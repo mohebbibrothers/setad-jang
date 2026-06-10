@@ -186,6 +186,20 @@ class TestVerifySuccess:
                 code=result.code_plain,
             )
 
+    def test_concurrent_success_replay_loses_conditional_update(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """اگر request دیگری بین read و mark استفاده کرده باشد، verify موفق نشود."""
+        result = _make_email_otp(identifier="race@example.com", purpose="signup")
+
+        monkeypatch.setattr("apps.authentication.otp._mark_otp_used", lambda otp: False)
+
+        with pytest.raises(otp_service.OTPNotFound):
+            otp_service.verify_otp(
+                identifier_kind=PrimaryIdentifierKind.EMAIL,
+                identifier_value="race@example.com",
+                purpose="signup",
+                code=result.code_plain,
+            )
+
 
 # ============================================================
 # Group 4: Verify failures

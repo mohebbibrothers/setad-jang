@@ -33,6 +33,7 @@ from datetime import timedelta
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import transaction
+from django.db.models import F
 from django.utils import timezone
 
 from .choices import OTPPurpose
@@ -183,28 +184,40 @@ def _invalidate_old_otps(
     ).update(is_used=True, updated_at=timezone.now())
 
 
-def _mark_otp_used(otp: OTPCode) -> None:
-    """OTP را به‌صورت atomic مارک کن. این تابع را برای failure side-effects استفاده کن."""
-    with transaction.atomic():
+def _mark_otp_used(otp: OTPCode) -> bool:
+    """
+    OTP را با conditional update اتمیک استفاده‌شده کن.
+
+    Returns:
+        True اگر همین فراخوانی OTP را invalidate کرد؛ False اگر OTP قبلاً توسط
+        request/process دیگری استفاده شده بود. این guard replay همزمان را می‌بندد.
+    """
+    updated = OTPCode.objects.filter(pk=otp.pk, is_used=False).update(
+        is_used=True,
+        updated_at=timezone.now(),
+    )
+    if updated:
         otp.is_used = True
-        otp.save(update_fields=["is_used", "updated_at"])
+    return bool(updated)
 
 
-def _increment_otp_attempts(otp: OTPCode, *, also_invalidate: bool = False) -> None:
+def _increment_otp_attempts(otp: OTPCode) -> int:
     """
-    افزایش attempts روی OTP به‌صورت atomic.
+    افزایش attempts روی OTP با F-expression و conditional update.
 
-    اگر also_invalidate=True، OTP هم در همان transaction invalidate می‌شود.
-    این تابع را برای failure side-effects استفاده کن — atomic block جداست
-    تا exception پس از این، side-effects را rollback نکند.
+    این تابع race-safe است: increment در دیتابیس انجام می‌شود و فقط اگر OTP هنوز
+    active باشد اعمال می‌گردد. اگر OTP همزمان استفاده شده باشد، OTPNotFound
+    raise می‌شود تا caller آن را مثل replay/invalidated flow هندل کند.
     """
     with transaction.atomic():
-        otp.attempts = (otp.attempts or 0) + 1
-        update_fields = ["attempts", "updated_at"]
-        if also_invalidate:
-            otp.is_used = True
-            update_fields.append("is_used")
-        otp.save(update_fields=update_fields)
+        updated = OTPCode.objects.filter(pk=otp.pk, is_used=False).update(
+            attempts=F("attempts") + 1,
+            updated_at=timezone.now(),
+        )
+        if not updated:
+            raise OTPNotFound("کدی برای این درخواست یافت نشد. لطفاً درخواست جدید بدهید.")
+        otp.refresh_from_db(fields=["attempts", "is_used", "updated_at"])
+        return int(otp.attempts or 0)
 
 
 # ============================================================
@@ -375,7 +388,8 @@ def verify_otp(
 
     # Check expiry
     if otp.is_expired:
-        _mark_otp_used(otp)
+        if not _mark_otp_used(otp):
+            raise OTPNotFound("کدی برای این درخواست یافت نشد. لطفاً درخواست جدید بدهید.")
         logger.info(
             "OTP verify failed (expired) for identifier=%s purpose=%s",
             mask_identifier(identifier_value, identifier_kind=identifier_kind),
@@ -385,7 +399,8 @@ def verify_otp(
 
     # Check attempts before any work
     if otp.attempts >= _OTP_MAX_ATTEMPTS:
-        _mark_otp_used(otp)
+        if not _mark_otp_used(otp):
+            raise OTPNotFound("کدی برای این درخواست یافت نشد. لطفاً درخواست جدید بدهید.")
         logger.warning(
             "OTP invalidated due to max attempts for identifier=%s purpose=%s",
             mask_identifier(identifier_value, identifier_kind=identifier_kind),
@@ -398,15 +413,13 @@ def verify_otp(
     # Compare hashes (constant-time)
     expected_hash = _hash_code(code)
     if not hmac.compare_digest(otp.code_hash, expected_hash):
-        # افزایش attempts را در یک atomic block جدا انجام می‌دهیم تا
-        # exception بعدی این تغییر را rollback نکند.
-        # اگر این attempt آخرین فرصت بود، OTP را invalidate هم می‌کنیم.
-        next_attempt_count = (otp.attempts or 0) + 1
-        will_exhaust = next_attempt_count >= _OTP_MAX_ATTEMPTS
+        # افزایش attempts با F-expression انجام می‌شود تا concurrent wrong attempts
+        # هم lost-update ایجاد نکنند. اگر این attempt حد نهایی را رد کند، OTP با یک
+        # conditional update جدا invalidate می‌شود.
+        next_attempt_count = _increment_otp_attempts(otp)
 
-        _increment_otp_attempts(otp, also_invalidate=will_exhaust)
-
-        if will_exhaust:
+        if next_attempt_count >= _OTP_MAX_ATTEMPTS:
+            _mark_otp_used(otp)
             logger.warning(
                 "OTP invalidated on attempt %d for identifier=%s purpose=%s",
                 next_attempt_count,
@@ -425,8 +438,9 @@ def verify_otp(
         )
         raise OTPInvalidCode("کد وارد شده اشتباه است.")
 
-    # Success: replay protection
-    _mark_otp_used(otp)
+    # Success: replay protection with conditional update for concurrent double-submit.
+    if not _mark_otp_used(otp):
+        raise OTPNotFound("کدی برای این درخواست یافت نشد. لطفاً درخواست جدید بدهید.")
     logger.info(
         "OTP verified successfully for identifier=%s purpose=%s",
         mask_identifier(identifier_value, identifier_kind=identifier_kind),
