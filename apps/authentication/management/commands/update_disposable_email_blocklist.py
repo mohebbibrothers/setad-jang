@@ -48,6 +48,7 @@ _TARGET_PATH = (
 
 
 class Command(BaseCommand):
+    """Management command entrypoint for this maintenance workflow."""
     help = "Update the local blocklist of disposable email domains from a remote source."
 
     def add_arguments(self, parser) -> None:

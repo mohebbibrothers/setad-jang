@@ -1,0 +1,3 @@
+"""
+Audit logs application package.
+"""

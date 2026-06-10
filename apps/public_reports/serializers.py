@@ -1,3 +1,7 @@
+"""
+DRF serializers for public report public and admin APIs.
+"""
+
 from rest_framework import serializers
 
 from .choices import ReportStatus
@@ -43,12 +47,14 @@ class ReportSubjectAdminSerializer(serializers.ModelSerializer):
 
 
 class ReportSubjectCreateSerializer(serializers.Serializer):
+    """ReportSubjectCreateSerializer implementation for the public_reports application."""
     title = serializers.CharField(max_length=150)
     description = serializers.CharField(required=False, allow_blank=True)
     order = serializers.IntegerField(required=False, default=0)
 
 
 class ReportSubjectUpdateSerializer(serializers.Serializer):
+    """ReportSubjectUpdateSerializer implementation for the public_reports application."""
     title = serializers.CharField(max_length=150, required=False)
     description = serializers.CharField(required=False, allow_blank=True)
     order = serializers.IntegerField(required=False)
@@ -61,6 +67,7 @@ class ReportSubjectUpdateSerializer(serializers.Serializer):
 
 
 class ReportAttachmentSerializer(serializers.ModelSerializer):
+    """ReportAttachmentSerializer implementation for the public_reports application."""
     class Meta:
         model = ReportAttachment
         fields = ("id", "image", "created_at")
@@ -72,6 +79,7 @@ class ReportAttachmentSerializer(serializers.ModelSerializer):
 
 
 class ReportCreateSerializer(serializers.Serializer):
+    """ReportCreateSerializer implementation for the public_reports application."""
     full_name = serializers.CharField(max_length=150)
     phone_number = serializers.CharField(max_length=20, required=False, allow_blank=True)
     subject_id = serializers.PrimaryKeyRelatedField(
@@ -95,6 +103,7 @@ class ReportCreateSerializer(serializers.Serializer):
 
 
 class ReportListSerializer(serializers.ModelSerializer):
+    """ReportListSerializer implementation for the public_reports application."""
     subject = ReportSubjectPublicSerializer(read_only=True)
 
     class Meta:
@@ -109,6 +118,7 @@ class ReportListSerializer(serializers.ModelSerializer):
 
 
 class ReportDetailSerializer(serializers.ModelSerializer):
+    """ReportDetailSerializer implementation for the public_reports application."""
     subject = ReportSubjectPublicSerializer(read_only=True)
     attachments = ReportAttachmentSerializer(many=True, read_only=True)
 
@@ -130,5 +140,6 @@ class ReportDetailSerializer(serializers.ModelSerializer):
 
 
 class ReportStatusUpdateSerializer(serializers.Serializer):
+    """ReportStatusUpdateSerializer implementation for the public_reports application."""
     status = serializers.ChoiceField(choices=ReportStatus.choices)
     admin_note = serializers.CharField(required=False, allow_blank=True)

@@ -1,3 +1,7 @@
+"""
+URL routing for authentication public, user, and admin APIs.
+"""
+
 from django.urls import path
 
 from .views import (

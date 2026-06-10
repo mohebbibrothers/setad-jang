@@ -1,3 +1,7 @@
+"""
+Signal handlers for authentication model lifecycle events.
+"""
+
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 

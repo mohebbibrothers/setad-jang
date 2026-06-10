@@ -1,3 +1,7 @@
+"""
+Enumeration choices for Tabyin content metadata.
+"""
+
 from django.db import models
 
 

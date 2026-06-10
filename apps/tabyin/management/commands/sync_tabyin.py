@@ -19,6 +19,7 @@ logger = logging.getLogger("tabyin.sync")
 
 
 class Command(BaseCommand):
+    """Management command entrypoint for this maintenance workflow."""
     help = "همگام‌سازی محتوای جهاد تبیین از سایت محتوانگار"
 
     def add_arguments(self, parser: CommandParser) -> None:

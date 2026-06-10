@@ -1,0 +1,3 @@
+"""
+Public reports application package.
+"""

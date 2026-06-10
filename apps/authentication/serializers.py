@@ -1,3 +1,7 @@
+"""
+DRF serializers for authentication, profile, and user management APIs.
+"""
+
 from __future__ import annotations
 
 from typing import Final
@@ -205,6 +209,7 @@ def _normalize_identifier_for_identifier_add(
 
 
 class ProfileSerializer(serializers.ModelSerializer):
+    """ProfileSerializer implementation for the authentication application."""
     phone_number = serializers.CharField(
         source="user.phone_number",
         read_only=True,
@@ -227,6 +232,7 @@ class ProfileSerializer(serializers.ModelSerializer):
 
 
 class UserMeSerializer(serializers.ModelSerializer):
+    """UserMeSerializer implementation for the authentication application."""
     profile = ProfileSerializer(read_only=True)
     full_name = serializers.CharField(read_only=True)
 
@@ -253,6 +259,7 @@ class UserMeSerializer(serializers.ModelSerializer):
 
 
 class UserAdminSerializer(serializers.ModelSerializer):
+    """UserAdminSerializer implementation for the authentication application."""
     profile = ProfileSerializer(read_only=True)
     full_name = serializers.CharField(read_only=True)
 
@@ -282,6 +289,7 @@ class UserAdminSerializer(serializers.ModelSerializer):
 
 
 class RegisterSerializer(serializers.Serializer):
+    """RegisterSerializer implementation for the authentication application."""
     email = serializers.EmailField()
     password = serializers.CharField(write_only=True, validators=[validate_password])
     first_name = serializers.CharField(required=False, allow_blank=True, max_length=100)
@@ -300,6 +308,7 @@ class RegisterSerializer(serializers.Serializer):
 
 
 class LoginSerializer(serializers.Serializer):
+    """LoginSerializer implementation for the authentication application."""
     email = serializers.EmailField()
     password = serializers.CharField(write_only=True)
 
@@ -311,6 +320,7 @@ class LoginSerializer(serializers.Serializer):
 
 
 class VerifyEmailSerializer(serializers.Serializer):
+    """VerifyEmailSerializer implementation for the authentication application."""
     email = serializers.EmailField()
     code = serializers.CharField(min_length=OTP_CODE_LENGTH, max_length=OTP_CODE_LENGTH)
 
@@ -322,6 +332,7 @@ class VerifyEmailSerializer(serializers.Serializer):
 
 
 class ResendVerificationSerializer(serializers.Serializer):
+    """ResendVerificationSerializer implementation for the authentication application."""
     email = serializers.EmailField()
 
     def validate_email(self, value: str) -> str:
@@ -332,14 +343,17 @@ class ResendVerificationSerializer(serializers.Serializer):
 
 
 class RefreshTokenInputSerializer(serializers.Serializer):
+    """RefreshTokenInputSerializer implementation for the authentication application."""
     refresh = serializers.CharField()
 
 
 class LogoutSerializer(serializers.Serializer):
+    """LogoutSerializer implementation for the authentication application."""
     refresh = serializers.CharField()
 
 
 class ForgotPasswordSerializer(serializers.Serializer):
+    """ForgotPasswordSerializer implementation for the authentication application."""
     email = serializers.EmailField()
 
     def validate_email(self, value: str) -> str:
@@ -350,6 +364,7 @@ class ForgotPasswordSerializer(serializers.Serializer):
 
 
 class ResetPasswordSerializer(serializers.Serializer):
+    """ResetPasswordSerializer implementation for the authentication application."""
     email = serializers.EmailField()
     code = serializers.CharField(min_length=OTP_CODE_LENGTH, max_length=OTP_CODE_LENGTH)
     new_password = serializers.CharField(
@@ -365,6 +380,7 @@ class ResetPasswordSerializer(serializers.Serializer):
 
 
 class ChangePasswordSerializer(serializers.Serializer):
+    """ChangePasswordSerializer implementation for the authentication application."""
     old_password = serializers.CharField(write_only=True)
     new_password = serializers.CharField(
         write_only=True,
@@ -548,11 +564,13 @@ class IdentifierMakePrimarySerializer(serializers.Serializer):
 
 
 class UpdateMeSerializer(serializers.Serializer):
+    """UpdateMeSerializer implementation for the authentication application."""
     first_name = serializers.CharField(required=False, allow_blank=True, max_length=100)
     last_name = serializers.CharField(required=False, allow_blank=True, max_length=100)
 
 
 class UpdateProfileSerializer(serializers.Serializer):
+    """UpdateProfileSerializer implementation for the authentication application."""
     phone_number = serializers.CharField(required=False, allow_blank=True, max_length=20)
     national_code = serializers.CharField(
         required=False,
@@ -587,6 +605,7 @@ class UpdateProfileSerializer(serializers.Serializer):
 
 
 class AdminUserUpdateSerializer(serializers.Serializer):
+    """AdminUserUpdateSerializer implementation for the authentication application."""
     first_name = serializers.CharField(required=False, allow_blank=True, max_length=100)
     last_name = serializers.CharField(required=False, allow_blank=True, max_length=100)
     is_active = serializers.BooleanField(required=False)
@@ -594,4 +613,5 @@ class AdminUserUpdateSerializer(serializers.Serializer):
 
 
 class AdminChangeRoleSerializer(serializers.Serializer):
+    """AdminChangeRoleSerializer implementation for the authentication application."""
     role = serializers.ChoiceField(choices=UserRole.choices)

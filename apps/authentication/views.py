@@ -1,3 +1,7 @@
+"""
+API views for authentication, identity management, and user administration.
+"""
+
 from __future__ import annotations
 
 from typing import Any
@@ -259,6 +263,7 @@ _LEGACY_DESCRIPTION_FOOTER = (
 
 
 def _build_honeypot_error_response() -> ErrorResponse:
+    """Internal helper for views."""
     return ErrorResponse(
         message="درخواست نامعتبر است.",
         status_code=status.HTTP_400_BAD_REQUEST,
@@ -266,6 +271,7 @@ def _build_honeypot_error_response() -> ErrorResponse:
 
 
 def _build_global_otp_guard_error_response() -> ErrorResponse:
+    """Internal helper for views."""
     return ErrorResponse(
         message="در حال حاضر امکان ارسال کد وجود ندارد. لطفاً کمی بعد تلاش کنید.",
         status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -273,18 +279,21 @@ def _build_global_otp_guard_error_response() -> ErrorResponse:
 
 
 def _check_honeypot(request: Request) -> ErrorResponse | None:
+    """Internal helper for views."""
     if is_honeypot_triggered(request.data):
         return _build_honeypot_error_response()
     return None
 
 
 def _check_global_otp_guard() -> ErrorResponse | None:
+    """Internal helper for views."""
     if is_global_otp_guard_tripped():
         return _build_global_otp_guard_error_response()
     return None
 
 
 def _otp_service_error_to_response(exc: OTPServiceError) -> ErrorResponse:
+    """Internal helper for views."""
     status_code = status.HTTP_400_BAD_REQUEST
 
     if isinstance(exc.original, OTPCooldownActive):
@@ -322,6 +331,7 @@ def _mark_legacy_response(
 
 
 class SignupRequestAPIView(APIView):
+    """SignupRequestAPIView implementation for the authentication application."""
     permission_classes = [AllowAny]
     throttle_classes = [OTPRequestThrottle, OTPGlobalIPThrottle]
 
@@ -365,6 +375,7 @@ class SignupRequestAPIView(APIView):
 
 
 class SignupVerifyAPIView(APIView):
+    """SignupVerifyAPIView implementation for the authentication application."""
     permission_classes = [AllowAny]
     throttle_classes = [OTPVerifyThrottle]
 
@@ -426,6 +437,7 @@ class SignupVerifyAPIView(APIView):
 
 
 class LoginPasswordAPIView(APIView):
+    """LoginPasswordAPIView implementation for the authentication application."""
     permission_classes = [AllowAny]
     throttle_classes = [LoginThrottle]
 
@@ -533,6 +545,7 @@ class LoginPasswordAPIView(APIView):
 
 
 class LoginOTPRequestAPIView(APIView):
+    """LoginOTPRequestAPIView implementation for the authentication application."""
     permission_classes = [AllowAny]
     throttle_classes = [OTPRequestThrottle, OTPGlobalIPThrottle]
 
@@ -578,6 +591,7 @@ class LoginOTPRequestAPIView(APIView):
 
 
 class LoginOTPVerifyAPIView(APIView):
+    """LoginOTPVerifyAPIView implementation for the authentication application."""
     permission_classes = [AllowAny]
     throttle_classes = [OTPVerifyThrottle]
 
@@ -698,6 +712,7 @@ class LoginOTPVerifyAPIView(APIView):
 
 
 class IdentifierForgotPasswordRequestAPIView(APIView):
+    """IdentifierForgotPasswordRequestAPIView implementation for the authentication application."""
     permission_classes = [AllowAny]
     throttle_classes = [PasswordResetThrottle, OTPGlobalIPThrottle]
 
@@ -743,6 +758,7 @@ class IdentifierForgotPasswordRequestAPIView(APIView):
 
 
 class IdentifierForgotPasswordConfirmAPIView(APIView):
+    """IdentifierForgotPasswordConfirmAPIView implementation for the authentication application."""
     permission_classes = [AllowAny]
     throttle_classes = [OTPVerifyThrottle]
 
@@ -799,6 +815,7 @@ class IdentifierForgotPasswordConfirmAPIView(APIView):
 
 
 class IdentifierAddRequestAPIView(APIView):
+    """IdentifierAddRequestAPIView implementation for the authentication application."""
     permission_classes = [IsAuthenticated]
     throttle_classes = [OTPRequestThrottle, OTPGlobalIPThrottle]
 
@@ -853,6 +870,7 @@ class IdentifierAddRequestAPIView(APIView):
 
 
 class IdentifierAddVerifyAPIView(APIView):
+    """IdentifierAddVerifyAPIView implementation for the authentication application."""
     permission_classes = [IsAuthenticated]
     throttle_classes = [OTPVerifyThrottle]
 
@@ -914,6 +932,7 @@ class IdentifierAddVerifyAPIView(APIView):
 
 
 class IdentifierMakePrimaryAPIView(APIView):
+    """IdentifierMakePrimaryAPIView implementation for the authentication application."""
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
@@ -969,6 +988,7 @@ class IdentifierMakePrimaryAPIView(APIView):
 
 
 class RegisterAPIView(APIView):
+    """RegisterAPIView implementation for the authentication application."""
     permission_classes = [AllowAny]
     throttle_classes = [RegisterThrottle]
 
@@ -1007,6 +1027,7 @@ class RegisterAPIView(APIView):
 
 
 class VerifyEmailAPIView(APIView):
+    """VerifyEmailAPIView implementation for the authentication application."""
     permission_classes = [AllowAny]
     throttle_classes = [OTPRequestThrottle]
 
@@ -1063,6 +1084,7 @@ class VerifyEmailAPIView(APIView):
 
 
 class ResendVerificationAPIView(APIView):
+    """ResendVerificationAPIView implementation for the authentication application."""
     permission_classes = [AllowAny]
     throttle_classes = [OTPRequestThrottle]
 
@@ -1119,6 +1141,7 @@ class ResendVerificationAPIView(APIView):
 
 
 class LoginAPIView(APIView):
+    """LoginAPIView implementation for the authentication application."""
     permission_classes = [AllowAny]
     throttle_classes = [LoginThrottle]
 
@@ -1224,6 +1247,7 @@ class LoginAPIView(APIView):
 
 
 class CustomTokenRefreshView(TokenRefreshView):
+    """CustomTokenRefreshView implementation for the authentication application."""
     permission_classes = [AllowAny]
     serializer_class = TokenRefreshSerializer
 
@@ -1256,6 +1280,7 @@ class CustomTokenRefreshView(TokenRefreshView):
 
 
 class ForgotPasswordAPIView(APIView):
+    """ForgotPasswordAPIView implementation for the authentication application."""
     permission_classes = [AllowAny]
     throttle_classes = [PasswordResetThrottle]
 
@@ -1295,6 +1320,7 @@ class ForgotPasswordAPIView(APIView):
 
 
 class ResetPasswordAPIView(APIView):
+    """ResetPasswordAPIView implementation for the authentication application."""
     permission_classes = [AllowAny]
     throttle_classes = [PasswordResetThrottle]
 
@@ -1362,6 +1388,7 @@ class ResetPasswordAPIView(APIView):
 
 
 class ChangePasswordAPIView(APIView):
+    """ChangePasswordAPIView implementation for the authentication application."""
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
@@ -1406,6 +1433,7 @@ class ChangePasswordAPIView(APIView):
 
 
 class LogoutAPIView(APIView):
+    """LogoutAPIView implementation for the authentication application."""
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
@@ -1450,6 +1478,7 @@ class LogoutAPIView(APIView):
 
 
 class MeAPIView(APIView):
+    """MeAPIView implementation for the authentication application."""
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
@@ -1492,6 +1521,7 @@ class MeAPIView(APIView):
 
 
 class ProfileAPIView(APIView):
+    """ProfileAPIView implementation for the authentication application."""
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
@@ -1545,6 +1575,7 @@ class ProfileAPIView(APIView):
 
 
 class AdminUserListAPIView(APIView):
+    """AdminUserListAPIView implementation for the authentication application."""
     permission_classes = [IsAdminUser]
     pagination_class = StandardPagination
 
@@ -1591,6 +1622,7 @@ class AdminUserListAPIView(APIView):
 
 
 class AdminUserDetailAPIView(APIView):
+    """AdminUserDetailAPIView implementation for the authentication application."""
     permission_classes = [IsAdminUser]
 
     @extend_schema(
@@ -1712,6 +1744,7 @@ class AdminUserDetailAPIView(APIView):
 
 
 class AdminChangeUserRoleAPIView(APIView):
+    """AdminChangeUserRoleAPIView implementation for the authentication application."""
     permission_classes = [IsAdminUser]
 
     @extend_schema(

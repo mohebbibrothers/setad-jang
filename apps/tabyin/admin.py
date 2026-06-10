@@ -6,6 +6,7 @@ from apps.tabyin.models import TabyinAttachment, TabyinContent
 
 
 class TabyinAttachmentInline(admin.TabularInline):
+    """TabyinAttachmentInline implementation for the tabyin application."""
     model = TabyinAttachment
     extra = 0
     readonly_fields = [
@@ -29,6 +30,7 @@ class TabyinAttachmentInline(admin.TabularInline):
 
 @admin.register(TabyinContent)
 class TabyinContentAdmin(admin.ModelAdmin):
+    """TabyinContentAdmin implementation for the tabyin application."""
     list_display = [
         "external_id",
         "title_short",
@@ -85,6 +87,7 @@ class TabyinContentAdmin(admin.ModelAdmin):
 
 @admin.register(TabyinAttachment)
 class TabyinAttachmentAdmin(admin.ModelAdmin):
+    """TabyinAttachmentAdmin implementation for the tabyin application."""
     list_display = [
         "id",
         "content_title",

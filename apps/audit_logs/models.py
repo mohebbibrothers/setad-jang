@@ -1,3 +1,7 @@
+"""
+Database models for append-oriented activity audit logging.
+"""
+
 from __future__ import annotations
 
 from django.conf import settings

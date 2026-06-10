@@ -1,3 +1,7 @@
+"""
+DRF permission classes for authentication and profile endpoints.
+"""
+
 from rest_framework.permissions import BasePermission
 
 from .choices import UserRole

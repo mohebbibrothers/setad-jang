@@ -1,3 +1,7 @@
+"""
+Custom user, profile, and OTP models for multi-identifier authentication.
+"""
+
 from __future__ import annotations
 
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
@@ -28,6 +32,7 @@ class PrimaryIdentifierKind(models.TextChoices):
 
 
 def avatar_upload_path(instance: Profile, filename: str) -> str:
+    """avatar_upload_path helper for the authentication application."""
     return f"avatars/{instance.user_id}/{filename}"
 
 

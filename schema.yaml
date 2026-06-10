@@ -5401,6 +5401,8 @@ components:
       - unique_paid_users
     AdminChangeRole:
       type: object
+      description: AdminChangeRoleSerializer implementation for the authentication
+        application.
       properties:
         role:
           $ref: '#/components/schemas/RoleEnum'
@@ -6996,6 +6998,8 @@ components:
       - total_shares
     ChangePassword:
       type: object
+      description: ChangePasswordSerializer implementation for the authentication
+        application.
       properties:
         old_password:
           type: string
@@ -7038,6 +7042,8 @@ components:
       - timestamp
     ForgotPassword:
       type: object
+      description: ForgotPasswordSerializer implementation for the authentication
+        application.
       properties:
         email:
           type: string
@@ -7130,6 +7136,7 @@ components:
       - identifier_kind
     Login:
       type: object
+      description: LoginSerializer implementation for the authentication application.
       properties:
         email:
           type: string
@@ -7191,6 +7198,7 @@ components:
       - refresh
     Logout:
       type: object
+      description: LogoutSerializer implementation for the authentication application.
       properties:
         refresh:
           type: string
@@ -7936,6 +7944,8 @@ components:
           description: آیا محتوا در سایت عمومی نمایش داده شود؟
     PatchedAdminUserUpdate:
       type: object
+      description: AdminUserUpdateSerializer implementation for the authentication
+        application.
       properties:
         first_name:
           type: string
@@ -8046,6 +8056,8 @@ components:
           type: boolean
     PatchedReportStatusUpdate:
       type: object
+      description: ReportStatusUpdateSerializer implementation for the public_reports
+        application.
       properties:
         status:
           $ref: '#/components/schemas/ReportStatusEnum'
@@ -8053,6 +8065,8 @@ components:
           type: string
     PatchedReportSubjectUpdate:
       type: object
+      description: ReportSubjectUpdateSerializer implementation for the public_reports
+        application.
       properties:
         title:
           type: string
@@ -8076,6 +8090,7 @@ components:
           nullable: true
     PatchedUpdateMe:
       type: object
+      description: UpdateMeSerializer implementation for the authentication application.
       properties:
         first_name:
           type: string
@@ -8085,6 +8100,7 @@ components:
           maxLength: 100
     PatchedUpdateProfile:
       type: object
+      description: UpdateProfileSerializer implementation for the authentication application.
       properties:
         phone_number:
           type: string
@@ -8221,6 +8237,7 @@ components:
       - payment_status_display
     Profile:
       type: object
+      description: ProfileSerializer implementation for the authentication application.
       properties:
         phone_number:
           type: string
@@ -10528,6 +10545,8 @@ components:
       - results
     RefreshTokenInput:
       type: object
+      description: RefreshTokenInputSerializer implementation for the authentication
+        application.
       properties:
         refresh:
           type: string
@@ -10535,6 +10554,7 @@ components:
       - refresh
     Register:
       type: object
+      description: RegisterSerializer implementation for the authentication application.
       properties:
         email:
           type: string
@@ -10577,6 +10597,8 @@ components:
       - message
     ReportAttachment:
       type: object
+      description: ReportAttachmentSerializer implementation for the public_reports
+        application.
       properties:
         id:
           type: integer
@@ -10596,6 +10618,7 @@ components:
       - image
     ReportCreate:
       type: object
+      description: ReportCreateSerializer implementation for the public_reports application.
       properties:
         full_name:
           type: string
@@ -10619,6 +10642,7 @@ components:
       - subject_id
     ReportDetail:
       type: object
+      description: ReportDetailSerializer implementation for the public_reports application.
       properties:
         id:
           type: integer
@@ -10691,6 +10715,7 @@ components:
       - message
     ReportList:
       type: object
+      description: ReportListSerializer implementation for the public_reports application.
       properties:
         id:
           type: integer
@@ -10849,6 +10874,8 @@ components:
       - message
     ReportSubjectCreate:
       type: object
+      description: ReportSubjectCreateSerializer implementation for the public_reports
+        application.
       properties:
         title:
           type: string
@@ -10908,6 +10935,8 @@ components:
       - message
     ResendVerification:
       type: object
+      description: ResendVerificationSerializer implementation for the authentication
+        application.
       properties:
         email:
           type: string
@@ -10916,6 +10945,7 @@ components:
       - email
     ResetPassword:
       type: object
+      description: ResetPasswordSerializer implementation for the authentication application.
       properties:
         email:
           type: string
@@ -11250,6 +11280,7 @@ components:
       - message
     UserAdmin:
       type: object
+      description: UserAdminSerializer implementation for the authentication application.
       properties:
         id:
           type: integer
@@ -11365,6 +11396,7 @@ components:
       - message
     UserMe:
       type: object
+      description: UserMeSerializer implementation for the authentication application.
       properties:
         id:
           type: integer
@@ -11430,6 +11462,7 @@ components:
       - message
     VerifyEmail:
       type: object
+      description: VerifyEmailSerializer implementation for the authentication application.
       properties:
         email:
           type: string

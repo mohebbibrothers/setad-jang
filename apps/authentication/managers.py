@@ -1,3 +1,7 @@
+"""
+Custom querysets and managers for the authentication user model.
+"""
+
 from __future__ import annotations
 
 from typing import Any
@@ -13,6 +17,7 @@ _IDENTIFIER_PHONE = "phone"
 
 
 class UserQuerySet(BaseQuerySet):
+    """UserQuerySet implementation for the authentication application."""
     def admins(self):
         return self.filter(role=UserRole.ADMIN)
 

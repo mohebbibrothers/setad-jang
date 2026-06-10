@@ -1,3 +1,7 @@
+"""
+Pagination classes that preserve the project response envelope.
+"""
+
 from __future__ import annotations
 
 from typing import Any
@@ -40,15 +44,18 @@ class BaseWrappedPagination(PageNumberPagination):
 
 
 class StandardPagination(BaseWrappedPagination):
+    """StandardPagination implementation for the core application."""
     page_size = 20
     max_page_size = 100
 
 
 class SmallPagination(BaseWrappedPagination):
+    """SmallPagination implementation for the core application."""
     page_size = 10
     max_page_size = 50
 
 
 class LargePagination(BaseWrappedPagination):
+    """LargePagination implementation for the core application."""
     page_size = 50
     max_page_size = 200

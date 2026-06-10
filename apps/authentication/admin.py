@@ -1,3 +1,7 @@
+"""
+Django admin configuration for users, profiles, and OTP records.
+"""
+
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 

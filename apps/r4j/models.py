@@ -56,18 +56,21 @@ from .validators import (
 
 
 def _criminal_photo_upload_path(instance: R4JCriminalPhoto, filename: str) -> str:
+    """Internal helper for models."""
     return f"r4j/criminals/{instance.criminal_id}/photos/{filename}"
 
 
 def _criminal_attachment_upload_path(
     instance: R4JCriminalAttachment, filename: str,
 ) -> str:
+    """Internal helper for models."""
     return f"r4j/criminals/{instance.criminal_id}/attachments/{filename}"
 
 
 def _report_attachment_upload_path(
     instance: R4JReportAttachment, filename: str,
 ) -> str:
+    """Internal helper for models."""
     return f"r4j/reports/{instance.report_id}/attachments/{filename}"
 
 

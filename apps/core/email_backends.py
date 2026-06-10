@@ -1,3 +1,7 @@
+"""
+Custom email backend implementations for local and development delivery.
+"""
+
 from __future__ import annotations
 
 from email.header import decode_header, make_header

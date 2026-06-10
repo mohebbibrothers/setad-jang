@@ -1,3 +1,7 @@
+"""
+Read-only query helpers for authentication and user identity lookups.
+"""
+
 from __future__ import annotations
 
 from django.db.models import QuerySet
@@ -122,10 +126,12 @@ def get_active_user_by_phone_number(phone_number: str) -> User | None:
 
 
 def get_user_by_id(user_id: int) -> User | None:
+    """get_user_by_id helper for the authentication application."""
     return _get_user_queryset(include_inactive=True).filter(pk=user_id).first()
 
 
 def get_all_users_for_admin() -> QuerySet[User]:
+    """get_all_users_for_admin helper for the authentication application."""
     return User.all_objects.select_related("profile").order_by("-date_joined", "-id")
 
 
@@ -197,4 +203,5 @@ def get_latest_valid_otp(user: User, purpose: str) -> OTPCode | None:
 
 
 def get_profile_by_user(user: User) -> Profile | None:
+    """get_profile_by_user helper for the authentication application."""
     return Profile.objects.select_related("user").filter(user=user).first()

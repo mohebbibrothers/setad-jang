@@ -1,3 +1,7 @@
+"""
+Read-only query helpers for public report subjects and reports.
+"""
+
 from django.db.models import Count, QuerySet
 
 from .models import Report, ReportSubject
@@ -18,6 +22,7 @@ def get_all_subjects_for_admin() -> QuerySet[ReportSubject]:
 
 
 def get_subject_by_id_for_admin(subject_id: int) -> ReportSubject | None:
+    """get_subject_by_id_for_admin helper for the public_reports application."""
     return (
         ReportSubject.all_objects.annotate(reports_count=Count("reports"))
         .filter(id=subject_id)
@@ -29,10 +34,12 @@ def get_subject_by_id_for_admin(subject_id: int) -> ReportSubject | None:
 
 
 def get_all_reports() -> QuerySet[Report]:
+    """get_all_reports helper for the public_reports application."""
     return Report.objects.select_related("subject").prefetch_related("attachments")
 
 
 def get_report_by_id(report_id: int) -> Report | None:
+    """get_report_by_id helper for the public_reports application."""
     return (
         Report.objects.select_related("subject")
         .prefetch_related("attachments")

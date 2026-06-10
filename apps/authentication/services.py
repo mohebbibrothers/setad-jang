@@ -1,3 +1,7 @@
+"""
+Business services for registration, login, OTP, and identifier management.
+"""
+
 from __future__ import annotations
 
 import logging

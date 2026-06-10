@@ -1,3 +1,7 @@
+"""
+Database models for public report subjects, reports, and attachments.
+"""
+
 from django.db import models
 from django.utils.text import slugify
 
@@ -8,10 +12,12 @@ from .validators import validate_image_extension, validate_image_size
 
 
 def report_attachment_upload_path(instance, filename):
+    """report_attachment_upload_path helper for the public_reports application."""
     return f"public_reports/{instance.report_id}/{filename}"
 
 
 class ReportSubject(BaseModel):
+    """ReportSubject implementation for the public_reports application."""
     title = models.CharField(max_length=150, unique=True, verbose_name="عنوان موضوع")
     slug = models.SlugField(max_length=170, unique=True, blank=True, verbose_name="شناسه")
     description = models.TextField(blank=True, verbose_name="توضیحات")
@@ -32,6 +38,7 @@ class ReportSubject(BaseModel):
 
 
 class Report(BaseModel):
+    """Report implementation for the public_reports application."""
     full_name = models.CharField(max_length=150, verbose_name="نام گزارش‌دهنده")
     phone_number = models.CharField(max_length=14, blank=True, null=True, verbose_name="شماره تماس")
     subject = models.ForeignKey(
@@ -64,6 +71,7 @@ class Report(BaseModel):
 
 
 class ReportAttachment(BaseModel):
+    """ReportAttachment implementation for the public_reports application."""
     report = models.ForeignKey(
         Report,
         on_delete=models.CASCADE,

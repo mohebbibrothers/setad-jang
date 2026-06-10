@@ -1,15 +1,21 @@
+"""
+Django admin configuration for public report subjects and reports.
+"""
+
 from django.contrib import admin
 
 from .models import Report, ReportAttachment, ReportSubject
 
 
 class ReportAttachmentInline(admin.TabularInline):
+    """ReportAttachmentInline implementation for the public_reports application."""
     model = ReportAttachment
     extra = 0
 
 
 @admin.register(ReportSubject)
 class ReportSubjectAdmin(admin.ModelAdmin):
+    """ReportSubjectAdmin implementation for the public_reports application."""
     list_display = ("title", "slug", "order", "is_active", "created_at")
     list_editable = ("order", "is_active")
     search_fields = ("title", "slug")
@@ -19,6 +25,7 @@ class ReportSubjectAdmin(admin.ModelAdmin):
 
 @admin.register(Report)
 class ReportAdmin(admin.ModelAdmin):
+    """ReportAdmin implementation for the public_reports application."""
     list_display = ("full_name", "subject", "status", "created_at")
     list_filter = ("status", "subject", "created_at")
     search_fields = ("full_name", "phone_number", "description")
@@ -28,4 +35,5 @@ class ReportAdmin(admin.ModelAdmin):
 
 @admin.register(ReportAttachment)
 class ReportAttachmentAdmin(admin.ModelAdmin):
+    """ReportAttachmentAdmin implementation for the public_reports application."""
     list_display = ("report", "created_at")

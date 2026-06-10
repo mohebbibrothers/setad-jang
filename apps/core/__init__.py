@@ -1,0 +1,3 @@
+"""
+Core infrastructure application package.
+"""

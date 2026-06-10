@@ -1,9 +1,14 @@
+"""
+Abstract base models shared across project applications.
+"""
+
 from django.db import models
 
 from .managers import ActiveManager, AllObjectsManager
 
 
 class BaseModel(models.Model):
+    """BaseModel implementation for the core application."""
     created_at = models.DateTimeField(
         auto_now_add=True,
         verbose_name="تاریخ ایجاد",

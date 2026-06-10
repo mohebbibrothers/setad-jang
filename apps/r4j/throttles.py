@@ -16,16 +16,20 @@ from rest_framework.throttling import AnonRateThrottle, UserRateThrottle
 
 
 class R4JBrowseAnonThrottle(AnonRateThrottle):
+    """R4JBrowseAnonThrottle implementation for the r4j application."""
     scope = "r4j_browse_anon"
 
 
 class R4JBrowseUserThrottle(UserRateThrottle):
+    """R4JBrowseUserThrottle implementation for the r4j application."""
     scope = "r4j_browse_user"
 
 
 class R4JReportCreateThrottle(UserRateThrottle):
+    """R4JReportCreateThrottle implementation for the r4j application."""
     scope = "r4j_report_create"
 
 
 class R4JBountySetThrottle(UserRateThrottle):
+    """R4JBountySetThrottle implementation for the r4j application."""
     scope = "r4j_bounty_set"

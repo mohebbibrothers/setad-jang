@@ -1,3 +1,7 @@
+"""
+Enumeration choices used by the authentication domain.
+"""
+
 from django.db import models
 
 

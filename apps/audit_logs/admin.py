@@ -1,3 +1,7 @@
+"""
+Django admin configuration for immutable audit log inspection.
+"""
+
 from django.contrib import admin
 
 from .models import AuditLog
