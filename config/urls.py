@@ -116,6 +116,11 @@ api_v1_urlpatterns = [
         "api/v1/madadkar/",
         include(("apps.madadkar.urls", "madadkar"), namespace="madadkar"),
     ),
+    # ── LMS (Learning Management System) ────────────────────
+    path(
+        "api/v1/lms/",
+        include(("apps.lms.urls", "lms"), namespace="lms"),
+    ),
 ]
 
 # ============================================================

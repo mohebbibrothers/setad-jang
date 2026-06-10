@@ -62,6 +62,7 @@ LOCAL_APPS = [
     "apps.tabyin.apps.TabyinConfig",
     "apps.r4j.apps.R4JConfig",
     "apps.madadkar.apps.MadadkarConfig",
+    "apps.lms.apps.LMSConfig",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -212,6 +213,11 @@ REST_FRAMEWORK = {
         "madadkar_browse_user": "120/min",
         "madadkar_participate": "10/min",
         "madadkar_payment_verify": "30/min",
+        # ── LMS — Learning Management System ────────────────
+        "lms_enroll": "20/hour",
+        "lms_progress": "120/min",
+        "lms_quiz_start": "10/hour",
+        "lms_discussion": "30/hour",
     },
 }
 

@@ -20,6 +20,23 @@ from .audit_logs import AuditLogFactory
 # ── Authentication ──────────────────────────────────────────
 from .auth import AdminUserFactory, UserFactory
 
+# ── LMS (Learning Management System) ────────────────────────
+from .lms import (
+    CertificateFactory,
+    CourseFactory,
+    EnrollmentFactory,
+    LessonFactory,
+    LessonProgressFactory,
+    LMSCategoryFactory,
+    LMSUserSkillFactory,
+    PublishedCourseFactory,
+    PublishedQuizFactory,
+    QuizAttemptFactory,
+    QuizFactory,
+    QuizOptionFactory,
+    QuizQuestionFactory,
+)
+
 # ── Madadkar (Charitable Crowdfunding) ──────────────────────
 from .madadkar import (
     CampaignFactory,
@@ -61,15 +78,28 @@ __all__ = [
     "CampaignFactory",
     "CampaignImageFactory",
     "CampaignWithDeadlineFactory",
+    "CertificateFactory",
     "ClosedCampaignFactory",
     "CompletedCampaignFactory",
+    "CourseFactory",
+    "EnrollmentFactory",
     "ExpiredParticipationFactory",
     "FailedParticipationFactory",
     "FailedPaymentFactory",
+    "LMSCategoryFactory",
+    "LMSUserSkillFactory",
+    "LessonFactory",
+    "LessonProgressFactory",
     "PaidParticipationFactory",
     "ParticipationFactory",
     "PaymentFactory",
     "PublishedCampaignFactory",
+    "PublishedCourseFactory",
+    "PublishedQuizFactory",
+    "QuizAttemptFactory",
+    "QuizFactory",
+    "QuizOptionFactory",
+    "QuizQuestionFactory",
     "R4JBountyFactory",
     "R4JCriminalFactory",
     "R4JCriminalPublishedFactory",
