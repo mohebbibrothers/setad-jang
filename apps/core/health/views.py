@@ -1,10 +1,17 @@
 """
 Views برای Health Check endpoints.
 
-دو endpoint ارائه می‌شود:
-- `/health/`: ساده و سریع — برای liveness probe (load balancer)
-- `/health/detailed/`: کامل با تمام checkها — برای monitoring
+سه endpoint عملیاتی ارائه می‌شود:
+- `/health/`: liveness بسیار سریع — فقط زنده بودن process را نشان می‌دهد.
+- `/health/ready/`: readiness — dependencyهای critical را چک می‌کند.
+- `/health/detailed/`: monitoring/debugging — readiness + diagnosticهای تکمیلی.
+
+اصل مهم: health response نباید secret، DSN کامل، token، password یا traceback خام
+را به client نشان دهد. جزئیات خطا safe و component-level هستند؛ لاگ‌ها برای ops
+جزئیات بیشتری مثل component و latency را دارند.
 """
+
+from __future__ import annotations
 
 import logging
 import platform
@@ -23,28 +30,25 @@ from rest_framework.views import APIView
 
 from apps.core.health.checks import (
     STATUS_ERROR,
-    STATUS_OK,
     aggregate_status,
-    check_cache,
-    check_database,
-    check_tabyin_sync,
+    build_detailed_checks,
+    build_readiness_checks,
+    check_liveness,
 )
 from apps.core.health.serializers import (
     DetailedHealthSerializer,
+    ReadinessHealthSerializer,
     SimpleHealthSerializer,
 )
 
-logger = logging.getLogger("apps.core")
-
+logger = logging.getLogger("apps.core.health")
 
 # ─── Tag Constant ───────────────────────────────────────────
 
 TAG_HEALTH = "سلامت سیستم"
 
-
 # ─── Server Start Time (for uptime calculation) ─────────────
-# این مقدار یک بار در زمان import این ماژول ست می‌شود
-# و تا restart شدن process ثابت می‌ماند.
+
 _SERVER_STARTED_AT = time.monotonic()
 
 
@@ -66,7 +70,7 @@ def _get_environment() -> str:
 
 
 def _build_system_info() -> dict[str, Any]:
-    """ساخت dict اطلاعات سیستمی پروژه."""
+    """ساخت dict اطلاعات سیستمی غیرحساس پروژه."""
     project_version = getattr(settings, "PROJECT_VERSION", "1.0.0")
 
     return {
@@ -80,58 +84,110 @@ def _build_system_info() -> dict[str, Any]:
     }
 
 
-# ─── Simple Health Endpoint ─────────────────────────────────
+def _http_status_for_health(overall: str) -> int:
+    """Map health status to HTTP status code."""
+    return status.HTTP_503_SERVICE_UNAVAILABLE if overall == STATUS_ERROR else status.HTTP_200_OK
+
+
+def _log_health_summary(*, endpoint: str, overall: str, checks: dict[str, dict[str, Any]]) -> None:
+    """Log degraded/error components with enough context for operators."""
+    if overall == "ok":
+        logger.debug("Health endpoint ok endpoint=%s", endpoint)
+        return
+
+    components = {
+        name: {
+            "status": result.get("status"),
+            "latency_ms": result.get("latency_ms"),
+            "detail": result.get("detail"),
+        }
+        for name, result in checks.items()
+        if result.get("status") != "ok"
+    }
+
+    if overall == STATUS_ERROR:
+        logger.error("Health endpoint failed endpoint=%s components=%s", endpoint, components)
+    else:
+        logger.warning("Health endpoint degraded endpoint=%s components=%s", endpoint, components)
+
+
+# ─── Liveness Endpoint ──────────────────────────────────────
 
 
 class SimpleHealthView(APIView):
     """
-    Health check ساده — مناسب liveness probe.
+    Liveness probe — فقط زنده بودن process.
 
-    این endpoint سریع‌ترین حالت ممکن است و فقط نشان می‌دهد سرویس "زنده" است.
-    برای استفاده توسط load balancer، Kubernetes liveness probe، یا uptime monitoring.
-
-    پاسخ:
-    - 200 OK: سرویس فعال است
-    - 503 Service Unavailable: سرویس مشکل دارد
+    این endpoint dependency خارجی را چک نمی‌کند تا orchestrator به‌خاطر قطعی
+    DB/Redis بی‌دلیل process سالم را restart نکند. readiness برای dependencyهاست.
     """
 
     permission_classes = [AllowAny]
-    # غیرفعال کردن throttle برای endpoint health
     throttle_classes = []
 
     @extend_schema(
-        operation_id="health_simple",
+        operation_id="health_liveness",
         tags=[TAG_HEALTH],
-        summary="چک سلامت ساده",
+        summary="Liveness check",
         description=(
-            "بررسی سریع زنده بودن سرویس.\n\n"
-            "این endpoint برای **liveness probe** ابزارهای DevOps طراحی شده "
-            "(Kubernetes, Docker Swarm, AWS ELB, ...).\n\n"
-            "**پاسخ:**\n"
-            "- `200 OK`: سرویس فعال است\n"
-            "- `503 Service Unavailable`: سرویس مشکل دارد\n\n"
-            "این endpoint بدون throttle است."
+            "بررسی سریع زنده بودن process بدون چک dependency خارجی.\n\n"
+            "برای Kubernetes/Docker liveness probe و load balancerهای ساده مناسب است."
+        ),
+        responses={200: SimpleHealthSerializer},
+    )
+    def get(self, request: Request) -> Response:
+        result = check_liveness()
+        return Response(
+            data={
+                "status": result["status"],
+                "timestamp": timezone.now().isoformat(),
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+# ─── Readiness Endpoint ─────────────────────────────────────
+
+
+class ReadinessHealthView(APIView):
+    """
+    Readiness probe — dependencyهای critical برای سرو traffic.
+
+    اگر DB/cache/broker error باشند، 503 برمی‌گرداند. degraded با 200 برمی‌گردد
+    ولی در body و logs مشخص می‌شود تا monitoring هشدار بدهد.
+    """
+
+    permission_classes = [AllowAny]
+    throttle_classes = []
+
+    @extend_schema(
+        operation_id="health_readiness",
+        tags=[TAG_HEALTH],
+        summary="Readiness check",
+        description=(
+            "بررسی dependencyهای critical برای سرو کردن traffic:\n"
+            "Database، Cache و Celery broker.\n\n"
+            "- `200 status=ok`: آماده سرویس‌دهی\n"
+            "- `200 status=degraded`: آماده ولی کند/غیربهینه\n"
+            "- `503 status=error`: آماده سرویس‌دهی نیست"
         ),
         responses={
-            200: SimpleHealthSerializer,
-            503: SimpleHealthSerializer,
+            200: ReadinessHealthSerializer,
+            503: ReadinessHealthSerializer,
         },
     )
     def get(self, request: Request) -> Response:
-        # فقط چک سریع DB انجام می‌دهیم — cache و بقیه در /detailed/
-        db_check = check_database()
-
-        overall = STATUS_OK if db_check["status"] == STATUS_OK else STATUS_ERROR
-        http_status = (
-            status.HTTP_200_OK if overall == STATUS_OK else status.HTTP_503_SERVICE_UNAVAILABLE
-        )
+        checks = build_readiness_checks()
+        overall = aggregate_status(checks)
+        _log_health_summary(endpoint="readiness", overall=overall, checks=checks)
 
         return Response(
             data={
                 "status": overall,
                 "timestamp": timezone.now().isoformat(),
+                "checks": checks,
             },
-            status=http_status,
+            status=_http_status_for_health(overall),
         )
 
 
@@ -140,9 +196,10 @@ class SimpleHealthView(APIView):
 
 class DetailedHealthView(APIView):
     """
-    Health check کامل — تمام چک‌ها + اطلاعات سیستم.
+    Health check کامل — readiness + اطلاعات سیستم + diagnosticهای non-critical.
 
-    مناسب برای dashboard‌های monitoring و debugging.
+    مناسب dashboardهای monitoring و debugging. برای liveness/readiness مستقیم
+    orchestration، از `/health/` و `/health/ready/` استفاده شود.
     """
 
     permission_classes = [AllowAny]
@@ -151,22 +208,11 @@ class DetailedHealthView(APIView):
     @extend_schema(
         operation_id="health_detailed",
         tags=[TAG_HEALTH],
-        summary="چک سلامت کامل سیستم",
+        summary="Detailed health check",
         description=(
-            "بررسی جامع وضعیت تمام کامپوننت‌های سیستم:\n\n"
-            "**چک‌ها:**\n"
-            "- 🗄 **Database**: اتصال + زمان پاسخ\n"
-            "- 💾 **Cache**: اتصال + زمان پاسخ\n"
-            "- 📊 **Tabyin Sync**: آمار محتواها + زمان آخرین همگام‌سازی\n\n"
-            "**اطلاعات سیستم:**\n"
-            "- نسخه پروژه، Django، Python\n"
-            "- محیط اجرا (dev / staging / prod)\n"
-            "- uptime سرور\n\n"
-            "**کدهای پاسخ:**\n"
-            "- `200 OK`: همه چیز سالم است (`status=ok`)\n"
-            "- `200 OK` با `status=degraded`: عملکرد کند است\n"
-            "- `503 Service Unavailable`: یک یا چند کامپوننت خطا دارد\n\n"
-            "این endpoint بدون throttle است."
+            "بررسی جامع وضعیت کامپوننت‌های سیستم.\n\n"
+            "شامل readiness checks و diagnosticهای تکمیلی مثل Tabyin sync.\n"
+            "خروجی secret-safe است و credential/traceback خام نشان نمی‌دهد."
         ),
         responses={
             200: DetailedHealthSerializer,
@@ -174,18 +220,9 @@ class DetailedHealthView(APIView):
         },
     )
     def get(self, request: Request) -> Response:
-        # اجرای تمام چک‌ها
-        checks = {
-            "database": check_database(),
-            "cache": check_cache(),
-            "tabyin_sync": check_tabyin_sync(),
-        }
-
-        # جمع‌بندی وضعیت کلی
+        checks = build_detailed_checks()
         overall = aggregate_status(checks)
-        http_status = (
-            status.HTTP_200_OK if overall != STATUS_ERROR else status.HTTP_503_SERVICE_UNAVAILABLE
-        )
+        _log_health_summary(endpoint="detailed", overall=overall, checks=checks)
 
         return Response(
             data={
@@ -194,5 +231,5 @@ class DetailedHealthView(APIView):
                 "checks": checks,
                 "system": _build_system_info(),
             },
-            status=http_status,
+            status=_http_status_for_health(overall),
         )

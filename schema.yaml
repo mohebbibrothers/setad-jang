@@ -1378,18 +1378,12 @@ paths:
           description: ''
   /api/v1/health/:
     get:
-      operationId: health_simple
+      operationId: health_liveness
       description: |-
-        بررسی سریع زنده بودن سرویس.
+        بررسی سریع زنده بودن process بدون چک dependency خارجی.
 
-        این endpoint برای **liveness probe** ابزارهای DevOps طراحی شده (Kubernetes, Docker Swarm, AWS ELB, ...).
-
-        **پاسخ:**
-        - `200 OK`: سرویس فعال است
-        - `503 Service Unavailable`: سرویس مشکل دارد
-
-        این endpoint بدون throttle است.
-      summary: چک سلامت ساده
+        برای Kubernetes/Docker liveness probe و load balancerهای ساده مناسب است.
+      summary: Liveness check
       tags:
       - سلامت سیستم
       security:
@@ -1397,12 +1391,6 @@ paths:
       - {}
       responses:
         '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SimpleHealth'
-          description: ''
-        '503':
           content:
             application/json:
               schema:
@@ -1411,14 +1399,12 @@ paths:
   /api/v1/health/detailed/:
     get:
       operationId: health_detailed
-      description: "بررسی جامع وضعیت تمام کامپوننت‌های سیستم:\n\n**چک‌ها:**\n- \U0001F5C4
-        **Database**: اتصال + زمان پاسخ\n- \U0001F4BE **Cache**: اتصال + زمان پاسخ\n-
-        \U0001F4CA **Tabyin Sync**: آمار محتواها + زمان آخرین همگام‌سازی\n\n**اطلاعات
-        سیستم:**\n- نسخه پروژه، Django، Python\n- محیط اجرا (dev / staging / prod)\n-
-        uptime سرور\n\n**کدهای پاسخ:**\n- `200 OK`: همه چیز سالم است (`status=ok`)\n-
-        `200 OK` با `status=degraded`: عملکرد کند است\n- `503 Service Unavailable`:
-        یک یا چند کامپوننت خطا دارد\n\nاین endpoint بدون throttle است."
-      summary: چک سلامت کامل سیستم
+      description: |-
+        بررسی جامع وضعیت کامپوننت‌های سیستم.
+
+        شامل readiness checks و diagnosticهای تکمیلی مثل Tabyin sync.
+        خروجی secret-safe است و credential/traceback خام نشان نمی‌دهد.
+      summary: Detailed health check
       tags:
       - سلامت سیستم
       security:
@@ -1436,6 +1422,35 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DetailedHealth'
+          description: ''
+  /api/v1/health/ready/:
+    get:
+      operationId: health_readiness
+      description: |-
+        بررسی dependencyهای critical برای سرو کردن traffic:
+        Database، Cache و Celery broker.
+
+        - `200 status=ok`: آماده سرویس‌دهی
+        - `200 status=degraded`: آماده ولی کند/غیربهینه
+        - `503 status=error`: آماده سرویس‌دهی نیست
+      summary: Readiness check
+      tags:
+      - سلامت سیستم
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadinessHealth'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadinessHealth'
           description: ''
   /api/v1/madadkar/admin/campaigns/:
     get:
@@ -7046,31 +7061,61 @@ components:
       required:
       - new_password
       - old_password
-    DetailedHealth:
+    ComponentCheck:
       type: object
-      description: پاسخ کامل health check شامل تمام چک‌ها و اطلاعات سیستم.
+      description: نتیجه چک یک کامپوننت operational.
       properties:
         status:
           allOf:
           - $ref: '#/components/schemas/HealthStatusEnum'
           description: |-
-            وضعیت کلی سرویس (جمع‌بندی همه چک‌ها)
+            وضعیت این کامپوننت
 
             * `ok` - ok
             * `error` - error
             * `degraded` - degraded
+        latency_ms:
+          type: number
+          format: double
+          description: زمان پاسخ به میلی‌ثانیه
+        backend:
+          type: string
+          description: نوع backend یا label امن dependency
+        detail:
+          type: string
+          description: جزئیات امن خطا یا degraded state
+      required:
+      - status
+    DetailedChecks:
+      type: object
+      description: چک‌های detailed شامل readiness و diagnosticهای non-critical.
+      properties:
+        database:
+          $ref: '#/components/schemas/ComponentCheck'
+        cache:
+          $ref: '#/components/schemas/ComponentCheck'
+        celery_broker:
+          $ref: '#/components/schemas/ComponentCheck'
+        tabyin_sync:
+          $ref: '#/components/schemas/TabyinSyncCheck'
+      required:
+      - cache
+      - celery_broker
+      - database
+      - tabyin_sync
+    DetailedHealth:
+      type: object
+      description: پاسخ کامل health check شامل تمام چک‌ها و اطلاعات سیستم.
+      properties:
+        status:
+          $ref: '#/components/schemas/HealthStatusEnum'
         timestamp:
           type: string
           format: date-time
-          description: زمان انجام چک
         checks:
-          type: object
-          additionalProperties: {}
-          description: نتیجه چک هر کامپوننت
+          $ref: '#/components/schemas/DetailedChecks'
         system:
-          allOf:
-          - $ref: '#/components/schemas/SystemInfo'
-          description: اطلاعات سیستمی پروژه
+          $ref: '#/components/schemas/SystemInfo'
       required:
       - checks
       - status
@@ -10579,6 +10624,35 @@ components:
       required:
       - count
       - results
+    ReadinessChecks:
+      type: object
+      description: چک‌های critical readiness برای سرو کردن traffic.
+      properties:
+        database:
+          $ref: '#/components/schemas/ComponentCheck'
+        cache:
+          $ref: '#/components/schemas/ComponentCheck'
+        celery_broker:
+          $ref: '#/components/schemas/ComponentCheck'
+      required:
+      - cache
+      - celery_broker
+      - database
+    ReadinessHealth:
+      type: object
+      description: پاسخ readiness شامل dependencyهای critical.
+      properties:
+        status:
+          $ref: '#/components/schemas/HealthStatusEnum'
+        timestamp:
+          type: string
+          format: date-time
+        checks:
+          $ref: '#/components/schemas/ReadinessChecks'
+      required:
+      - checks
+      - status
+      - timestamp
     RefreshTokenInput:
       type: object
       description: RefreshTokenInputSerializer implementation for the authentication
@@ -11105,7 +11179,7 @@ components:
       - password
     SimpleHealth:
       type: object
-      description: پاسخ ساده health check — مناسب load balancers.
+      description: پاسخ ساده health check — مناسب liveness probes.
       properties:
         status:
           allOf:
@@ -11275,7 +11349,7 @@ components:
           description: آیا حالت debug فعال است؟
         environment:
           type: string
-          description: محیط اجرا (dev / staging / prod)
+          description: محیط اجرا
         uptime_seconds:
           type: integer
           description: چند ثانیه از start سرور گذشته
@@ -11350,6 +11424,29 @@ components:
         * `video` - ویدئو
         * `audio` - صوت
         * `other` - سایر
+    TabyinSyncCheck:
+      type: object
+      description: نتیجه چک وضعیت sync تبیین.
+      properties:
+        status:
+          $ref: '#/components/schemas/HealthStatusEnum'
+        total_contents:
+          type: integer
+        active_contents:
+          type: integer
+        deleted_in_source:
+          type: integer
+        last_synced_at:
+          type: string
+          format: date-time
+          nullable: true
+        seconds_since_last_sync:
+          type: integer
+          nullable: true
+        detail:
+          type: string
+      required:
+      - status
     TokenRefreshData:
       type: object
       properties:

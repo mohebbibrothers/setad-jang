@@ -1,33 +1,88 @@
 """
-Health Check Functions — توابع چک کردن وضعیت اجزای سیستم.
+Health Check Functions — reusable operational diagnostics.
 
-هر تابع check یک dict استاندارد برمی‌گرداند:
+هر check یک dict استاندارد و JSON-safe برمی‌گرداند:
 {
-    "status": "ok" | "error",
+    "status": "ok" | "degraded" | "error",
     "latency_ms": float,
-    "detail": str,  # اختیاری در صورت خطا
+    "detail": str,      # فقط پیام safe و non-secret
+    "backend": str,     # در صورت معنی‌دار بودن
 }
 
-این ماژول مستقل از view است تا قابلیت reuse در management commands،
-celery tasks، یا monitoring scripts را داشته باشد.
+طراحی این ماژول برای production observability است:
+- liveness نباید dependency خارجی را چک کند.
+- readiness باید dependencyهای critical را چک کند.
+- detailed health علاوه بر dependencyها، diagnosticهای non-critical مثل Tabyin sync
+  را هم گزارش می‌کند.
+- هیچ URL کامل، credential، token یا exception raw نباید در خروجی health leak شود.
 """
 
+from __future__ import annotations
+
 import logging
+import socket
 import time
 from typing import Any
+from urllib.parse import urlparse
 
+import redis
+from django.conf import settings
 from django.core.cache import cache
 from django.db import connections
-from django.db.utils import OperationalError
 
-logger = logging.getLogger("apps.core")
-
+logger = logging.getLogger("apps.core.health")
 
 # ─── Status Constants ───────────────────────────────────────
 
 STATUS_OK = "ok"
 STATUS_ERROR = "error"
-STATUS_DEGRADED = "degraded"  # وقتی سرویس کار می‌کند ولی کند است
+STATUS_DEGRADED = "degraded"
+
+DATABASE_DEGRADED_AFTER_MS = 250.0
+CACHE_DEGRADED_AFTER_MS = 100.0
+BROKER_DEGRADED_AFTER_MS = 250.0
+
+
+# ─── Generic helpers ────────────────────────────────────────
+
+
+def _latency_ms_since(start: float) -> float:
+    """Return elapsed monotonic time in milliseconds."""
+    return round((time.monotonic() - start) * 1000, 2)
+
+
+def _status_for_latency(latency_ms: float, *, degraded_after_ms: float) -> str:
+    """Map latency to ok/degraded according to component threshold."""
+    return STATUS_DEGRADED if latency_ms > degraded_after_ms else STATUS_OK
+
+
+def _safe_error_detail(exc: Exception) -> str:
+    """Return a safe, non-secret error detail for health responses."""
+    return type(exc).__name__
+
+
+def _safe_url_label(url: str) -> str:
+    """Return a credential-free label for service URLs."""
+    parsed = urlparse(url)
+    if not parsed.scheme:
+        return "unknown"
+    if parsed.hostname:
+        port = f":{parsed.port}" if parsed.port else ""
+        return f"{parsed.scheme}://{parsed.hostname}{port}"
+    return parsed.scheme
+
+
+# ─── Liveness ───────────────────────────────────────────────
+
+
+def check_liveness() -> dict[str, Any]:
+    """
+    Lightweight process liveness check.
+
+    این check هیچ dependency خارجی را لمس نمی‌کند و فقط برای پاسخ سریع به
+    orchestrator/load balancer استفاده می‌شود.
+    """
+    return {"status": STATUS_OK}
 
 
 # ─── Database Check ─────────────────────────────────────────
@@ -35,15 +90,10 @@ STATUS_DEGRADED = "degraded"  # وقتی سرویس کار می‌کند ولی 
 
 def check_database(database_alias: str = "default") -> dict[str, Any]:
     """
-    چک سلامت اتصال دیتابیس.
-
-    یک کوئری ساده `SELECT 1` می‌زند و زمان آن را اندازه می‌گیرد.
-
-    Args:
-        database_alias: نام دیتابیس در DATABASES (پیش‌فرض: "default")
+    چک سلامت اتصال دیتابیس با یک `SELECT 1` ساده.
 
     Returns:
-        dict با کلیدهای: status, latency_ms, detail (در صورت خطا)
+        dict شامل status, latency_ms و در صورت degraded/error یک detail امن.
     """
     start = time.monotonic()
     try:
@@ -51,24 +101,33 @@ def check_database(database_alias: str = "default") -> dict[str, Any]:
         with connection.cursor() as cursor:
             cursor.execute("SELECT 1")
             cursor.fetchone()
-        latency_ms = round((time.monotonic() - start) * 1000, 2)
-        return {
-            "status": STATUS_OK,
+        latency_ms = _latency_ms_since(start)
+        component_status = _status_for_latency(
+            latency_ms,
+            degraded_after_ms=DATABASE_DEGRADED_AFTER_MS,
+        )
+        result: dict[str, Any] = {
+            "status": component_status,
             "latency_ms": latency_ms,
+            "backend": connection.vendor,
         }
-    except OperationalError as exc:
-        logger.exception("Database health check failed")
-        return {
-            "status": STATUS_ERROR,
-            "latency_ms": round((time.monotonic() - start) * 1000, 2),
-            "detail": f"OperationalError: {exc}",
-        }
+        if component_status == STATUS_DEGRADED:
+            result["detail"] = "Database latency is above threshold."
+            logger.warning("Database health degraded latency_ms=%s", latency_ms)
+        return result
     except Exception as exc:
-        logger.exception("Unexpected error in database health check")
+        latency_ms = _latency_ms_since(start)
+        logger.exception(
+            "Database health check failed alias=%s latency_ms=%s error_type=%s",
+            database_alias,
+            latency_ms,
+            type(exc).__name__,
+        )
         return {
             "status": STATUS_ERROR,
-            "latency_ms": round((time.monotonic() - start) * 1000, 2),
-            "detail": f"{type(exc).__name__}: {exc}",
+            "latency_ms": latency_ms,
+            "backend": database_alias,
+            "detail": _safe_error_detail(exc),
         }
 
 
@@ -77,71 +136,68 @@ def check_database(database_alias: str = "default") -> dict[str, Any]:
 
 def check_cache() -> dict[str, Any]:
     """
-    چک سلامت سیستم cache.
+    چک سلامت cache با set/get/delete کوتاه.
 
-    یک مقدار تستی set/get/delete می‌کند، زمان آن را اندازه می‌گیرد،
-    و نوع backend فعلی را گزارش می‌کند.
-
-    Returns:
-        dict با کلیدهای: status, latency_ms, backend, detail (در صورت خطا)
+    اگر cache مقدار اشتباه برگرداند یا exception بدهد، component error می‌شود.
+    latency بالا degraded محسوب می‌شود اما readiness را الزاماً fail نمی‌کند.
     """
     test_key = "_health_check_probe"
     test_value = "ping"
-
-    # تشخیص نوع backend از روی کلاس
     backend_name = _detect_cache_backend()
-
     start = time.monotonic()
     try:
         cache.set(test_key, test_value, timeout=10)
         retrieved = cache.get(test_key)
         cache.delete(test_key)
-
-        latency_ms = round((time.monotonic() - start) * 1000, 2)
+        latency_ms = _latency_ms_since(start)
 
         if retrieved != test_value:
+            logger.error("Cache health check returned unexpected value backend=%s", backend_name)
             return {
                 "status": STATUS_ERROR,
                 "backend": backend_name,
                 "latency_ms": latency_ms,
-                "detail": "Cache returned unexpected value",
+                "detail": "Cache returned unexpected value.",
             }
 
-        return {
-            "status": STATUS_OK,
+        component_status = _status_for_latency(
+            latency_ms,
+            degraded_after_ms=CACHE_DEGRADED_AFTER_MS,
+        )
+        result: dict[str, Any] = {
+            "status": component_status,
             "backend": backend_name,
             "latency_ms": latency_ms,
         }
+        if component_status == STATUS_DEGRADED:
+            result["detail"] = "Cache latency is above threshold."
+            logger.warning("Cache health degraded backend=%s latency_ms=%s", backend_name, latency_ms)
+        return result
     except Exception as exc:
-        logger.exception("Cache health check failed")
+        latency_ms = _latency_ms_since(start)
+        logger.exception(
+            "Cache health check failed backend=%s latency_ms=%s error_type=%s",
+            backend_name,
+            latency_ms,
+            type(exc).__name__,
+        )
         return {
             "status": STATUS_ERROR,
             "backend": backend_name,
-            "latency_ms": round((time.monotonic() - start) * 1000, 2),
-            "detail": f"{type(exc).__name__}: {exc}",
+            "latency_ms": latency_ms,
+            "detail": _safe_error_detail(exc),
         }
 
 
 def _detect_cache_backend() -> str:
-    """
-    تشخیص نوع backend cache فعلی از روی کلاس آن.
-
-    در Django 6.x، `cache` یک ConnectionProxy است، پس باید از
-    `caches['default']` برای دسترسی به backend واقعی استفاده کنیم.
-
-    Returns:
-        نام backend به صورت قابل خواندن:
-        'locmem', 'redis', 'memcached', 'filebased', 'dummy', یا 'unknown'
-    """
+    """تشخیص نوع backend cache فعلی از روی کلاس backend واقعی."""
     try:
         from django.core.cache import caches
 
-        # دسترسی به backend واقعی (نه ConnectionProxy)
         real_backend = caches["default"]
         backend_module = real_backend.__class__.__module__.lower()
         backend_class = real_backend.__class__.__name__.lower()
 
-        # تشخیص بر اساس module path
         if "locmem" in backend_module:
             return "locmem"
         if "redis" in backend_module or "redis" in backend_class:
@@ -161,6 +217,92 @@ def _detect_cache_backend() -> str:
         return "unknown"
 
 
+# ─── Celery Broker Check ────────────────────────────────────
+
+
+def check_celery_broker() -> dict[str, Any]:
+    """
+    چک readiness برای Celery broker بدون dispatch کردن task.
+
+    برای Redis broker یک ping واقعی زده می‌شود. برای memory broker تست‌ها/dev
+    ok برمی‌گردد. برای schemeهای TCP-based دیگر، socket connect کوتاه انجام
+    می‌شود تا dependency availability بدون leak کردن credential بررسی شود.
+    """
+    broker_url = str(getattr(settings, "CELERY_BROKER_URL", ""))
+    broker_label = _safe_url_label(broker_url)
+    parsed = urlparse(broker_url)
+    start = time.monotonic()
+
+    try:
+        if not broker_url:
+            return {
+                "status": STATUS_ERROR,
+                "backend": "missing",
+                "latency_ms": _latency_ms_since(start),
+                "detail": "CELERY_BROKER_URL is not configured.",
+            }
+
+        if parsed.scheme == "memory":
+            return {
+                "status": STATUS_OK,
+                "backend": "memory",
+                "latency_ms": _latency_ms_since(start),
+            }
+
+        if parsed.scheme in {"redis", "rediss"}:
+            client = redis.Redis.from_url(
+                broker_url,
+                socket_connect_timeout=2,
+                socket_timeout=2,
+            )
+            client.ping()
+        elif parsed.hostname:
+            port = parsed.port or _default_port_for_scheme(parsed.scheme)
+            if port is None:
+                raise ValueError("Unsupported broker URL scheme")
+            with socket.create_connection((parsed.hostname, port), timeout=2) as sock:
+                sock.getpeername()
+        else:
+            raise ValueError("Invalid broker URL")
+
+        latency_ms = _latency_ms_since(start)
+        component_status = _status_for_latency(
+            latency_ms,
+            degraded_after_ms=BROKER_DEGRADED_AFTER_MS,
+        )
+        result: dict[str, Any] = {
+            "status": component_status,
+            "backend": broker_label,
+            "latency_ms": latency_ms,
+        }
+        if component_status == STATUS_DEGRADED:
+            result["detail"] = "Celery broker latency is above threshold."
+            logger.warning("Celery broker health degraded broker=%s latency_ms=%s", broker_label, latency_ms)
+        return result
+    except Exception as exc:
+        latency_ms = _latency_ms_since(start)
+        logger.exception(
+            "Celery broker health check failed broker=%s latency_ms=%s error_type=%s",
+            broker_label,
+            latency_ms,
+            type(exc).__name__,
+        )
+        return {
+            "status": STATUS_ERROR,
+            "backend": broker_label,
+            "latency_ms": latency_ms,
+            "detail": _safe_error_detail(exc),
+        }
+
+
+def _default_port_for_scheme(scheme: str) -> int | None:
+    """Return common TCP port for known broker URL schemes."""
+    return {
+        "amqp": 5672,
+        "amqps": 5671,
+    }.get(scheme)
+
+
 # ─── Tabyin Sync Stats ──────────────────────────────────────
 
 
@@ -168,14 +310,9 @@ def check_tabyin_sync() -> dict[str, Any]:
     """
     گزارش وضعیت آخرین همگام‌سازی محتوای تبیین.
 
-    این چک خطایی برنمی‌گرداند مگر در حالت عدم دسترسی به DB —
-    فقط اطلاعاتی است و در همه حالت `status=ok` برمی‌گرداند.
-
-    Returns:
-        dict با اطلاعات آماری sync.
+    این check diagnostic/non-critical است و فقط در صورت query failure خطا می‌دهد.
     """
     try:
-        # Lazy import برای جلوگیری از circular import
         from django.utils import timezone
 
         from apps.tabyin.models import TabyinContent
@@ -206,10 +343,10 @@ def check_tabyin_sync() -> dict[str, Any]:
             "seconds_since_last_sync": seconds_since_last_sync,
         }
     except Exception as exc:
-        logger.exception("Tabyin sync health check failed")
+        logger.exception("Tabyin sync health check failed error_type=%s", type(exc).__name__)
         return {
             "status": STATUS_ERROR,
-            "detail": f"{type(exc).__name__}: {exc}",
+            "detail": _safe_error_detail(exc),
         }
 
 
@@ -232,3 +369,20 @@ def aggregate_status(checks: dict[str, dict[str, Any]]) -> str:
     if STATUS_DEGRADED in statuses:
         return STATUS_DEGRADED
     return STATUS_OK
+
+
+def build_readiness_checks() -> dict[str, dict[str, Any]]:
+    """Run all critical dependency checks required for serving traffic."""
+    return {
+        "database": check_database(),
+        "cache": check_cache(),
+        "celery_broker": check_celery_broker(),
+    }
+
+
+def build_detailed_checks() -> dict[str, dict[str, Any]]:
+    """Run readiness checks plus non-critical diagnostic checks."""
+    return {
+        **build_readiness_checks(),
+        "tabyin_sync": check_tabyin_sync(),
+    }

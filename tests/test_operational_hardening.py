@@ -149,3 +149,10 @@ def test_runtime_celerybeat_schedule_is_ignored_and_not_present() -> None:
 
     assert "celerybeat-schedule" in gitignore
     assert not (PROJECT_ROOT / "celerybeat-schedule").exists()
+
+
+def test_dockerfile_healthcheck_uses_readiness_endpoint() -> None:
+    """Container healthcheck باید readiness را بسنجد، نه صرفاً liveness را."""
+    dockerfile = (PROJECT_ROOT / "Dockerfile").read_text(encoding="utf-8")
+
+    assert "/api/v1/health/ready/" in dockerfile

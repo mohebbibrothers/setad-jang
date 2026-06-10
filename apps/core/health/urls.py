@@ -2,18 +2,25 @@
 
 from django.urls import path
 
-from apps.core.health.views import DetailedHealthView, SimpleHealthView
+from apps.core.health.views import (
+    DetailedHealthView,
+    ReadinessHealthView,
+    SimpleHealthView,
+)
 
 app_name = "health"
 
 urlpatterns = [
-    # ── Liveness probe (سریع، برای load balancer) ──
     path(
         "",
         SimpleHealthView.as_view(),
         name="simple",
     ),
-    # ── Detailed check (کامل، برای monitoring) ─────
+    path(
+        "ready/",
+        ReadinessHealthView.as_view(),
+        name="ready",
+    ),
     path(
         "detailed/",
         DetailedHealthView.as_view(),

@@ -165,7 +165,8 @@ docker-compose exec web pytest -q
 - Swagger UI: `/api/docs/`
 - ReDoc: `/api/redoc/`
 - OpenAPI schema: `/api/schema/`
-- Health: `/api/v1/health/`
+- Liveness health: `/api/v1/health/`
+- Readiness health: `/api/v1/health/ready/`
 - Detailed health: `/api/v1/health/detailed/`
 
 ---
