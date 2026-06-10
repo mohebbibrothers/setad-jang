@@ -591,6 +591,11 @@ def signup_request(
     """
     Step 1 of identifier-first signup.
     """
+    identifier_value = _normalize_identifier_by_kind(
+        identifier_kind=identifier_kind,
+        identifier_value=identifier_value,
+    )
+
     try:
         generate_identifier_otp(
             identifier_kind=identifier_kind,
@@ -626,6 +631,11 @@ def signup_verify(
     """
     Step 2 of identifier-first signup.
     """
+    identifier_value = _normalize_identifier_by_kind(
+        identifier_kind=identifier_kind,
+        identifier_value=identifier_value,
+    )
+
     try:
         verify_identifier_otp(
             identifier_kind=identifier_kind,
@@ -687,6 +697,11 @@ def login_with_password(
     """
     from .selectors import get_user_by_identifier
 
+    identifier_value = _normalize_identifier_by_kind(
+        identifier_kind=identifier_kind,
+        identifier_value=identifier_value,
+    )
+
     user = get_user_by_identifier(
         identifier_kind=identifier_kind,
         identifier_value=identifier_value,
@@ -743,6 +758,11 @@ def login_otp_request(
     """
     from .selectors import get_active_user_by_identifier
 
+    identifier_value = _normalize_identifier_by_kind(
+        identifier_kind=identifier_kind,
+        identifier_value=identifier_value,
+    )
+
     user = get_active_user_by_identifier(
         identifier_kind=identifier_kind,
         identifier_value=identifier_value,
@@ -783,6 +803,11 @@ def login_otp_verify(
     """
     from .selectors import get_active_user_by_identifier
 
+    identifier_value = _normalize_identifier_by_kind(
+        identifier_kind=identifier_kind,
+        identifier_value=identifier_value,
+    )
+
     try:
         verify_identifier_otp(
             identifier_kind=identifier_kind,
@@ -819,6 +844,11 @@ def forgot_password_request(
     Request password reset OTP by identifier.
     """
     from .selectors import get_active_user_by_identifier
+
+    identifier_value = _normalize_identifier_by_kind(
+        identifier_kind=identifier_kind,
+        identifier_value=identifier_value,
+    )
 
     user = get_active_user_by_identifier(
         identifier_kind=identifier_kind,
@@ -860,6 +890,11 @@ def forgot_password_confirm(
     Confirm password reset with OTP.
     """
     from .selectors import get_active_user_by_identifier
+
+    identifier_value = _normalize_identifier_by_kind(
+        identifier_kind=identifier_kind,
+        identifier_value=identifier_value,
+    )
 
     try:
         verify_identifier_otp(

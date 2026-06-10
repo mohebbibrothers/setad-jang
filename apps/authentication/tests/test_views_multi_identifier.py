@@ -253,6 +253,27 @@ class TestMultiIdentifierAuthViews:
         )
         assert OTPCode.objects.count() == 0
 
+    def test_login_otp_request_is_enumeration_safe_for_inactive_identifier(
+        self,
+        api_client,
+    ) -> None:
+        _create_verified_phone_user(phone_number="+989120000123")
+        User.all_objects.filter(phone_number="+989120000123").update(is_active=False)
+
+        response = api_client.post(
+            _auth_url("login-otp-request"),
+            data={"identifier": "+989120000123"},
+            format="json",
+        )
+
+        assert response.status_code == 200
+        assert response.data["success"] is True
+        assert (
+            response.data["message"]
+            == "اگر حسابی با این شناسه وجود داشته باشد، کد ورود ارسال شد."
+        )
+        assert OTPCode.objects.count() == 0
+
     def test_login_otp_verify_returns_tokens_for_phone_user(
         self,
         api_client,
@@ -297,6 +318,27 @@ class TestMultiIdentifierAuthViews:
         response = api_client.post(
             _auth_url("password-forgot-request-identifier"),
             data={"identifier": "+989120009999"},
+            format="json",
+        )
+
+        assert response.status_code == 200
+        assert response.data["success"] is True
+        assert (
+            response.data["message"]
+            == "اگر حسابی با این شناسه وجود داشته باشد، کد بازیابی ارسال شد."
+        )
+        assert OTPCode.objects.count() == 0
+
+    def test_password_forgot_request_is_enumeration_safe_for_inactive_identifier(
+        self,
+        api_client,
+    ) -> None:
+        _create_verified_phone_user(phone_number="+989120000124")
+        User.all_objects.filter(phone_number="+989120000124").update(is_active=False)
+
+        response = api_client.post(
+            _auth_url("password-forgot-request-identifier"),
+            data={"identifier": "+989120000124"},
             format="json",
         )
 
