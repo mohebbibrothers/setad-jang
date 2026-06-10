@@ -1,0 +1,102 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality-gate:
+    name: Quality Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: setadjang
+          POSTGRES_USER: setadjang
+          POSTGRES_PASSWORD: strong-postgres-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U setadjang -d setadjang"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    env:
+      DJANGO_SETTINGS_MODULE: config.settings.development
+      SECRET_KEY: ci-secret-key-with-more-than-fifty-characters-for-setad-jang
+      DEBUG: "False"
+      ALLOWED_HOSTS: 127.0.0.1,localhost,testserver
+      CACHE_BACKEND: locmem
+      REDIS_URL: redis://127.0.0.1:6379/1
+      CELERY_BROKER_URL: memory://
+      CELERY_RESULT_BACKEND: cache+memory://
+      OTP_PROVIDER: email
+      MADADKAR_PAYMENT_PROVIDER: sandbox
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+
+      - name: Install dependencies
+        run: make install
+
+      - name: Verify dependency graph
+        run: make pip-check
+
+      - name: Ruff lint
+        run: make lint
+
+      - name: Django system check
+        run: make check
+
+      - name: Django deploy check
+        run: make deploy-check
+
+      - name: Migration drift check
+        run: make migrations-check
+
+      - name: OpenAPI schema validation
+        run: make schema-check SCHEMA_OUTPUT=schema-ci.yaml
+
+      - name: Test suite
+        run: make test
+
+      - name: Upload validated schema artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: schema-ci
+          path: schema-ci.yaml
+          if-no-files-found: ignore

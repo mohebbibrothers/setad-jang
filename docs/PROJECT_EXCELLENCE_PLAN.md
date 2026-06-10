@@ -181,15 +181,15 @@ Definition of Done:
 
 ---
 
-## Phase 10 — CI/CD & Developer Experience
+## Phase 10 — CI/CD & Developer Experience ✅
 
 هدف: هر push خودکار validate شود.
 
-Scope:
-- GitHub Actions با PostgreSQL/Redis services.
-- ruff/check/migrations/schema/pytest pipeline.
-- Makefile یا task runner.
-- optional pre-commit.
+خروجی‌ها:
+- GitHub Actions quality gate با PostgreSQL و Redis service containers.
+- pipeline کامل: dependency check، Ruff، Django check، deploy check، migration drift، schema validation، pytest.
+- Makefile به‌عنوان entrypoint واحد local/CI.
+- schema artifact در CI برای review و debugging.
 
 Definition of Done:
-- main branch بدون عبور از quality gates قابل شکستن نباشد.
+- main branch با quality gates خودکار محافظت می‌شود و همان دستورهای local در CI هم اجرا می‌شوند.

@@ -97,11 +97,12 @@ Production settings به‌صورت پیش‌فرض PostgreSQL می‌خواهد
 وضعیت فعلی verification:
 
 ```bash
-ruff check .                                      # All checks passed
+make verify                                      # اجرای quality gate کامل
+ruff check .                                     # All checks passed
 python manage.py check                           # System check identified no issues
 python manage.py makemigrations --check --dry-run # No changes detected
 python manage.py spectacular --file schema.yaml --validate
-pytest -q                                        # 783 passed
+pytest -q                                        # 871+ passed
 ```
 
 تست‌ها پوشش می‌دهند:
