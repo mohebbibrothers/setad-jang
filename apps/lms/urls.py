@@ -1,11 +1,28 @@
-"""
-URL routing for the LMS application.
+"""URL routing for the LMS application."""
 
-Concrete API endpoints are added in LMS API phases. Keeping the namespace wired
-from Phase 1 allows schema/config checks to stay stable as the app grows.
-"""
+from django.urls import path
 
+from apps.lms import views
 
 app_name = "lms"
 
-urlpatterns: list = []
+urlpatterns = [
+    path("categories/", views.LMSCategoryPublicListView.as_view(), name="category-list"),
+    path("categories/<str:slug>/", views.LMSCategoryPublicDetailView.as_view(), name="category-detail"),
+    path("courses/", views.LMSCoursePublicListView.as_view(), name="course-list"),
+    path("courses/<str:slug>/", views.LMSCoursePublicDetailView.as_view(), name="course-detail"),
+    path("courses/<str:slug>/lessons/", views.LMSCourseLessonsPublicView.as_view(), name="course-lessons"),
+    path("courses/<str:slug>/lessons/<str:lesson_slug>/", views.LMSLessonPublicDetailView.as_view(), name="lesson-detail"),
+    path("courses/<str:slug>/enroll/", views.LMSUserEnrollView.as_view(), name="course-enroll"),
+    path("me/enrollments/", views.LMSUserEnrollmentListView.as_view(), name="user-enrollment-list"),
+    path("me/skills/", views.LMSUserSkillListView.as_view(), name="user-skill-list"),
+    path("admin/categories/", views.LMSAdminCategoryListCreateView.as_view(), name="admin-category-list-create"),
+    path("admin/categories/<int:category_id>/", views.LMSAdminCategoryDetailView.as_view(), name="admin-category-detail"),
+    path("admin/courses/", views.LMSAdminCourseListCreateView.as_view(), name="admin-course-list-create"),
+    path("admin/courses/<int:course_id>/", views.LMSAdminCourseDetailView.as_view(), name="admin-course-detail"),
+    path("admin/courses/<int:course_id>/publish/", views.LMSAdminCoursePublishView.as_view(), name="admin-course-publish"),
+    path("admin/courses/<int:course_id>/archive/", views.LMSAdminCourseArchiveView.as_view(), name="admin-course-archive"),
+    path("admin/courses/<int:course_id>/lessons/", views.LMSAdminLessonListCreateView.as_view(), name="admin-lesson-list-create"),
+    path("admin/lessons/<int:lesson_id>/", views.LMSAdminLessonDetailView.as_view(), name="admin-lesson-detail"),
+    path("admin/courses/<int:course_id>/report/", views.LMSAdminCourseReportView.as_view(), name="admin-course-report"),
+]

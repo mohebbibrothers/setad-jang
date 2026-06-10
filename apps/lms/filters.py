@@ -9,7 +9,7 @@ import django_filters
 from django.db.models import Q
 
 from apps.lms.choices import CourseLevel, CourseStatus
-from apps.lms.models import Course, LMSCategory
+from apps.lms.models import Course, Enrollment, LMSCategory
 
 
 class CoursePublicFilter(django_filters.FilterSet):
@@ -50,3 +50,18 @@ class LMSCategoryAdminFilter(django_filters.FilterSet):
     class Meta:
         model = LMSCategory
         fields: list[str] = []
+
+
+class CourseReportEnrollmentFilter(django_filters.FilterSet):
+    """Filters for admin course report enrollment rows."""
+
+    status = django_filters.CharFilter(field_name="status", lookup_expr="exact")
+    passed = django_filters.BooleanFilter(method="filter_passed")
+
+    class Meta:
+        model = Enrollment
+        fields: list[str] = []
+
+    def filter_passed(self, queryset, name, value):
+        """Filter enrollments by certificate existence."""
+        return queryset.filter(certificate__isnull=not value)

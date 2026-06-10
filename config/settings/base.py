@@ -483,6 +483,10 @@ SPECTACULAR_SETTINGS = {
         "MadadkarCampaignStatusEnum": "apps.madadkar.choices.CampaignStatus",
         "MadadkarParticipationStatusEnum": "apps.madadkar.choices.ParticipationStatus",
         "MadadkarPaymentStatusEnum": "apps.madadkar.choices.PaymentStatus",
+        "LMSCourseLevelEnum": "apps.lms.choices.CourseLevel",
+        "LMSCourseStatusEnum": "apps.lms.choices.CourseStatus",
+        "LMSEnrollmentStatusEnum": "apps.lms.choices.EnrollmentStatus",
+        "LMSBadgeLevelEnum": "apps.lms.choices.BadgeLevel",
         "HealthStatusEnum": ("ok", "error", "degraded"),
     },
     "POSTPROCESSING_HOOKS": [
