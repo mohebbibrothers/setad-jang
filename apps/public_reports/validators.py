@@ -6,7 +6,7 @@ from django.core.exceptions import ValidationError
 
 ALLOWED_IMAGE_EXTENSIONS = ["jpg", "jpeg", "png", "webp"]
 MAX_IMAGE_SIZE_MB = 5
-MAX_ATTACHMENTS_PER_REPORT = 10
+MAX_ATTACHMENTS_PER_REPORT = 5
 
 
 def validate_image_extension(file):

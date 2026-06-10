@@ -49,6 +49,7 @@ from .serializers import (
     ReportCreateSerializer,
     ReportDetailSerializer,
     ReportListSerializer,
+    ReportPublicCreatedSerializer,
     ReportStatusUpdateSerializer,
     ReportSubjectAdminSerializer,
     ReportSubjectCreateSerializer,
@@ -56,6 +57,7 @@ from .serializers import (
     ReportSubjectUpdateSerializer,
 )
 from .services import (
+    InvalidReportStatusTransition,
     create_report,
     create_subject,
     delete_subject,
@@ -104,6 +106,10 @@ SUBJECT_ADMIN_DETAIL_SUCCESS_RESPONSE = build_success_response_serializer(
 REPORT_DETAIL_SUCCESS_RESPONSE = build_success_response_serializer(
     name="ReportDetailSuccessResponse",
     data_serializer=ReportDetailSerializer,
+)
+REPORT_PUBLIC_CREATED_SUCCESS_RESPONSE = build_success_response_serializer(
+    name="ReportPublicCreatedSuccessResponse",
+    data_serializer=ReportPublicCreatedSerializer,
 )
 REPORT_PAGINATED_SUCCESS_RESPONSE = build_paginated_success_response_serializer(
     name="ReportListPaginatedSuccessResponse",
@@ -163,7 +169,7 @@ class ReportCreateAPIView(APIView):
         ),
         request=ReportCreateSerializer,
         responses={
-            201: REPORT_DETAIL_SUCCESS_RESPONSE,
+            201: REPORT_PUBLIC_CREATED_SUCCESS_RESPONSE,
             400: GENERIC_ERROR_RESPONSE,
             429: GENERIC_ERROR_RESPONSE,
         },
@@ -199,7 +205,7 @@ class ReportCreateAPIView(APIView):
         )
 
         return CreatedResponse(
-            data=ReportDetailSerializer(report).data,
+            data=ReportPublicCreatedSerializer(report).data,
             message="گزارش شما با موفقیت ثبت شد.",
         )
 
@@ -547,11 +553,17 @@ class AdminReportStatusUpdateAPIView(APIView):
         old_status = report.status
         new_status = serializer.validated_data["status"]
 
-        report = update_report_status(
-            report=report,
-            status=new_status,
-            admin_note=serializer.validated_data.get("admin_note", ""),
-        )
+        try:
+            report = update_report_status(
+                report=report,
+                status=new_status,
+                admin_note=serializer.validated_data.get("admin_note", ""),
+            )
+        except InvalidReportStatusTransition as exc:
+            return ErrorResponse(
+                message=str(exc),
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
 
         # Audit — sync چون status change compliance-critical است
         metadata = extract_audit_metadata(request)

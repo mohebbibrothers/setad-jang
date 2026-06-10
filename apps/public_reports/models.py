@@ -27,6 +27,9 @@ class ReportSubject(BaseModel):
         verbose_name = "موضوع گزارش"
         verbose_name_plural = "موضوعات گزارش"
         ordering = ["order", "title"]
+        indexes = [
+            models.Index(fields=["is_active", "order", "title"]),
+        ]
 
     def __str__(self):
         return self.title
@@ -65,6 +68,11 @@ class Report(BaseModel):
         verbose_name = "گزارش مردمی"
         verbose_name_plural = "گزارشات مردمی"
         ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["status", "-created_at"]),
+            models.Index(fields=["subject", "status", "-created_at"]),
+            models.Index(fields=["submitter_ip", "-created_at"]),
+        ]
 
     def __str__(self):
         return f"{self.full_name} - {self.subject.title}"

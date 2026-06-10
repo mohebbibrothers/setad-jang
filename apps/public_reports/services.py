@@ -17,10 +17,23 @@ import logging
 
 from django.db import transaction
 
-from .choices import ReportStatus
+from .choices import REPORT_ALLOWED_STATUS_TRANSITIONS, ReportStatus
 from .models import Report, ReportAttachment, ReportSubject
 
 logger = logging.getLogger("apps.public_reports")
+
+
+# ============================================================
+# Exceptions
+# ============================================================
+
+
+class PublicReportsServiceError(Exception):
+    """Base exception for public reports service layer errors."""
+
+
+class InvalidReportStatusTransition(PublicReportsServiceError):
+    """Raised when an admin tries to perform an invalid report state transition."""
 
 
 # ============================================================
@@ -165,6 +178,18 @@ def update_report_status(
         raise ValueError("وضعیت نامعتبر است.")
 
     old_status = report.status
+    allowed_next_statuses = REPORT_ALLOWED_STATUS_TRANSITIONS.get(old_status, frozenset())
+    if status not in allowed_next_statuses:
+        logger.warning(
+            "Invalid public report status transition report_id=%s old_status=%s requested_status=%s",
+            report.pk,
+            old_status,
+            status,
+        )
+        raise InvalidReportStatusTransition(
+            "تغییر وضعیت گزارش از حالت فعلی به وضعیت انتخاب‌شده مجاز نیست.",
+        )
+
     report.status = status
 
     if admin_note:

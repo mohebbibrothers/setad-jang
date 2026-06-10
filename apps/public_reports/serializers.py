@@ -117,6 +117,26 @@ class ReportListSerializer(serializers.ModelSerializer):
         )
 
 
+class ReportPublicCreatedSerializer(serializers.ModelSerializer):
+    """Public response serializer for newly-created reports without internal metadata."""
+
+    subject = ReportSubjectPublicSerializer(read_only=True)
+    attachments = ReportAttachmentSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Report
+        fields = (
+            "id",
+            "full_name",
+            "phone_number",
+            "subject",
+            "description",
+            "status",
+            "attachments",
+            "created_at",
+        )
+
+
 class ReportDetailSerializer(serializers.ModelSerializer):
     """ReportDetailSerializer implementation for the public_reports application."""
     subject = ReportSubjectPublicSerializer(read_only=True)

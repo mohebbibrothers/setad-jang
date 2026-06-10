@@ -3084,7 +3084,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ReportDetailSuccessResponse'
+                $ref: '#/components/schemas/ReportPublicCreatedSuccessResponse'
           description: ''
         '400':
           content:
@@ -10635,7 +10635,7 @@ components:
           items:
             type: string
             format: uri
-          maxItems: 10
+          maxItems: 5
       required:
       - description
       - full_name
@@ -10778,6 +10778,67 @@ components:
       required:
       - count
       - results
+    ReportPublicCreated:
+      type: object
+      description: Public response serializer for newly-created reports without internal
+        metadata.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        full_name:
+          type: string
+          title: نام گزارش‌دهنده
+          maxLength: 150
+        phone_number:
+          type: string
+          nullable: true
+          title: شماره تماس
+          maxLength: 14
+        subject:
+          allOf:
+          - $ref: '#/components/schemas/ReportSubjectPublic'
+          readOnly: true
+        description:
+          type: string
+          title: توضیحات گزارش
+        status:
+          allOf:
+          - $ref: '#/components/schemas/ReportStatusEnum'
+          title: وضعیت بررسی
+        attachments:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReportAttachment'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: تاریخ ایجاد
+      required:
+      - attachments
+      - created_at
+      - description
+      - full_name
+      - id
+      - subject
+    ReportPublicCreatedSuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          default: true
+        status_code:
+          type: integer
+          default: 200
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/ReportPublicCreated'
+      required:
+      - data
+      - message
     ReportStatusEnum:
       enum:
       - pending
