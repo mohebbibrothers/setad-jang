@@ -1,5 +1,5 @@
 """
-Enumeration choices for Tabyin content metadata.
+Enumeration choices for Tabyin content metadata and submission workflows.
 """
 
 from django.db import models
@@ -19,3 +19,23 @@ class SyncMode(models.TextChoices):
 
     FULL = "full", "کامل"
     INCREMENTAL = "incremental", "افزایشی"
+
+
+class ContentOrigin(models.TextChoices):
+    """منشأ محتوای تبیین."""
+
+    EXTERNAL = "external", "همگام‌سازی خارجی"
+    USER_SUBMITTED = "user_submitted", "ارسالی کاربر"
+
+
+class SubmissionStatus(models.TextChoices):
+    """وضعیت بررسی محتوای ارسال‌شده توسط کاربر."""
+
+    APPROVED = "approved", "تأیید شده"
+    PENDING_REVIEW = "pending_review", "در انتظار بررسی"
+    REJECTED = "rejected", "رد شده"
+
+
+SUBMISSION_REVIEWABLE_STATUSES: frozenset[str] = frozenset(
+    [SubmissionStatus.PENDING_REVIEW]
+)

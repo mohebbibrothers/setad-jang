@@ -2,10 +2,14 @@
 Database models for synced Tabyin content and attachments.
 """
 
+import uuid
+
+from django.conf import settings
 from django.db import models
+from django.utils import timezone
 
 from apps.core.models import BaseModel
-from apps.tabyin.choices import MediaType
+from apps.tabyin.choices import ContentOrigin, MediaType, SubmissionStatus
 from apps.tabyin.managers import (
     TabyinContentAllManager,
     TabyinContentManager,
@@ -20,13 +24,53 @@ class TabyinContent(BaseModel):
     داده‌ها از منبع خارجی sync می‌شوند و در دیتابیس ما ذخیره می‌شوند.
     """
 
-    # --- شناسه منبع ---
+    # --- شناسه پایدار ---
     external_id = models.CharField(
         max_length=64,
         unique=True,
         db_index=True,
-        verbose_name="شناسه منبع",
-        help_text="شناسه یکتای محتوا در سایت محتوانگار (مقدار id در JSON).",
+        verbose_name="شناسه پایدار",
+        help_text="برای محتوای خارجی id منبع و برای محتوای کاربر local UUID است.",
+    )
+    origin = models.CharField(
+        max_length=20,
+        choices=ContentOrigin.choices,
+        default=ContentOrigin.EXTERNAL,
+        db_index=True,
+        verbose_name="منشأ محتوا",
+    )
+    submitted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="tabyin_submissions",
+        verbose_name="ارسال‌کننده",
+    )
+    submission_status = models.CharField(
+        max_length=20,
+        choices=SubmissionStatus.choices,
+        default=SubmissionStatus.APPROVED,
+        db_index=True,
+        verbose_name="وضعیت بررسی",
+    )
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="tabyin_reviewed_submissions",
+        verbose_name="بررسی‌کننده",
+    )
+    reviewed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="زمان بررسی",
+    )
+    admin_note = models.TextField(
+        blank=True,
+        default="",
+        verbose_name="یادداشت ادمین",
     )
 
     # --- محتوای اصلی ---
@@ -116,8 +160,16 @@ class TabyinContent(BaseModel):
         verbose_name_plural = "محتواهای تبیین"
         indexes = [
             models.Index(
-                fields=["is_active", "is_deleted_in_source", "-source_created_at"],
+                fields=["is_active", "is_deleted_in_source", "submission_status", "-source_created_at"],
                 name="idx_tabyin_public_list",
+            ),
+            models.Index(
+                fields=["origin", "submission_status", "-created_at"],
+                name="idx_tabyin_submission_queue",
+            ),
+            models.Index(
+                fields=["submitted_by", "submission_status", "-created_at"],
+                name="idx_tabyin_user_submissions",
             ),
             models.Index(
                 fields=["external_id"],
@@ -131,6 +183,14 @@ class TabyinContent(BaseModel):
 
     def __str__(self) -> str:
         return self.title or self.external_id
+
+    def save(self, *args: object, **kwargs: object) -> None:
+        """Generate local stable id and timestamps for user submissions."""
+        if not self.external_id:
+            self.external_id = f"local-{uuid.uuid4().hex}"
+        if self.origin == ContentOrigin.USER_SUBMITTED and self.source_created_at is None:
+            self.source_created_at = timezone.now()
+        super().save(*args, **kwargs)
 
     @property
     def primary_media_type(self) -> str:

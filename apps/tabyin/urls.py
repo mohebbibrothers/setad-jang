@@ -3,12 +3,8 @@ URL routing اپ تبیین.
 
 ساختار:
 - Public: مسیرهای عمومی محتوا
-- Admin: مدیریت محتواها (لیست، جزئیات، toggle)
-- Admin async sync: dispatch کردن sync به‌صورت async و پیگیری وضعیت آن
-
-نکته:
-نام مسیرها به‌صورت kebab-case تعریف شده‌اند تا با استاندارد پروژه
-هماهنگ باشند و در `reverse()` نیز قابل اتکا بمانند.
+- User: ارسال محتوا توسط کاربران احرازشده و مشاهده وضعیت بررسی
+- Admin: مدیریت محتواها، بررسی submissions و sync async
 """
 
 from django.urls import path
@@ -29,6 +25,17 @@ urlpatterns = [
         views.PublicTabyinContentDetailView.as_view(),
         name="public-content-detail",
     ),
+    # ── User submissions ────────────────────────────
+    path(
+        "me/submissions/",
+        views.UserTabyinSubmissionListCreateView.as_view(),
+        name="user-submission-list-create",
+    ),
+    path(
+        "me/submissions/<int:content_id>/",
+        views.UserTabyinSubmissionDetailView.as_view(),
+        name="user-submission-detail",
+    ),
     # ── Admin: Content management ───────────────────
     path(
         "admin/contents/",
@@ -44,6 +51,27 @@ urlpatterns = [
         "admin/contents/<str:external_id>/toggle/",
         views.AdminTabyinContentToggleView.as_view(),
         name="admin-content-toggle",
+    ),
+    # ── Admin: User submission review ───────────────
+    path(
+        "admin/submissions/",
+        views.AdminTabyinSubmissionQueueView.as_view(),
+        name="admin-submission-list",
+    ),
+    path(
+        "admin/submissions/<int:content_id>/",
+        views.AdminTabyinSubmissionDetailView.as_view(),
+        name="admin-submission-detail",
+    ),
+    path(
+        "admin/submissions/<int:content_id>/approve/",
+        views.AdminTabyinSubmissionApproveView.as_view(),
+        name="admin-submission-approve",
+    ),
+    path(
+        "admin/submissions/<int:content_id>/reject/",
+        views.AdminTabyinSubmissionRejectView.as_view(),
+        name="admin-submission-reject",
     ),
     # ── Admin: Async sync (Celery) ──────────────────
     path(

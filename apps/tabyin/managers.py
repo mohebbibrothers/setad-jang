@@ -9,13 +9,27 @@ from __future__ import annotations
 
 from django.db import models
 
+from apps.tabyin.choices import SubmissionStatus
+
 
 class TabyinContentQuerySet(models.QuerySet):
     """QuerySet سفارشی برای محتوای تبیین."""
 
     def active(self) -> TabyinContentQuerySet:
-        """فقط محتواهای فعال و حذف‌نشده در منبع."""
-        return self.filter(is_active=True, is_deleted_in_source=False)
+        """فقط محتواهای فعال، حذف‌نشده و تأییدشده برای نمایش عمومی."""
+        return self.filter(
+            is_active=True,
+            is_deleted_in_source=False,
+            submission_status=SubmissionStatus.APPROVED,
+        )
+
+    def pending_review(self) -> TabyinContentQuerySet:
+        """محتواهای ارسالی کاربران که هنوز توسط ادمین بررسی نشده‌اند."""
+        return self.filter(submission_status=SubmissionStatus.PENDING_REVIEW)
+
+    def user_submitted(self) -> TabyinContentQuerySet:
+        """محتواهای ایجادشده توسط کاربران سایت."""
+        return self.filter(origin="user_submitted")
 
     def with_attachments(self) -> TabyinContentQuerySet:
         """Prefetch پیوست‌ها برای جلوگیری از N+1 query."""
@@ -26,20 +40,12 @@ class TabyinContentQuerySet(models.QuerySet):
         return self.filter(is_deleted_in_source=True)
 
 
-# ─────────────────────────────────────────────────────────────
-# Manager پیش‌فرض — فقط محتوای فعال
-# با from_queryset، همه متدهای QuerySet (active, with_attachments, ...)
-# به‌صورت خودکار روی Manager هم در دسترس هستند.
-# ─────────────────────────────────────────────────────────────
 class TabyinContentManager(models.Manager.from_queryset(TabyinContentQuerySet)):
-    """Manager پیش‌فرض — به‌صورت خودکار فقط محتوای فعال را برمی‌گرداند."""
+    """Manager پیش‌فرض — فقط محتوای قابل نمایش عمومی را برمی‌گرداند."""
 
     def get_queryset(self) -> TabyinContentQuerySet:
         return super().get_queryset().active()
 
 
-# ─────────────────────────────────────────────────────────────
-# Manager برای دسترسی به همه رکوردها (شامل غیرفعال و soft-deleted)
-# ─────────────────────────────────────────────────────────────
 class TabyinContentAllManager(models.Manager.from_queryset(TabyinContentQuerySet)):
     """Manager برای دسترسی به همه رکوردها — استفاده در ادمین و sync."""

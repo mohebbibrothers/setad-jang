@@ -50,8 +50,13 @@ from apps.tabyin.serializers import (
     AdminTabyinContentDetailSerializer,
     AdminTabyinContentListSerializer,
     AdminTabyinContentToggleSerializer,
+    AdminTabyinSubmissionQueueSerializer,
+    AdminTabyinSubmissionReviewSerializer,
     PublicTabyinContentDetailSerializer,
     PublicTabyinContentListSerializer,
+    UserTabyinSubmissionCreateSerializer,
+    UserTabyinSubmissionDetailSerializer,
+    UserTabyinSubmissionListSerializer,
 )
 from apps.tabyin.throttles import (
     TabyinPublicAnonThrottle,
@@ -209,6 +214,108 @@ class PublicTabyinContentDetailView(APIView):
 
         serializer = PublicTabyinContentDetailSerializer(content)
         return SuccessResponse(data=serializer.data)
+
+
+# ============================================================
+# User Views — Content submissions
+# ============================================================
+
+
+class UserTabyinSubmissionListCreateView(APIView):
+    """Authenticated users can submit content and list their own submissions."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        operation_id="tabyin_user_submissions_list",
+        summary="لیست محتواهای ارسالی من",
+        tags=[TAG_TABYIN_PUBLIC],
+        responses={
+            200: build_paginated_success_response_serializer(
+                name="UserTabyinSubmissionListResponse",
+                item_serializer=UserTabyinSubmissionListSerializer,
+            ),
+        },
+    )
+    def get(self, request: Request) -> SuccessResponse:
+        queryset = selectors.get_user_submissions(user_id=request.user.pk)
+        paginator = StandardPagination()
+        page = paginator.paginate_queryset(queryset, request)
+        serializer = UserTabyinSubmissionListSerializer(page, many=True)
+        return paginator.get_paginated_response(
+            serializer.data,
+            message="لیست محتواهای ارسالی شما با موفقیت دریافت شد.",
+        )
+
+    @extend_schema(
+        operation_id="tabyin_user_submission_create",
+        summary="ارسال محتوای جدید برای بررسی ادمین",
+        tags=[TAG_TABYIN_PUBLIC],
+        request=UserTabyinSubmissionCreateSerializer,
+        responses={
+            201: build_success_response_serializer(
+                name="UserTabyinSubmissionCreatedResponse",
+                data_serializer=UserTabyinSubmissionDetailSerializer,
+            ),
+            400: build_error_response_serializer(name="UserTabyinSubmissionCreateBadRequest"),
+        },
+    )
+    def post(self, request: Request) -> SuccessResponse:
+        serializer = UserTabyinSubmissionCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        content = services.submit_user_content(
+            user=request.user,
+            title=serializer.validated_data["title"],
+            description=serializer.validated_data["description"],
+            attachments=serializer.validated_data.get("attachments", []),
+        )
+
+        metadata = extract_audit_metadata(request)
+        log_action_async(
+            user_id=request.user.pk,
+            action=audit_actions.TABYIN_USER_SUBMISSION_SUBMITTED,
+            resource_type="tabyin_content",
+            resource_id=str(content.pk),
+            extra_data={"external_id": content.external_id},
+            **metadata,
+        )
+
+        return SuccessResponse(
+            data=UserTabyinSubmissionDetailSerializer(content).data,
+            status_code=status.HTTP_201_CREATED,
+            message="محتوای شما ثبت شد و پس از تأیید ادمین نمایش داده می‌شود.",
+        )
+
+
+class UserTabyinSubmissionDetailView(APIView):
+    """Authenticated users can inspect one of their own submissions."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        operation_id="tabyin_user_submission_retrieve",
+        summary="جزئیات محتوای ارسالی من",
+        tags=[TAG_TABYIN_PUBLIC],
+        responses={
+            200: build_success_response_serializer(
+                name="UserTabyinSubmissionDetailResponse",
+                data_serializer=UserTabyinSubmissionDetailSerializer,
+            ),
+            404: build_error_response_serializer(name="UserTabyinSubmissionNotFound"),
+        },
+    )
+    def get(self, request: Request, content_id: int) -> SuccessResponse | ErrorResponse:
+        content = selectors.get_user_submission_by_id(
+            user_id=request.user.pk,
+            content_id=content_id,
+        )
+        if content is None:
+            return ErrorResponse(
+                message="محتوایی با این شناسه یافت نشد.",
+                status_code=status.HTTP_404_NOT_FOUND,
+            )
+        return SuccessResponse(data=UserTabyinSubmissionDetailSerializer(content).data)
 
 
 # ============================================================
@@ -381,6 +488,165 @@ class AdminTabyinContentToggleView(APIView):
         return SuccessResponse(
             data=detail_serializer.data,
             message="وضعیت محتوا با موفقیت تغییر کرد.",
+        )
+
+
+# ============================================================
+# Admin Views — User submission review
+# ============================================================
+
+
+class AdminTabyinSubmissionQueueView(APIView):
+    """Admin review queue for user-submitted Tabyin content."""
+
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+    @extend_schema(
+        operation_id="tabyin_admin_submissions_queue",
+        summary="صف بررسی محتواهای ارسالی کاربران",
+        tags=[TAG_TABYIN_ADMIN],
+        responses={
+            200: build_paginated_success_response_serializer(
+                name="AdminTabyinSubmissionQueueResponse",
+                item_serializer=AdminTabyinSubmissionQueueSerializer,
+            ),
+        },
+    )
+    def get(self, request: Request) -> SuccessResponse:
+        queryset = selectors.get_admin_user_submissions_queue()
+        status_filter = request.query_params.get("submission_status")
+        if status_filter:
+            queryset = queryset.filter(submission_status=status_filter)
+
+        paginator = StandardPagination()
+        page = paginator.paginate_queryset(queryset, request)
+        serializer = AdminTabyinSubmissionQueueSerializer(page, many=True)
+        return paginator.get_paginated_response(
+            serializer.data,
+            message="صف بررسی محتواهای ارسالی با موفقیت دریافت شد.",
+        )
+
+
+class AdminTabyinSubmissionDetailView(APIView):
+    """Admin detail view for one user-submitted content item."""
+
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+    @extend_schema(
+        operation_id="tabyin_admin_submission_retrieve",
+        summary="جزئیات محتوای ارسالی کاربر",
+        tags=[TAG_TABYIN_ADMIN],
+        responses={
+            200: build_success_response_serializer(
+                name="AdminTabyinSubmissionDetailResponse",
+                data_serializer=AdminTabyinSubmissionQueueSerializer,
+            ),
+            404: build_error_response_serializer(name="AdminTabyinSubmissionNotFound"),
+        },
+    )
+    def get(self, request: Request, content_id: int) -> SuccessResponse | ErrorResponse:
+        content = selectors.get_admin_user_submission_by_id(content_id)
+        if content is None:
+            return ErrorResponse(
+                message="محتوای ارسالی یافت نشد.",
+                status_code=status.HTTP_404_NOT_FOUND,
+            )
+        return SuccessResponse(data=AdminTabyinSubmissionQueueSerializer(content).data)
+
+
+class AdminTabyinSubmissionApproveView(APIView):
+    """Approve a pending user-submitted Tabyin content item."""
+
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+    @extend_schema(
+        operation_id="tabyin_admin_submission_approve",
+        summary="تأیید محتوای ارسالی کاربر",
+        tags=[TAG_TABYIN_ADMIN],
+        request=AdminTabyinSubmissionReviewSerializer,
+        responses={
+            200: build_success_response_serializer(
+                name="AdminTabyinSubmissionApproveResponse",
+                data_serializer=AdminTabyinSubmissionQueueSerializer,
+            ),
+            400: build_error_response_serializer(name="AdminTabyinSubmissionReviewBadRequest"),
+            404: build_error_response_serializer(name="AdminTabyinSubmissionReviewNotFound"),
+        },
+    )
+    def post(self, request: Request, content_id: int) -> SuccessResponse | ErrorResponse:
+        content = selectors.get_admin_user_submission_by_id(content_id)
+        if content is None:
+            return ErrorResponse(message="محتوای ارسالی یافت نشد.", status_code=404)
+        serializer = AdminTabyinSubmissionReviewSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            content = services.approve_user_submission(
+                content=content,
+                admin=request.user,
+                admin_note=serializer.validated_data.get("admin_note", ""),
+            )
+        except services.SubmissionNotReviewable as exc:
+            return ErrorResponse(message=str(exc))
+
+        metadata = extract_audit_metadata(request)
+        log_action_async(
+            user_id=request.user.pk,
+            action=audit_actions.TABYIN_USER_SUBMISSION_APPROVED,
+            resource_type="tabyin_content",
+            resource_id=str(content.pk),
+            **metadata,
+        )
+        return SuccessResponse(
+            data=AdminTabyinSubmissionQueueSerializer(content).data,
+            message="محتوای ارسالی با موفقیت تأیید شد.",
+        )
+
+
+class AdminTabyinSubmissionRejectView(APIView):
+    """Reject a pending user-submitted Tabyin content item."""
+
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+    @extend_schema(
+        operation_id="tabyin_admin_submission_reject",
+        summary="رد محتوای ارسالی کاربر",
+        tags=[TAG_TABYIN_ADMIN],
+        request=AdminTabyinSubmissionReviewSerializer,
+        responses={
+            200: build_success_response_serializer(
+                name="AdminTabyinSubmissionRejectResponse",
+                data_serializer=AdminTabyinSubmissionQueueSerializer,
+            ),
+            400: build_error_response_serializer(name="AdminTabyinSubmissionRejectBadRequest"),
+            404: build_error_response_serializer(name="AdminTabyinSubmissionRejectNotFound"),
+        },
+    )
+    def post(self, request: Request, content_id: int) -> SuccessResponse | ErrorResponse:
+        content = selectors.get_admin_user_submission_by_id(content_id)
+        if content is None:
+            return ErrorResponse(message="محتوای ارسالی یافت نشد.", status_code=404)
+        serializer = AdminTabyinSubmissionReviewSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            content = services.reject_user_submission(
+                content=content,
+                admin=request.user,
+                admin_note=serializer.validated_data.get("admin_note", ""),
+            )
+        except services.SubmissionNotReviewable as exc:
+            return ErrorResponse(message=str(exc))
+
+        metadata = extract_audit_metadata(request)
+        log_action_async(
+            user_id=request.user.pk,
+            action=audit_actions.TABYIN_USER_SUBMISSION_REJECTED,
+            resource_type="tabyin_content",
+            resource_id=str(content.pk),
+            **metadata,
+        )
+        return SuccessResponse(
+            data=AdminTabyinSubmissionQueueSerializer(content).data,
+            message="محتوای ارسالی رد شد.",
         )
 
 

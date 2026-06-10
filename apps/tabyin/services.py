@@ -23,9 +23,12 @@ from datetime import date, datetime
 from typing import Any, Literal
 
 from celery.result import AsyncResult
+from django.db import transaction
+from django.utils import timezone
 
 from apps.core.cache import cache_delete_namespace
-from apps.tabyin.models import TabyinContent
+from apps.tabyin.choices import SUBMISSION_REVIEWABLE_STATUSES, ContentOrigin, SubmissionStatus
+from apps.tabyin.models import TabyinAttachment, TabyinContent
 from apps.tabyin.providers import get_tabyin_provider
 from apps.tabyin.selectors import (
     PUBLIC_DETAIL_NAMESPACE,
@@ -54,6 +57,146 @@ def _invalidate_public_caches() -> None:
     cache_delete_namespace(PUBLIC_LIST_NAMESPACE)
     cache_delete_namespace(PUBLIC_DETAIL_NAMESPACE)
     logger.info("Public tabyin caches invalidated")
+
+
+
+# ============================================================
+# Exceptions
+# ============================================================
+
+
+class TabyinServiceError(Exception):
+    """Base exception for Tabyin service layer errors."""
+
+
+class SubmissionNotReviewable(TabyinServiceError):
+    """Raised when an admin tries to review a non-pending submission."""
+
+
+# ============================================================
+# User submissions
+# ============================================================
+
+
+@transaction.atomic
+def submit_user_content(
+    *,
+    user: Any,
+    title: str,
+    description: str,
+    attachments: list[dict[str, Any]] | None = None,
+) -> TabyinContent:
+    """
+    Create a user-submitted Tabyin content item in pending-review state.
+
+    User submissions are never public immediately. They become public only after
+    admin approval, while externally-synced content remains auto-approved.
+    """
+    now = timezone.now()
+    content = TabyinContent.objects.create(
+        title=title,
+        description=description,
+        origin=ContentOrigin.USER_SUBMITTED,
+        submitted_by=user,
+        submission_status=SubmissionStatus.PENDING_REVIEW,
+        is_active=False,
+        is_deleted_in_source=False,
+        author_username=getattr(user, "primary_identifier_value", "") or getattr(user, "email", "") or "",
+        source_created_at=now,
+        source_updated_at=now,
+        raw_payload={"source": "user_submission"},
+    )
+
+    for index, attachment in enumerate(attachments or []):
+        TabyinAttachment.objects.create(
+            content=content,
+            url=attachment["url"],
+            relative_url=attachment.get("url", ""),
+            media_type=attachment.get("media_type", "other"),
+            title=attachment.get("title", ""),
+            order=attachment.get("order", index),
+        )
+
+    logger.info(
+        "User Tabyin submission created content_id=%s external_id=%s user_id=%s attachments=%s",
+        content.pk,
+        content.external_id,
+        getattr(user, "pk", None),
+        len(attachments or []),
+    )
+    return content
+
+
+@transaction.atomic
+def approve_user_submission(
+    *,
+    content: TabyinContent,
+    admin: Any,
+    admin_note: str = "",
+) -> TabyinContent:
+    """Approve a pending user submission and make it visible publicly."""
+    if content.submission_status not in SUBMISSION_REVIEWABLE_STATUSES:
+        raise SubmissionNotReviewable("این محتوا قبلاً بررسی شده و قابل بررسی مجدد نیست.")
+
+    content.submission_status = SubmissionStatus.APPROVED
+    content.reviewed_by = admin
+    content.reviewed_at = timezone.now()
+    content.admin_note = admin_note
+    content.is_active = True
+    content.is_deleted_in_source = False
+    content.save(
+        update_fields=[
+            "submission_status",
+            "reviewed_by",
+            "reviewed_at",
+            "admin_note",
+            "is_active",
+            "is_deleted_in_source",
+            "updated_at",
+        ]
+    )
+    _invalidate_public_caches()
+    logger.info(
+        "User Tabyin submission approved content_id=%s admin_id=%s",
+        content.pk,
+        getattr(admin, "pk", None),
+    )
+    return content
+
+
+@transaction.atomic
+def reject_user_submission(
+    *,
+    content: TabyinContent,
+    admin: Any,
+    admin_note: str = "",
+) -> TabyinContent:
+    """Reject a pending user submission and keep it hidden from public listings."""
+    if content.submission_status not in SUBMISSION_REVIEWABLE_STATUSES:
+        raise SubmissionNotReviewable("این محتوا قبلاً بررسی شده و قابل بررسی مجدد نیست.")
+
+    content.submission_status = SubmissionStatus.REJECTED
+    content.reviewed_by = admin
+    content.reviewed_at = timezone.now()
+    content.admin_note = admin_note
+    content.is_active = False
+    content.save(
+        update_fields=[
+            "submission_status",
+            "reviewed_by",
+            "reviewed_at",
+            "admin_note",
+            "is_active",
+            "updated_at",
+        ]
+    )
+    _invalidate_public_caches()
+    logger.info(
+        "User Tabyin submission rejected content_id=%s admin_id=%s",
+        content.pk,
+        getattr(admin, "pk", None),
+    )
+    return content
 
 
 # ============================================================

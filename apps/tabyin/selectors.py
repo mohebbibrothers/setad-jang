@@ -24,6 +24,7 @@ from apps.core.cache import (
     get_namespace_version,
     make_cache_key,
 )
+from apps.tabyin.choices import ContentOrigin, SubmissionStatus
 from apps.tabyin.models import TabyinContent
 
 logger = logging.getLogger("tabyin")
@@ -204,3 +205,64 @@ def get_admin_content_by_external_id(
         return TabyinContent.all_objects.with_attachments().get(external_id=external_id)
     except TabyinContent.DoesNotExist:
         return None
+
+
+# ============================================================
+# User submission selectors
+# ============================================================
+
+
+def get_user_submissions(*, user_id: int) -> QuerySet[TabyinContent]:
+    """List user-submitted contents owned by a specific user."""
+    return (
+        TabyinContent.all_objects.user_submitted()
+        .filter(submitted_by_id=user_id)
+        .prefetch_related("attachments")
+        .order_by("-created_at")
+    )
+
+
+def get_user_submission_by_id(*, user_id: int, content_id: int) -> TabyinContent | None:
+    """Get one user submission with owner-based IDOR protection."""
+    try:
+        return (
+            TabyinContent.all_objects.user_submitted()
+            .filter(pk=content_id, submitted_by_id=user_id)
+            .prefetch_related("attachments")
+            .get()
+        )
+    except TabyinContent.DoesNotExist:
+        return None
+
+
+def get_admin_user_submissions_queue() -> QuerySet[TabyinContent]:
+    """Admin review queue for user-submitted Tabyin contents."""
+    return (
+        TabyinContent.all_objects.filter(origin=ContentOrigin.USER_SUBMITTED)
+        .select_related("submitted_by", "reviewed_by")
+        .prefetch_related("attachments")
+        .order_by("-created_at")
+    )
+
+
+def get_admin_user_submission_by_id(content_id: int) -> TabyinContent | None:
+    """Admin lookup for one user-submitted content item."""
+    try:
+        return (
+            TabyinContent.all_objects.filter(
+                pk=content_id,
+                origin=ContentOrigin.USER_SUBMITTED,
+            )
+            .select_related("submitted_by", "reviewed_by")
+            .prefetch_related("attachments")
+            .get()
+        )
+    except TabyinContent.DoesNotExist:
+        return None
+
+
+def get_pending_user_submissions() -> QuerySet[TabyinContent]:
+    """Pending user-submitted contents waiting for admin review."""
+    return get_admin_user_submissions_queue().filter(
+        submission_status=SubmissionStatus.PENDING_REVIEW,
+    )

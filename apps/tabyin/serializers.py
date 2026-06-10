@@ -16,6 +16,7 @@ Serializers برای اپ تبیین.
 
 from rest_framework import serializers
 
+from apps.tabyin.choices import MediaType
 from apps.tabyin.models import TabyinAttachment, TabyinContent
 
 # ============================================================
@@ -68,6 +69,7 @@ class PublicTabyinContentListSerializer(serializers.ModelSerializer):
             "title",
             "description",
             "author_username",
+            "origin",
             "source_created_at",
             "source_url",
             "primary_media_type",
@@ -92,6 +94,7 @@ class PublicTabyinContentDetailSerializer(serializers.ModelSerializer):
             "title",
             "description",
             "author_username",
+            "origin",
             "source_entity_id",
             "source_created_at",
             "source_updated_at",
@@ -121,6 +124,11 @@ class AdminTabyinContentListSerializer(serializers.ModelSerializer):
             "external_id",
             "title",
             "author_username",
+            "origin",
+            "submission_status",
+            "submitted_by_id",
+            "reviewed_by_id",
+            "reviewed_at",
             "source_status",
             "source_type",
             "source_created_at",
@@ -147,6 +155,12 @@ class AdminTabyinContentDetailSerializer(serializers.ModelSerializer):
             "title",
             "description",
             "author_username",
+            "origin",
+            "submission_status",
+            "submitted_by_id",
+            "reviewed_by_id",
+            "reviewed_at",
+            "admin_note",
             "source_entity_id",
             "source_status",
             "source_type",
@@ -254,3 +268,104 @@ class AdminSyncTaskStatusSerializer(serializers.Serializer):
     successful = serializers.BooleanField(required=False, allow_null=True)
     result = SyncStatsSerializer(required=False, allow_null=True)
     error = serializers.CharField(required=False, allow_null=True)
+
+
+# ============================================================
+# User Submission Serializers
+# ============================================================
+
+
+class TabyinSubmissionAttachmentInputSerializer(serializers.Serializer):
+    """Input serializer for user-submitted content attachment URLs."""
+
+    url = serializers.URLField(max_length=1024)
+    media_type = serializers.ChoiceField(choices=MediaType.choices, default=MediaType.OTHER)
+    title = serializers.CharField(max_length=512, required=False, allow_blank=True)
+    order = serializers.IntegerField(required=False, min_value=0, default=0)
+
+
+class UserTabyinSubmissionCreateSerializer(serializers.Serializer):
+    """Input serializer for authenticated user content submissions."""
+
+    title = serializers.CharField(max_length=512)
+    description = serializers.CharField()
+    attachments = TabyinSubmissionAttachmentInputSerializer(
+        many=True,
+        required=False,
+        allow_empty=True,
+    )
+
+    def validate_attachments(self, value: list[dict]) -> list[dict]:
+        """Limit attachment count to keep review workload and payload size bounded."""
+        if len(value) > 5:
+            raise serializers.ValidationError("حداکثر ۵ پیوست برای هر محتوا مجاز است.")
+        return value
+
+
+class UserTabyinSubmissionListSerializer(serializers.ModelSerializer):
+    """List serializer for a user's own submitted contents."""
+
+    attachments_count = serializers.IntegerField(source="attachments.count", read_only=True)
+
+    class Meta:
+        model = TabyinContent
+        fields = [
+            "id",
+            "external_id",
+            "title",
+            "submission_status",
+            "admin_note",
+            "attachments_count",
+            "created_at",
+            "reviewed_at",
+        ]
+
+
+class UserTabyinSubmissionDetailSerializer(serializers.ModelSerializer):
+    """Detail serializer for a user's own submitted content."""
+
+    attachments = TabyinAttachmentSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = TabyinContent
+        fields = [
+            "id",
+            "external_id",
+            "title",
+            "description",
+            "submission_status",
+            "admin_note",
+            "attachments",
+            "created_at",
+            "updated_at",
+            "reviewed_at",
+        ]
+
+
+class AdminTabyinSubmissionReviewSerializer(serializers.Serializer):
+    """Input serializer for admin approval/rejection of user submissions."""
+
+    admin_note = serializers.CharField(required=False, allow_blank=True)
+
+
+class AdminTabyinSubmissionQueueSerializer(serializers.ModelSerializer):
+    """Admin serializer for reviewing user-submitted content."""
+
+    submitted_by_email = serializers.EmailField(source="submitted_by.email", read_only=True)
+    attachments = TabyinAttachmentSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = TabyinContent
+        fields = [
+            "id",
+            "external_id",
+            "title",
+            "description",
+            "submission_status",
+            "submitted_by_id",
+            "submitted_by_email",
+            "admin_note",
+            "attachments",
+            "created_at",
+            "reviewed_at",
+        ]

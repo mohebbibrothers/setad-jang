@@ -5224,6 +5224,140 @@ paths:
               schema:
                 $ref: '#/components/schemas/AdminTabyinContentToggleNotFoundResponse'
           description: ''
+  /api/v1/tabyin/admin/submissions/:
+    get:
+      operationId: tabyin_admin_submissions_queue
+      description: Admin review queue for user-submitted Tabyin content.
+      summary: صف بررسی محتواهای ارسالی کاربران
+      tags:
+      - تبیین — مدیریت
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminTabyinSubmissionQueueResponse'
+          description: ''
+  /api/v1/tabyin/admin/submissions/{content_id}/:
+    get:
+      operationId: tabyin_admin_submission_retrieve
+      description: Admin detail view for one user-submitted content item.
+      summary: جزئیات محتوای ارسالی کاربر
+      parameters:
+      - in: path
+        name: content_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - تبیین — مدیریت
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminTabyinSubmissionDetailResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminTabyinSubmissionNotFound'
+          description: ''
+  /api/v1/tabyin/admin/submissions/{content_id}/approve/:
+    post:
+      operationId: tabyin_admin_submission_approve
+      description: Approve a pending user-submitted Tabyin content item.
+      summary: تأیید محتوای ارسالی کاربر
+      parameters:
+      - in: path
+        name: content_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - تبیین — مدیریت
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminTabyinSubmissionReview'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AdminTabyinSubmissionReview'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AdminTabyinSubmissionReview'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminTabyinSubmissionApproveResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminTabyinSubmissionReviewBadRequest'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminTabyinSubmissionReviewNotFound'
+          description: ''
+  /api/v1/tabyin/admin/submissions/{content_id}/reject/:
+    post:
+      operationId: tabyin_admin_submission_reject
+      description: Reject a pending user-submitted Tabyin content item.
+      summary: رد محتوای ارسالی کاربر
+      parameters:
+      - in: path
+        name: content_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - تبیین — مدیریت
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminTabyinSubmissionReview'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AdminTabyinSubmissionReview'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AdminTabyinSubmissionReview'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminTabyinSubmissionRejectResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminTabyinSubmissionRejectBadRequest'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminTabyinSubmissionRejectNotFound'
+          description: ''
   /api/v1/tabyin/admin/sync/:
     post:
       operationId: tabyin_admin_sync_dispatch
@@ -5377,6 +5511,83 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PublicTabyinContentDetailNotFoundResponse'
+          description: ''
+  /api/v1/tabyin/me/submissions/:
+    get:
+      operationId: tabyin_user_submissions_list
+      description: Authenticated users can submit content and list their own submissions.
+      summary: لیست محتواهای ارسالی من
+      tags:
+      - تبیین — عمومی
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserTabyinSubmissionListResponse'
+          description: ''
+    post:
+      operationId: tabyin_user_submission_create
+      description: Authenticated users can submit content and list their own submissions.
+      summary: ارسال محتوای جدید برای بررسی ادمین
+      tags:
+      - تبیین — عمومی
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserTabyinSubmissionCreate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/UserTabyinSubmissionCreate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/UserTabyinSubmissionCreate'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserTabyinSubmissionCreatedResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserTabyinSubmissionCreateBadRequest'
+          description: ''
+  /api/v1/tabyin/me/submissions/{content_id}/:
+    get:
+      operationId: tabyin_user_submission_retrieve
+      description: Authenticated users can inspect one of their own submissions.
+      summary: جزئیات محتوای ارسالی من
+      parameters:
+      - in: path
+        name: content_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - تبیین — عمومی
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserTabyinSubmissionDetailResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserTabyinSubmissionNotFound'
           description: ''
 components:
   schemas:
@@ -5808,8 +6019,8 @@ components:
           readOnly: true
         external_id:
           type: string
-          title: شناسه منبع
-          description: شناسه یکتای محتوا در سایت محتوانگار (مقدار id در JSON).
+          title: شناسه پایدار
+          description: برای محتوای خارجی id منبع و برای محتوای کاربر local UUID است.
           maxLength: 64
         title:
           type: string
@@ -5823,6 +6034,32 @@ components:
           title: نام پدیدآورنده
           description: مقدار username از محتوانگار.
           maxLength: 255
+        origin:
+          allOf:
+          - $ref: '#/components/schemas/OriginEnum'
+          title: منشأ محتوا
+        submission_status:
+          allOf:
+          - $ref: '#/components/schemas/SubmissionStatusEnum'
+          title: وضعیت بررسی
+        submitted_by_id:
+          type: integer
+          nullable: true
+          title: ارسال‌کننده
+          readOnly: true
+        reviewed_by_id:
+          type: integer
+          nullable: true
+          title: بررسی‌کننده
+          readOnly: true
+        reviewed_at:
+          type: string
+          format: date-time
+          nullable: true
+          title: زمان بررسی
+        admin_note:
+          type: string
+          title: یادداشت ادمین
         source_entity_id:
           type: integer
           maximum: 9223372036854775807
@@ -5895,6 +6132,8 @@ components:
       - created_at
       - external_id
       - id
+      - reviewed_by_id
+      - submitted_by_id
       - updated_at
     AdminTabyinContentDetailForbiddenResponse:
       type: object
@@ -5951,8 +6190,8 @@ components:
           readOnly: true
         external_id:
           type: string
-          title: شناسه منبع
-          description: شناسه یکتای محتوا در سایت محتوانگار (مقدار id در JSON).
+          title: شناسه پایدار
+          description: برای محتوای خارجی id منبع و برای محتوای کاربر local UUID است.
           maxLength: 64
         title:
           type: string
@@ -5963,6 +6202,29 @@ components:
           title: نام پدیدآورنده
           description: مقدار username از محتوانگار.
           maxLength: 255
+        origin:
+          allOf:
+          - $ref: '#/components/schemas/OriginEnum'
+          title: منشأ محتوا
+        submission_status:
+          allOf:
+          - $ref: '#/components/schemas/SubmissionStatusEnum'
+          title: وضعیت بررسی
+        submitted_by_id:
+          type: integer
+          nullable: true
+          title: ارسال‌کننده
+          readOnly: true
+        reviewed_by_id:
+          type: integer
+          nullable: true
+          title: بررسی‌کننده
+          readOnly: true
+        reviewed_at:
+          type: string
+          format: date-time
+          nullable: true
+          title: زمان بررسی
         source_status:
           type: integer
           maximum: 9223372036854775807
@@ -6014,6 +6276,8 @@ components:
       - created_at
       - external_id
       - id
+      - reviewed_by_id
+      - submitted_by_id
       - updated_at
     AdminTabyinContentListForbiddenResponse:
       type: object
@@ -6127,6 +6391,228 @@ components:
       required:
       - data
       - message
+    AdminTabyinSubmissionApproveResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          default: true
+        status_code:
+          type: integer
+          default: 200
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/AdminTabyinSubmissionQueue'
+      required:
+      - data
+      - message
+    AdminTabyinSubmissionDetailResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          default: true
+        status_code:
+          type: integer
+          default: 200
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/AdminTabyinSubmissionQueue'
+      required:
+      - data
+      - message
+    AdminTabyinSubmissionNotFound:
+      type: object
+      properties:
+        success:
+          type: boolean
+          default: false
+        status_code:
+          type: integer
+        message:
+          type: string
+        errors:
+          nullable: true
+      required:
+      - message
+      - status_code
+    AdminTabyinSubmissionQueue:
+      type: object
+      description: Admin serializer for reviewing user-submitted content.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        external_id:
+          type: string
+          title: شناسه پایدار
+          description: برای محتوای خارجی id منبع و برای محتوای کاربر local UUID است.
+          maxLength: 64
+        title:
+          type: string
+          title: عنوان
+          maxLength: 512
+        description:
+          type: string
+          title: توضیحات
+        submission_status:
+          allOf:
+          - $ref: '#/components/schemas/SubmissionStatusEnum'
+          title: وضعیت بررسی
+        submitted_by_id:
+          type: integer
+          nullable: true
+          title: ارسال‌کننده
+          readOnly: true
+        submitted_by_email:
+          type: string
+          format: email
+          readOnly: true
+        admin_note:
+          type: string
+          title: یادداشت ادمین
+        attachments:
+          type: array
+          items:
+            $ref: '#/components/schemas/TabyinAttachment'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: تاریخ ایجاد
+        reviewed_at:
+          type: string
+          format: date-time
+          nullable: true
+          title: زمان بررسی
+      required:
+      - attachments
+      - created_at
+      - external_id
+      - id
+      - submitted_by_email
+      - submitted_by_id
+    AdminTabyinSubmissionQueueResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/AdminTabyinSubmissionQueueResponseData'
+        success:
+          type: boolean
+          default: true
+        status_code:
+          type: integer
+          default: 200
+        message:
+          type: string
+      required:
+      - data
+      - message
+    AdminTabyinSubmissionQueueResponseData:
+      type: object
+      properties:
+        count:
+          type: integer
+        next:
+          type: string
+          format: uri
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminTabyinSubmissionQueue'
+      required:
+      - count
+      - results
+    AdminTabyinSubmissionRejectBadRequest:
+      type: object
+      properties:
+        success:
+          type: boolean
+          default: false
+        status_code:
+          type: integer
+        message:
+          type: string
+        errors:
+          nullable: true
+      required:
+      - message
+      - status_code
+    AdminTabyinSubmissionRejectNotFound:
+      type: object
+      properties:
+        success:
+          type: boolean
+          default: false
+        status_code:
+          type: integer
+        message:
+          type: string
+        errors:
+          nullable: true
+      required:
+      - message
+      - status_code
+    AdminTabyinSubmissionRejectResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          default: true
+        status_code:
+          type: integer
+          default: 200
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/AdminTabyinSubmissionQueue'
+      required:
+      - data
+      - message
+    AdminTabyinSubmissionReview:
+      type: object
+      description: Input serializer for admin approval/rejection of user submissions.
+      properties:
+        admin_note:
+          type: string
+    AdminTabyinSubmissionReviewBadRequest:
+      type: object
+      properties:
+        success:
+          type: boolean
+          default: false
+        status_code:
+          type: integer
+        message:
+          type: string
+        errors:
+          nullable: true
+      required:
+      - message
+      - status_code
+    AdminTabyinSubmissionReviewNotFound:
+      type: object
+      properties:
+        success:
+          type: boolean
+          default: false
+        status_code:
+          type: integer
+        message:
+          type: string
+        errors:
+          nullable: true
+      required:
+      - message
+      - status_code
     AdminUserSummary:
       type: object
       description: خلاصه‌ای از User برای نمایش در analytics ادمین.
@@ -7812,6 +8298,14 @@ components:
       required:
       - code
       - identifier
+    OriginEnum:
+      enum:
+      - external
+      - user_submitted
+      type: string
+      description: |-
+        * `external` - همگام‌سازی خارجی
+        * `user_submitted` - ارسالی کاربر
     ParticipationCampaignSummary:
       type: object
       description: خلاصه‌ای از Campaign برای نمایش در داخل Participation.
@@ -8414,8 +8908,8 @@ components:
       properties:
         external_id:
           type: string
-          title: شناسه منبع
-          description: شناسه یکتای محتوا در سایت محتوانگار (مقدار id در JSON).
+          title: شناسه پایدار
+          description: برای محتوای خارجی id منبع و برای محتوای کاربر local UUID است.
           maxLength: 64
         title:
           type: string
@@ -8429,6 +8923,10 @@ components:
           title: نام پدیدآورنده
           description: مقدار username از محتوانگار.
           maxLength: 255
+        origin:
+          allOf:
+          - $ref: '#/components/schemas/OriginEnum'
+          title: منشأ محتوا
         source_entity_id:
           type: integer
           maximum: 9223372036854775807
@@ -8502,8 +9000,8 @@ components:
       properties:
         external_id:
           type: string
-          title: شناسه منبع
-          description: شناسه یکتای محتوا در سایت محتوانگار (مقدار id در JSON).
+          title: شناسه پایدار
+          description: برای محتوای خارجی id منبع و برای محتوای کاربر local UUID است.
           maxLength: 64
         title:
           type: string
@@ -8517,6 +9015,10 @@ components:
           title: نام پدیدآورنده
           description: مقدار username از محتوانگار.
           maxLength: 255
+        origin:
+          allOf:
+          - $ref: '#/components/schemas/OriginEnum'
+          title: منشأ محتوا
         source_created_at:
           type: string
           format: date-time
@@ -11286,6 +11788,16 @@ components:
       - logo
       - name
       - slug
+    SubmissionStatusEnum:
+      enum:
+      - approved
+      - pending_review
+      - rejected
+      type: string
+      description: |-
+        * `approved` - تأیید شده
+        * `pending_review` - در انتظار بررسی
+        * `rejected` - رد شده
     SyncStats:
       type: object
       description: |-
@@ -11424,6 +11936,27 @@ components:
         * `video` - ویدئو
         * `audio` - صوت
         * `other` - سایر
+    TabyinSubmissionAttachmentInput:
+      type: object
+      description: Input serializer for user-submitted content attachment URLs.
+      properties:
+        url:
+          type: string
+          format: uri
+          maxLength: 1024
+        media_type:
+          allOf:
+          - $ref: '#/components/schemas/TabyinMediaTypeEnum'
+          default: other
+        title:
+          type: string
+          maxLength: 512
+        order:
+          type: integer
+          minimum: 0
+          default: 0
+      required:
+      - url
     TabyinSyncCheck:
       type: object
       description: نتیجه چک وضعیت sync تبیین.
@@ -11654,6 +12187,213 @@ components:
       required:
       - data
       - message
+    UserTabyinSubmissionCreate:
+      type: object
+      description: Input serializer for authenticated user content submissions.
+      properties:
+        title:
+          type: string
+          maxLength: 512
+        description:
+          type: string
+        attachments:
+          type: array
+          items:
+            $ref: '#/components/schemas/TabyinSubmissionAttachmentInput'
+      required:
+      - description
+      - title
+    UserTabyinSubmissionCreateBadRequest:
+      type: object
+      properties:
+        success:
+          type: boolean
+          default: false
+        status_code:
+          type: integer
+        message:
+          type: string
+        errors:
+          nullable: true
+      required:
+      - message
+      - status_code
+    UserTabyinSubmissionCreatedResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          default: true
+        status_code:
+          type: integer
+          default: 200
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/UserTabyinSubmissionDetail'
+      required:
+      - data
+      - message
+    UserTabyinSubmissionDetail:
+      type: object
+      description: Detail serializer for a user's own submitted content.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        external_id:
+          type: string
+          title: شناسه پایدار
+          description: برای محتوای خارجی id منبع و برای محتوای کاربر local UUID است.
+          maxLength: 64
+        title:
+          type: string
+          title: عنوان
+          maxLength: 512
+        description:
+          type: string
+          title: توضیحات
+        submission_status:
+          allOf:
+          - $ref: '#/components/schemas/SubmissionStatusEnum'
+          title: وضعیت بررسی
+        admin_note:
+          type: string
+          title: یادداشت ادمین
+        attachments:
+          type: array
+          items:
+            $ref: '#/components/schemas/TabyinAttachment'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: تاریخ ایجاد
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: تاریخ بروزرسانی
+        reviewed_at:
+          type: string
+          format: date-time
+          nullable: true
+          title: زمان بررسی
+      required:
+      - attachments
+      - created_at
+      - external_id
+      - id
+      - updated_at
+    UserTabyinSubmissionDetailResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          default: true
+        status_code:
+          type: integer
+          default: 200
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/UserTabyinSubmissionDetail'
+      required:
+      - data
+      - message
+    UserTabyinSubmissionList:
+      type: object
+      description: List serializer for a user's own submitted contents.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        external_id:
+          type: string
+          title: شناسه پایدار
+          description: برای محتوای خارجی id منبع و برای محتوای کاربر local UUID است.
+          maxLength: 64
+        title:
+          type: string
+          title: عنوان
+          maxLength: 512
+        submission_status:
+          allOf:
+          - $ref: '#/components/schemas/SubmissionStatusEnum'
+          title: وضعیت بررسی
+        admin_note:
+          type: string
+          title: یادداشت ادمین
+        attachments_count:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: تاریخ ایجاد
+        reviewed_at:
+          type: string
+          format: date-time
+          nullable: true
+          title: زمان بررسی
+      required:
+      - attachments_count
+      - created_at
+      - external_id
+      - id
+    UserTabyinSubmissionListResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/UserTabyinSubmissionListResponseData'
+        success:
+          type: boolean
+          default: true
+        status_code:
+          type: integer
+          default: 200
+        message:
+          type: string
+      required:
+      - data
+      - message
+    UserTabyinSubmissionListResponseData:
+      type: object
+      properties:
+        count:
+          type: integer
+        next:
+          type: string
+          format: uri
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserTabyinSubmissionList'
+      required:
+      - count
+      - results
+    UserTabyinSubmissionNotFound:
+      type: object
+      properties:
+        success:
+          type: boolean
+          default: false
+        status_code:
+          type: integer
+        message:
+          type: string
+        errors:
+          nullable: true
+      required:
+      - message
+      - status_code
     VerifyEmail:
       type: object
       description: VerifyEmailSerializer implementation for the authentication application.
