@@ -197,9 +197,10 @@ class R4JCriminal(BaseModel):
         verbose_name_plural = "مجرمین"
         ordering = ["-created_at"]
         indexes = [
-            models.Index(fields=["is_published", "is_active"]),
+            models.Index(fields=["is_published", "is_active", "-created_at"]),
             models.Index(fields=["last_name", "first_name"]),
             models.Index(fields=["country", "province", "city"]),
+            models.Index(fields=["gender", "is_published", "is_active"]),
             models.Index(fields=["-total_bounty_toman"]),
         ]
 
@@ -304,7 +305,10 @@ class R4JCriminalPhone(BaseModel):
         verbose_name = "شماره تماس مجرم"
         verbose_name_plural = "شماره‌های تماس مجرمین"
         ordering = ["-created_at"]
-        indexes = [models.Index(fields=["criminal", "is_public"])]
+        indexes = [
+            models.Index(fields=["criminal", "is_public"]),
+            models.Index(fields=["number"]),
+        ]
 
     def __str__(self) -> str:
         return f"{self.label or ''} {self.number}".strip()
@@ -339,7 +343,10 @@ class R4JCriminalSocial(BaseModel):
         verbose_name = "حساب شبکه اجتماعی مجرم"
         verbose_name_plural = "حساب‌های شبکه اجتماعی مجرمین"
         ordering = ["-created_at"]
-        indexes = [models.Index(fields=["criminal", "is_public"])]
+        indexes = [
+            models.Index(fields=["criminal", "is_public"]),
+            models.Index(fields=["platform", "is_public"]),
+        ]
         constraints = [
             models.UniqueConstraint(
                 fields=["criminal", "platform", "handle_or_url"],
@@ -550,9 +557,9 @@ class R4JReport(BaseModel):
         verbose_name_plural = "گزارشات جامعه"
         ordering = ["-created_at"]
         indexes = [
-            models.Index(fields=["criminal", "status"]),
-            models.Index(fields=["submitted_by", "status"]),
-            models.Index(fields=["status"]),
+            models.Index(fields=["criminal", "status", "-created_at"]),
+            models.Index(fields=["submitted_by", "status", "-created_at"]),
+            models.Index(fields=["status", "-created_at"]),
         ]
 
     def __str__(self) -> str:
@@ -699,9 +706,9 @@ class R4JBounty(BaseModel):
         verbose_name_plural = "جوایز"
         ordering = ["-created_at"]
         indexes = [
-            models.Index(fields=["criminal", "status"]),
-            models.Index(fields=["user", "status"]),
-            models.Index(fields=["status"]),
+            models.Index(fields=["criminal", "status", "-created_at"]),
+            models.Index(fields=["user", "status", "-created_at"]),
+            models.Index(fields=["status", "-created_at"]),
         ]
         constraints = [
             models.UniqueConstraint(
