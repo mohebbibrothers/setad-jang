@@ -36,6 +36,7 @@ from typing import Any
 from django.conf import settings
 from rest_framework import status
 from rest_framework.exceptions import (
+    ErrorDetail,
     PermissionDenied,
     Throttled,
     ValidationError,
@@ -169,8 +170,9 @@ def _extract_message(exc: Exception, status_code: int) -> str:
 
     if hasattr(exc, "detail"):
         detail = exc.detail
-        if isinstance(detail, str):
-            return detail
+        default_detail = getattr(exc, "default_detail", None)
+        if isinstance(detail, str) and str(detail) != str(default_detail):
+            return str(detail)
 
     return _DEFAULT_MESSAGES.get(status_code, "خطایی رخ داده است.")
 
@@ -184,6 +186,8 @@ def _extract_errors(response: Response, exc: Exception) -> Any:
       (چون DRF آن را به dict/list تبدیل کرده).
     - برای بقیه، response.data مستقیم استفاده می‌شود.
     - اگر response.data فقط یک detail string باشد، آن را به dict می‌پیچیم.
+    - خروجی همیشه به JSON primitives تبدیل می‌شود تا contract پاسخ حتی قبل از
+      renderer نیز deterministic و قابل تست باشد.
 
     Args:
         response: پاسخ DRF handler.
@@ -195,13 +199,33 @@ def _extract_errors(response: Response, exc: Exception) -> Any:
     data = response.data
 
     if isinstance(exc, ValidationError):
-        return data
+        return _normalize_error_data(data)
 
     if isinstance(data, dict) and "detail" in data and len(data) == 1:
-        return data
+        return _normalize_error_data(data)
 
     if isinstance(data, str):
         return {"detail": data}
+
+    return _normalize_error_data(data)
+
+
+def _normalize_error_data(data: Any) -> Any:
+    """
+    تبدیل ErrorDetail/ReturnDict/ReturnListهای DRF به JSON primitives.
+
+    DRF renderer در نهایت ErrorDetail را serialize می‌کند، اما نگه‌داشتن
+    ErrorDetail داخل envelope باعث می‌شود تست‌ها، لاگ‌ها و هر استفاده‌ی قبل از
+    renderer non-deterministic باشد. این helper contract داخلی را هم تمیز می‌کند.
+    """
+    if isinstance(data, ErrorDetail):
+        return str(data)
+
+    if isinstance(data, dict):
+        return {str(key): _normalize_error_data(value) for key, value in data.items()}
+
+    if isinstance(data, list | tuple):
+        return [_normalize_error_data(item) for item in data]
 
     return data
 
