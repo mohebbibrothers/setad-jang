@@ -36,6 +36,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from .choices import OTPPurpose
+from .logging_utils import mask_identifier
 from .models import OTPCode, PrimaryIdentifierKind
 from .providers import OTPDeliveryProviderError, get_otp_provider
 
@@ -253,7 +254,7 @@ def generate_and_send_otp(
             remaining = int(_OTP_COOLDOWN_SECONDS - elapsed)
             logger.info(
                 "OTP cooldown active for identifier=%s purpose=%s remaining=%ds",
-                identifier_value,
+                mask_identifier(identifier_value, identifier_kind=identifier_kind),
                 purpose,
                 remaining,
             )
@@ -293,7 +294,7 @@ def generate_and_send_otp(
     except OTPDeliveryProviderError as exc:
         logger.error(
             "Provider delivery failed identifier=%s purpose=%s error=%s",
-            identifier_value,
+            mask_identifier(identifier_value, identifier_kind=identifier_kind),
             purpose,
             exc,
         )
@@ -303,7 +304,7 @@ def generate_and_send_otp(
 
     logger.info(
         "OTP generated and handed to provider identifier=%s purpose=%s expires_at=%s",
-        identifier_value,
+        mask_identifier(identifier_value, identifier_kind=identifier_kind),
         purpose,
         expires_at.isoformat(),
     )
@@ -367,7 +368,7 @@ def verify_otp(
     if otp is None:
         logger.info(
             "OTP verify failed (not found) for identifier=%s purpose=%s",
-            identifier_value,
+            mask_identifier(identifier_value, identifier_kind=identifier_kind),
             purpose,
         )
         raise OTPNotFound("کدی برای این درخواست یافت نشد. لطفاً درخواست جدید بدهید.")
@@ -377,7 +378,7 @@ def verify_otp(
         _mark_otp_used(otp)
         logger.info(
             "OTP verify failed (expired) for identifier=%s purpose=%s",
-            identifier_value,
+            mask_identifier(identifier_value, identifier_kind=identifier_kind),
             purpose,
         )
         raise OTPExpired("کد منقضی شده است. لطفاً درخواست جدید بدهید.")
@@ -387,7 +388,7 @@ def verify_otp(
         _mark_otp_used(otp)
         logger.warning(
             "OTP invalidated due to max attempts for identifier=%s purpose=%s",
-            identifier_value,
+            mask_identifier(identifier_value, identifier_kind=identifier_kind),
             purpose,
         )
         raise OTPTooManyAttempts(
@@ -409,7 +410,7 @@ def verify_otp(
             logger.warning(
                 "OTP invalidated on attempt %d for identifier=%s purpose=%s",
                 next_attempt_count,
-                identifier_value,
+                mask_identifier(identifier_value, identifier_kind=identifier_kind),
                 purpose,
             )
             raise OTPTooManyAttempts(
@@ -419,7 +420,7 @@ def verify_otp(
         logger.info(
             "OTP verify failed (wrong code) attempt=%d for identifier=%s purpose=%s",
             next_attempt_count,
-            identifier_value,
+            mask_identifier(identifier_value, identifier_kind=identifier_kind),
             purpose,
         )
         raise OTPInvalidCode("کد وارد شده اشتباه است.")
@@ -428,7 +429,7 @@ def verify_otp(
     _mark_otp_used(otp)
     logger.info(
         "OTP verified successfully for identifier=%s purpose=%s",
-        identifier_value,
+        mask_identifier(identifier_value, identifier_kind=identifier_kind),
         purpose,
     )
     return otp

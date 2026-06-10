@@ -15,6 +15,7 @@ from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from .choices import OTPPurpose, UserRole
+from .logging_utils import mask_identifier
 from .models import OTPCode, PrimaryIdentifierKind, Profile, User
 from .normalizers import normalize_email, normalize_phone
 from .otp import (
@@ -466,7 +467,7 @@ def register_user(
     logger.info(
         "User registered user_id=%s email=%s",
         user.pk,
-        user.email,
+        mask_identifier(user.email, identifier_kind=PrimaryIdentifierKind.EMAIL),
     )
 
     return user
@@ -484,7 +485,7 @@ def login_user(
     try:
         normalized_email = normalize_email(email)
     except ValidationError:
-        logger.info("Login failed due to invalid email format input=%s", email)
+        logger.info("Login failed due to invalid email format input=%s", mask_identifier(email, identifier_kind=PrimaryIdentifierKind.EMAIL))
         return None
 
     user = authenticate(
@@ -493,13 +494,13 @@ def login_user(
         password=password,
     )
     if not user:
-        logger.info("Login failed for identifier=%s", normalized_email)
+        logger.info("Login failed for identifier=%s", mask_identifier(normalized_email, identifier_kind=PrimaryIdentifierKind.EMAIL))
         return None
 
     logger.info(
         "User logged in user_id=%s identifier=%s",
         user.pk,
-        normalized_email,
+        mask_identifier(normalized_email, identifier_kind=PrimaryIdentifierKind.EMAIL),
     )
 
     return _build_login_result(user=user, request=request)
@@ -519,7 +520,7 @@ def verify_user_email(*, user: User, code: str) -> bool:
         user.is_email_verified = True
         user.save(update_fields=["is_email_verified"])
 
-    logger.info("User email verified user_id=%s email=%s", user.pk, user.email)
+    logger.info("User email verified user_id=%s email=%s", user.pk, mask_identifier(user.email, identifier_kind=PrimaryIdentifierKind.EMAIL))
     return True
 
 
@@ -599,7 +600,7 @@ def signup_request(
     except (OTPCooldownActive, OTPDeliveryError) as exc:
         logger.info(
             "Signup OTP failed identifier=%s error=%s",
-            identifier_value,
+            mask_identifier(identifier_value, identifier_kind=identifier_kind),
             exc,
         )
         raise _map_otp_error_to_service_error(exc) from exc
@@ -607,7 +608,7 @@ def signup_request(
     logger.info(
         "Signup OTP sent identifier_kind=%s identifier=%s",
         identifier_kind,
-        identifier_value,
+        mask_identifier(identifier_value, identifier_kind=identifier_kind),
     )
 
 
@@ -662,7 +663,7 @@ def signup_verify(
         "User created via identifier signup user_id=%s identifier_kind=%s identifier=%s",
         user.pk,
         identifier_kind,
-        identifier_value,
+        mask_identifier(identifier_value, identifier_kind=identifier_kind),
     )
 
     if request is not None:
@@ -695,7 +696,7 @@ def login_with_password(
         logger.info(
             "Login failed (not found) identifier_kind=%s identifier=%s",
             identifier_kind,
-            identifier_value,
+            mask_identifier(identifier_value, identifier_kind=identifier_kind),
         )
         raise IdentifierNotFound("کاربری با این مشخصات یافت نشد.")
 
@@ -703,7 +704,7 @@ def login_with_password(
         logger.info(
             "Login failed (inactive) user_id=%s identifier=%s",
             user.pk,
-            identifier_value,
+            mask_identifier(identifier_value, identifier_kind=identifier_kind),
         )
         raise AccountInactive("حساب کاربری غیرفعال است.")
 
@@ -711,7 +712,7 @@ def login_with_password(
         logger.info(
             "Login failed (wrong password) user_id=%s identifier=%s",
             user.pk,
-            identifier_value,
+            mask_identifier(identifier_value, identifier_kind=identifier_kind),
         )
         raise InvalidCredentials("رمز عبور اشتباه است.")
 
@@ -719,7 +720,7 @@ def login_with_password(
         logger.info(
             "Login failed (not verified) user_id=%s identifier=%s",
             user.pk,
-            identifier_value,
+            mask_identifier(identifier_value, identifier_kind=identifier_kind),
         )
         raise AccountNotVerified("شناسه اصلی شما هنوز تأیید نشده است.")
 
@@ -750,7 +751,7 @@ def login_otp_request(
     if user is None:
         logger.info(
             "Login OTP request for non-existent/inactive identifier=%s (silently ignored)",
-            identifier_value,
+            mask_identifier(identifier_value, identifier_kind=identifier_kind),
         )
         return
 
@@ -827,7 +828,7 @@ def forgot_password_request(
     if user is None:
         logger.info(
             "Password reset OTP request for non-existent identifier=%s (silently ignored)",
-            identifier_value,
+            mask_identifier(identifier_value, identifier_kind=identifier_kind),
         )
         return
 
@@ -919,7 +920,7 @@ def identifier_add_request(
             "Identifier add OTP failed user_id=%s identifier_kind=%s identifier=%s error=%s",
             user.pk,
             identifier_kind,
-            normalized_value,
+            mask_identifier(normalized_value, identifier_kind=identifier_kind),
             exc,
         )
         raise _map_otp_error_to_service_error(exc) from exc
@@ -928,7 +929,7 @@ def identifier_add_request(
         "Identifier add OTP sent user_id=%s identifier_kind=%s identifier=%s",
         user.pk,
         identifier_kind,
-        normalized_value,
+        mask_identifier(normalized_value, identifier_kind=identifier_kind),
     )
 
 
@@ -996,7 +997,7 @@ def identifier_add_verify(
         "Identifier attached/verified user_id=%s identifier_kind=%s identifier=%s updated_fields=%s",
         user.pk,
         identifier_kind,
-        normalized_value,
+        mask_identifier(normalized_value, identifier_kind=identifier_kind),
         update_fields,
     )
 
