@@ -107,6 +107,19 @@ AUDIT_LOG_LIST_PARAMETERS = [
         location=OpenApiParameter.QUERY,
         description="فیلتر بر اساس آدرس IP",
     ),
+
+    OpenApiParameter(
+        name="method",
+        type=OpenApiTypes.STR,
+        location=OpenApiParameter.QUERY,
+        description="فیلتر بر اساس متد HTTP",
+    ),
+    OpenApiParameter(
+        name="path",
+        type=OpenApiTypes.STR,
+        location=OpenApiParameter.QUERY,
+        description="فیلتر بر اساس مسیر درخواست",
+    ),
     OpenApiParameter(
         name="created_after",
         type=OpenApiTypes.DATETIME,
@@ -152,6 +165,8 @@ class AdminAuditLogListAPIView(APIView):
             "- `resource_id`: شناسه منبع\n"
             "- `request_id`: شناسه درخواست (X-Request-ID)\n"
             "- `ip_address`: آدرس IP\n"
+            "- `method`: متد HTTP\n"
+            "- `path`: مسیر درخواست\n"
             "- `created_after` / `created_before`: بازه زمانی\n"
             "- `search`: جستجو در action, resource_type, resource_id\n\n"
             "نیازمند احراز هویت با نقش admin."

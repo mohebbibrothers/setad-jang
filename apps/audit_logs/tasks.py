@@ -36,6 +36,9 @@ def create_audit_log_task(
     resource_id: str | None = None,
     ip_address: str | None = None,
     request_id: str | None = None,
+    user_agent: str = "",
+    path: str = "",
+    method: str = "",
     changes: dict[str, Any] | None = None,
     extra_data: dict[str, Any] | None = None,
 ) -> None:
@@ -55,6 +58,9 @@ def create_audit_log_task(
             resource_id=resource_id,
             ip_address=ip_address,
             request_id=request_id,
+            user_agent=user_agent,
+            path=path,
+            method=method,
             changes=changes,
             extra_data=extra_data,
         )

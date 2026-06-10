@@ -22,15 +22,20 @@ class AuditLogAdmin(admin.ModelAdmin):
         "resource_id",
         "ip_address",
         "request_id",
+        "method",
+        "path",
         "created_at",
     )
-    list_filter = ("action", "resource_type", "created_at")
-    search_fields = ("action", "resource_type", "resource_id", "ip_address", "request_id")
+    list_filter = ("action", "resource_type", "method", "created_at")
+    search_fields = ("action", "resource_type", "resource_id", "ip_address", "request_id", "path")
     readonly_fields = (
         "user",
         "action",
         "ip_address",
         "request_id",
+        "user_agent",
+        "path",
+        "method",
         "resource_type",
         "resource_id",
         "changes",

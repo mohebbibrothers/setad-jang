@@ -49,6 +49,16 @@ class AuditLogFilter(django_filters.FilterSet):
         lookup_expr="exact",
         help_text="فیلتر بر اساس آدرس IP",
     )
+    method = django_filters.CharFilter(
+        field_name="method",
+        lookup_expr="iexact",
+        help_text="فیلتر بر اساس متد HTTP",
+    )
+    path = django_filters.CharFilter(
+        field_name="path",
+        lookup_expr="icontains",
+        help_text="فیلتر بر اساس مسیر درخواست",
+    )
     created_after = django_filters.IsoDateTimeFilter(
         field_name="created_at",
         lookup_expr="gte",
@@ -61,7 +71,7 @@ class AuditLogFilter(django_filters.FilterSet):
     )
     search = django_filters.CharFilter(
         method="filter_search",
-        help_text="جستجو در action, resource_type و resource_id",
+        help_text="جستجو در action, resource_type, resource_id و path",
     )
 
     class Meta:
@@ -80,5 +90,6 @@ class AuditLogFilter(django_filters.FilterSet):
         return queryset.filter(
             Q(action__icontains=value)
             | Q(resource_type__icontains=value)
-            | Q(resource_id__icontains=value),
+            | Q(resource_id__icontains=value)
+            | Q(path__icontains=value),
         )

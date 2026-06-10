@@ -9,11 +9,16 @@ Audit Log Helpers.
   به log_action / log_action_async است.
 - request_id اول از attribute ست‌شده توسط RequestIDMiddleware خوانده
   می‌شود و fallback به header مستقیم دارد.
+- metadata عملیاتی مثل IP، user-agent، path و method برای forensic tracing
+  ثبت می‌شود، اما body/headerهای حساس هرگز وارد audit نمی‌شوند.
 """
 
 from __future__ import annotations
 
 from rest_framework.request import Request
+
+_MAX_USER_AGENT_LENGTH = 512
+_MAX_PATH_LENGTH = 512
 
 
 def get_client_ip(request: Request) -> str | None:
@@ -34,9 +39,24 @@ def get_request_id(request: Request) -> str | None:
     """
     request_id = getattr(request, "request_id", None)
     if request_id:
-        return request_id
+        return str(request_id)
 
     return request.META.get("HTTP_X_REQUEST_ID") or request.META.get("X_REQUEST_ID")
+
+
+def get_user_agent(request: Request) -> str:
+    """Extract and truncate User-Agent for safe persistence."""
+    return str(request.META.get("HTTP_USER_AGENT", ""))[:_MAX_USER_AGENT_LENGTH]
+
+
+def get_request_path(request: Request) -> str:
+    """Extract and truncate request path for audit traceability."""
+    return str(getattr(request, "path", ""))[:_MAX_PATH_LENGTH]
+
+
+def get_request_method(request: Request) -> str:
+    """Extract normalized HTTP method from request."""
+    return str(getattr(request, "method", "")).upper()[:10]
 
 
 def extract_audit_metadata(request: Request) -> dict[str, str | None]:
@@ -49,4 +69,7 @@ def extract_audit_metadata(request: Request) -> dict[str, str | None]:
     return {
         "ip_address": get_client_ip(request),
         "request_id": get_request_id(request),
+        "user_agent": get_user_agent(request),
+        "path": get_request_path(request),
+        "method": get_request_method(request),
     }

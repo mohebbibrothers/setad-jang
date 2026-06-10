@@ -33,5 +33,8 @@ class AuditLogFactory(DjangoModelFactory):
     )
     ip_address = "127.0.0.1"
     request_id = factory.Sequence(lambda n: f"req-{n:06d}")
+    user_agent = "pytest-agent/1.0"
+    path = "/api/v1/test/"
+    method = "GET"
     changes = None
     extra_data = None

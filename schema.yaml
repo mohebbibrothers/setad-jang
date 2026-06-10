@@ -51,6 +51,8 @@ paths:
         - `resource_id`: شناسه منبع
         - `request_id`: شناسه درخواست (X-Request-ID)
         - `ip_address`: آدرس IP
+        - `method`: متد HTTP
+        - `path`: مسیر درخواست
         - `created_after` / `created_before`: بازه زمانی
         - `search`: جستجو در action, resource_type, resource_id
 
@@ -80,6 +82,11 @@ paths:
           type: string
         description: فیلتر بر اساس آدرس IP
       - in: query
+        name: method
+        schema:
+          type: string
+        description: فیلتر بر اساس متد HTTP
+      - in: query
         name: page
         schema:
           type: integer
@@ -89,6 +96,11 @@ paths:
         schema:
           type: integer
         description: تعداد آیتم در هر صفحه (حداکثر ۱۰۰)
+      - in: query
+        name: path
+        schema:
+          type: string
+        description: فیلتر بر اساس مسیر درخواست
       - in: query
         name: request_id
         schema:
@@ -6156,6 +6168,17 @@ components:
           readOnly: true
           nullable: true
           title: شناسه درخواست
+        user_agent:
+          type: string
+          readOnly: true
+        path:
+          type: string
+          readOnly: true
+          title: مسیر درخواست
+        method:
+          type: string
+          readOnly: true
+          title: متد HTTP
         changes:
           readOnly: true
           nullable: true
@@ -6176,10 +6199,13 @@ components:
       - extra_data
       - id
       - ip_address
+      - method
+      - path
       - request_id
       - resource_id
       - resource_type
       - user
+      - user_agent
     AuditLogDetailResponse:
       type: object
       properties:
@@ -6246,6 +6272,14 @@ components:
           readOnly: true
           nullable: true
           title: شناسه درخواست
+        method:
+          type: string
+          readOnly: true
+          title: متد HTTP
+        path:
+          type: string
+          readOnly: true
+          title: مسیر درخواست
         created_at:
           type: string
           format: date-time
@@ -6256,6 +6290,8 @@ components:
       - created_at
       - id
       - ip_address
+      - method
+      - path
       - request_id
       - resource_id
       - resource_type

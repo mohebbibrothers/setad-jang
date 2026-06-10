@@ -39,6 +39,8 @@ class AuditLogListSerializer(serializers.ModelSerializer):
             "resource_id",
             "ip_address",
             "request_id",
+            "method",
+            "path",
             "created_at",
         )
         read_only_fields = fields
@@ -59,6 +61,9 @@ class AuditLogDetailSerializer(serializers.ModelSerializer):
             "resource_id",
             "ip_address",
             "request_id",
+            "user_agent",
+            "path",
+            "method",
             "changes",
             "extra_data",
             "created_at",
