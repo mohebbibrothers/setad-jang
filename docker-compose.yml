@@ -1,0 +1,173 @@
+# ============================================================
+# Setad Jang — Production-grade local orchestration
+# ============================================================
+
+name: setadjang
+
+x-app-env: &app_env
+  DJANGO_SETTINGS_MODULE: config.settings.production
+  DEBUG: "False"
+  ALLOWED_HOSTS: "127.0.0.1,localhost"
+  CACHE_BACKEND: redis
+  REDIS_URL: redis://redis:6379/1
+  CELERY_BROKER_URL: redis://redis:6379/2
+  CELERY_RESULT_BACKEND: redis://redis:6379/2
+  DATABASE_PATH: /app/data/db.sqlite3
+  SECURE_SSL_REDIRECT: "False"
+  SECURE_HSTS_SECONDS: "0"
+
+services:
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    networks:
+      - internal
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+  web:
+    image: setadjang:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      <<: *app_env
+      RUN_MIGRATIONS: "1"
+      RUN_COLLECTSTATIC: "1"
+      GUNICORN_WORKERS: "3"
+    ports:
+      - "8000:8000"
+    networks:
+      - internal
+    volumes:
+      - db_data:/app/data
+      - static_data:/app/staticfiles
+      - media_data:/app/media
+
+  worker:
+    image: setadjang:latest
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+      web:
+        condition: service_started
+    env_file:
+      - .env
+    environment:
+      <<: *app_env
+      RUN_MIGRATIONS: "0"
+      RUN_COLLECTSTATIC: "0"
+    networks:
+      - internal
+    volumes:
+      - db_data:/app/data
+      - media_data:/app/media
+    command:
+      [
+        "celery",
+        "-A",
+        "config",
+        "worker",
+        "--loglevel=info",
+        "-Q",
+        "default,tabyin_sync",
+      ]
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A config inspect ping --timeout=5 -d celery@$$HOSTNAME"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  beat:
+    image: setadjang:latest
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+      web:
+        condition: service_started
+    env_file:
+      - .env
+    environment:
+      <<: *app_env
+      RUN_MIGRATIONS: "0"
+      RUN_COLLECTSTATIC: "0"
+    networks:
+      - internal
+    volumes:
+      - db_data:/app/data
+      - beat_data:/app/data/beat
+    command:
+      [
+        "celery",
+        "-A",
+        "config",
+        "beat",
+        "--loglevel=info",
+        "--schedule=/app/data/beat/celerybeat-schedule",
+      ]
+    healthcheck:
+      test: ["CMD-SHELL", "test -s /app/data/beat/celerybeat-schedule"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+
+  flower:
+    image: setadjang:latest
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+      worker:
+        condition: service_started
+    env_file:
+      - .env
+    environment:
+      <<: *app_env
+      RUN_MIGRATIONS: "0"
+      RUN_COLLECTSTATIC: "0"
+    ports:
+      - "5555:5555"
+    networks:
+      - internal
+    command:
+      [
+        "celery",
+        "-A",
+        "config",
+        "flower",
+        "--port=5555",
+      ]
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:5555/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+networks:
+  internal:
+    driver: bridge
+
+volumes:
+  redis_data:
+  static_data:
+  media_data:
+  db_data:
+  beat_data:

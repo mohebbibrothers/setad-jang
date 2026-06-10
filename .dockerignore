@@ -1,0 +1,94 @@
+# ============================================================
+# Setad Jang — Docker build context exclusions
+# ============================================================
+# هر چیزی که اینجا باشد به Docker daemon فرستاده نمی‌شود.
+# هدف: build سریع‌تر، image کوچک‌تر، جلوگیری از نشت data/secrets.
+
+# ── Version control ────────────────────────────────────────
+.git
+.gitignore
+.gitattributes
+
+# ── Python virtualenvs (هرگز نباید داخل image بیاید) ─────
+.venv
+.venv-wsl
+venv
+env
+
+# ── Bytecode / cache / build artifacts ─────────────────────
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info
+build
+dist
+.eggs
+*.eggs
+.pytest_cache
+.ruff_cache
+.mypy_cache
+.coverage
+.coverage.*
+coverage.xml
+htmlcov
+
+# ── IDE / editor ───────────────────────────────────────────
+.idea
+.vscode
+*.swp
+*.swo
+
+# ── OS artifacts ───────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── Local data (نباید در image production بیاید) ──────────
+db.sqlite3
+db.sqlite3-journal
+media
+staticfiles
+
+# ── Secrets / env (مقادیر واقعی فقط در runtime تزریق شوند)
+.env
+.env.*
+!.env.example
+
+# ── Generated artifacts ────────────────────────────────────
+schema.yaml
+celerybeat-schedule
+celerybeat-schedule.*
+
+# ── Tests و dev-only artifacts ─────────────────────────────
+# تست‌ها در production image لازم نیستند.
+tests
+**/tests
+test_*.py
+*_test.py
+*.bak.*
+requirements-dev.txt
+
+# ── Docker-related (جلوگیری از وارد شدن به خود image) ─────
+docker-compose*.yml
+Dockerfile*
+.dockerignore
+
+# ── Docs / project meta (در image runtime لازم نیست) ──────
+README.md
+README*
+LICENSE
+CHANGELOG*
+docs
+
+# ── Logs ───────────────────────────────────────────────────
+*.log
+logs
+
+# ============================================================
+# Explicit allow — data files that MUST be in the image
+# ============================================================
+# مهم: blocklist disposable email domains باید همراه کد در image بیاید
+# تا validation در runtime بدون external I/O کار کند.
+!apps/authentication/data/
+!apps/authentication/data/**

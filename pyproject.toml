@@ -1,0 +1,150 @@
+# ============================================================
+# Project: Setad Jang
+# Tooling configuration (Ruff, Pytest, Coverage)
+# ============================================================
+# هدف: یک فایل واحد برای پیکربندی ابزارهای کیفیت کد و تست.
+# هرگاه ابزار جدیدی به پروژه اضافه شد، تنظیماتش هم همین‌جا اضافه می‌شود.
+#
+# اصول فعلی:
+# - lint باید clean باشد
+# - warningها در تست باید fail شوند (zero-warning policy)
+# - config باید strict و production-minded بماند
+
+# ════════════════════════════════════════════════════════════
+# Ruff
+# ════════════════════════════════════════════════════════════
+[tool.ruff]
+target-version = "py314"
+line-length = 100
+
+extend-exclude = [
+    ".venv",
+    ".venv-wsl",
+    "migrations",
+    "staticfiles",
+    "media",
+    "schema.yaml",
+]
+
+# ─── Linter ────────────────────────────────────────────────
+[tool.ruff.lint]
+select = [
+    "E",
+    "W",
+    "F",
+    "I",
+    "B",
+    "UP",
+    "SIM",
+    "C4",
+    "DJ",
+    "RUF",
+]
+
+# ─── Ignored rules — همراه با rationale ────────────────────
+ignore = [
+    "E501",   # line-too-long — formatter به اندازه کافی مدیریت می‌کند
+    "B008",   # function call in default arg — DRF/Django زیاد از این الگو دارد
+    "RUF001", # ambiguous unicode (مثل کاراکترهای فارسی)
+    "RUF002", # ambiguous docstring (مثل کاراکترهای فارسی)
+    "RUF003", # ambiguous comment (مثل کاراکترهای فارسی)
+    "DJ001",  # null=True on string fields — در پروژه گاهی نیاز است
+
+    # ── Style decisions (intentional) ─────────────────────
+    "RUF012", # ClassVar — در Django/DRF idiomatic نیست
+    "SIM108", # ternary — در sync engine if/else خواناتر است
+    "SIM118", # `key in dict.keys()` — explicit بودن گاهی readable‌تر است
+    "C416",   # dict comprehension — alias-friendly و کم‌خطر است
+    "UP040",  # TypeAlias — هنوز در صنعت معتبر است
+    "UP047",  # PEP 695 generics — برای سطح بلوغ پروژه overengineering است
+]
+
+# ─── per-file ignores ──────────────────────────────────────
+# توضیحات:
+# - settings/*.py از star-import استاندارد Django settings استفاده می‌کند.
+# - managers/providers/client از self-referential annotations استفاده می‌کنند
+#   که بدون `from __future__ import annotations` در همان فایل، ruff آن‌ها را
+#   F821 می‌بیند. به‌جای تغییر کد production، در اینجا ignore می‌کنیم.
+[tool.ruff.lint.per-file-ignores]
+"**/migrations/*.py"             = ["E", "F", "I", "B", "UP", "SIM", "C4", "DJ", "RUF"]
+"**/settings/*.py"               = ["F401", "F403", "F405"]
+"manage.py"                      = ["E402"]
+"**/tests/**/*.py"               = ["E501"]
+"**/test_*.py"                   = ["E501"]
+"conftest.py"                    = ["E402"]
+"apps/tabyin/managers.py"        = ["F821"]
+"apps/tabyin/providers/base.py"  = ["F821"]
+"apps/tabyin/sync/client.py"     = ["F821"]
+
+# ─── Import sorting (isort) ────────────────────────────────
+[tool.ruff.lint.isort]
+known-first-party = ["apps", "config"]
+combine-as-imports = true
+
+# ─── Formatter ─────────────────────────────────────────────
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "auto"
+docstring-code-format = false
+
+# ════════════════════════════════════════════════════════════
+# Pytest
+# ════════════════════════════════════════════════════════════
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings.development"
+python_files = ["tests.py", "test_*.py", "*_tests.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+testpaths = ["apps", "tests"]
+
+# نکته مهم:
+# - warningها در پروژه نباید مخفی شوند.
+# - هر warning باید تست را fail کند تا zero-warning discipline حفظ شود.
+# - بنابراین به‌جای --disable-warnings از filterwarnings=["error"] استفاده می‌کنیم.
+addopts = [
+    "-ra",
+    "--strict-markers",
+    "--strict-config",
+    "--tb=short",
+    "--reuse-db",
+]
+
+filterwarnings = [
+    "error",
+]
+
+markers = [
+    "unit: تست‌های unit (سریع، بدون DB یا I/O)",
+    "integration: تست‌های integration (با DB یا چند لایه واقعی)",
+    "celery: تست‌های مرتبط با Celery tasks",
+    "external: تست‌هایی که با mock به سرویس خارجی وصل می‌شوند",
+]
+
+# ════════════════════════════════════════════════════════════
+# Coverage
+# ════════════════════════════════════════════════════════════
+[tool.coverage.run]
+source = ["apps", "config"]
+branch = true
+omit = [
+    "*/migrations/*",
+    "*/tests/*",
+    "*/test_*.py",
+    "*/__init__.py",
+    "manage.py",
+    "config/asgi.py",
+    "config/wsgi.py",
+    "config/settings/*",
+]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+precision = 2
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]
