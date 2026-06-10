@@ -5,6 +5,8 @@ Provider Pattern — اینترفیس پایه برای منابع داده تب
 فقط یک Provider جدید می‌نویسیم بدون تغییر در sync engine.
 """
 
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from typing import Any
 

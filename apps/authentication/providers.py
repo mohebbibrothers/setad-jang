@@ -12,7 +12,7 @@ OTP delivery providers.
 
 نکته:
 - در حال حاضر Email delivery از Django email backend استفاده می‌کند.
-- SMS delivery فعلاً یک placeholder امن و development-friendly است.
+- SMS delivery فعلاً از provider کنسولی مخصوص development استفاده می‌کند.
 - در production اگر SMS provider واقعی پیکربندی نشده باشد، باید fail loud کند.
 """
 
@@ -83,7 +83,7 @@ class OTPDeliveryProvider(ABC):
             OTPDeliveryFailedError:
                 اگر provider نتوانست OTP را تحویل دهد.
         """
-        raise NotImplementedError
+        raise OTPDeliveryProviderError("Abstract OTP delivery provider cannot send directly.")
 
 
 # ============================================================
@@ -143,13 +143,13 @@ class EmailOTPProvider(OTPDeliveryProvider):
 
 
 # ============================================================
-# SMS placeholder provider
+# SMS console development provider
 # ============================================================
 
 
 class ConsoleSMSOTPProvider(OTPDeliveryProvider):
     """
-    Placeholder برای SMS delivery.
+    Provider کنسولی مخصوص development برای SMS delivery.
 
     Behavior:
     - در DEBUG: OTP را فقط log می‌کند تا flow قابل تست باشد.
@@ -172,7 +172,7 @@ class ConsoleSMSOTPProvider(OTPDeliveryProvider):
             )
 
         logger.info(
-            "[DEV ONLY] OTP SMS placeholder recipient=%s purpose=%s code=%s provider=%s",
+            "[DEV ONLY] OTP SMS console provider recipient=%s purpose=%s code=%s provider=%s",
             recipient,
             purpose,
             code,
@@ -223,7 +223,7 @@ def get_sms_otp_provider() -> OTPDeliveryProvider:
     """
     ساخت provider مربوط به SMS/phone.
 
-    فعلاً فقط console placeholder پشتیبانی می‌شود.
+    فعلاً فقط provider کنسولی development پشتیبانی می‌شود.
     """
     provider_backend = getattr(settings, "OTP_SMS_PROVIDER", _SMS_BACKEND_CONSOLE)
 

@@ -9,6 +9,8 @@ HTTP Client حرفه‌ای برای ارتباط با API محتوانگار.
 - بدون افشای authorization در logs
 """
 
+from __future__ import annotations
+
 import logging
 import time
 from typing import Any

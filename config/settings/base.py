@@ -752,7 +752,7 @@ MADADKAR_PAYMENT_TIMEOUT_MINUTES = config(
     cast=int,
 )
 
-# تنظیمات Zarinpal (placeholder — هنوز فعال نیست)
+# تنظیمات Zarinpal
 MADADKAR_ZARINPAL_MERCHANT_ID = config(
     "MADADKAR_ZARINPAL_MERCHANT_ID",
     default="",

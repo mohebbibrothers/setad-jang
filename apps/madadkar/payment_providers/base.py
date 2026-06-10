@@ -85,7 +85,7 @@ class AbstractPaymentProvider(ABC):
 
     Implementations:
     - SandboxProvider: برای dev/test (همیشه success)
-    - ZarinpalProvider: production (placeholder تا روز فعال‌سازی)
+    - ZarinpalProvider: production-ready HTTP integration
     - IDPayProvider, MellatProvider, ... (آینده)
 
     قراردادها:

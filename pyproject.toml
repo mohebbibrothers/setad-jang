@@ -62,9 +62,6 @@ ignore = [
 # ─── per-file ignores ──────────────────────────────────────
 # توضیحات:
 # - settings/*.py از star-import استاندارد Django settings استفاده می‌کند.
-# - managers/providers/client از self-referential annotations استفاده می‌کنند
-#   که بدون `from __future__ import annotations` در همان فایل، ruff آن‌ها را
-#   F821 می‌بیند. به‌جای تغییر کد production، در اینجا ignore می‌کنیم.
 [tool.ruff.lint.per-file-ignores]
 "**/migrations/*.py"             = ["E", "F", "I", "B", "UP", "SIM", "C4", "DJ", "RUF"]
 "**/settings/*.py"               = ["F401", "F403", "F405"]
@@ -72,9 +69,6 @@ ignore = [
 "**/tests/**/*.py"               = ["E501"]
 "**/test_*.py"                   = ["E501"]
 "conftest.py"                    = ["E402"]
-"apps/tabyin/managers.py"        = ["F821"]
-"apps/tabyin/providers/base.py"  = ["F821"]
-"apps/tabyin/sync/client.py"     = ["F821"]
 
 # ─── Import sorting (isort) ────────────────────────────────
 [tool.ruff.lint.isort]

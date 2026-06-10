@@ -7,7 +7,7 @@ Tests — apps.authentication.providers
   - ارسال موفق از طریق Django mail backend
   - wrap کردن خطای backend در exception سطح provider
 
-- SMS placeholder provider:
+- SMS console development provider:
   - در DEBUG باید success برگرداند
   - در production باید fail loud کند
 
@@ -108,12 +108,12 @@ class TestEmailOTPProvider:
 
 
 # ============================================================
-# SMS placeholder provider
+# SMS console development provider
 # ============================================================
 
 
 class TestConsoleSMSOTPProvider:
-    """تست‌های مربوط به SMS placeholder provider."""
+    """تست‌های مربوط به SMS console development provider."""
 
     def test_returns_true_in_debug_mode(self, settings) -> None:
         settings.DEBUG = True

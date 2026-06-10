@@ -3,7 +3,7 @@
 
 پوشش:
 - SandboxProvider: request_payment + verify_payment
-- ZarinpalProvider: راه‌اندازی + NotImplementedError + ZarinpalNotConfiguredError
+- ZarinpalProvider: request/verify واقعی با mock شبکه + ZarinpalNotConfiguredError
 - Factory: get_payment_provider() + UnknownPaymentProviderError + override
 - Result dataclasses: immutability و فیلدهای پیش‌فرض
 """
@@ -125,8 +125,27 @@ class TestSandboxProviderVerify:
 
 
 # ============================================================
-# ZarinpalProvider — placeholder behavior
+# ZarinpalProvider — HTTP integration behavior
 # ============================================================
+
+
+class _FakeZarinpalResponse:
+    """Response کوچک و deterministic برای mock کردن requests.post در تست‌های زرین‌پال."""
+
+    def __init__(
+        self,
+        *,
+        status_code: int = 200,
+        payload: dict | None = None,
+        text: str = "",
+    ) -> None:
+        self.status_code = status_code
+        self._payload = payload if payload is not None else {}
+        self.text = text or str(self._payload)
+
+    def json(self):
+        """برگرداندن payload mock‌شده مشابه requests.Response.json."""
+        return self._payload
 
 
 class TestZarinpalProviderConfiguration:
@@ -145,25 +164,173 @@ class TestZarinpalProviderConfiguration:
         provider = ZarinpalProvider()
         assert provider.merchant_id == "test-merchant-id"
 
-    def test_request_payment_raises_not_implemented(self, settings):
-        """تا روز اتصال، request_payment نباید فراخوانی شود."""
+    def test_uses_sandbox_urls_when_sandbox_enabled(self, settings):
+        """در حالت sandbox endpointها باید sandbox باشند."""
         settings.MADADKAR_ZARINPAL_MERCHANT_ID = "test-merchant-id"
+        settings.MADADKAR_ZARINPAL_SANDBOX = True
+
         provider = ZarinpalProvider()
 
-        with pytest.raises(NotImplementedError):
-            provider.request_payment(
-                amount=1000,
-                description="x",
-                callback_url="http://localhost/cb/",
+        assert "sandbox.zarinpal.com" in provider.request_url
+        assert "sandbox.zarinpal.com" in provider.verify_url
+        assert "sandbox.zarinpal.com" in provider.startpay_url_template
+
+    def test_uses_production_urls_when_sandbox_disabled(self, settings):
+        """در حالت production endpointها نباید sandbox باشند."""
+        settings.MADADKAR_ZARINPAL_MERCHANT_ID = "test-merchant-id"
+        settings.MADADKAR_ZARINPAL_SANDBOX = False
+
+        provider = ZarinpalProvider()
+
+        assert provider.request_url == ZarinpalProvider.REQUEST_URL
+        assert provider.verify_url == ZarinpalProvider.VERIFY_URL
+        assert provider.startpay_url_template == ZarinpalProvider.STARTPAY_URL
+
+
+class TestZarinpalProviderRequestPayment:
+    """تست‌های request_payment زرین‌پال با mock شبکه."""
+
+    def test_request_payment_success_returns_authority_and_gateway_url(
+        self,
+        settings,
+        monkeypatch,
+    ):
+        settings.MADADKAR_ZARINPAL_MERCHANT_ID = "test-merchant-id"
+        provider = ZarinpalProvider()
+        calls = []
+
+        def fake_post(url, json, timeout):
+            calls.append({"url": url, "json": json, "timeout": timeout})
+            return _FakeZarinpalResponse(
+                payload={"data": {"code": 100, "authority": "A0000000000001"}, "errors": []}
             )
 
-    def test_verify_payment_raises_not_implemented(self, settings):
-        """تا روز اتصال، verify_payment نباید فراخوانی شود."""
+        monkeypatch.setattr("apps.madadkar.payment_providers.zarinpal.requests.post", fake_post)
+
+        result = provider.request_payment(
+            amount=1000,
+            description="کمک",
+            callback_url="https://example.com/callback",
+            mobile="09120000000",
+            email="user@example.com",
+            metadata={"campaign_id": "7"},
+        )
+
+        assert result.success is True
+        assert result.authority == "A0000000000001"
+        assert result.gateway_status == "100"
+        assert result.authority in result.gateway_url
+        assert calls[0]["timeout"] == provider.REQUEST_TIMEOUT_SECONDS
+        assert calls[0]["json"]["merchant_id"] == "test-merchant-id"
+        assert calls[0]["json"]["metadata"]["mobile"] == "09120000000"
+        assert calls[0]["json"]["metadata"]["campaign_id"] == "7"
+
+    def test_request_payment_gateway_error_returns_failure(self, settings, monkeypatch):
         settings.MADADKAR_ZARINPAL_MERCHANT_ID = "test-merchant-id"
         provider = ZarinpalProvider()
 
-        with pytest.raises(NotImplementedError):
-            provider.verify_payment(authority="x", amount=1000)
+        def fake_post(url, json, timeout):
+            return _FakeZarinpalResponse(
+                payload={"data": {"code": -9}, "errors": {"message": "invalid merchant"}}
+            )
+
+        monkeypatch.setattr("apps.madadkar.payment_providers.zarinpal.requests.post", fake_post)
+
+        result = provider.request_payment(
+            amount=1000,
+            description="کمک",
+            callback_url="https://example.com/callback",
+        )
+
+        assert result.success is False
+        assert result.gateway_status == "-9"
+        assert result.error_message == "invalid merchant"
+
+    def test_request_payment_timeout_returns_structured_failure(self, settings, monkeypatch):
+        settings.MADADKAR_ZARINPAL_MERCHANT_ID = "test-merchant-id"
+        provider = ZarinpalProvider()
+
+        def fake_post(url, json, timeout):
+            raise TimeoutError
+
+        import requests
+
+        def fake_timeout(url, json, timeout):
+            raise requests.exceptions.Timeout
+
+        monkeypatch.setattr("apps.madadkar.payment_providers.zarinpal.requests.post", fake_timeout)
+
+        result = provider.request_payment(
+            amount=1000,
+            description="کمک",
+            callback_url="https://example.com/callback",
+        )
+
+        assert result.success is False
+        assert result.gateway_status == "transport_error"
+        assert "زمان مقرر" in result.error_message
+
+
+class TestZarinpalProviderVerifyPayment:
+    """تست‌های verify_payment زرین‌پال با mock شبکه."""
+
+    def test_verify_payment_success_returns_ref_id_and_amount(self, settings, monkeypatch):
+        settings.MADADKAR_ZARINPAL_MERCHANT_ID = "test-merchant-id"
+        provider = ZarinpalProvider()
+        calls = []
+
+        def fake_post(url, json, timeout):
+            calls.append({"url": url, "json": json, "timeout": timeout})
+            return _FakeZarinpalResponse(
+                payload={"data": {"code": 100, "ref_id": 987654321}, "errors": []}
+            )
+
+        monkeypatch.setattr("apps.madadkar.payment_providers.zarinpal.requests.post", fake_post)
+
+        result = provider.verify_payment(authority="A0000000000001", amount=2500)
+
+        assert result.success is True
+        assert result.already_verified is False
+        assert result.ref_id == "987654321"
+        assert result.verified_amount == 2500
+        assert result.gateway_status == "100"
+        assert calls[0]["json"]["authority"] == "A0000000000001"
+        assert calls[0]["timeout"] == provider.VERIFY_TIMEOUT_SECONDS
+
+    def test_verify_payment_code_101_is_idempotent_success(self, settings, monkeypatch):
+        settings.MADADKAR_ZARINPAL_MERCHANT_ID = "test-merchant-id"
+        provider = ZarinpalProvider()
+
+        def fake_post(url, json, timeout):
+            return _FakeZarinpalResponse(
+                payload={"data": {"code": 101, "ref_id": "REF-101"}, "errors": []}
+            )
+
+        monkeypatch.setattr("apps.madadkar.payment_providers.zarinpal.requests.post", fake_post)
+
+        result = provider.verify_payment(authority="A0000000000001", amount=2500)
+
+        assert result.success is True
+        assert result.already_verified is True
+        assert result.ref_id == "REF-101"
+        assert result.gateway_status == "101"
+
+    def test_verify_payment_gateway_error_returns_failure(self, settings, monkeypatch):
+        settings.MADADKAR_ZARINPAL_MERCHANT_ID = "test-merchant-id"
+        provider = ZarinpalProvider()
+
+        def fake_post(url, json, timeout):
+            return _FakeZarinpalResponse(
+                payload={"data": {"code": -51}, "errors": {"message": "payment not found"}}
+            )
+
+        monkeypatch.setattr("apps.madadkar.payment_providers.zarinpal.requests.post", fake_post)
+
+        result = provider.verify_payment(authority="bad", amount=2500)
+
+        assert result.success is False
+        assert result.gateway_status == "-51"
+        assert result.error_message == "payment not found"
 
 
 # ============================================================

@@ -65,6 +65,53 @@ DEBUG = False
 
 
 # ============================================================
+# Database — PostgreSQL by default
+# ============================================================
+
+_DATABASE_ENGINE = config("DATABASE_ENGINE", default="postgres").strip().lower()
+
+if _DATABASE_ENGINE == "postgres":
+    _POSTGRES_PASSWORD = config("POSTGRES_PASSWORD")
+    if _POSTGRES_PASSWORD in {"", "change-me", "change-me-postgres-password"}:
+        raise RuntimeError(
+            "POSTGRES_PASSWORD در production نباید خالی یا مقدار نمونه باشد.",
+        )
+
+    if len(_POSTGRES_PASSWORD) < 16:
+        raise RuntimeError(
+            "POSTGRES_PASSWORD در production باید حداقل 16 کاراکتر باشد.",
+        )
+
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": config("POSTGRES_DB"),
+            "USER": config("POSTGRES_USER"),
+            "PASSWORD": _POSTGRES_PASSWORD,
+            "HOST": config("POSTGRES_HOST", default="postgres"),
+            "PORT": config("POSTGRES_PORT", default="5432"),
+            "CONN_MAX_AGE": config("POSTGRES_CONN_MAX_AGE", default=60, cast=int),
+            "CONN_HEALTH_CHECKS": True,
+            "OPTIONS": {
+                "connect_timeout": config("POSTGRES_CONNECT_TIMEOUT", default=10, cast=int),
+            },
+        },
+    }
+elif _DATABASE_ENGINE == "sqlite":
+    if not config("ALLOW_SQLITE_IN_PRODUCTION", default=False, cast=bool):
+        raise RuntimeError(
+            "SQLite در production فقط برای demo/local emergency مجاز است. "
+            "برای استفاده آگاهانه DATABASE_ENGINE=sqlite و "
+            "ALLOW_SQLITE_IN_PRODUCTION=True را تنظیم کن؛ برای production واقعی "
+            "از PostgreSQL استفاده کن.",
+        )
+else:
+    raise RuntimeError(
+        "DATABASE_ENGINE نامعتبر است. مقدارهای مجاز: postgres, sqlite.",
+    )
+
+
+# ============================================================
 # HTTPS / Proxy
 # ============================================================
 
@@ -73,7 +120,7 @@ SECURE_SSL_REDIRECT = config("SECURE_SSL_REDIRECT", default=True, cast=bool)
 
 SECURE_HSTS_SECONDS = config(
     "SECURE_HSTS_SECONDS",
-    default=60 * 60 * 24 * 30,
+    default=60 * 60 * 24 * 365,
     cast=int,
 )
 SECURE_HSTS_INCLUDE_SUBDOMAINS = config(
@@ -83,7 +130,7 @@ SECURE_HSTS_INCLUDE_SUBDOMAINS = config(
 )
 SECURE_HSTS_PRELOAD = config(
     "SECURE_HSTS_PRELOAD",
-    default=False,
+    default=True,
     cast=bool,
 )
 

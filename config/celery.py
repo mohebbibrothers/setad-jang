@@ -19,7 +19,7 @@ Celery application bootstrap برای پروژه ستاد جنگ.
 Docker compatibility:
 - docker-compose service `celery_worker` و `celery_beat` هر دو
   از این فایل به‌عنوان entrypoint استفاده می‌کنند:
-    celery -A config worker -l info -Q default,tabyin_sync
+    celery -A config worker -l info -Q default,tabyin_sync,madadkar
     celery -A config beat -l info
 """
 

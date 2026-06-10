@@ -5,6 +5,8 @@ Managers و QuerySets سفارشی برای مدل‌های اپ تبیین.
 تا تمام متدهای QuerySet به‌صورت خودکار روی Manager هم در دسترس باشند.
 """
 
+from __future__ import annotations
+
 from django.db import models
 
 
@@ -41,5 +43,3 @@ class TabyinContentManager(models.Manager.from_queryset(TabyinContentQuerySet)):
 # ─────────────────────────────────────────────────────────────
 class TabyinContentAllManager(models.Manager.from_queryset(TabyinContentQuerySet)):
     """Manager برای دسترسی به همه رکوردها — استفاده در ادمین و sync."""
-
-    pass
