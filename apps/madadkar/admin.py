@@ -16,6 +16,7 @@ from apps.madadkar.models import (
     CampaignImage,
     Participation,
     Payment,
+    PaymentEvent,
     Sponsor,
 )
 
@@ -181,6 +182,10 @@ class ParticipationAdmin(admin.ModelAdmin):
         """ایجاد مشارکت فقط از طریق API مجاز است."""
         return False
 
+    def has_change_permission(self, request, obj=None) -> bool:
+        """ویرایش مشارکت ممنوع — برای حفظ یکپارچگی مالی."""
+        return False
+
     def has_delete_permission(self, request, obj=None) -> bool:
         """حذف مشارکت ممنوع — برای حفظ یکپارچگی مالی."""
         return False
@@ -229,6 +234,57 @@ class PaymentAdmin(admin.ModelAdmin):
         """ایجاد پرداخت فقط از طریق API/درگاه مجاز است."""
         return False
 
+    def has_change_permission(self, request, obj=None) -> bool:
+        """ویرایش پرداخت ممنوع — برای حفظ سوابق مالی."""
+        return False
+
     def has_delete_permission(self, request, obj=None) -> bool:
         """حذف پرداخت ممنوع — برای حفظ سوابق مالی."""
+        return False
+
+
+# ---------------------------------------------------------------------------
+# PaymentEvent
+# ---------------------------------------------------------------------------
+
+@admin.register(PaymentEvent)
+class PaymentEventAdmin(admin.ModelAdmin):
+    """ادمین ledger رویدادهای پرداخت — فقط خواندنی و append-only."""
+
+    list_display = (
+        "id",
+        "payment",
+        "event_kind",
+        "previous_status",
+        "new_status",
+        "amount",
+        "gateway_status",
+        "created_at",
+    )
+    list_filter = ("event_kind", "previous_status", "new_status", "gateway_status")
+    search_fields = ("payment__authority", "payment__ref_id", "ref_id")
+    readonly_fields = (
+        "payment",
+        "event_kind",
+        "previous_status",
+        "new_status",
+        "amount",
+        "gateway_status",
+        "ref_id",
+        "metadata",
+        "created_at",
+        "updated_at",
+    )
+    ordering = ("-created_at",)
+
+    def has_add_permission(self, request) -> bool:
+        """ایجاد رویداد پرداخت فقط از service layer مجاز است."""
+        return False
+
+    def has_change_permission(self, request, obj=None) -> bool:
+        """ویرایش رویداد پرداخت ممنوع است."""
+        return False
+
+    def has_delete_permission(self, request, obj=None) -> bool:
+        """حذف رویداد پرداخت ممنوع است."""
         return False

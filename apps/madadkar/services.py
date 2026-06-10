@@ -45,6 +45,7 @@ from django.utils import timezone
 from apps.madadkar.choices import (
     CampaignStatus,
     ParticipationStatus,
+    PaymentEventKind,
     PaymentStatus,
 )
 from apps.madadkar.models import (
@@ -52,6 +53,7 @@ from apps.madadkar.models import (
     CampaignImage,
     Participation,
     Payment,
+    PaymentEvent,
     Sponsor,
 )
 from apps.madadkar.payment_providers import get_payment_provider
@@ -238,6 +240,42 @@ def _is_campaign_open_for_participation(campaign: Campaign) -> tuple[bool, str]:
         return False, "تمام سهم‌های این حرکت رزرو شده است."
 
     return True, ""
+
+
+def _record_payment_event(
+    *,
+    payment: Payment,
+    event_kind: str,
+    previous_status: str = "",
+    new_status: str = "",
+    metadata: dict[str, Any] | None = None,
+) -> PaymentEvent:
+    """
+    ثبت append-only رویداد مالی برای reconciliation و forensic tracing.
+
+    Payment آخرین وضعیت را نگه می‌دارد؛ PaymentEvent مسیر transitionها را ثبت
+    می‌کند. این helper باید داخل همان transaction تغییر وضعیت payment فراخوانی
+    شود تا ledger و state اصلی با هم commit شوند.
+    """
+    event = PaymentEvent.objects.create(
+        payment=payment,
+        event_kind=event_kind,
+        previous_status=previous_status,
+        new_status=new_status,
+        amount=payment.amount,
+        gateway_status=payment.gateway_status,
+        ref_id=payment.ref_id,
+        metadata=metadata or {},
+    )
+    logger.info(
+        "Madadkar payment event recorded payment_id=%s event_id=%s kind=%s previous=%s new=%s",
+        payment.pk,
+        event.pk,
+        event_kind,
+        previous_status,
+        new_status,
+    )
+    return event
 
 
 # ===========================================================================
@@ -740,6 +778,13 @@ def initiate_participation(
         ip_address=ip_address,
         user_agent=user_agent[:500] if user_agent else "",
     )
+    _record_payment_event(
+        payment=payment,
+        event_kind=PaymentEventKind.CREATED,
+        previous_status="",
+        new_status=PaymentStatus.PENDING,
+        metadata={"campaign_id": locked_campaign.pk, "participation_id": participation.pk},
+    )
 
     # ── sync counters (PENDING_PAYMENt هم شمارش می‌شود → سهم رزرو می‌ماند)
     _sync_campaign_counters(campaign=locked_campaign)
@@ -877,6 +922,7 @@ def verify_payment(*, authority: str) -> Payment:
             )
             locked_participation = locked_payment.participation
 
+            previous_status = locked_payment.status
             locked_payment.status = PaymentStatus.FAILED
             locked_payment.gateway_status = verify_result.gateway_status
             locked_payment.verified_at = now
@@ -887,6 +933,16 @@ def verify_payment(*, authority: str) -> Payment:
                     "verified_at",
                     "updated_at",
                 ],
+            )
+            _record_payment_event(
+                payment=locked_payment,
+                event_kind=PaymentEventKind.AMOUNT_MISMATCH,
+                previous_status=previous_status,
+                new_status=PaymentStatus.FAILED,
+                metadata={
+                    "stored_amount": payment.amount,
+                    "verified_amount": verify_result.verified_amount,
+                },
             )
 
             locked_participation.status = ParticipationStatus.FAILED
@@ -929,6 +985,7 @@ def verify_payment(*, authority: str) -> Payment:
 
         # ── حالت ۱: verify ناموفق → release shares
         if not verify_result.success:
+            previous_status = locked_payment.status
             locked_payment.status = PaymentStatus.FAILED
             locked_payment.gateway_status = verify_result.gateway_status
             locked_payment.verified_at = now
@@ -939,6 +996,13 @@ def verify_payment(*, authority: str) -> Payment:
                     "verified_at",
                     "updated_at",
                 ],
+            )
+            _record_payment_event(
+                payment=locked_payment,
+                event_kind=PaymentEventKind.VERIFY_FAILED,
+                previous_status=previous_status,
+                new_status=PaymentStatus.FAILED,
+                metadata={"error_message": verify_result.error_message},
             )
 
             locked_participation.status = ParticipationStatus.FAILED
@@ -955,6 +1019,7 @@ def verify_payment(*, authority: str) -> Payment:
             return locked_payment
 
         # ── حالت ۲: verify موفق + amount صحیح → ثبت قطعی
+        previous_status = locked_payment.status
         locked_payment.status = PaymentStatus.SUCCESS
         locked_payment.ref_id = verify_result.ref_id
         locked_payment.gateway_status = verify_result.gateway_status
@@ -969,6 +1034,13 @@ def verify_payment(*, authority: str) -> Payment:
                 "verified_at",
                 "updated_at",
             ],
+        )
+        _record_payment_event(
+            payment=locked_payment,
+            event_kind=PaymentEventKind.VERIFY_SUCCESS,
+            previous_status=previous_status,
+            new_status=PaymentStatus.SUCCESS,
+            metadata={"already_verified": verify_result.already_verified},
         )
 
         locked_participation.status = ParticipationStatus.PAID
@@ -1016,15 +1088,23 @@ def expire_stale_participation(*, participation: Participation) -> Participation
     participation.status = ParticipationStatus.EXPIRED
     participation.save(update_fields=["status", "updated_at"])
 
-    # Payment مرتبط را هم FAILED می‌کنیم
-    Payment.objects.filter(
+    # Payment مرتبط را هم FAILED می‌کنیم و ledger event ثبت می‌کنیم.
+    payment = Payment.objects.filter(
         participation=participation,
         status=PaymentStatus.PENDING,
-    ).update(
-        status=PaymentStatus.FAILED,
-        gateway_status="expired",
-        verified_at=timezone.now(),
-    )
+    ).first()
+    if payment is not None:
+        previous_status = payment.status
+        payment.status = PaymentStatus.FAILED
+        payment.gateway_status = "expired"
+        payment.verified_at = timezone.now()
+        payment.save(update_fields=["status", "gateway_status", "verified_at", "updated_at"])
+        _record_payment_event(
+            payment=payment,
+            event_kind=PaymentEventKind.EXPIRED,
+            previous_status=previous_status,
+            new_status=PaymentStatus.FAILED,
+        )
 
     _sync_campaign_counters(campaign=campaign)
 

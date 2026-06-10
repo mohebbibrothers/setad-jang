@@ -26,6 +26,7 @@ from apps.core.models import BaseModel
 from apps.madadkar.choices import (
     CampaignStatus,
     ParticipationStatus,
+    PaymentEventKind,
     PaymentStatus,
 )
 from apps.madadkar.managers import (
@@ -584,3 +585,92 @@ class Payment(BaseModel):
             f"Payment #{self.pk}: authority={self.authority} "
             f"status={self.status} amount={self.amount}"
         )
+
+
+# ---------------------------------------------------------------------------
+# PaymentEvent (ledger رویدادهای مالی)
+# ---------------------------------------------------------------------------
+
+class PaymentEventQuerySet(models.QuerySet):
+    """QuerySet append-only برای جلوگیری از تغییر bulk در ledger پرداخت."""
+
+    def update(self, **kwargs):
+        """Bulk update روی ledger مالی ممنوع است."""
+        raise PermissionError("ویرایش رویدادهای پرداخت مجاز نیست.")
+
+    def delete(self):
+        """Bulk delete روی ledger مالی ممنوع است."""
+        raise PermissionError("حذف رویدادهای پرداخت مجاز نیست.")
+
+
+class PaymentEventManager(models.Manager.from_queryset(PaymentEventQuerySet)):
+    """Manager append-only برای PaymentEvent."""
+
+
+class PaymentEvent(BaseModel):
+    """
+    Ledger append-only رویدادهای پرداخت.
+
+    این مدل برای forensic/reconciliation مالی است و هر تغییر مهم در چرخه پرداخت
+    را به‌صورت immutable ثبت می‌کند. Payment آخرین state را نگه می‌دارد؛
+    PaymentEvent مسیر رسیدن به آن state را.
+    """
+
+    payment = models.ForeignKey(
+        Payment,
+        on_delete=models.PROTECT,
+        related_name="events",
+        verbose_name="پرداخت",
+    )
+    event_kind = models.CharField(
+        max_length=30,
+        choices=PaymentEventKind.choices,
+        verbose_name="نوع رویداد",
+    )
+    previous_status = models.CharField(
+        max_length=20,
+        blank=True,
+        verbose_name="وضعیت قبلی",
+    )
+    new_status = models.CharField(
+        max_length=20,
+        blank=True,
+        verbose_name="وضعیت جدید",
+    )
+    amount = models.PositiveBigIntegerField(verbose_name="مبلغ (تومان)")
+    gateway_status = models.CharField(max_length=50, blank=True, verbose_name="وضعیت درگاه")
+    ref_id = models.CharField(max_length=100, blank=True, verbose_name="شناسه مرجع")
+    metadata = models.JSONField(default=dict, blank=True, verbose_name="داده تکمیلی")
+
+    objects = PaymentEventManager()
+    all_objects = PaymentEventManager()
+
+    class Meta:
+        verbose_name = "رویداد پرداخت"
+        verbose_name_plural = "رویدادهای پرداخت"
+        ordering = ["-created_at", "-id"]
+        indexes = [
+            models.Index(fields=["payment", "event_kind"], name="madadkar_evt_payment_kind_idx"),
+            models.Index(fields=["event_kind", "-created_at"], name="madadkar_evt_kind_time_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"PaymentEvent #{self.pk}: payment={self.payment_id} kind={self.event_kind}"
+
+    def save(self, *args, **kwargs) -> None:
+        """فقط insert مجاز است؛ update رویداد مالی ممنوع است."""
+        if self.pk and not self._state.adding:
+            raise PermissionError("ویرایش رویدادهای پرداخت مجاز نیست.")
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        """حذف hard رویداد مالی ممنوع است."""
+        raise PermissionError("حذف رویدادهای پرداخت مجاز نیست.")
+
+    def soft_delete(self) -> None:
+        """حذف نرم رویداد مالی ممنوع است."""
+        raise PermissionError("حذف رویدادهای پرداخت مجاز نیست.")
+
+    def restore(self) -> None:
+        """بازیابی روی ledger append-only معنا ندارد."""
+        raise PermissionError("بازیابی رویدادهای پرداخت مجاز نیست.")

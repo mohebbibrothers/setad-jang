@@ -31,3 +31,13 @@ class PaymentStatus(models.TextChoices):
     PENDING = "pending", "در انتظار"
     SUCCESS = "success", "موفق"
     FAILED = "failed", "ناموفق"
+
+
+class PaymentEventKind(models.TextChoices):
+    """نوع رویداد ledger پرداخت مددکار."""
+
+    CREATED = "created", "ایجاد پرداخت"
+    VERIFY_SUCCESS = "verify_success", "تأیید موفق"
+    VERIFY_FAILED = "verify_failed", "تأیید ناموفق"
+    AMOUNT_MISMATCH = "amount_mismatch", "عدم تطابق مبلغ"
+    EXPIRED = "expired", "انقضای پرداخت"
