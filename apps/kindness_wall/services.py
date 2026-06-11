@@ -7,12 +7,15 @@ from typing import Any
 from django.db import transaction
 from django.utils import timezone
 
-from apps.kindness_wall.choices import ListingStatus, MatchStatus
+from apps.kindness_wall.choices import DuplicateStatus, ListingStatus, MatchStatus, ReportStatus
 from apps.kindness_wall.matching import calculate_match_score, tokenize
 from apps.kindness_wall.models import (
+    KindnessBookmark,
     KindnessCategory,
+    KindnessContactReveal,
     KindnessDuplicateCandidate,
     KindnessListing,
+    KindnessListingReport,
     KindnessListingTag,
     KindnessMatch,
     KindnessTag,
@@ -234,3 +237,241 @@ def detect_duplicate_candidates(*, listing: KindnessListing, threshold: int = 75
             )
             duplicates.append(duplicate)
     return duplicates
+
+
+_SENSITIVE_REVIEW_FIELDS = {
+    "listing_type",
+    "category",
+    "title",
+    "description",
+    "province",
+    "city",
+    "district",
+    "address_hint",
+}
+
+
+@transaction.atomic
+def update_listing(*, listing: KindnessListing, user: Any, **fields: Any) -> KindnessListing:
+    """Update owner listing and return to review if sensitive public fields changed."""
+    if listing.owner_id != user.pk:
+        raise KindnessPermissionError("فقط سازنده آگهی می‌تواند آن را ویرایش کند.")
+    allowed = _SENSITIVE_REVIEW_FIELDS | {"latitude", "longitude"}
+    changed_sensitive = False
+    update_fields: list[str] = []
+    for field, value in fields.items():
+        if field not in allowed:
+            continue
+        current = getattr(listing, field)
+        if current != value:
+            setattr(listing, field, value)
+            update_fields.append(field)
+            if field in _SENSITIVE_REVIEW_FIELDS:
+                changed_sensitive = True
+    if changed_sensitive and listing.status == ListingStatus.PUBLISHED:
+        listing.status = ListingStatus.PENDING_REVIEW
+        listing.published_at = None
+        update_fields.extend(["status", "published_at"])
+    if update_fields:
+        update_fields.append("updated_at")
+        listing.save(update_fields=list(set(update_fields)))
+        sync_listing_tags(listing=listing)
+        detect_duplicate_candidates(listing=listing)
+    return listing
+
+
+@transaction.atomic
+def close_listing(*, listing: KindnessListing, user: Any) -> KindnessListing:
+    """Close a listing by owner."""
+    if listing.owner_id != user.pk:
+        raise KindnessPermissionError("فقط سازنده آگهی می‌تواند آن را ببندد.")
+    if listing.status not in {ListingStatus.PUBLISHED, ListingStatus.PENDING_REVIEW, ListingStatus.REJECTED, ListingStatus.NEEDS_EDIT}:
+        raise KindnessListingStateError("این آگهی در وضعیت فعلی قابل بستن نیست.")
+    listing.status = ListingStatus.CLOSED
+    listing.closed_at = timezone.now()
+    listing.save(update_fields=["status", "closed_at", "updated_at"])
+    return listing
+
+
+@transaction.atomic
+def soft_delete_listing(*, listing: KindnessListing, user: Any) -> None:
+    """Soft-delete a listing by owner."""
+    if listing.owner_id != user.pk:
+        raise KindnessPermissionError("فقط سازنده آگهی می‌تواند آن را حذف کند.")
+    listing.status = ListingStatus.DELETED
+    listing.is_active = False
+    listing.save(update_fields=["status", "is_active", "updated_at"])
+    sync_category_counters(category=listing.category)
+
+
+@transaction.atomic
+def suspend_listing(*, listing: KindnessListing, admin: Any, reason: str) -> KindnessListing:
+    """Suspend a published listing by admin."""
+    if listing.status != ListingStatus.PUBLISHED:
+        raise KindnessListingStateError("فقط آگهی منتشرشده قابل تعلیق است.")
+    listing.status = ListingStatus.SUSPENDED
+    listing.reviewed_by = admin
+    listing.reviewed_at = timezone.now()
+    listing.suspension_reason = reason
+    listing.save(update_fields=["status", "reviewed_by", "reviewed_at", "suspension_reason", "updated_at"])
+    return listing
+
+
+@transaction.atomic
+def restore_suspended_listing(*, listing: KindnessListing, admin: Any) -> KindnessListing:
+    """Restore a suspended listing to published state by admin."""
+    if listing.status != ListingStatus.SUSPENDED:
+        raise KindnessListingStateError("فقط آگهی تعلیق‌شده قابل بازگردانی است.")
+    listing.status = ListingStatus.PUBLISHED
+    listing.reviewed_by = admin
+    listing.reviewed_at = timezone.now()
+    listing.suspension_reason = ""
+    listing.save(update_fields=["status", "reviewed_by", "reviewed_at", "suspension_reason", "updated_at"])
+    regenerate_matches_for_listing(listing=listing)
+    return listing
+
+
+@transaction.atomic
+def renew_listing(*, listing: KindnessListing, user: Any, ttl_days: int = DEFAULT_LISTING_TTL_DAYS) -> KindnessListing:
+    """Renew an owner listing expiration window."""
+    if listing.owner_id != user.pk:
+        raise KindnessPermissionError("فقط سازنده آگهی می‌تواند آن را تمدید کند.")
+    if listing.status not in {ListingStatus.PUBLISHED, ListingStatus.EXPIRED, ListingStatus.CLOSED}:
+        raise KindnessListingStateError("این آگهی در وضعیت فعلی قابل تمدید نیست.")
+    listing.expires_at = timezone.now() + timezone.timedelta(days=ttl_days)
+    if listing.status in {ListingStatus.EXPIRED, ListingStatus.CLOSED}:
+        listing.status = ListingStatus.PENDING_REVIEW
+    listing.save(update_fields=["expires_at", "status", "updated_at"])
+    return listing
+
+
+@transaction.atomic
+def expire_due_listings(*, now=None) -> int:
+    """Expire published listings whose expiration date has passed."""
+    now = now or timezone.now()
+    updated = KindnessListing.objects.filter(
+        status=ListingStatus.PUBLISHED,
+        expires_at__isnull=False,
+        expires_at__lte=now,
+    ).update(status=ListingStatus.EXPIRED, updated_at=now)
+    return int(updated)
+
+
+@transaction.atomic
+def reveal_contact(*, listing: KindnessListing, viewer: Any, ip_address: str | None = None, user_agent: str = "", request_id: str = "") -> KindnessContactReveal:
+    """Reveal listing contact phone to an authenticated user and record audit trail."""
+    if not getattr(viewer, "is_authenticated", False):
+        raise KindnessPermissionError("برای مشاهده شماره تماس باید وارد حساب کاربری شوید.")
+    if not listing.is_public:
+        raise KindnessListingStateError("شماره تماس فقط برای آگهی منتشرشده قابل مشاهده است.")
+    reveal = KindnessContactReveal.objects.create(
+        listing=listing,
+        viewer=viewer,
+        listing_owner=listing.owner,
+        phone_snapshot=listing.contact_phone_snapshot,
+        ip_address=ip_address,
+        user_agent=user_agent[:512] if user_agent else "",
+        request_id=request_id or "",
+    )
+    listing.contact_reveal_count = listing.contact_reveals.count()
+    listing.save(update_fields=["contact_reveal_count", "updated_at"])
+    return reveal
+
+
+@transaction.atomic
+def create_bookmark(*, listing: KindnessListing, user: Any) -> KindnessBookmark:
+    """Bookmark a public listing idempotently."""
+    if not listing.is_public:
+        raise KindnessListingStateError("فقط آگهی منتشرشده قابل ذخیره است.")
+    bookmark, _created = KindnessBookmark.objects.get_or_create(user=user, listing=listing)
+    listing.bookmark_count = listing.bookmarks.count()
+    listing.save(update_fields=["bookmark_count", "updated_at"])
+    return bookmark
+
+
+@transaction.atomic
+def delete_bookmark(*, listing: KindnessListing, user: Any) -> None:
+    """Remove a user's bookmark for a listing."""
+    KindnessBookmark.objects.filter(user=user, listing=listing).delete()
+    listing.bookmark_count = listing.bookmarks.count()
+    listing.save(update_fields=["bookmark_count", "updated_at"])
+
+
+@transaction.atomic
+def report_listing(*, listing: KindnessListing, reported_by: Any, reason: str, description: str = "") -> KindnessListingReport:
+    """Report a public listing for admin moderation."""
+    if not listing.is_public:
+        raise KindnessListingStateError("فقط آگهی منتشرشده قابل گزارش است.")
+    report = KindnessListingReport.objects.create(
+        listing=listing,
+        reported_by=reported_by,
+        reason=reason,
+        description=description,
+    )
+    listing.report_count = listing.reports.count()
+    listing.save(update_fields=["report_count", "updated_at"])
+    return report
+
+
+@transaction.atomic
+def review_listing_report(*, report: KindnessListingReport, admin: Any, status: str, admin_note: str = "", suspend_listing_on_review: bool = False) -> KindnessListingReport:
+    """Review a listing report and optionally suspend the listing."""
+    if status not in ReportStatus.values:
+        raise KindnessListingStateError("وضعیت گزارش نامعتبر است.")
+    report.status = status
+    report.reviewed_by = admin
+    report.reviewed_at = timezone.now()
+    report.admin_note = admin_note
+    report.save(update_fields=["status", "reviewed_by", "reviewed_at", "admin_note", "updated_at"])
+    if suspend_listing_on_review and status == ReportStatus.REVIEWED and report.listing.status == ListingStatus.PUBLISHED:
+        suspend_listing(listing=report.listing, admin=admin, reason=admin_note or "گزارش تخلف تأیید شد.")
+    return report
+
+
+@transaction.atomic
+def dismiss_match(*, match: KindnessMatch, user: Any) -> KindnessMatch:
+    """Dismiss a match for the owner of the source listing."""
+    if match.source_listing.owner_id != user.pk:
+        raise KindnessPermissionError("فقط صاحب آگهی می‌تواند این پیشنهاد را نادیده بگیرد.")
+    match.status = MatchStatus.DISMISSED
+    match.dismissed_by = user
+    match.dismissed_at = timezone.now()
+    match.save(update_fields=["status", "dismissed_by", "dismissed_at", "updated_at"])
+    return match
+
+
+@transaction.atomic
+def mark_match_contacted(*, match: KindnessMatch, user: Any) -> KindnessMatch:
+    """Mark a match as contacted by the source listing owner."""
+    if match.source_listing.owner_id != user.pk:
+        raise KindnessPermissionError("فقط صاحب آگهی می‌تواند این پیشنهاد را به‌عنوان تماس‌گرفته‌شده ثبت کند.")
+    match.status = MatchStatus.CONTACTED
+    match.contacted_at = timezone.now()
+    match.save(update_fields=["status", "contacted_at", "updated_at"])
+    return match
+
+
+@transaction.atomic
+def review_duplicate_candidate(*, duplicate: KindnessDuplicateCandidate, status: str, reason: str = "") -> KindnessDuplicateCandidate:
+    """Review a duplicate candidate."""
+    if status not in DuplicateStatus.values:
+        raise KindnessListingStateError("وضعیت بررسی تکراری بودن نامعتبر است.")
+    duplicate.status = status
+    if reason:
+        duplicate.reason = reason
+    duplicate.save(update_fields=["status", "reason", "updated_at"])
+    return duplicate
+
+
+def get_admin_analytics_summary() -> dict[str, int]:
+    """Return aggregate counters for admin dashboard."""
+    return {
+        "total_listings": KindnessListing.all_objects.count(),
+        "pending_listings": KindnessListing.all_objects.filter(status=ListingStatus.PENDING_REVIEW).count(),
+        "published_listings": KindnessListing.objects.published().count(),
+        "need_help_listings": KindnessListing.all_objects.filter(listing_type="need_help").count(),
+        "offer_help_listings": KindnessListing.all_objects.filter(listing_type="offer_help").count(),
+        "contact_reveals": KindnessContactReveal.objects.count(),
+        "active_matches": KindnessMatch.objects.filter(status=MatchStatus.ACTIVE).count(),
+        "pending_reports": KindnessListingReport.objects.filter(status=ReportStatus.PENDING).count(),
+    }
