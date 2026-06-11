@@ -177,6 +177,8 @@ def create_listing(
     city: str | None = None,
     district: str = "",
     address_hint: str = "",
+    latitude=None,
+    longitude=None,
 ) -> KindnessListing:
     """Create a listing in draft state with owner identity snapshots and auto-tags."""
     ensure_user_can_create_listing(owner)
@@ -191,6 +193,8 @@ def create_listing(
         city=city or profile.city,
         district=district,
         address_hint=address_hint,
+        latitude=latitude,
+        longitude=longitude,
         status=ListingStatus.DRAFT,
         expires_at=timezone.now() + timezone.timedelta(days=DEFAULT_LISTING_TTL_DAYS),
         **_snapshot_owner(owner),
@@ -450,6 +454,8 @@ def reveal_contact(*, listing: KindnessListing, viewer: Any, ip_address: str | N
     """Reveal listing contact phone to an authenticated user and record audit trail."""
     if not getattr(viewer, "is_authenticated", False):
         raise KindnessPermissionError("برای مشاهده شماره تماس باید وارد حساب کاربری شوید.")
+    if listing.owner_id == viewer.pk:
+        raise KindnessPermissionError("سازنده آگهی شماره تماس خود را در جزئیات آگهی مدیریت می‌کند و نیازی به نمایش عمومی ندارد.")
     if not listing.is_public:
         raise KindnessListingStateError("شماره تماس فقط برای آگهی منتشرشده قابل مشاهده است.")
     reveal = KindnessContactReveal.objects.create(

@@ -4,6 +4,7 @@ from rest_framework import serializers
 
 from apps.kindness_wall.choices import DuplicateStatus, ReportStatus
 from apps.kindness_wall.models import (
+    KindnessBookmark,
     KindnessCategory,
     KindnessContactReveal,
     KindnessDuplicateCandidate,
@@ -205,9 +206,22 @@ class KindnessUserListingDetailSerializer(KindnessListingDetailSerializer):
             "bookmark_count",
             "report_count",
             "last_matched_at",
+            "latitude",
+            "longitude",
             "created_at",
             "updated_at",
         )
+        read_only_fields = fields
+
+
+class KindnessBookmarkSerializer(serializers.ModelSerializer):
+    """User bookmark serializer with optimized listing card."""
+
+    listing = KindnessListingListSerializer(read_only=True)
+
+    class Meta:
+        model = KindnessBookmark
+        fields = ("id", "listing", "created_at")
         read_only_fields = fields
 
 

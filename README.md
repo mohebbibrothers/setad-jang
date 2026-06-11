@@ -2,7 +2,7 @@
 
 <p align="center">
   <strong>Enterprise-grade, production-minded Django REST Framework backend</strong><br />
-  Django 6 · DRF · PostgreSQL · Redis · Celery · OpenAPI · JWT · Audit Trail · Payment Ledger · LMS
+  Django 6 · DRF · PostgreSQL · Redis · Celery · OpenAPI · JWT · Audit Trail · Payment Ledger · LMS · Kindness Wall
 </p>
 
 <p align="center">
@@ -10,7 +10,7 @@
   <img alt="DRF" src="https://img.shields.io/badge/DRF-3.x-A30000?style=for-the-badge" />
   <img alt="Celery" src="https://img.shields.io/badge/Celery-5.x-37814A?style=for-the-badge&logo=celery&logoColor=white" />
   <img alt="PostgreSQL" src="https://img.shields.io/badge/PostgreSQL-production-4169E1?style=for-the-badge&logo=postgresql&logoColor=white" />
-  <img alt="Tests" src="https://img.shields.io/badge/tests-928%2B%20passed-brightgreen?style=for-the-badge" />
+  <img alt="Tests" src="https://img.shields.io/badge/tests-979%2B%20passed-brightgreen?style=for-the-badge" />
   <img alt="OpenAPI" src="https://img.shields.io/badge/OpenAPI-clean-blue?style=for-the-badge" />
 </p>
 
@@ -23,15 +23,16 @@
 - [3. معماری کلان](#3-معماری-کلان)
 - [4. اپ‌ها و قابلیت‌ها](#4-اپها-و-قابلیتها)
 - [5. LMS — سامانه آموزش بعثت مردم](#5-lms--سامانه-آموزش-بعثت-مردم)
-- [6. Observability و Health](#6-observability-و-health)
-- [7. Logging و Auditability](#7-logging-و-auditability)
-- [8. Celery و Background Jobs](#8-celery-و-background-jobs)
-- [9. Docker و Production Runtime](#9-docker-و-production-runtime)
-- [10. نصب و اجرای Local](#10-نصب-و-اجرای-local)
-- [11. Quality Gate و CI/CD](#11-quality-gate-و-cicd)
-- [12. OpenAPI Documentation](#12-openapi-documentation)
-- [13. Production Checklist](#13-production-checklist)
-- [14. فلسفه مهندسی پروژه](#14-فلسفه-مهندسی-پروژه)
+- [6. Kindness Wall — دیوار مهربانی](#6-kindness-wall--دیوار-مهربانی)
+- [7. Observability و Health](#7-observability-و-health)
+- [8. Logging و Auditability](#8-logging-و-auditability)
+- [9. Celery و Background Jobs](#9-celery-و-background-jobs)
+- [10. Docker و Production Runtime](#10-docker-و-production-runtime)
+- [11. نصب و اجرای Local](#11-نصب-و-اجرای-local)
+- [12. Quality Gate و CI/CD](#12-quality-gate-و-cicd)
+- [13. OpenAPI Documentation](#13-openapi-documentation)
+- [14. Production Checklist](#14-production-checklist)
+- [15. فلسفه مهندسی پروژه](#15-فلسفه-مهندسی-پروژه)
 
 ---
 
@@ -65,6 +66,7 @@ Developer experience
 | `r4j` | Reward for Justice، پروفایل مجرم، گزارش community، bounty |
 | `madadkar` | crowdfunding خیریه سهم‌محور، payment gateway، Zarinpal، ledger مالی |
 | `lms` | سامانه آموزش بعثت مردم، دوره، جلسه، آزمون، مدرک، مهارت، گزارش مدیریتی |
+| `kindness_wall` | دیوار مهربانی، آگهی کمک/نیاز، دسته‌بندی درختی، matching، contact reveal امن، گزارش و analytics |
 
 ---
 
@@ -85,7 +87,7 @@ python manage.py check                           ✅ No issues
 python manage.py check --deploy                  ✅ No issues
 python manage.py makemigrations --check --dry-run ✅ No changes detected
 python manage.py spectacular --validate          ✅ Clean OpenAPI schema
-pytest -q                                        ✅ 928+ passed
+pytest -q                                        ✅ 979+ passed
 ```
 
 پروژه با policyهای سخت‌گیرانه نگهداری می‌شود:
@@ -846,7 +848,191 @@ Q&A moderation
 
 ---
 
-## 6. Observability و Health
+## 6. Kindness Wall — دیوار مهربانی
+
+دیوار مهربانی یک اپ آگهی‌محور شبیه Divar است، اما بدون خریدوفروش و بدون تراکنش مالی. هدف آن اتصال انسانی بین دو نوع ثابت آگهی است:
+
+```text
+نیاز به کمک دارم     → need_help
+می‌خواهم کمک کنم    → offer_help
+```
+
+### 6.1 اصول طراحی
+
+- دسته‌بندی‌ها dynamic و tree-based هستند و توسط ادمین مدیریت می‌شوند.
+- کاربر فقط در صورت login، شماره موبایل تأییدشده و پروفایل هویتی کامل می‌تواند آگهی ثبت کند.
+- آگهی ابتدا draft است، سپس برای review ارسال می‌شود و فقط بعد از approval منتشر می‌شود.
+- public list/detail هیچ‌وقت شماره تماس خام را expose نمی‌کند.
+- مشاهده شماره تماس فقط از endpoint اختصاصی، فقط برای authenticated user، همراه با audit row انجام می‌شود.
+- owner نمی‌تواند با reveal-contact آگهی خودش metrics را inflate کند؛ شماره خودش را از dashboard مالک می‌بیند.
+- mutationها در service layer هستند؛ views فقط orchestration HTTP انجام می‌دهند.
+- selectors مسئول queryهای optimized با `select_related` و `prefetch_related` هستند.
+
+### 6.2 مدل‌های اصلی
+
+```text
+KindnessCategory            → دسته‌بندی درختی ادمین‌محور
+KindnessListing             → آگهی اصلی کمک/نیاز
+KindnessListingImage        → تصویر کاور/گالری
+KindnessTag                 → فرهنگ تگ نرمال‌شده
+KindnessKeywordAlias        → synonym/alias برای matching فارسی
+KindnessMatch               → match materialized بین آگهی‌های opposite type
+KindnessContactReveal       → audit trail نمایش شماره تماس
+KindnessListingReport       → گزارش تخلف کاربر
+KindnessBookmark            → ذخیره آگهی توسط کاربر
+KindnessDuplicateCandidate  → کاندیدای آگهی تکراری برای بررسی ادمین
+```
+
+### 6.3 Workflow آگهی
+
+```text
+DRAFT
+  → submit
+PENDING_REVIEW
+  → approve → PUBLISHED
+  → reject  → REJECTED / NEEDS_EDIT
+PUBLISHED
+  → close by owner       → CLOSED
+  → suspend by admin     → SUSPENDED
+  → expire by maintenance → EXPIRED
+  → edit sensitive fields → PENDING_REVIEW
+```
+
+قواعد مهم:
+
+- ویرایش فیلدهای حساس آگهی منتشرشده، آن را دوباره به review می‌فرستد.
+- حذف owner به‌صورت soft-delete انجام می‌شود و audit دارد.
+- بستن آگهی با delete فرق دارد و history را حفظ می‌کند.
+- تمدید آگهی expired/closed دوباره آن را وارد workflow review می‌کند.
+
+### 6.4 Matching حرفه‌ای
+
+Matching engine از چند سیگنال استفاده می‌کند:
+
+- opposite listing type
+- category و parent tree proximity
+- province/city proximity
+- Persian text normalization
+- token overlap
+- keyword aliases / synonyms
+- score breakdown و reason codes
+
+نتیجه matching به‌صورت materialized در `KindnessMatch` ذخیره می‌شود تا list/detail سریع و قابل audit باشد.
+
+### 6.5 Contact Reveal و Privacy
+
+Public APIs شماره تماس را مخفی نگه می‌دارند. مسیر امن مشاهده شماره:
+
+```text
+POST /api/v1/kindness-wall/listings/{slug}/reveal-contact/
+```
+
+ویژگی‌ها:
+
+- نیازمند authentication
+- throttle مستقل
+- ثبت `KindnessContactReveal`
+- ثبت audit action
+- افزایش counter فقط برای reveal معتبر
+- جلوگیری از self-reveal owner
+- عدم نمایش مختصات دقیق در public detail
+
+### 6.6 Admin و Analytics
+
+پنل API ادمین شامل موارد زیر است:
+
+- مدیریت دسته‌بندی درختی با جلوگیری از cycle
+- approve/reject/suspend/restore آگهی
+- review گزارش‌های تخلف
+- review کاندیداهای duplicate
+- مشاهده matchها و contact revealها
+- analytics executive dashboard
+- Excel export راست‌به‌چپ برای listings و reports
+
+Analytics شامل:
+
+```text
+status distribution
+listing type distribution
+province/city distribution
+category distribution
+top viewed listings
+top revealed listings
+match effectiveness
+report distribution
+duplicate candidates
+```
+
+### 6.7 Kindness Wall Endpoint Summary
+
+Public:
+
+```text
+GET  /api/v1/kindness-wall/categories/
+GET  /api/v1/kindness-wall/listings/
+GET  /api/v1/kindness-wall/listings/{slug}/
+GET  /api/v1/kindness-wall/listings/{slug}/matches/
+```
+
+Authenticated:
+
+```text
+POST   /api/v1/kindness-wall/listings/{slug}/reveal-contact/
+POST   /api/v1/kindness-wall/listings/{slug}/report/
+POST   /api/v1/kindness-wall/listings/{slug}/bookmark/
+DELETE /api/v1/kindness-wall/listings/{slug}/bookmark/
+GET    /api/v1/kindness-wall/me/bookmarks/
+GET    /api/v1/kindness-wall/me/listings/
+POST   /api/v1/kindness-wall/me/listings/
+GET    /api/v1/kindness-wall/me/listings/{id}/
+PATCH  /api/v1/kindness-wall/me/listings/{id}/
+DELETE /api/v1/kindness-wall/me/listings/{id}/
+POST   /api/v1/kindness-wall/me/listings/{id}/submit/
+POST   /api/v1/kindness-wall/me/listings/{id}/renew/
+POST   /api/v1/kindness-wall/me/listings/{id}/close/
+GET    /api/v1/kindness-wall/me/matches/
+POST   /api/v1/kindness-wall/me/matches/{id}/dismiss/
+POST   /api/v1/kindness-wall/me/matches/{id}/contacted/
+```
+
+Admin:
+
+```text
+GET/POST      /api/v1/kindness-wall/admin/categories/
+GET/PATCH/DELETE /api/v1/kindness-wall/admin/categories/{id}/
+GET           /api/v1/kindness-wall/admin/listings/
+GET           /api/v1/kindness-wall/admin/listings/export/
+GET           /api/v1/kindness-wall/admin/listings/{id}/
+POST          /api/v1/kindness-wall/admin/listings/{id}/approve/
+POST          /api/v1/kindness-wall/admin/listings/{id}/reject/
+POST          /api/v1/kindness-wall/admin/listings/{id}/suspend/
+POST          /api/v1/kindness-wall/admin/listings/{id}/restore/
+GET           /api/v1/kindness-wall/admin/reports/
+GET           /api/v1/kindness-wall/admin/reports/export/
+POST          /api/v1/kindness-wall/admin/reports/{id}/review/
+GET           /api/v1/kindness-wall/admin/matches/
+GET           /api/v1/kindness-wall/admin/matches/{id}/
+GET           /api/v1/kindness-wall/admin/contact-reveals/
+GET           /api/v1/kindness-wall/admin/duplicates/
+POST          /api/v1/kindness-wall/admin/duplicates/{id}/review/
+GET           /api/v1/kindness-wall/admin/analytics/
+```
+
+### 6.8 تست و Performance Contracts
+
+دیوار مهربانی با تست‌های چندلایه پوشش داده شده است:
+
+- domain foundation
+- service workflows
+- API workflow
+- admin/export/analytics
+- final edge cases
+- privacy regression
+- N+1 performance contracts برای serializerهای پرترافیک
+
+---
+
+## 7. Observability و Health
 
 سه سطح health داریم:
 
@@ -866,7 +1052,7 @@ Health responseها secret-safe هستند و credential/traceback خام leak �
 
 ---
 
-## 7. Logging و Auditability
+## 8. Logging و Auditability
 
 فرمت logging:
 
@@ -885,7 +1071,7 @@ Health responseها secret-safe هستند و credential/traceback خام leak �
 
 ---
 
-## 8. Celery و Background Jobs
+## 9. Celery و Background Jobs
 
 Celery برای taskهای async و scheduled استفاده می‌شود:
 
@@ -908,7 +1094,7 @@ madadkar
 
 ---
 
-## 9. Docker و Production Runtime
+## 10. Docker و Production Runtime
 
 سرویس‌ها:
 
@@ -929,7 +1115,7 @@ Healthcheck کانتینر web روی readiness است:
 
 ---
 
-## 10. نصب و اجرای Local
+## 11. نصب و اجرای Local
 
 ```bash
 python -m venv .venv
@@ -949,7 +1135,7 @@ python manage.py runserver
 
 ---
 
-## 11. Quality Gate و CI/CD
+## 12. Quality Gate و CI/CD
 
 دستور اصلی:
 
@@ -993,7 +1179,7 @@ GitHub Actions:
 
 ---
 
-## 12. OpenAPI Documentation
+## 13. OpenAPI Documentation
 
 بعد از اجرای سرور:
 
@@ -1011,7 +1197,7 @@ make schema-update
 
 ---
 
-## 13. Production Checklist
+## 14. Production Checklist
 
 قبل از production واقعی:
 
@@ -1035,7 +1221,7 @@ Object storage برای media در مقیاس production
 
 ---
 
-## 14. فلسفه مهندسی پروژه
+## 15. فلسفه مهندسی پروژه
 
 ```text
 Correctness before speed

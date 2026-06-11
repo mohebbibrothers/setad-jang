@@ -6,6 +6,7 @@ from django.db.models import Prefetch, QuerySet
 
 from apps.kindness_wall.choices import MatchStatus
 from apps.kindness_wall.models import (
+    KindnessBookmark,
     KindnessCategory,
     KindnessContactReveal,
     KindnessDuplicateCandidate,
@@ -48,6 +49,16 @@ def get_public_listing_by_slug(slug: str) -> KindnessListing | None:
 def get_user_listings(*, user_id: int) -> QuerySet[KindnessListing]:
     """Return listings owned by a user."""
     return KindnessListing.objects.filter(owner_id=user_id).select_related("category").prefetch_related("images")
+
+
+def get_user_bookmarks(*, user_id: int) -> QuerySet[KindnessBookmark]:
+    """Return current user's bookmarks with listing cards optimized."""
+    return (
+        KindnessBookmark.objects.filter(user_id=user_id)
+        .select_related("listing", "listing__category")
+        .prefetch_related(Prefetch("listing__images", queryset=KindnessListingImage.objects.order_by("order", "id")))
+        .order_by("-created_at")
+    )
 
 
 def get_listing_matches(*, listing: KindnessListing) -> QuerySet[KindnessMatch]:

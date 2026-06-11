@@ -42,6 +42,7 @@ from apps.kindness_wall.serializers import (
     KindnessAdminMatchSerializer,
     KindnessAdminReviewSerializer,
     KindnessAdminSuspendSerializer,
+    KindnessBookmarkSerializer,
     KindnessCategorySerializer,
     KindnessContactRevealSerializer,
     KindnessDuplicateCandidateSerializer,
@@ -299,6 +300,26 @@ class KindnessUserListingRenewView(APIView):
         return SuccessResponse(data=KindnessUserListingDetailSerializer(listing).data, message="آگهی تمدید شد و در صورت نیاز برای بررسی ارسال شد.")
 
 
+class KindnessUserListingCloseView(APIView):
+    """Close own listing without deleting historical workflow data."""
+
+    permission_classes = [IsAuthenticated]
+    serializer_class = KindnessUserListingDetailSerializer
+
+    @extend_schema(operation_id="kindness_user_listings_close", tags=[TAG_USER], request=None, responses={200: USER_LISTING_DETAIL_RESPONSE, 403: ERROR_RESPONSE, 404: ERROR_RESPONSE})
+    def post(self, request: Request, listing_id: int) -> SuccessResponse | ErrorResponse:
+        """Close a listing by its owner."""
+        listing = selectors.get_user_listing_by_id(user_id=request.user.pk, listing_id=listing_id)
+        if listing is None:
+            return ErrorResponse(message="آگهی یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+        try:
+            listing = services.close_listing(listing=listing, user=request.user)
+        except (services.KindnessPermissionError, services.KindnessListingStateError) as exc:
+            return _service_error_response(exc, status_code=status.HTTP_403_FORBIDDEN)
+        log_action_async(user_id=request.user.pk, action=audit_actions.KINDNESS_LISTING_CLOSED, resource_type="kindness_listing", resource_id=str(listing.pk), **extract_audit_metadata(request))
+        return SuccessResponse(data=KindnessUserListingDetailSerializer(listing).data, message="آگهی بسته شد.")
+
+
 class KindnessBookmarkView(APIView):
     """Create/delete bookmark for public listing."""
 
@@ -322,6 +343,21 @@ class KindnessBookmarkView(APIView):
         services.delete_bookmark(listing=listing, user=request.user)
         log_action_async(user_id=request.user.pk, action=audit_actions.KINDNESS_BOOKMARK_DELETED, resource_type="kindness_listing", resource_id=str(listing.pk), **extract_audit_metadata(request))
         return DeletedResponse(message="آگهی از ذخیره‌ها حذف شد.")
+
+
+class KindnessUserBookmarkListView(APIView):
+    """Current user's saved Kindness Wall listings."""
+
+    permission_classes = [IsAuthenticated]
+    serializer_class = KindnessBookmarkSerializer
+
+    @extend_schema(operation_id="kindness_user_bookmarks_list", tags=[TAG_USER], responses={200: build_paginated_success_response_serializer(name="KindnessUserBookmarkListResponse", item_serializer=KindnessBookmarkSerializer)})
+    def get(self, request: Request) -> Response:
+        """Return bookmarked published listings for current user."""
+        queryset = selectors.get_user_bookmarks(user_id=request.user.pk)
+        paginator = StandardPagination()
+        page = paginator.paginate_queryset(queryset, request, view=self)
+        return paginator.get_paginated_response(KindnessBookmarkSerializer(page, many=True).data)
 
 
 class KindnessUserMatchListView(APIView):
