@@ -1,0 +1,1 @@
+"""Kindness Wall application package."""

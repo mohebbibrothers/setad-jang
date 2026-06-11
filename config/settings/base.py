@@ -63,6 +63,7 @@ LOCAL_APPS = [
     "apps.r4j.apps.R4JConfig",
     "apps.madadkar.apps.MadadkarConfig",
     "apps.lms.apps.LMSConfig",
+    "apps.kindness_wall.apps.KindnessWallConfig",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
