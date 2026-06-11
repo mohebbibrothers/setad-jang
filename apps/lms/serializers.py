@@ -13,6 +13,11 @@ from apps.lms.models import (
     LessonQuestion,
     LMSCategory,
     LMSUserSkill,
+    Quiz,
+    QuizAttempt,
+    QuizOption,
+    QuizQuestion,
+    QuizUnlock,
 )
 
 
@@ -377,4 +382,226 @@ class DiscussionReportSerializer(serializers.ModelSerializer):
             "reviewed_at",
             "created_at",
         )
+        read_only_fields = fields
+
+
+class QuizOptionAdminSerializer(serializers.ModelSerializer):
+    """Admin serializer exposing correct option flags."""
+
+    class Meta:
+        model = QuizOption
+        fields = ("id", "text", "is_correct", "order", "is_active")
+        read_only_fields = ("id",)
+
+
+class QuizQuestionAdminSerializer(serializers.ModelSerializer):
+    """Admin serializer for quiz questions and options."""
+
+    options = QuizOptionAdminSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = QuizQuestion
+        fields = ("id", "text", "explanation", "order", "weight", "is_active", "options")
+        read_only_fields = ("id",)
+
+
+class QuizAdminSerializer(serializers.ModelSerializer):
+    """Admin serializer for full quiz configuration."""
+
+    questions = QuizQuestionAdminSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Quiz
+        fields = (
+            "id",
+            "course_id",
+            "title",
+            "description",
+            "status",
+            "time_limit_minutes",
+            "passing_score",
+            "max_attempts",
+            "retake_delay_days",
+            "shuffle_questions",
+            "shuffle_options",
+            "show_result_immediately",
+            "show_correct_answers_after_pass",
+            "is_required_for_certificate",
+            "published_at",
+            "questions",
+        )
+        read_only_fields = ("id", "course_id", "published_at")
+
+
+class QuizCreateUpdateSerializer(serializers.Serializer):
+    """Input serializer for admin quiz create/update."""
+
+    title = serializers.CharField(max_length=255, required=False)
+    description = serializers.CharField(required=False, allow_blank=True)
+    time_limit_minutes = serializers.IntegerField(required=False, min_value=1)
+    passing_score = serializers.DecimalField(required=False, max_digits=4, decimal_places=2, min_value=0, max_value=20)
+    max_attempts = serializers.IntegerField(required=False, min_value=1, max_value=10)
+    retake_delay_days = serializers.IntegerField(required=False, min_value=0, max_value=365)
+    shuffle_questions = serializers.BooleanField(required=False)
+    shuffle_options = serializers.BooleanField(required=False)
+    show_result_immediately = serializers.BooleanField(required=False)
+    show_correct_answers_after_pass = serializers.BooleanField(required=False)
+    is_required_for_certificate = serializers.BooleanField(required=False)
+
+
+class QuizQuestionCreateSerializer(serializers.Serializer):
+    """Input serializer for admin quiz question creation."""
+
+    text = serializers.CharField()
+    explanation = serializers.CharField(required=False, allow_blank=True, default="")
+    order = serializers.IntegerField(required=False, min_value=1, default=1)
+    weight = serializers.DecimalField(required=False, max_digits=6, decimal_places=2, min_value=0, default="1.00")
+
+
+class QuizOptionCreateSerializer(serializers.Serializer):
+    """Input serializer for admin quiz option creation."""
+
+    text = serializers.CharField(max_length=500)
+    is_correct = serializers.BooleanField(required=False, default=False)
+    order = serializers.IntegerField(required=False, min_value=1, default=1)
+
+
+class QuizPublicSerializer(serializers.ModelSerializer):
+    """User-visible quiz metadata without answers."""
+
+    questions_count = serializers.IntegerField(source="questions.count", read_only=True)
+
+    class Meta:
+        model = Quiz
+        fields = (
+            "id",
+            "course_id",
+            "title",
+            "description",
+            "time_limit_minutes",
+            "passing_score",
+            "max_attempts",
+            "retake_delay_days",
+            "questions_count",
+        )
+        read_only_fields = fields
+
+
+class QuizAttemptQuestionOptionSerializer(serializers.ModelSerializer):
+    """User-visible option in an active attempt; never exposes correctness."""
+
+    class Meta:
+        model = QuizOption
+        fields = ("id", "text", "order")
+        read_only_fields = fields
+
+
+class QuizAttemptQuestionSerializer(serializers.ModelSerializer):
+    """User-visible question in an active attempt."""
+
+    options = serializers.SerializerMethodField()
+
+    class Meta:
+        model = QuizQuestion
+        fields = ("id", "text", "weight", "options")
+        read_only_fields = fields
+
+    def get_options(self, obj: QuizQuestion) -> list[dict]:
+        """Return options in attempt snapshot order without correct flags."""
+        option_order = self.context.get("option_order", {})
+        ordered_ids = option_order.get(str(obj.pk), [])
+        options_by_id = {option.pk: option for option in obj.options.all()}
+        ordered_options = [options_by_id[option_id] for option_id in ordered_ids if option_id in options_by_id]
+        return QuizAttemptQuestionOptionSerializer(ordered_options, many=True).data
+
+
+class QuizAttemptDetailSerializer(serializers.ModelSerializer):
+    """Attempt detail serializer hiding correct answers unless attempt is passed."""
+
+    questions = serializers.SerializerMethodField()
+    answers = serializers.SerializerMethodField()
+
+    class Meta:
+        model = QuizAttempt
+        fields = (
+            "id",
+            "quiz_id",
+            "course_id",
+            "attempt_number",
+            "status",
+            "started_at",
+            "submitted_at",
+            "expires_at",
+            "score_percent",
+            "score_out_of_20",
+            "is_passed",
+            "questions",
+            "answers",
+        )
+        read_only_fields = fields
+
+    def get_questions(self, obj: QuizAttempt) -> list[dict]:
+        """Return questions in snapshot order."""
+        questions = list(
+            QuizQuestion.objects.filter(pk__in=obj.question_snapshot)
+            .prefetch_related("options")
+        )
+        by_id = {question.pk: question for question in questions}
+        ordered = [by_id[qid] for qid in obj.question_snapshot if qid in by_id]
+        return QuizAttemptQuestionSerializer(
+            ordered,
+            many=True,
+            context={"option_order": obj.option_order_snapshot},
+        ).data
+
+    def get_answers(self, obj: QuizAttempt) -> list[dict]:
+        """Return submitted answers; correct answers only after passing."""
+        reveal_correct = bool(obj.is_passed and obj.quiz.show_correct_answers_after_pass)
+        payload = []
+        for answer in obj.answers.select_related("question", "selected_option").all():
+            item = {
+                "question_id": answer.question_id,
+                "selected_option_id": answer.selected_option_id,
+                "is_correct": answer.is_correct if obj.submitted_at else None,
+                "score_awarded": str(answer.score_awarded),
+            }
+            if reveal_correct:
+                correct = answer.question.options.filter(is_correct=True).first()
+                item["correct_option_id"] = correct.pk if correct else None
+                item["explanation"] = answer.question.explanation
+            payload.append(item)
+        return payload
+
+
+class QuizAttemptSubmitSerializer(serializers.Serializer):
+    """Input serializer for submitting a quiz attempt."""
+
+    answers = serializers.ListField(
+        child=serializers.DictField(child=serializers.IntegerField(min_value=1)),
+        allow_empty=False,
+    )
+
+    def validate_answers(self, value: list[dict]) -> list[dict]:
+        """Validate each answer object has required keys."""
+        for item in value:
+            if "question_id" not in item or "selected_option_id" not in item:
+                raise serializers.ValidationError("هر پاسخ باید question_id و selected_option_id داشته باشد.")
+        return value
+
+
+class QuizUnlockCreateSerializer(serializers.Serializer):
+    """Input serializer for admin manual quiz unlock."""
+
+    user_id = serializers.IntegerField(min_value=1)
+    reason = serializers.CharField()
+    extra_attempts = serializers.IntegerField(required=False, min_value=1, max_value=10, default=1)
+    valid_until = serializers.DateTimeField(required=False, allow_null=True)
+
+
+class QuizUnlockSerializer(serializers.ModelSerializer):
+    """Output serializer for quiz unlock records."""
+
+    class Meta:
+        model = QuizUnlock
+        fields = ("id", "quiz_id", "course_id", "user_id", "unlocked_by_id", "reason", "extra_attempts", "valid_until", "created_at")
         read_only_fields = fields

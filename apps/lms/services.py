@@ -555,3 +555,318 @@ def review_discussion_report(*, report, reviewed_by: Any, status: str) -> Any:
     report.reviewed_at = timezone.now()
     report.save(update_fields=["status", "reviewed_by", "reviewed_at", "updated_at"])
     return report
+
+
+# ============================================================
+# Professional Quiz Engine
+# ============================================================
+
+
+class LMSQuizError(LMSServiceError):
+    """Base exception for LMS quiz engine errors."""
+
+
+class QuizNotAvailableError(LMSQuizError):
+    """Raised when a quiz is not currently available to a user."""
+
+
+class QuizValidationError(LMSQuizError):
+    """Raised when quiz publishing or submission data is invalid."""
+
+
+class QuizAttemptLockedError(LMSQuizError):
+    """Raised when the user cannot start another quiz attempt."""
+
+
+class QuizAttemptSubmissionError(LMSQuizError):
+    """Raised when an attempt submission is invalid."""
+
+
+@transaction.atomic
+def create_or_update_quiz(*, course: Course, **fields: Any):
+    """Create or update a course quiz in draft state."""
+    from apps.lms.models import Quiz
+
+    quiz, created = Quiz.objects.get_or_create(
+        course=course,
+        defaults={
+            "title": fields.pop("title", f"آزمون {course.title}"),
+            **fields,
+        },
+    )
+    if not created:
+        allowed = {
+            "title",
+            "description",
+            "time_limit_minutes",
+            "passing_score",
+            "max_attempts",
+            "retake_delay_days",
+            "shuffle_questions",
+            "shuffle_options",
+            "show_result_immediately",
+            "show_correct_answers_after_pass",
+            "is_required_for_certificate",
+        }
+        update_fields: list[str] = []
+        for field, value in fields.items():
+            if field in allowed:
+                setattr(quiz, field, value)
+                update_fields.append(field)
+        if update_fields:
+            update_fields.append("updated_at")
+            quiz.save(update_fields=list(set(update_fields)))
+    return quiz, created
+
+
+@transaction.atomic
+def create_quiz_question(*, quiz, text: str, explanation: str = "", order: int = 1, weight: Decimal | int | str = 1):
+    """Create a weighted single-choice question for an admin-managed quiz."""
+    from apps.lms.models import QuizQuestion
+
+    return QuizQuestion.objects.create(
+        quiz=quiz,
+        text=text,
+        explanation=explanation,
+        order=order,
+        weight=weight,
+    )
+
+
+@transaction.atomic
+def create_quiz_option(*, question, text: str, is_correct: bool = False, order: int = 1):
+    """Create one answer option for an admin-managed quiz question."""
+    from apps.lms.models import QuizOption
+
+    return QuizOption.objects.create(
+        question=question,
+        text=text,
+        is_correct=is_correct,
+        order=order,
+    )
+
+
+def validate_quiz_publishable(*, quiz) -> None:
+    """Validate that quiz has publishable question/option structure."""
+    questions = list(quiz.questions.filter(is_active=True).prefetch_related("options"))
+    if not questions:
+        raise QuizValidationError("برای انتشار آزمون حداقل یک سؤال فعال لازم است.")
+    for question in questions:
+        options = list(question.options.filter(is_active=True))
+        correct_count = sum(1 for option in options if option.is_correct)
+        if len(options) < 2:
+            raise QuizValidationError("هر سؤال آزمون باید حداقل دو گزینه فعال داشته باشد.")
+        if correct_count != 1:
+            raise QuizValidationError("هر سؤال چهارگزینه‌ای باید دقیقاً یک پاسخ صحیح داشته باشد.")
+
+
+@transaction.atomic
+def publish_quiz(*, quiz):
+    """Publish a quiz after validating questions and correct options."""
+    from apps.lms.choices import QuizStatus
+
+    validate_quiz_publishable(quiz=quiz)
+    quiz.status = QuizStatus.PUBLISHED
+    quiz.published_at = timezone.now()
+    quiz.save(update_fields=["status", "published_at", "updated_at"])
+    return quiz
+
+
+def _valid_unlocks_count(*, quiz, user) -> int:
+    """Return extra attempts granted by currently valid admin unlocks."""
+    from apps.lms.models import QuizUnlock
+
+    now = timezone.now()
+    return sum(
+        unlock.extra_attempts
+        for unlock in QuizUnlock.objects.filter(quiz=quiz, user=user)
+        if unlock.valid_until is None or unlock.valid_until >= now
+    )
+
+
+def _next_attempt_number(*, quiz, user) -> int:
+    """Return next attempt number for a user/quiz pair."""
+    from apps.lms.models import QuizAttempt
+
+    latest = QuizAttempt.objects.filter(quiz=quiz, user=user).order_by("-attempt_number").first()
+    return (latest.attempt_number + 1) if latest else 1
+
+
+def _build_attempt_snapshots(*, quiz) -> tuple[list[int], dict[str, list[int]]]:
+    """Build randomized question and option order snapshots."""
+    import random
+
+    questions = list(quiz.questions.filter(is_active=True).prefetch_related("options").order_by("order", "id"))
+    question_ids = [question.pk for question in questions]
+    if quiz.shuffle_questions:
+        random.shuffle(question_ids)
+
+    option_order: dict[str, list[int]] = {}
+    question_by_id = {question.pk: question for question in questions}
+    for question_id in question_ids:
+        options = list(question_by_id[question_id].options.filter(is_active=True).order_by("order", "id"))
+        option_ids = [option.pk for option in options]
+        if quiz.shuffle_options:
+            random.shuffle(option_ids)
+        option_order[str(question_id)] = option_ids
+    return question_ids, option_order
+
+
+@transaction.atomic
+def start_quiz_attempt(*, quiz, user: Any):
+    """Start a new quiz attempt with immutable question/option order snapshots."""
+    from apps.lms.choices import QuizAttemptStatus, QuizStatus
+    from apps.lms.models import Enrollment, QuizAttempt
+
+    if quiz.status != QuizStatus.PUBLISHED or not quiz.is_active:
+        raise QuizNotAvailableError("آزمون این کلاس در حال حاضر فعال نیست.")
+    enrollment = Enrollment.objects.filter(
+        user=user,
+        course=quiz.course,
+        status__in=[EnrollmentStatus.ACTIVE, EnrollmentStatus.COMPLETED],
+    ).first()
+    if enrollment is None:
+        raise QuizNotAvailableError("برای شرکت در آزمون باید در کلاس ثبت‌نام کرده باشید.")
+
+    existing_in_progress = QuizAttempt.objects.filter(
+        quiz=quiz,
+        user=user,
+        status=QuizAttemptStatus.IN_PROGRESS,
+    ).order_by("-started_at").first()
+    now = timezone.now()
+    if existing_in_progress is not None:
+        if existing_in_progress.expires_at and existing_in_progress.expires_at <= now:
+            existing_in_progress.status = QuizAttemptStatus.EXPIRED
+            existing_in_progress.save(update_fields=["status", "updated_at"])
+        else:
+            return existing_in_progress, False
+
+    terminal_attempts = QuizAttempt.objects.filter(quiz=quiz, user=user).exclude(
+        status=QuizAttemptStatus.IN_PROGRESS,
+    )
+    if terminal_attempts.filter(is_passed=True).exists():
+        raise QuizAttemptLockedError("شما قبلاً این آزمون را با موفقیت گذرانده‌اید.")
+
+    attempt_number = _next_attempt_number(quiz=quiz, user=user)
+    allowed_attempts = quiz.max_attempts + _valid_unlocks_count(quiz=quiz, user=user)
+    if attempt_number > allowed_attempts:
+        raise QuizAttemptLockedError("تعداد تلاش‌های مجاز شما برای این آزمون به پایان رسیده است.")
+
+    last_failed = terminal_attempts.filter(status=QuizAttemptStatus.FAILED).order_by("-submitted_at").first()
+    if last_failed is not None and attempt_number <= quiz.max_attempts:
+        unlocks = _valid_unlocks_count(quiz=quiz, user=user)
+        retry_at = last_failed.submitted_at + timezone.timedelta(days=quiz.retake_delay_days)
+        if unlocks <= 0 and now < retry_at:
+            raise QuizAttemptLockedError("تلاش بعدی شما هنوز فعال نشده است. لطفاً در زمان تعیین‌شده مراجعه کنید.")
+
+    validate_quiz_publishable(quiz=quiz)
+    question_snapshot, option_order_snapshot = _build_attempt_snapshots(quiz=quiz)
+    expires_at = now + timezone.timedelta(minutes=quiz.time_limit_minutes)
+    attempt = QuizAttempt.objects.create(
+        quiz=quiz,
+        course=quiz.course,
+        enrollment=enrollment,
+        user=user,
+        attempt_number=attempt_number,
+        status=QuizAttemptStatus.IN_PROGRESS,
+        started_at=now,
+        expires_at=expires_at,
+        question_snapshot=question_snapshot,
+        option_order_snapshot=option_order_snapshot,
+    )
+    return attempt, True
+
+
+@transaction.atomic
+def submit_quiz_attempt(*, attempt, answers: list[dict[str, int]]):
+    """Submit a quiz attempt, persist answers, and calculate weighted score."""
+    from apps.lms.choices import QuizAttemptStatus
+    from apps.lms.models import QuizAnswer, QuizOption, QuizQuestion
+
+    locked_attempt = (
+        attempt.__class__.objects.select_for_update()
+        .select_related("quiz")
+        .get(pk=attempt.pk)
+    )
+    if locked_attempt.status != QuizAttemptStatus.IN_PROGRESS:
+        raise QuizAttemptSubmissionError("این تلاش آزمون قابل ثبت پاسخ نیست.")
+    now = timezone.now()
+    if locked_attempt.expires_at and locked_attempt.expires_at <= now:
+        locked_attempt.status = QuizAttemptStatus.EXPIRED
+        locked_attempt.submitted_at = now
+        locked_attempt.save(update_fields=["status", "submitted_at", "updated_at"])
+        raise QuizAttemptSubmissionError("زمان آزمون به پایان رسیده است.")
+
+    question_ids = [int(item) for item in locked_attempt.question_snapshot]
+    allowed_options = {
+        int(question_id): {int(option_id) for option_id in option_ids}
+        for question_id, option_ids in locked_attempt.option_order_snapshot.items()
+    }
+    answer_map = {int(item["question_id"]): int(item["selected_option_id"]) for item in answers}
+    if set(answer_map) != set(question_ids):
+        raise QuizAttemptSubmissionError("باید به تمام سؤال‌های آزمون پاسخ دهید.")
+
+    questions = {question.pk: question for question in QuizQuestion.objects.filter(pk__in=question_ids)}
+    options = {option.pk: option for option in QuizOption.objects.filter(pk__in=answer_map.values())}
+
+    total_weight = sum(Decimal(questions[qid].weight) for qid in question_ids)
+    awarded_weight = Decimal("0.00")
+    QuizAnswer.objects.filter(attempt=locked_attempt).delete()
+    for question_id in question_ids:
+        selected_option_id = answer_map[question_id]
+        if selected_option_id not in allowed_options.get(question_id, set()):
+            raise QuizAttemptSubmissionError("گزینه انتخاب‌شده معتبر نیست.")
+        selected_option = options[selected_option_id]
+        question = questions[question_id]
+        is_correct = selected_option.question_id == question_id and selected_option.is_correct
+        score_awarded = Decimal(question.weight) if is_correct else Decimal("0.00")
+        awarded_weight += score_awarded
+        QuizAnswer.objects.create(
+            attempt=locked_attempt,
+            question=question,
+            selected_option=selected_option,
+            is_correct=is_correct,
+            weight=question.weight,
+            score_awarded=score_awarded,
+        )
+
+    score_percent = (awarded_weight / total_weight * Decimal("100.00")) if total_weight else Decimal("0.00")
+    score_out_of_20 = (awarded_weight / total_weight * Decimal("20.00")) if total_weight else Decimal("0.00")
+    score_percent = score_percent.quantize(Decimal("0.01"))
+    score_out_of_20 = score_out_of_20.quantize(Decimal("0.01"))
+    is_passed = score_out_of_20 >= locked_attempt.quiz.passing_score
+
+    locked_attempt.score_raw = awarded_weight
+    locked_attempt.score_percent = score_percent
+    locked_attempt.score_out_of_20 = score_out_of_20
+    locked_attempt.is_passed = is_passed
+    locked_attempt.status = QuizAttemptStatus.PASSED if is_passed else QuizAttemptStatus.FAILED
+    locked_attempt.submitted_at = now
+    locked_attempt.save(
+        update_fields=[
+            "score_raw",
+            "score_percent",
+            "score_out_of_20",
+            "is_passed",
+            "status",
+            "submitted_at",
+            "updated_at",
+        ]
+    )
+    return locked_attempt
+
+
+@transaction.atomic
+def unlock_quiz_for_user(*, quiz, user: Any, unlocked_by: Any, reason: str, extra_attempts: int = 1, valid_until=None):
+    """Grant manual extra attempts for a locked quiz user."""
+    from apps.lms.models import QuizUnlock
+
+    return QuizUnlock.objects.create(
+        quiz=quiz,
+        course=quiz.course,
+        user=user,
+        unlocked_by=unlocked_by,
+        reason=reason,
+        extra_attempts=extra_attempts,
+        valid_until=valid_until,
+    )

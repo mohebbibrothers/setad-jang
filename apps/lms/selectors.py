@@ -169,3 +169,40 @@ def get_admin_discussion_reports() -> QuerySet:
 def get_admin_discussion_report_by_id(*, report_id: int):
     """Return one discussion report for admin moderation."""
     return get_admin_discussion_reports().filter(pk=report_id).first()
+
+
+def get_published_quiz_for_course(*, course: Course):
+    """Return published quiz for a course, if any."""
+    from apps.lms.choices import QuizStatus
+    from apps.lms.models import Quiz
+
+    return (
+        Quiz.objects.filter(course=course, status=QuizStatus.PUBLISHED, is_active=True)
+        .prefetch_related("questions__options")
+        .first()
+    )
+
+
+def get_admin_quiz_by_course_id(*, course_id: int):
+    """Return quiz for a course in admin scope."""
+    from apps.lms.models import Quiz
+
+    return Quiz.all_objects.filter(course_id=course_id).prefetch_related("questions__options").first()
+
+
+def get_quiz_attempt_by_id(*, user_id: int, attempt_id: int):
+    """Return one quiz attempt owned by user."""
+    from apps.lms.models import QuizAttempt
+
+    return (
+        QuizAttempt.objects.select_related("quiz", "course", "enrollment")
+        .filter(pk=attempt_id, user_id=user_id)
+        .first()
+    )
+
+
+def get_admin_quiz_question_by_id(*, question_id: int):
+    """Return quiz question for admin scope."""
+    from apps.lms.models import QuizQuestion
+
+    return QuizQuestion.all_objects.select_related("quiz", "quiz__course").filter(pk=question_id).first()
