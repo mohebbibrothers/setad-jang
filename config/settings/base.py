@@ -745,6 +745,15 @@ CELERY_TASK_ROUTES = {
     "apps.madadkar.tasks.close_expired_campaigns_task": {
         "queue": "madadkar",
     },
+    "apps.support_desk.tasks.mark_support_sla_breaches_task": {
+        "queue": "default",
+    },
+    "apps.support_desk.tasks.cleanup_stale_support_drafts_task": {
+        "queue": "default",
+    },
+    "apps.support_desk.tasks.daily_support_digest_task": {
+        "queue": "default",
+    },
 }
 
 CELERY_BEAT_SCHEDULE = {
@@ -763,6 +772,18 @@ CELERY_BEAT_SCHEDULE = {
     "madadkar-close-expired-campaigns-every-10-minutes": {
         "task": "apps.madadkar.tasks.close_expired_campaigns_task",
         "schedule": crontab(minute="*/10"),
+    },
+    "support-mark-sla-breaches-every-5-minutes": {
+        "task": "apps.support_desk.tasks.mark_support_sla_breaches_task",
+        "schedule": crontab(minute="*/5"),
+    },
+    "support-cleanup-stale-drafts-daily": {
+        "task": "apps.support_desk.tasks.cleanup_stale_support_drafts_task",
+        "schedule": crontab(minute=20, hour=2),
+    },
+    "support-daily-digest": {
+        "task": "apps.support_desk.tasks.daily_support_digest_task",
+        "schedule": crontab(minute=0, hour=8),
     },
 }
 

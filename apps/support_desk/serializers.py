@@ -439,6 +439,32 @@ class SupportDuplicateReviewSerializer(serializers.Serializer):
     reason = serializers.CharField(required=False, allow_blank=True, default="")
 
 
+class SupportAdminAnalyticsSerializer(serializers.Serializer):
+    """Admin support analytics dashboard serializer."""
+
+    total_tickets = serializers.IntegerField()
+    open_tickets = serializers.IntegerField()
+    unassigned_tickets = serializers.IntegerField()
+    sla_breached_tickets = serializers.IntegerField()
+    resolved_tickets = serializers.IntegerField()
+    escalated_tickets = serializers.IntegerField()
+    reopened_tickets = serializers.IntegerField()
+    csat_average = serializers.FloatField()
+    csat_count = serializers.IntegerField()
+    reopen_rate_percent = serializers.FloatField()
+    escalation_rate_percent = serializers.FloatField()
+    sla_breach_rate_percent = serializers.FloatField()
+    status_distribution = serializers.ListField(child=serializers.DictField())
+    department_distribution = serializers.ListField(child=serializers.DictField())
+    category_distribution = serializers.ListField(child=serializers.DictField())
+    ticket_type_distribution = serializers.ListField(child=serializers.DictField())
+    priority_distribution = serializers.ListField(child=serializers.DictField())
+    severity_distribution = serializers.ListField(child=serializers.DictField())
+    assignee_distribution = serializers.ListField(child=serializers.DictField())
+    csat_distribution = serializers.ListField(child=serializers.DictField())
+    generated_at = serializers.DateTimeField()
+
+
 class SupportAttachmentVisibilityGuardSerializer(serializers.Serializer):
     """Schema-only serializer documenting user upload visibility boundary."""
 

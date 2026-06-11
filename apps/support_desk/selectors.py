@@ -11,6 +11,7 @@ from apps.support_desk.models import (
     SupportTicket,
     SupportTicketAttachment,
     SupportTicketMessage,
+    SupportTicketSatisfaction,
     SupportTicketType,
 )
 
@@ -140,6 +141,21 @@ def get_admin_tickets() -> QuerySet[SupportTicket]:
 def get_admin_ticket_by_number(*, ticket_number: str) -> SupportTicket | None:
     """Return one ticket in admin scope."""
     return get_admin_tickets().filter(ticket_number=ticket_number).first()
+
+
+def get_admin_messages() -> QuerySet[SupportTicketMessage]:
+    """Return all support timeline messages for admin export."""
+    return SupportTicketMessage.objects.select_related("ticket", "author").order_by("-created_at")
+
+
+def get_admin_satisfaction_ratings() -> QuerySet[SupportTicketSatisfaction]:
+    """Return CSAT ratings for admin export."""
+    return SupportTicketSatisfaction.objects.select_related("ticket", "user").order_by("-created_at")
+
+
+def get_admin_sla_tickets() -> QuerySet[SupportTicket]:
+    """Return tickets with SLA metadata for SLA reporting/export."""
+    return get_admin_tickets().filter(applied_sla_policy__isnull=False)
 
 
 def get_admin_duplicate_candidates() -> QuerySet[SupportDuplicateCandidate]:

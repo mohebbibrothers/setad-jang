@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from django.http import HttpResponse
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
@@ -20,6 +21,13 @@ from apps.core.schemas import (
     build_success_response_serializer,
 )
 from apps.support_desk import selectors, services
+from apps.support_desk.export import (
+    build_csat_workbook,
+    build_messages_workbook,
+    build_sla_workbook,
+    build_support_export_filename,
+    build_tickets_workbook,
+)
 from apps.support_desk.filters import (
     SupportAdminTicketFilter,
     SupportDuplicateCandidateAdminFilter,
@@ -27,6 +35,7 @@ from apps.support_desk.filters import (
 )
 from apps.support_desk.permissions import IsSupportAdminUser
 from apps.support_desk.serializers import (
+    SupportAdminAnalyticsSerializer,
     SupportAdminAssignSerializer,
     SupportAdminReasonSerializer,
     SupportAdminStatusSerializer,
@@ -771,3 +780,86 @@ class SupportAdminDuplicateCandidateReviewView(APIView):
         duplicate = services.review_duplicate_candidate(duplicate=duplicate, admin=request.user, **serializer.validated_data)
         log_action_async(user_id=request.user.pk, action=audit_actions.SUPPORT_DUPLICATE_REVIEWED, resource_type="support_duplicate_candidate", resource_id=str(duplicate.pk), **extract_audit_metadata(request))
         return SuccessResponse(data=SupportDuplicateCandidateSerializer(duplicate).data, message="وضعیت کاندیدای تکراری بروزرسانی شد.")
+
+
+ADMIN_ANALYTICS_RESPONSE = build_success_response_serializer(name="SupportAdminAnalyticsResponse", data_serializer=SupportAdminAnalyticsSerializer)
+
+
+class SupportAdminAnalyticsView(APIView):
+    """Admin support analytics dashboard."""
+
+    permission_classes = [IsSupportAdminUser]
+    serializer_class = SupportAdminAnalyticsSerializer
+
+    @extend_schema(operation_id="support_admin_analytics", tags=[TAG_SUPPORT_USER], responses={200: ADMIN_ANALYTICS_RESPONSE})
+    def get(self, request: Request) -> SuccessResponse:
+        """Return support desk analytics summary."""
+        return SuccessResponse(data=services.get_admin_analytics_summary(), message="گزارش تحلیلی میز پشتیبانی دریافت شد.")
+
+
+class SupportAdminTicketExportView(APIView):
+    """Admin Excel export for support tickets."""
+
+    permission_classes = [IsSupportAdminUser]
+
+    @extend_schema(operation_id="support_admin_export_tickets", tags=[TAG_SUPPORT_USER], responses={200: None})
+    def get(self, request: Request) -> HttpResponse:
+        """Export filtered ticket queue as an RTL Excel workbook."""
+        queryset = selectors.get_admin_tickets()
+        filterset = SupportAdminTicketFilter(request.query_params, queryset=queryset)
+        if filterset.is_valid():
+            queryset = filterset.qs
+        workbook = build_tickets_workbook(tickets=queryset)
+        filename = build_support_export_filename(export_type="tickets")
+        log_action_async(user_id=request.user.pk, action=audit_actions.SUPPORT_EXPORT_GENERATED, resource_type="support_ticket", resource_id="bulk", extra_data={"filename": filename, "export_type": "tickets"}, **extract_audit_metadata(request))
+        response = HttpResponse(workbook.getvalue(), content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return response
+
+
+class SupportAdminMessageExportView(APIView):
+    """Admin Excel export for support messages."""
+
+    permission_classes = [IsSupportAdminUser]
+
+    @extend_schema(operation_id="support_admin_export_messages", tags=[TAG_SUPPORT_USER], responses={200: None})
+    def get(self, request: Request) -> HttpResponse:
+        """Export timeline messages as an RTL Excel workbook."""
+        workbook = build_messages_workbook(messages=selectors.get_admin_messages())
+        filename = build_support_export_filename(export_type="messages")
+        log_action_async(user_id=request.user.pk, action=audit_actions.SUPPORT_EXPORT_GENERATED, resource_type="support_ticket_message", resource_id="bulk", extra_data={"filename": filename, "export_type": "messages"}, **extract_audit_metadata(request))
+        response = HttpResponse(workbook.getvalue(), content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return response
+
+
+class SupportAdminSLAExportView(APIView):
+    """Admin Excel export for SLA reporting."""
+
+    permission_classes = [IsSupportAdminUser]
+
+    @extend_schema(operation_id="support_admin_export_sla", tags=[TAG_SUPPORT_USER], responses={200: None})
+    def get(self, request: Request) -> HttpResponse:
+        """Export SLA ticket data as an RTL Excel workbook."""
+        workbook = build_sla_workbook(tickets=selectors.get_admin_sla_tickets())
+        filename = build_support_export_filename(export_type="sla")
+        log_action_async(user_id=request.user.pk, action=audit_actions.SUPPORT_EXPORT_GENERATED, resource_type="support_sla", resource_id="bulk", extra_data={"filename": filename, "export_type": "sla"}, **extract_audit_metadata(request))
+        response = HttpResponse(workbook.getvalue(), content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return response
+
+
+class SupportAdminCSATExportView(APIView):
+    """Admin Excel export for CSAT ratings."""
+
+    permission_classes = [IsSupportAdminUser]
+
+    @extend_schema(operation_id="support_admin_export_csat", tags=[TAG_SUPPORT_USER], responses={200: None})
+    def get(self, request: Request) -> HttpResponse:
+        """Export CSAT data as an RTL Excel workbook."""
+        workbook = build_csat_workbook(ratings=selectors.get_admin_satisfaction_ratings())
+        filename = build_support_export_filename(export_type="csat")
+        log_action_async(user_id=request.user.pk, action=audit_actions.SUPPORT_EXPORT_GENERATED, resource_type="support_csat", resource_id="bulk", extra_data={"filename": filename, "export_type": "csat"}, **extract_audit_metadata(request))
+        response = HttpResponse(workbook.getvalue(), content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return response

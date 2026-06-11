@@ -940,17 +940,47 @@ def models_Q_resolution_due(now):
     return Q(resolution_due_at__isnull=False, resolution_due_at__lte=now)
 
 
+def _distribution(queryset, *fields: str, limit: int | None = None) -> list[dict[str, Any]]:
+    """Return grouped counts as serializer-friendly dictionaries."""
+    rows = queryset.values(*fields).annotate(count=Count("id")).order_by("-count", *fields)
+    if limit is not None:
+        rows = rows[:limit]
+    return [dict(row) for row in rows]
+
+
 def get_admin_analytics_summary() -> dict[str, Any]:
-    """Return service-level aggregate counters for support dashboard."""
+    """Return executive-grade aggregate counters for support dashboard."""
     tickets = SupportTicket.all_objects.all()
+    open_tickets = tickets.exclude(status__in=[TicketStatus.CLOSED, TicketStatus.ARCHIVED, TicketStatus.SPAM])
+    rated = SupportTicketSatisfaction.objects.all()
+    total_ratings = rated.count()
+    rating_sum = sum(rating.rating for rating in rated)
+    resolved_count = tickets.filter(status__in=[TicketStatus.RESOLVED, TicketStatus.CLOSED]).count()
+    reopened_count = tickets.filter(reopen_count__gt=0).count()
+    escalated_count = tickets.filter(escalated_at__isnull=False).count()
+    breached_count = tickets.filter(sla_breached_at__isnull=False).count()
     return {
         "total_tickets": tickets.count(),
-        "open_tickets": tickets.exclude(status__in=[TicketStatus.CLOSED, TicketStatus.ARCHIVED, TicketStatus.SPAM]).count(),
-        "unassigned_tickets": tickets.filter(assigned_to__isnull=True).count(),
-        "sla_breached_tickets": tickets.filter(sla_breached_at__isnull=False).count(),
-        "status_distribution": list(tickets.values("status").annotate(count=Count("id")).order_by("-count")),
-        "department_distribution": list(tickets.values("department_id", "department__title").annotate(count=Count("id")).order_by("-count")),
-        "priority_distribution": list(tickets.values("priority").annotate(count=Count("id")).order_by("-count")),
+        "open_tickets": open_tickets.count(),
+        "unassigned_tickets": open_tickets.filter(assigned_to__isnull=True).count(),
+        "sla_breached_tickets": breached_count,
+        "resolved_tickets": resolved_count,
+        "escalated_tickets": escalated_count,
+        "reopened_tickets": reopened_count,
+        "csat_average": round(rating_sum / total_ratings, 2) if total_ratings else 0,
+        "csat_count": total_ratings,
+        "reopen_rate_percent": round((reopened_count / resolved_count) * 100, 2) if resolved_count else 0,
+        "escalation_rate_percent": round((escalated_count / max(tickets.count(), 1)) * 100, 2),
+        "sla_breach_rate_percent": round((breached_count / max(tickets.count(), 1)) * 100, 2),
+        "status_distribution": _distribution(tickets, "status"),
+        "department_distribution": _distribution(tickets, "department_id", "department__title"),
+        "category_distribution": _distribution(tickets, "category_id", "category__title", limit=30),
+        "ticket_type_distribution": _distribution(tickets, "ticket_type_id", "ticket_type__title"),
+        "priority_distribution": _distribution(tickets, "priority"),
+        "severity_distribution": _distribution(tickets, "severity"),
+        "assignee_distribution": _distribution(tickets.exclude(assigned_to__isnull=True), "assigned_to_id", "assigned_to__email", limit=30),
+        "csat_distribution": _distribution(rated, "rating"),
+        "generated_at": timezone.now(),
     }
 
 

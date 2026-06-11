@@ -40,4 +40,9 @@ urlpatterns = [
     path("admin/tickets/<str:ticket_number>/close/", views.SupportAdminTicketCloseView.as_view(), name="admin-ticket-close"),
     path("admin/duplicates/", views.SupportAdminDuplicateCandidateListView.as_view(), name="admin-duplicate-list"),
     path("admin/duplicates/<int:duplicate_id>/review/", views.SupportAdminDuplicateCandidateReviewView.as_view(), name="admin-duplicate-review"),
+    path("admin/analytics/", views.SupportAdminAnalyticsView.as_view(), name="admin-analytics"),
+    path("admin/export/tickets/", views.SupportAdminTicketExportView.as_view(), name="admin-export-tickets"),
+    path("admin/export/messages/", views.SupportAdminMessageExportView.as_view(), name="admin-export-messages"),
+    path("admin/export/sla/", views.SupportAdminSLAExportView.as_view(), name="admin-export-sla"),
+    path("admin/export/csat/", views.SupportAdminCSATExportView.as_view(), name="admin-export-csat"),
 ]
