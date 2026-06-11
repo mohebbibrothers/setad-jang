@@ -475,3 +475,11 @@ def get_admin_analytics_summary() -> dict[str, int]:
         "active_matches": KindnessMatch.objects.filter(status=MatchStatus.ACTIVE).count(),
         "pending_reports": KindnessListingReport.objects.filter(status=ReportStatus.PENDING).count(),
     }
+
+
+@transaction.atomic
+def increment_listing_view_count(*, listing: KindnessListing) -> KindnessListing:
+    """Increment listing view counter in service layer."""
+    listing.view_count = listing.view_count + 1
+    listing.save(update_fields=["view_count", "updated_at"])
+    return listing

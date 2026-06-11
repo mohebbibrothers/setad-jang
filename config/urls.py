@@ -121,6 +121,11 @@ api_v1_urlpatterns = [
         "api/v1/lms/",
         include(("apps.lms.urls", "lms"), namespace="lms"),
     ),
+    # ── Kindness Wall (Divar-e Mehrabani) ──────────────────
+    path(
+        "api/v1/kindness-wall/",
+        include(("apps.kindness_wall.urls", "kindness_wall"), namespace="kindness_wall"),
+    ),
 ]
 
 # ============================================================

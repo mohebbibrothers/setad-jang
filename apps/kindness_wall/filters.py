@@ -4,7 +4,7 @@ import django_filters
 from django.db.models import Q
 
 from apps.kindness_wall.choices import ListingType
-from apps.kindness_wall.models import KindnessListing
+from apps.kindness_wall.models import KindnessListing, KindnessListingReport
 
 
 class KindnessListingPublicFilter(django_filters.FilterSet):
@@ -23,3 +23,21 @@ class KindnessListingPublicFilter(django_filters.FilterSet):
     def filter_search(self, queryset, name, value):
         """Search title/description/search document."""
         return queryset.filter(Q(title__icontains=value) | Q(description__icontains=value) | Q(search_document__icontains=value))
+
+
+class KindnessListingAdminFilter(KindnessListingPublicFilter):
+    """Admin listing filters including workflow status."""
+
+    status = django_filters.CharFilter(field_name="status", lookup_expr="exact")
+    owner_id = django_filters.NumberFilter(field_name="owner_id")
+
+
+class KindnessReportAdminFilter(django_filters.FilterSet):
+    """Admin filters for listing reports."""
+
+    status = django_filters.CharFilter(field_name="status", lookup_expr="exact")
+    reason = django_filters.CharFilter(field_name="reason", lookup_expr="exact")
+
+    class Meta:
+        model = KindnessListingReport
+        fields: list[str] = []

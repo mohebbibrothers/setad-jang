@@ -219,6 +219,12 @@ REST_FRAMEWORK = {
         "lms_progress": "120/min",
         "lms_quiz_start": "10/hour",
         "lms_discussion": "30/hour",
+        # ── Kindness Wall — Divar-e Mehrabani ─────────
+        "kindness_browse_anon": "60/min",
+        "kindness_browse_user": "120/min",
+        "kindness_listing_create": "10/hour",
+        "kindness_contact_reveal": "20/hour",
+        "kindness_report": "10/hour",
     },
 }
 
