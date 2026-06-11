@@ -64,6 +64,7 @@ LOCAL_APPS = [
     "apps.madadkar.apps.MadadkarConfig",
     "apps.lms.apps.LMSConfig",
     "apps.kindness_wall.apps.KindnessWallConfig",
+    "apps.support_desk.apps.SupportDeskConfig",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -225,6 +226,13 @@ REST_FRAMEWORK = {
         "kindness_listing_create": "10/hour",
         "kindness_contact_reveal": "20/hour",
         "kindness_report": "10/hour",
+        # ── Support Desk — Ticketing ───────────────────────
+        "support_ticket_create": "5/hour",
+        "support_ticket_message": "30/hour",
+        "support_attachment_upload": "20/hour",
+        "support_suggest": "20/hour",
+        "support_user_browse": "120/min",
+        "support_admin_actions": "120/min",
     },
 }
 

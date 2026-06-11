@@ -69,6 +69,16 @@ from .r4j import (
     R4JReportFieldChangeFactory,
 )
 
+# ── Support Desk ────────────────────────────────────────────
+from .support_desk import (
+    SupportCategoryFactory,
+    SupportDepartmentFactory,
+    SupportSLAPolicyFactory,
+    SupportTicketFactory,
+    SupportTicketMessageFactory,
+    SupportTicketTypeFactory,
+)
+
 # ── Tabyin ──────────────────────────────────────────────────
 from .tabyin import TabyinAttachmentFactory, TabyinContentFactory
 
@@ -117,6 +127,12 @@ __all__ = [
     "SponsorFactory",
     "SponsorWithLogoFactory",
     "SuccessPaymentFactory",
+    "SupportCategoryFactory",
+    "SupportDepartmentFactory",
+    "SupportSLAPolicyFactory",
+    "SupportTicketFactory",
+    "SupportTicketMessageFactory",
+    "SupportTicketTypeFactory",
     "TabyinAttachmentFactory",
     "TabyinContentFactory",
     "UserFactory",

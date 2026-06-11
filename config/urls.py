@@ -126,6 +126,11 @@ api_v1_urlpatterns = [
         "api/v1/kindness-wall/",
         include(("apps.kindness_wall.urls", "kindness_wall"), namespace="kindness_wall"),
     ),
+    # ── Support Desk (Ticketing) ────────────────────────────
+    path(
+        "api/v1/support/",
+        include(("apps.support_desk.urls", "support_desk"), namespace="support_desk"),
+    ),
 ]
 
 # ============================================================
