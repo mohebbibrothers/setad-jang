@@ -10,7 +10,7 @@
   <img alt="DRF" src="https://img.shields.io/badge/DRF-3.x-A30000?style=for-the-badge" />
   <img alt="Celery" src="https://img.shields.io/badge/Celery-5.x-37814A?style=for-the-badge&logo=celery&logoColor=white" />
   <img alt="PostgreSQL" src="https://img.shields.io/badge/PostgreSQL-Production-4169E1?style=for-the-badge&logo=postgresql&logoColor=white" />
-  <img alt="Tests" src="https://img.shields.io/badge/tests-871%2B%20passed-brightgreen?style=for-the-badge" />
+  <img alt="Tests" src="https://img.shields.io/badge/tests-928%2B%20passed-brightgreen?style=for-the-badge" />
 </p>
 
 ---
@@ -51,7 +51,7 @@ python manage.py check                        ✅ No issues
 python manage.py check --deploy               ✅ No issues
 python manage.py makemigrations --check       ✅ No changes detected
 python manage.py spectacular --validate       ✅ Clean OpenAPI schema
-pytest -q                                     ✅ 871 passed
+pytest -q                                     ✅ 928+ passed
 ```
 
 پروژه با policy زیر نگهداری می‌شود:
