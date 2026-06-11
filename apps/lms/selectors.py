@@ -77,7 +77,11 @@ def get_admin_lesson_by_id(*, lesson_id: int) -> Lesson | None:
 
 def get_user_enrollments(*, user_id: int) -> QuerySet[Enrollment]:
     """Return enrollments owned by a user."""
-    return Enrollment.objects.select_related("course", "course__category").filter(user_id=user_id)
+    return (
+        Enrollment.objects.select_related("course", "course__category", "last_accessed_lesson")
+        .prefetch_related("lesson_progress__lesson")
+        .filter(user_id=user_id)
+    )
 
 
 def get_user_enrollment_by_id(*, user_id: int, enrollment_id: int) -> Enrollment | None:
@@ -97,3 +101,13 @@ def get_course_report_queryset(*, course_id: int) -> QuerySet[Enrollment]:
         .select_related("user", "course", "certificate")
         .order_by("-enrolled_at")
     )
+
+
+def get_user_enrollment_for_course(*, user_id: int, course_id: int) -> Enrollment | None:
+    """Return the user's enrollment for a course, if any."""
+    return get_user_enrollments(user_id=user_id).filter(course_id=course_id).first()
+
+
+def get_lesson_for_progress(*, lesson_id: int) -> Lesson | None:
+    """Return an active lesson with course for progress updates."""
+    return Lesson.objects.select_related("course").filter(pk=lesson_id, is_active=True).first()

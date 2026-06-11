@@ -14,7 +14,7 @@ from django.db.models import Count, Sum
 from django.utils import timezone
 
 from apps.lms.choices import BadgeLevel, CourseStatus, EnrollmentStatus
-from apps.lms.models import Course, Enrollment, Lesson, LMSCategory, LMSUserSkill
+from apps.lms.models import Course, Enrollment, Lesson, LessonProgress, LMSCategory, LMSUserSkill
 
 
 class LMSServiceError(Exception):
@@ -31,6 +31,17 @@ class CourseNotEnrollabeError(LMSServiceError):
 
 class CourseInvalidStateError(LMSServiceError):
     """Raised when a course lifecycle transition is not valid."""
+
+
+class EnrollmentNotActiveError(LMSServiceError):
+    """Raised when progress is attempted for a non-active enrollment."""
+
+
+class LessonNotInEnrollmentCourseError(LMSServiceError):
+    """Raised when a lesson does not belong to the user's enrolled course."""
+
+
+LESSON_COMPLETION_THRESHOLD_PERCENT = Decimal("90.00")
 
 
 @transaction.atomic
@@ -261,3 +272,133 @@ def create_skill_for_certificate(*, certificate) -> LMSUserSkill:
         },
     )
     return skill
+
+
+# ============================================================
+# Progress tracking
+# ============================================================
+
+
+def _calculate_percent(*, watched_seconds: int, duration_seconds: int) -> Decimal:
+    """Calculate a 0..100 percentage with two decimals."""
+    if duration_seconds <= 0:
+        return Decimal("100.00") if watched_seconds > 0 else Decimal("0.00")
+    value = (Decimal(watched_seconds) / Decimal(duration_seconds)) * Decimal("100")
+    return min(value.quantize(Decimal("0.01")), Decimal("100.00"))
+
+
+def _sync_enrollment_progress(*, enrollment: Enrollment) -> Enrollment:
+    """Recalculate aggregate enrollment progress from lesson progress records."""
+    aggregates = enrollment.lesson_progress.aggregate(
+        watched=Sum("watched_seconds"),
+        duration=Sum("duration_seconds_snapshot"),
+    )
+    watched = aggregates["watched"] or 0
+    duration = enrollment.course.estimated_duration_seconds or aggregates["duration"] or 0
+    enrollment.watched_seconds = watched
+    enrollment.total_seconds_snapshot = duration
+    enrollment.progress_percent = _calculate_percent(
+        watched_seconds=watched,
+        duration_seconds=duration,
+    )
+
+    active_lessons_count = Lesson.objects.filter(course=enrollment.course, is_active=True).count()
+    completed_lessons_count = enrollment.lesson_progress.filter(is_completed=True).count()
+    should_complete = active_lessons_count > 0 and completed_lessons_count >= active_lessons_count
+    if should_complete and enrollment.status == EnrollmentStatus.ACTIVE:
+        enrollment.status = EnrollmentStatus.COMPLETED
+        enrollment.completed_at = timezone.now()
+
+    enrollment.save(
+        update_fields=[
+            "watched_seconds",
+            "total_seconds_snapshot",
+            "progress_percent",
+            "status",
+            "completed_at",
+            "updated_at",
+        ]
+    )
+    return enrollment
+
+
+@transaction.atomic
+def update_lesson_progress(
+    *,
+    enrollment: Enrollment,
+    lesson: Lesson,
+    watched_seconds: int,
+    last_position_seconds: int | None = None,
+) -> LessonProgress:
+    """
+    Update lesson progress monotonically and sync aggregate enrollment progress.
+
+    watched_seconds is monotonic: clients may send repeated/out-of-order progress
+    events and the server keeps the maximum watched value. last_position_seconds
+    represents current playback position and may move backwards for rewinds.
+    """
+    locked_enrollment = (
+        Enrollment.objects.select_for_update()
+        .select_related("course")
+        .get(pk=enrollment.pk)
+    )
+    if locked_enrollment.status not in {EnrollmentStatus.ACTIVE, EnrollmentStatus.COMPLETED}:
+        raise EnrollmentNotActiveError("ثبت‌نام شما برای ثبت پیشرفت فعال نیست.")
+
+    locked_lesson = Lesson.objects.select_related("course").get(pk=lesson.pk)
+    if locked_lesson.course_id != locked_enrollment.course_id:
+        raise LessonNotInEnrollmentCourseError("این جلسه متعلق به کلاس ثبت‌نام‌شده شما نیست.")
+
+    duration_snapshot = locked_lesson.duration_seconds or 0
+    progress, _created = LessonProgress.objects.select_for_update().get_or_create(
+        enrollment=locked_enrollment,
+        lesson=locked_lesson,
+        defaults={
+            "duration_seconds_snapshot": duration_snapshot,
+            "first_watched_at": timezone.now(),
+        },
+    )
+
+    normalized_watched = max(0, watched_seconds)
+    capped_watched = min(normalized_watched, duration_snapshot) if duration_snapshot else normalized_watched
+    progress.watched_seconds = max(progress.watched_seconds, capped_watched)
+    progress.duration_seconds_snapshot = duration_snapshot
+    if last_position_seconds is not None:
+        normalized_position = max(0, last_position_seconds)
+        progress.last_position_seconds = (
+            min(normalized_position, duration_snapshot) if duration_snapshot else normalized_position
+        )
+    else:
+        progress.last_position_seconds = progress.watched_seconds
+
+    progress.progress_percent = _calculate_percent(
+        watched_seconds=progress.watched_seconds,
+        duration_seconds=duration_snapshot,
+    )
+    progress.last_watched_at = timezone.now()
+    if progress.first_watched_at is None:
+        progress.first_watched_at = progress.last_watched_at
+
+    if progress.progress_percent >= LESSON_COMPLETION_THRESHOLD_PERCENT:
+        progress.is_completed = True
+        if progress.completed_at is None:
+            progress.completed_at = progress.last_watched_at
+
+    progress.save(
+        update_fields=[
+            "watched_seconds",
+            "duration_seconds_snapshot",
+            "progress_percent",
+            "is_completed",
+            "last_position_seconds",
+            "first_watched_at",
+            "last_watched_at",
+            "completed_at",
+            "updated_at",
+        ]
+    )
+
+    locked_enrollment.last_accessed_lesson = locked_lesson
+    locked_enrollment.save(update_fields=["last_accessed_lesson", "updated_at"])
+    _sync_enrollment_progress(enrollment=locked_enrollment)
+    return progress

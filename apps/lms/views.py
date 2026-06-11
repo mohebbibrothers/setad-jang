@@ -32,15 +32,23 @@ from apps.lms.serializers import (
     CourseDetailSerializer,
     CourseReportSerializer,
     CourseSummarySerializer,
+    EnrollmentDetailSerializer,
     EnrollmentSerializer,
     LessonCreateUpdateSerializer,
+    LessonProgressSerializer,
+    LessonProgressUpdateSerializer,
     LessonSummarySerializer,
     LMSCategoryCreateUpdateSerializer,
     LMSCategorySerializer,
     LMSUserSkillSerializer,
 )
-from apps.lms.services import CourseNotEnrollabeError, LMSProfileIncompleteError
-from apps.lms.throttles import LMSEnrollThrottle
+from apps.lms.services import (
+    CourseNotEnrollabeError,
+    EnrollmentNotActiveError,
+    LessonNotInEnrollmentCourseError,
+    LMSProfileIncompleteError,
+)
+from apps.lms.throttles import LMSEnrollThrottle, LMSProgressThrottle
 
 TAG_LMS_PUBLIC = "آموزش — عمومی"
 TAG_LMS_USER = "آموزش — کاربر"
@@ -54,7 +62,9 @@ COURSE_LIST_RESPONSE = build_paginated_success_response_serializer(name="LMSCour
 LESSON_RESPONSE = build_success_response_serializer(name="LMSLessonResponse", data_serializer=LessonSummarySerializer)
 LESSON_LIST_RESPONSE = build_success_response_serializer(name="LMSLessonListResponse", data_serializer=LessonSummarySerializer, many=True)
 ENROLLMENT_RESPONSE = build_success_response_serializer(name="LMSEnrollmentResponse", data_serializer=EnrollmentSerializer)
+ENROLLMENT_DETAIL_RESPONSE = build_success_response_serializer(name="LMSEnrollmentDetailResponse", data_serializer=EnrollmentDetailSerializer)
 ENROLLMENT_LIST_RESPONSE = build_paginated_success_response_serializer(name="LMSEnrollmentListResponse", item_serializer=EnrollmentSerializer)
+LESSON_PROGRESS_RESPONSE = build_success_response_serializer(name="LMSLessonProgressResponse", data_serializer=LessonProgressSerializer)
 SKILL_LIST_RESPONSE = build_success_response_serializer(name="LMSSkillListResponse", data_serializer=LMSUserSkillSerializer, many=True)
 COURSE_REPORT_RESPONSE = build_success_response_serializer(name="LMSCourseReportResponse", data_serializer=CourseReportSerializer)
 
@@ -192,6 +202,73 @@ class LMSUserEnrollmentListView(APIView):
         page = paginator.paginate_queryset(queryset, request, view=self)
         serializer = EnrollmentSerializer(page, many=True)
         return paginator.get_paginated_response(serializer.data, message="لیست ثبت‌نام‌های شما دریافت شد.")
+
+
+class LMSUserEnrollmentDetailView(APIView):
+    """Retrieve one enrollment owned by the current user with progress records."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(operation_id="lms_user_enrollments_retrieve", tags=[TAG_LMS_USER], responses={200: ENROLLMENT_DETAIL_RESPONSE, 404: LMS_ERROR_RESPONSE})
+    def get(self, request: Request, enrollment_id: int) -> SuccessResponse | ErrorResponse:
+        """Return one owned enrollment."""
+        enrollment = selectors.get_user_enrollment_by_id(
+            user_id=request.user.pk,
+            enrollment_id=enrollment_id,
+        )
+        if enrollment is None:
+            return ErrorResponse(message="ثبت‌نامی با این شناسه یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+        return SuccessResponse(data=EnrollmentDetailSerializer(enrollment).data)
+
+
+class LMSLessonProgressUpdateView(APIView):
+    """Update watch progress for a lesson in one of the user's enrollments."""
+
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [LMSProgressThrottle]
+
+    @extend_schema(operation_id="lms_user_lessons_progress_update", tags=[TAG_LMS_USER], request=LessonProgressUpdateSerializer, responses={200: LESSON_PROGRESS_RESPONSE, 400: LMS_ERROR_RESPONSE, 403: LMS_ERROR_RESPONSE, 404: LMS_ERROR_RESPONSE})
+    def post(self, request: Request, lesson_id: int) -> SuccessResponse | ErrorResponse:
+        """Update lesson watch progress monotonically."""
+        lesson = selectors.get_lesson_for_progress(lesson_id=lesson_id)
+        if lesson is None:
+            return ErrorResponse(message="جلسه یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+
+        enrollment = selectors.get_user_enrollment_for_course(
+            user_id=request.user.pk,
+            course_id=lesson.course_id,
+        )
+        if enrollment is None:
+            return ErrorResponse(message="برای ثبت پیشرفت ابتدا باید در کلاس ثبت‌نام کنید.", status_code=status.HTTP_403_FORBIDDEN)
+
+        serializer = LessonProgressUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            progress = services.update_lesson_progress(
+                enrollment=enrollment,
+                lesson=lesson,
+                watched_seconds=serializer.validated_data["watched_seconds"],
+                last_position_seconds=serializer.validated_data.get("last_position_seconds"),
+            )
+        except (EnrollmentNotActiveError, LessonNotInEnrollmentCourseError) as exc:
+            return ErrorResponse(message=str(exc), status_code=status.HTTP_400_BAD_REQUEST)
+
+        log_action_async(
+            user_id=request.user.pk,
+            action=audit_actions.LMS_PROGRESS_UPDATED,
+            resource_type="lms_lesson_progress",
+            resource_id=str(progress.pk),
+            extra_data={
+                "lesson_id": lesson.pk,
+                "course_id": lesson.course_id,
+                "progress_percent": str(progress.progress_percent),
+            },
+            **extract_audit_metadata(request),
+        )
+        return SuccessResponse(
+            data=LessonProgressSerializer(progress).data,
+            message="پیشرفت جلسه با موفقیت ثبت شد.",
+        )
 
 
 class LMSUserSkillListView(APIView):

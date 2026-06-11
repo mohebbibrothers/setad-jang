@@ -2,7 +2,7 @@
 
 from rest_framework import serializers
 
-from apps.lms.models import Course, Enrollment, Lesson, LMSCategory, LMSUserSkill
+from apps.lms.models import Course, Enrollment, Lesson, LessonProgress, LMSCategory, LMSUserSkill
 
 
 class LMSCategorySerializer(serializers.ModelSerializer):
@@ -197,3 +197,41 @@ class LMSUserSkillSerializer(serializers.ModelSerializer):
         model = LMSUserSkill
         fields = ("id", "title", "slug", "badge_level", "course_title", "certificate_code", "issued_at")
         read_only_fields = fields
+
+
+class LessonProgressUpdateSerializer(serializers.Serializer):
+    """Input serializer for lesson progress updates."""
+
+    watched_seconds = serializers.IntegerField(min_value=0)
+    last_position_seconds = serializers.IntegerField(required=False, min_value=0)
+
+
+class LessonProgressSerializer(serializers.ModelSerializer):
+    """Output serializer for lesson progress state."""
+
+    lesson = LessonSummarySerializer(read_only=True)
+
+    class Meta:
+        model = LessonProgress
+        fields = (
+            "id",
+            "lesson",
+            "watched_seconds",
+            "duration_seconds_snapshot",
+            "progress_percent",
+            "is_completed",
+            "last_position_seconds",
+            "first_watched_at",
+            "last_watched_at",
+            "completed_at",
+        )
+        read_only_fields = fields
+
+
+class EnrollmentDetailSerializer(EnrollmentSerializer):
+    """Detailed enrollment serializer including lesson progress records."""
+
+    lesson_progress = LessonProgressSerializer(many=True, read_only=True)
+
+    class Meta(EnrollmentSerializer.Meta):
+        fields = (*EnrollmentSerializer.Meta.fields, "last_accessed_lesson_id", "lesson_progress")
