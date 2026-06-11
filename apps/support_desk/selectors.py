@@ -49,7 +49,13 @@ def get_admin_category_by_id(*, category_id: int) -> SupportCategory | None:
 def get_active_ticket_types() -> QuerySet[SupportTicketType]:
     """Return active dynamic ticket types for user ticket creation."""
     return (
-        SupportTicketType.objects.select_related("default_department", "default_category", "default_sla_policy")
+        SupportTicketType.objects.select_related(
+            "default_department",
+            "default_category",
+            "default_category__department",
+            "default_category__parent",
+            "default_sla_policy",
+        )
         .order_by("order", "title")
     )
 
@@ -57,7 +63,13 @@ def get_active_ticket_types() -> QuerySet[SupportTicketType]:
 def get_admin_ticket_types() -> QuerySet[SupportTicketType]:
     """Return all ticket types for admin management."""
     return (
-        SupportTicketType.all_objects.select_related("default_department", "default_category", "default_sla_policy")
+        SupportTicketType.all_objects.select_related(
+            "default_department",
+            "default_category",
+            "default_category__department",
+            "default_category__parent",
+            "default_sla_policy",
+        )
         .order_by("order", "title")
     )
 
@@ -107,7 +119,20 @@ def get_user_tickets(*, user_id: int) -> QuerySet[SupportTicket]:
     """Return tickets owned by a user with safe public timeline data."""
     return (
         SupportTicket.objects.filter(owner_id=user_id)
-        .select_related("department", "category", "ticket_type", "assigned_to", "applied_sla_policy")
+        .select_related(
+            "department",
+            "category",
+            "category__department",
+            "category__parent",
+            "ticket_type",
+            "ticket_type__default_department",
+            "ticket_type__default_category",
+            "ticket_type__default_category__department",
+            "ticket_type__default_category__parent",
+            "ticket_type__default_sla_policy",
+            "assigned_to",
+            "applied_sla_policy",
+        )
         .prefetch_related(
             Prefetch("messages", queryset=_message_queryset(include_internal=False)),
             Prefetch("attachments", queryset=_attachment_queryset(include_internal=False)),
@@ -129,7 +154,21 @@ def get_user_ticket_timeline(*, ticket: SupportTicket) -> QuerySet[SupportTicket
 def get_admin_tickets() -> QuerySet[SupportTicket]:
     """Return admin ticket queue optimized for listing/detail serializers."""
     return (
-        SupportTicket.all_objects.select_related("owner", "department", "category", "ticket_type", "assigned_to", "applied_sla_policy")
+        SupportTicket.all_objects.select_related(
+            "owner",
+            "department",
+            "category",
+            "category__department",
+            "category__parent",
+            "ticket_type",
+            "ticket_type__default_department",
+            "ticket_type__default_category",
+            "ticket_type__default_category__department",
+            "ticket_type__default_category__parent",
+            "ticket_type__default_sla_policy",
+            "assigned_to",
+            "applied_sla_policy",
+        )
         .prefetch_related(
             Prefetch("messages", queryset=_message_queryset(include_internal=True)),
             Prefetch("attachments", queryset=_attachment_queryset(include_internal=True)),

@@ -2,7 +2,7 @@
 
 <p align="center">
   <strong>Enterprise-grade, production-minded Django REST Framework backend</strong><br />
-  Django 6 · DRF · PostgreSQL · Redis · Celery · OpenAPI · JWT · Audit Trail · Payment Ledger · LMS · Kindness Wall
+  Django 6 · DRF · PostgreSQL · Redis · Celery · OpenAPI · JWT · Audit Trail · Payment Ledger · LMS · Kindness Wall · Support Desk
 </p>
 
 <p align="center">
@@ -10,7 +10,7 @@
   <img alt="DRF" src="https://img.shields.io/badge/DRF-3.x-A30000?style=for-the-badge" />
   <img alt="Celery" src="https://img.shields.io/badge/Celery-5.x-37814A?style=for-the-badge&logo=celery&logoColor=white" />
   <img alt="PostgreSQL" src="https://img.shields.io/badge/PostgreSQL-production-4169E1?style=for-the-badge&logo=postgresql&logoColor=white" />
-  <img alt="Tests" src="https://img.shields.io/badge/tests-979%2B%20passed-brightgreen?style=for-the-badge" />
+  <img alt="Tests" src="https://img.shields.io/badge/tests-1032%2B%20passed-brightgreen?style=for-the-badge" />
   <img alt="OpenAPI" src="https://img.shields.io/badge/OpenAPI-clean-blue?style=for-the-badge" />
 </p>
 
@@ -24,15 +24,16 @@
 - [4. اپ‌ها و قابلیت‌ها](#4-اپها-و-قابلیتها)
 - [5. LMS — سامانه آموزش بعثت مردم](#5-lms--سامانه-آموزش-بعثت-مردم)
 - [6. Kindness Wall — دیوار مهربانی](#6-kindness-wall--دیوار-مهربانی)
-- [7. Observability و Health](#7-observability-و-health)
-- [8. Logging و Auditability](#8-logging-و-auditability)
-- [9. Celery و Background Jobs](#9-celery-و-background-jobs)
-- [10. Docker و Production Runtime](#10-docker-و-production-runtime)
-- [11. نصب و اجرای Local](#11-نصب-و-اجرای-local)
-- [12. Quality Gate و CI/CD](#12-quality-gate-و-cicd)
-- [13. OpenAPI Documentation](#13-openapi-documentation)
-- [14. Production Checklist](#14-production-checklist)
-- [15. فلسفه مهندسی پروژه](#15-فلسفه-مهندسی-پروژه)
+- [7. Support Desk — میز پشتیبانی](#7-support-desk--میز-پشتیبانی)
+- [8. Observability و Health](#8-observability-و-health)
+- [9. Logging و Auditability](#9-logging-و-auditability)
+- [10. Celery و Background Jobs](#10-celery-و-background-jobs)
+- [11. Docker و Production Runtime](#11-docker-و-production-runtime)
+- [12. نصب و اجرای Local](#12-نصب-و-اجرای-local)
+- [13. Quality Gate و CI/CD](#13-quality-gate-و-cicd)
+- [14. OpenAPI Documentation](#14-openapi-documentation)
+- [15. Production Checklist](#15-production-checklist)
+- [16. فلسفه مهندسی پروژه](#16-فلسفه-مهندسی-پروژه)
 
 ---
 
@@ -67,6 +68,7 @@ Developer experience
 | `madadkar` | crowdfunding خیریه سهم‌محور، payment gateway، Zarinpal، ledger مالی |
 | `lms` | سامانه آموزش بعثت مردم، دوره، جلسه، آزمون، مدرک، مهارت، گزارش مدیریتی |
 | `kindness_wall` | دیوار مهربانی، آگهی کمک/نیاز، دسته‌بندی درختی، matching، contact reveal امن، گزارش و analytics |
+| `support_desk` | میز پشتیبانی enterprise، تیکت، SLA، دسته‌بندی درختی، مکالمه، internal note، export و analytics |
 
 ---
 
@@ -87,7 +89,7 @@ python manage.py check                           ✅ No issues
 python manage.py check --deploy                  ✅ No issues
 python manage.py makemigrations --check --dry-run ✅ No changes detected
 python manage.py spectacular --validate          ✅ Clean OpenAPI schema
-pytest -q                                        ✅ 979+ passed
+pytest -q                                        ✅ 1032+ passed
 ```
 
 پروژه با policyهای سخت‌گیرانه نگهداری می‌شود:
@@ -1032,7 +1034,159 @@ GET           /api/v1/kindness-wall/admin/analytics/
 
 ---
 
-## 7. Observability و Health
+## 7. Support Desk — میز پشتیبانی
+
+Support Desk یک سامانه تیکت enterprise برای ارتباط ساخت‌یافته کاربر با ادمین سایت است. این اپ به‌عنوان contact form ساده طراحی نشده؛ بلکه یک Help Desk کامل با taxonomy داینامیک، SLA، timeline، internal notes، assignment، canned responses، smart triage، duplicate detection، analytics و export است.
+
+### 7.1 اصول طراحی
+
+```text
+Authenticated-only ticketing
+Dynamic admin-managed departments
+Fully tree-based dynamic categories
+Admin-managed ticket types / SLA policies / macros
+Service-layer state transitions
+Selector-layer optimized reads
+Internal notes hidden from users
+SLA-aware workflow
+Audit for sensitive operations
+Excel export and analytics
+N+1 performance contracts
+```
+
+### 7.2 مدل‌های اصلی
+
+```text
+SupportDepartment            → دپارتمان/صف پشتیبانی
+SupportCategory              → دسته‌بندی درختی کامل
+SupportTicketType            → نوع/علت تیکت داینامیک
+SupportSLAPolicy             → سیاست SLA قابل مدیریت
+SupportTicket                → تیکت اصلی
+SupportTicketMessage         → timeline پیام‌ها و رویدادها
+SupportTicketAttachment      → ضمیمه public/internal
+SupportCannedResponse        → پاسخ آماده ادمین
+SupportTicketAssignment      → تاریخچه ارجاع
+SupportTicketStatusHistory   → تاریخچه وضعیت
+SupportSLAEvent              → رویدادهای SLA
+SupportTicketSatisfaction    → CSAT / رضایت‌سنجی
+SupportDuplicateCandidate    → کاندیدای تیکت تکراری
+```
+
+### 7.3 Taxonomy داینامیک و درختی
+
+همه taxonomyها توسط ادمین مدیریت می‌شوند. seed پیش‌فرض وجود دارد، اما hard-coded constraint محصولی نیست:
+
+- دپارتمان‌ها
+- دسته‌بندی‌های درختی چندسطحی
+- نوع تیکت
+- SLA policy
+- canned response
+- tagها
+
+دسته‌بندی‌ها دارای `parent`, `path`, `depth`, `department`, `order`, `is_active` هستند و cycle/self-parent/cross-department parent توسط service layer جلوگیری می‌شود.
+
+### 7.4 Workflow و SLA
+
+```text
+DRAFT → SUBMITTED → OPEN / IN_PROGRESS / WAITING_FOR_USER / WAITING_FOR_ADMIN
+      → RESOLVED → CLOSED
+      → REOPENED
+      → ESCALATED
+```
+
+SLA از زمان submit اعمال می‌شود:
+
+```text
+first_response_due_at
+resolution_due_at
+sla_breached_at
+sla_paused_at
+sla_total_paused_seconds
+```
+
+وقتی تیکت منتظر پاسخ کاربر است، SLA طبق policy pause می‌شود و با پاسخ کاربر resume می‌شود.
+
+### 7.5 User API Summary
+
+```text
+GET    /api/v1/support/departments/
+GET    /api/v1/support/categories/
+GET    /api/v1/support/ticket-types/
+POST   /api/v1/support/me/tickets/suggest/
+GET    /api/v1/support/me/tickets/
+POST   /api/v1/support/me/tickets/
+GET    /api/v1/support/me/tickets/{ticket_number}/
+PATCH  /api/v1/support/me/tickets/{ticket_number}/
+POST   /api/v1/support/me/tickets/{ticket_number}/submit/
+POST   /api/v1/support/me/tickets/{ticket_number}/reply/
+GET    /api/v1/support/me/tickets/{ticket_number}/timeline/
+POST   /api/v1/support/me/tickets/{ticket_number}/attachments/
+POST   /api/v1/support/me/tickets/{ticket_number}/reopen/
+POST   /api/v1/support/me/tickets/{ticket_number}/satisfaction/
+```
+
+### 7.6 Admin API Summary
+
+```text
+GET/POST       /api/v1/support/admin/departments/
+GET/PATCH/DELETE /api/v1/support/admin/departments/{id}/
+GET/POST       /api/v1/support/admin/categories/
+PATCH/DELETE   /api/v1/support/admin/categories/{id}/
+GET/POST       /api/v1/support/admin/ticket-types/
+PATCH          /api/v1/support/admin/ticket-types/{id}/
+GET/POST       /api/v1/support/admin/sla-policies/
+PATCH          /api/v1/support/admin/sla-policies/{id}/
+GET/POST       /api/v1/support/admin/canned-responses/
+PATCH          /api/v1/support/admin/canned-responses/{id}/
+POST           /api/v1/support/admin/canned-responses/{id}/use/
+GET            /api/v1/support/admin/tickets/
+GET            /api/v1/support/admin/tickets/{ticket_number}/
+POST           /api/v1/support/admin/tickets/{ticket_number}/reply/
+POST           /api/v1/support/admin/tickets/{ticket_number}/internal-note/
+POST           /api/v1/support/admin/tickets/{ticket_number}/assign/
+POST           /api/v1/support/admin/tickets/{ticket_number}/status/
+POST           /api/v1/support/admin/tickets/{ticket_number}/escalate/
+POST           /api/v1/support/admin/tickets/{ticket_number}/close/
+GET            /api/v1/support/admin/duplicates/
+POST           /api/v1/support/admin/duplicates/{id}/review/
+GET            /api/v1/support/admin/analytics/
+GET            /api/v1/support/admin/export/tickets/
+GET            /api/v1/support/admin/export/messages/
+GET            /api/v1/support/admin/export/sla/
+GET            /api/v1/support/admin/export/csat/
+```
+
+### 7.7 Analytics و Export
+
+داشبورد ادمین شامل توزیع وضعیت، دپارتمان، دسته، نوع تیکت، اولویت، شدت، assignee، CSAT، نرخ reopen، نرخ escalation و نرخ SLA breach است.
+
+خروجی‌های Excel:
+
+```text
+tickets
+messages
+sla
+csat
+```
+
+همه خروجی‌ها RTL، styled، filterable و audit‌شده هستند.
+
+### 7.8 تست و Performance Contracts
+
+Support Desk دارای تست‌های چندلایه است:
+
+- domain foundation
+- service workflows
+- user API
+- admin API
+- analytics/export/tasks
+- final performance contracts
+- privacy/internal-note regression
+- route and permission smoke tests
+
+---
+
+## 8. Observability و Health
 
 سه سطح health داریم:
 
@@ -1052,7 +1206,7 @@ Health responseها secret-safe هستند و credential/traceback خام leak �
 
 ---
 
-## 8. Logging و Auditability
+## 9. Logging و Auditability
 
 فرمت logging:
 
@@ -1071,7 +1225,7 @@ Health responseها secret-safe هستند و credential/traceback خام leak �
 
 ---
 
-## 9. Celery و Background Jobs
+## 10. Celery و Background Jobs
 
 Celery برای taskهای async و scheduled استفاده می‌شود:
 
@@ -1082,6 +1236,9 @@ audit log async write
 madadkar stale participation expiration
 madadkar expired campaign close
 LMS certificate PDF task extension point
+support SLA breach detection
+support stale draft cleanup
+support daily digest
 ```
 
 Queueها:
@@ -1094,7 +1251,7 @@ madadkar
 
 ---
 
-## 10. Docker و Production Runtime
+## 11. Docker و Production Runtime
 
 سرویس‌ها:
 
@@ -1115,7 +1272,7 @@ Healthcheck کانتینر web روی readiness است:
 
 ---
 
-## 11. نصب و اجرای Local
+## 12. نصب و اجرای Local
 
 ```bash
 python -m venv .venv
@@ -1135,7 +1292,7 @@ python manage.py runserver
 
 ---
 
-## 12. Quality Gate و CI/CD
+## 13. Quality Gate و CI/CD
 
 دستور اصلی:
 
@@ -1179,7 +1336,7 @@ GitHub Actions:
 
 ---
 
-## 13. OpenAPI Documentation
+## 14. OpenAPI Documentation
 
 بعد از اجرای سرور:
 
@@ -1197,7 +1354,7 @@ make schema-update
 
 ---
 
-## 14. Production Checklist
+## 15. Production Checklist
 
 قبل از production واقعی:
 
@@ -1221,7 +1378,7 @@ Object storage برای media در مقیاس production
 
 ---
 
-## 15. فلسفه مهندسی پروژه
+## 16. فلسفه مهندسی پروژه
 
 ```text
 Correctness before speed
