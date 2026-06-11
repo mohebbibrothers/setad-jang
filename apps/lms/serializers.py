@@ -674,3 +674,29 @@ class CertificateRevokeSerializer(serializers.Serializer):
     """Input serializer for admin certificate revocation."""
 
     reason = serializers.CharField()
+
+
+class CourseAnalyticsSerializer(serializers.Serializer):
+    """Admin analytics summary for a course."""
+
+    participants_count = serializers.IntegerField()
+    active_count = serializers.IntegerField()
+    completed_count = serializers.IntegerField()
+    graduates_count = serializers.IntegerField()
+    average_progress_percent = serializers.FloatField()
+    quiz_attempts_count = serializers.IntegerField()
+    quiz_passed_count = serializers.IntegerField()
+    quiz_failed_count = serializers.IntegerField()
+    average_score_out_of_20 = serializers.FloatField(allow_null=True)
+
+
+class CourseLeaderboardItemSerializer(serializers.Serializer):
+    """Leaderboard row for top LMS learners in a course."""
+
+    user_id = serializers.IntegerField()
+    full_name = serializers.CharField()
+    email = serializers.EmailField(allow_blank=True)
+    progress_percent = serializers.FloatField()
+    best_score_out_of_20 = serializers.FloatField(allow_null=True)
+    badge_level = serializers.CharField(allow_blank=True)
+    certificate_code = serializers.CharField(allow_blank=True)

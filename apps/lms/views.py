@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from django.contrib.auth import get_user_model
+from django.http import HttpResponse
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -21,6 +22,7 @@ from apps.core.schemas import (
     build_success_response_serializer,
 )
 from apps.lms import selectors, services
+from apps.lms.export import build_course_enrollments_workbook, build_course_export_filename
 from apps.lms.filters import (
     CourseAdminFilter,
     CoursePublicFilter,
@@ -32,8 +34,10 @@ from apps.lms.serializers import (
     CertificateRevokeSerializer,
     CertificateSerializer,
     CertificateVerifySerializer,
+    CourseAnalyticsSerializer,
     CourseCreateUpdateSerializer,
     CourseDetailSerializer,
+    CourseLeaderboardItemSerializer,
     CourseReportSerializer,
     CourseSummarySerializer,
     DiscussionModerationSerializer,
@@ -111,6 +115,8 @@ CERTIFICATE_VERIFY_RESPONSE = build_success_response_serializer(name="LMSCertifi
 CERTIFICATE_LIST_RESPONSE = build_paginated_success_response_serializer(name="LMSCertificateListResponse", item_serializer=CertificateSerializer)
 SKILL_LIST_RESPONSE = build_success_response_serializer(name="LMSSkillListResponse", data_serializer=LMSUserSkillSerializer, many=True)
 COURSE_REPORT_RESPONSE = build_success_response_serializer(name="LMSCourseReportResponse", data_serializer=CourseReportSerializer)
+COURSE_ANALYTICS_RESPONSE = build_success_response_serializer(name="LMSCourseAnalyticsResponse", data_serializer=CourseAnalyticsSerializer)
+COURSE_LEADERBOARD_RESPONSE = build_success_response_serializer(name="LMSCourseLeaderboardResponse", data_serializer=CourseLeaderboardItemSerializer, many=True)
 
 
 class LMSCategoryPublicListView(APIView):
@@ -1032,3 +1038,61 @@ class LMSAdminCourseReportView(APIView):
             data=CourseReportSerializer({"course": course, "summary": summary, "enrollments": enrollments}).data,
             message="گزارش کلاس با موفقیت دریافت شد.",
         )
+
+
+class LMSAdminCourseAnalyticsView(APIView):
+    """Admin analytics summary for one course."""
+
+    permission_classes = [IsLMSAdminUser]
+
+    @extend_schema(operation_id="lms_admin_courses_analytics", tags=[TAG_LMS_ADMIN], responses={200: COURSE_ANALYTICS_RESPONSE, 404: LMS_ERROR_RESPONSE})
+    def get(self, request: Request, course_id: int) -> SuccessResponse | ErrorResponse:
+        """Return aggregate analytics for a course."""
+        course = selectors.get_admin_course_by_id(course_id)
+        if course is None:
+            return ErrorResponse(message="کلاس یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+        return SuccessResponse(data=selectors.get_course_analytics(course=course), message="تحلیل کلاس با موفقیت دریافت شد.")
+
+
+class LMSAdminCourseLeaderboardView(APIView):
+    """Admin leaderboard for one course."""
+
+    permission_classes = [IsLMSAdminUser]
+
+    @extend_schema(operation_id="lms_admin_courses_leaderboard", tags=[TAG_LMS_ADMIN], responses={200: COURSE_LEADERBOARD_RESPONSE, 404: LMS_ERROR_RESPONSE})
+    def get(self, request: Request, course_id: int) -> SuccessResponse | ErrorResponse:
+        """Return top learners ranked by score/progress/badge."""
+        course = selectors.get_admin_course_by_id(course_id)
+        if course is None:
+            return ErrorResponse(message="کلاس یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+        return SuccessResponse(data=selectors.get_course_leaderboard(course=course), message="رتبه‌بندی کلاس با موفقیت دریافت شد.")
+
+
+class LMSAdminCourseExportView(APIView):
+    """Admin Excel export for course participants."""
+
+    permission_classes = [IsLMSAdminUser]
+
+    @extend_schema(operation_id="lms_admin_courses_export", tags=[TAG_LMS_ADMIN], responses={200: None, 404: LMS_ERROR_RESPONSE})
+    def get(self, request: Request, course_id: int) -> HttpResponse | ErrorResponse:
+        """Export course enrollment report as Excel."""
+        course = selectors.get_admin_course_by_id(course_id)
+        if course is None:
+            return ErrorResponse(message="کلاس یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+        enrollments = selectors.get_course_report_queryset(course_id=course.pk)
+        workbook = build_course_enrollments_workbook(course=course, enrollments=enrollments)
+        filename = build_course_export_filename(course=course)
+        log_action_async(
+            user_id=request.user.pk,
+            action=audit_actions.LMS_COURSE_REPORT_EXPORTED,
+            resource_type="lms_course",
+            resource_id=str(course.pk),
+            extra_data={"filename": filename},
+            **extract_audit_metadata(request),
+        )
+        response = HttpResponse(
+            workbook.getvalue(),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return response

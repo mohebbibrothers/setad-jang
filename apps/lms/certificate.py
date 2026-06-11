@@ -4,16 +4,39 @@ Certificate utilities for LMS graduation.
 Certificates in Ba'sat Mardom are both human-readable and machine-verifiable:
 - a public verification code/slug is stored on the Certificate model
 - the official Persian statement is generated from immutable snapshots
-- a lightweight PDF-compatible file is generated without external runtime deps
+- a polished PDF is generated with the official Ba'sat Mardom logo
+
+The PDF renderer intentionally uses Pillow, which is already a project dependency.
+This keeps certificate generation deterministic and deployable without adding a
+new native PDF dependency. The rendering API is isolated here so a future HTML/PDF
+renderer can replace it without touching service-layer logic.
 """
 
 from __future__ import annotations
 
 from decimal import Decimal
+from io import BytesIO
+from pathlib import Path
+from textwrap import wrap
+
+from django.conf import settings
+from PIL import Image, ImageDraw, ImageFont
 
 from apps.authentication.choices import Gender
 from apps.lms.choices import CertificateStatus
 from apps.lms.models import Certificate
+
+_TEAL = (39, 122, 126)
+_GOLD = (245, 198, 108)
+_DARK = (35, 55, 60)
+_MUTED = (100, 115, 120)
+_BG = (251, 252, 250)
+_WHITE = (255, 255, 255)
+
+_A4_LANDSCAPE = (1754, 1240)
+_FONT_REGULAR = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+_FONT_BOLD = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+_LOGO_PATH = Path(settings.BASE_DIR) / "static" / "lms" / "certificates" / "basat_mardom_logo.jpg"
 
 
 def honorific_for_gender(gender: str) -> str:
@@ -39,35 +62,28 @@ def build_certificate_text(certificate: Certificate) -> str:
 
 def build_certificate_pdf_bytes(certificate: Certificate) -> bytes:
     """
-    Build a minimal valid PDF payload for certificate storage.
+    Build a polished one-page PDF certificate using the official logo.
 
-    این PDF ساده و dependency-free است. برای نسخه production زیباتر می‌توان همین
-    interface را با renderer حرفه‌ای‌تر جایگزین کرد، بدون تغییر service layer.
+    The output is a proper PDF generated from a high-resolution image canvas. It
+    includes a decorative border, the uploaded Ba'sat Mardom logo, official
+    Persian certificate text, score, verification code, and issue date.
     """
-    text = build_certificate_text(certificate).encode("utf-16-be", errors="ignore")
-    # Minimal PDF with UTF-16BE hex string. Enough for storage/verification tests.
-    hex_text = text.hex().upper()
-    stream = f"BT /F1 12 Tf 50 760 Td <FEFF{hex_text}> Tj ET".encode()
-    objects = []
-    objects.append(b"1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n")
-    objects.append(b"2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj\n")
-    objects.append(
-        b"3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] "
-        b"/Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >> endobj\n"
-    )
-    objects.append(b"4 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj\n")
-    objects.append(b"5 0 obj << /Length " + str(len(stream)).encode() + b" >> stream\n" + stream + b"\nendstream endobj\n")
-    content = b"%PDF-1.4\n"
-    offsets = [0]
-    for obj in objects:
-        offsets.append(len(content))
-        content += obj
-    xref_offset = len(content)
-    content += f"xref\n0 {len(objects) + 1}\n0000000000 65535 f \n".encode()
-    for offset in offsets[1:]:
-        content += f"{offset:010d} 00000 n \n".encode()
-    content += f"trailer << /Size {len(objects) + 1} /Root 1 0 R >>\nstartxref\n{xref_offset}\n%%EOF\n".encode()
-    return content
+    canvas = Image.new("RGB", _A4_LANDSCAPE, _BG)
+    draw = ImageDraw.Draw(canvas)
+    width, height = canvas.size
+
+    _draw_background(draw, width, height)
+    _draw_logo(canvas)
+    _draw_certificate_text(draw, certificate, width, height)
+
+    buffer = BytesIO()
+    canvas.save(buffer, format="PDF", resolution=150.0)
+    return buffer.getvalue()
+
+
+def normalize_certificate_score(score: Decimal) -> str:
+    """Return score string for user-facing certificate displays."""
+    return f"{score:.2f}"
 
 
 def certificate_is_publicly_valid(certificate: Certificate) -> bool:
@@ -75,6 +91,92 @@ def certificate_is_publicly_valid(certificate: Certificate) -> bool:
     return certificate.status == CertificateStatus.ISSUED and certificate.is_active
 
 
-def normalize_certificate_score(score: Decimal) -> str:
-    """Return score string for user-facing certificate displays."""
-    return f"{score:.2f}"
+def _font(size: int, *, bold: bool = False) -> ImageFont.FreeTypeFont:
+    """Load a Persian-capable font."""
+    return ImageFont.truetype(_FONT_BOLD if bold else _FONT_REGULAR, size=size)
+
+
+def _draw_background(draw: ImageDraw.ImageDraw, width: int, height: int) -> None:
+    """Draw border, ornaments, and watermark-safe certificate background."""
+    margin = 70
+    draw.rounded_rectangle(
+        [margin, margin, width - margin, height - margin],
+        radius=34,
+        fill=_WHITE,
+        outline=_TEAL,
+        width=8,
+    )
+    draw.rounded_rectangle(
+        [margin + 24, margin + 24, width - margin - 24, height - margin - 24],
+        radius=24,
+        outline=_GOLD,
+        width=4,
+    )
+
+    # Decorative top/bottom ribbons.
+    draw.rectangle([margin, margin, width - margin, margin + 26], fill=_TEAL)
+    draw.rectangle([margin, height - margin - 26, width - margin, height - margin], fill=_TEAL)
+    draw.ellipse([width - 360, 120, width - 120, 360], fill=(250, 231, 190), outline=_GOLD, width=4)
+    draw.ellipse([120, height - 360, 330, height - 150], fill=(232, 246, 246), outline=_TEAL, width=3)
+
+
+def _draw_logo(canvas: Image.Image) -> None:
+    """Place the official logo on the certificate if available."""
+    if not _LOGO_PATH.exists():
+        return
+    logo = Image.open(_LOGO_PATH).convert("RGB")
+    max_w, max_h = 520, 190
+    logo.thumbnail((max_w, max_h), Image.Resampling.LANCZOS)
+    x = (canvas.width - logo.width) // 2
+    y = 110
+    canvas.paste(logo, (x, y))
+
+
+def _draw_certificate_text(draw: ImageDraw.ImageDraw, certificate: Certificate, width: int, height: int) -> None:
+    """Draw all certificate text using RTL-aware rendering."""
+    title_font = _font(64, bold=True)
+    subtitle_font = _font(34, bold=True)
+    body_font = _font(34)
+    label_font = _font(28, bold=True)
+    small_font = _font(24)
+
+    _text(draw, (width // 2, 345), "گواهی‌نامه پایان دوره", title_font, fill=_TEAL, anchor="mm")
+    _text(draw, (width // 2, 405), "سامانه بعثت مردم", subtitle_font, fill=_GOLD, anchor="mm")
+
+    body = build_certificate_text(certificate)
+    lines = _wrap_rtl(body, width_chars=78)
+    y = 520
+    for line in lines:
+        _text(draw, (width // 2, y), line, body_font, fill=_DARK, anchor="mm")
+        y += 58
+
+    score_text = f"نمره نهایی: {normalize_certificate_score(certificate.score_out_of_20)} از ۲۰"
+    code_text = f"کد اعتبارسنجی: {certificate.certificate_code}"
+    issue_text = f"تاریخ صدور: {certificate.issued_at:%Y-%m-%d}"
+
+    info_y = height - 320
+    draw.rounded_rectangle([230, info_y - 40, width - 230, info_y + 160], radius=20, fill=(248, 250, 250), outline=(220, 230, 230), width=2)
+    _text(draw, (width - 300, info_y), score_text, label_font, fill=_TEAL, anchor="ra")
+    _text(draw, (width - 300, info_y + 56), code_text, label_font, fill=_DARK, anchor="ra")
+    _text(draw, (width - 300, info_y + 112), issue_text, small_font, fill=_MUTED, anchor="ra")
+
+    _text(draw, (310, height - 170), "مهر و امضای سامانه", small_font, fill=_MUTED, anchor="mm")
+    draw.line([210, height - 215, 410, height - 215], fill=_TEAL, width=3)
+
+
+def _text(
+    draw: ImageDraw.ImageDraw,
+    xy: tuple[int, int],
+    text: str,
+    font: ImageFont.FreeTypeFont,
+    *,
+    fill: tuple[int, int, int],
+    anchor: str,
+) -> None:
+    """Draw Persian/RTL text with libraqm when available."""
+    draw.text(xy, text, font=font, fill=fill, anchor=anchor, direction="rtl", language="fa")
+
+
+def _wrap_rtl(text: str, *, width_chars: int) -> list[str]:
+    """Wrap Persian text by words for centered certificate body."""
+    return wrap(text, width=width_chars, break_long_words=False, replace_whitespace=False)

@@ -232,3 +232,54 @@ def get_admin_certificate_by_id(*, certificate_id: int):
     from apps.lms.models import Certificate
 
     return Certificate.all_objects.select_related("course", "user").filter(pk=certificate_id).first()
+
+
+def get_course_analytics(*, course: Course) -> dict:
+    """Return admin analytics summary for a course."""
+    from django.db.models import Avg
+
+    from apps.lms.choices import EnrollmentStatus, QuizAttemptStatus
+    from apps.lms.models import Certificate, QuizAttempt
+
+    enrollments = Enrollment.objects.filter(course=course)
+    attempts = QuizAttempt.objects.filter(course=course)
+    avg_score = attempts.exclude(submitted_at__isnull=True).aggregate(avg=Avg("score_out_of_20"))["avg"]
+    return {
+        "participants_count": enrollments.count(),
+        "active_count": enrollments.filter(status=EnrollmentStatus.ACTIVE).count(),
+        "completed_count": enrollments.filter(status=EnrollmentStatus.COMPLETED).count(),
+        "graduates_count": Certificate.objects.filter(course=course, is_active=True).count(),
+        "average_progress_percent": float(enrollments.aggregate(avg=Avg("progress_percent"))["avg"] or 0),
+        "quiz_attempts_count": attempts.count(),
+        "quiz_passed_count": attempts.filter(status=QuizAttemptStatus.PASSED).count(),
+        "quiz_failed_count": attempts.filter(status=QuizAttemptStatus.FAILED).count(),
+        "average_score_out_of_20": float(avg_score) if avg_score is not None else None,
+    }
+
+
+def get_course_leaderboard(*, course: Course) -> list[dict]:
+    """Return top learners for a course by score, certificate, and progress."""
+    from django.db.models import Max
+
+    enrollments = (
+        Enrollment.objects.filter(course=course)
+        .select_related("user", "certificate", "certificate__skill")
+        .annotate(best_score=Max("quiz_attempts__score_out_of_20"))
+        .order_by("-best_score", "-progress_percent", "user_id")
+    )
+    rows: list[dict] = []
+    for enrollment in enrollments:
+        certificate = getattr(enrollment, "certificate", None)
+        skill = getattr(certificate, "skill", None) if certificate else None
+        rows.append(
+            {
+                "user_id": enrollment.user_id,
+                "full_name": getattr(enrollment.user, "full_name", "") or str(enrollment.user),
+                "email": getattr(enrollment.user, "email", "") or "",
+                "progress_percent": float(enrollment.progress_percent or 0),
+                "best_score_out_of_20": float(enrollment.best_score) if enrollment.best_score is not None else None,
+                "badge_level": getattr(skill, "badge_level", "") if skill else "",
+                "certificate_code": getattr(certificate, "certificate_code", "") if certificate else "",
+            }
+        )
+    return rows
