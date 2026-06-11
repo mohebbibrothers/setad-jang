@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from django.db import transaction
+from django.db.models import Count
 from django.utils import timezone
 
 from apps.kindness_wall.choices import DuplicateStatus, ListingStatus, MatchStatus, ReportStatus
@@ -38,9 +39,96 @@ class KindnessPermissionError(KindnessWallServiceError):
     """Raised when an owner/admin boundary is violated."""
 
 
+class KindnessCategoryTreeError(KindnessWallServiceError):
+    """Raised when a category tree mutation would break hierarchy invariants."""
+
+
 DEFAULT_LISTING_TTL_DAYS = 45
 MATCH_THRESHOLD = 40
 MAX_MATCHES_PER_LISTING = 25
+
+
+def _assert_valid_category_parent(*, category: KindnessCategory | None = None, parent: KindnessCategory | None = None) -> None:
+    """Prevent self-parenting/cycles in the admin-managed category tree."""
+    if category is None or parent is None:
+        return
+    if parent.pk == category.pk:
+        raise KindnessCategoryTreeError("دسته‌بندی نمی‌تواند والد خودش باشد.")
+    if parent.path.startswith(category.path):
+        raise KindnessCategoryTreeError("انتقال دسته‌بندی به یکی از زیرشاخه‌های خودش مجاز نیست.")
+
+
+@transaction.atomic
+def create_category(
+    *,
+    title: str,
+    parent: KindnessCategory | None = None,
+    description: str = "",
+    icon: str = "",
+    order: int = 0,
+    is_active: bool = True,
+) -> KindnessCategory:
+    """Create an admin-managed tree category with slug/path invariants."""
+    category = KindnessCategory.all_objects.create(
+        parent=parent,
+        title=title.strip(),
+        description=description.strip(),
+        icon=icon.strip(),
+        order=order,
+        is_active=is_active,
+    )
+    return category
+
+
+def _refresh_descendant_paths(*, category: KindnessCategory) -> None:
+    """Re-save descendants so depth/path remain correct after moving a parent."""
+    for child in KindnessCategory.all_objects.filter(parent=category).order_by("order", "title"):
+        child.save(update_fields=["depth", "path", "updated_at"])
+        _refresh_descendant_paths(category=child)
+
+
+@transaction.atomic
+def update_category(*, category: KindnessCategory, **fields: Any) -> KindnessCategory:
+    """Update a category and keep the whole subtree consistent."""
+    parent = fields.get("parent", category.parent)
+    _assert_valid_category_parent(category=category, parent=parent)
+    allowed_fields = {"parent", "title", "description", "icon", "order", "is_active"}
+    update_fields: list[str] = []
+    for field, value in fields.items():
+        if field not in allowed_fields:
+            continue
+        if isinstance(value, str):
+            value = value.strip()
+        if getattr(category, field) != value:
+            setattr(category, field, value)
+            update_fields.append(field)
+    if update_fields:
+        update_fields.extend(["depth", "path", "updated_at"])
+        category.save(update_fields=list(set(update_fields)))
+        _refresh_descendant_paths(category=category)
+    return category
+
+
+@transaction.atomic
+def deactivate_category(*, category: KindnessCategory) -> KindnessCategory:
+    """Soft-delete a category only when it is safe for public navigation."""
+    if KindnessCategory.all_objects.filter(parent=category, is_active=True).exists():
+        raise KindnessCategoryTreeError("برای غیرفعال‌سازی این دسته ابتدا زیرشاخه‌های فعال آن را غیرفعال کنید.")
+    if KindnessListing.objects.published().filter(category=category).exists():
+        raise KindnessCategoryTreeError("دسته‌ای که آگهی منتشرشده دارد قابل حذف نیست.")
+    category.is_active = False
+    category.save(update_fields=["is_active", "updated_at"])
+    return category
+
+
+@transaction.atomic
+def restore_category(*, category: KindnessCategory) -> KindnessCategory:
+    """Restore a previously deactivated category."""
+    if category.parent_id and not category.parent.is_active:
+        raise KindnessCategoryTreeError("برای فعال‌سازی این دسته ابتدا دسته والد را فعال کنید.")
+    category.is_active = True
+    category.save(update_fields=["is_active", "updated_at"])
+    return category
 
 
 def ensure_user_can_create_listing(user: Any) -> None:
@@ -463,17 +551,53 @@ def review_duplicate_candidate(*, duplicate: KindnessDuplicateCandidate, status:
     return duplicate
 
 
-def get_admin_analytics_summary() -> dict[str, int]:
-    """Return aggregate counters for admin dashboard."""
+def _distribution(queryset, *fields: str, limit: int | None = None) -> list[dict[str, Any]]:
+    """Return list-friendly grouped counts for analytics serializers."""
+    rows = queryset.values(*fields).annotate(count=Count("id")).order_by("-count", *fields)
+    if limit is not None:
+        rows = rows[:limit]
+    return [dict(row) for row in rows]
+
+
+def get_admin_analytics_summary() -> dict[str, Any]:
+    """Return executive-grade aggregate counters for admin dashboard."""
+    listings = KindnessListing.all_objects.all()
+    match_distribution = dict(KindnessMatch.objects.values_list("status").annotate(count=Count("id")))
+    contacted_matches = match_distribution.get(MatchStatus.CONTACTED, 0)
+    active_matches = match_distribution.get(MatchStatus.ACTIVE, 0)
+    total_matches = KindnessMatch.objects.count()
+    reveals_count = KindnessContactReveal.objects.count()
     return {
-        "total_listings": KindnessListing.all_objects.count(),
-        "pending_listings": KindnessListing.all_objects.filter(status=ListingStatus.PENDING_REVIEW).count(),
+        "total_listings": listings.count(),
+        "pending_listings": listings.filter(status=ListingStatus.PENDING_REVIEW).count(),
         "published_listings": KindnessListing.objects.published().count(),
-        "need_help_listings": KindnessListing.all_objects.filter(listing_type="need_help").count(),
-        "offer_help_listings": KindnessListing.all_objects.filter(listing_type="offer_help").count(),
-        "contact_reveals": KindnessContactReveal.objects.count(),
-        "active_matches": KindnessMatch.objects.filter(status=MatchStatus.ACTIVE).count(),
+        "need_help_listings": listings.filter(listing_type="need_help").count(),
+        "offer_help_listings": listings.filter(listing_type="offer_help").count(),
+        "contact_reveals": reveals_count,
+        "active_matches": active_matches,
         "pending_reports": KindnessListingReport.objects.filter(status=ReportStatus.PENDING).count(),
+        "duplicate_candidates": KindnessDuplicateCandidate.objects.filter(status=DuplicateStatus.ACTIVE).count(),
+        "status_distribution": _distribution(listings, "status"),
+        "type_distribution": _distribution(listings, "listing_type"),
+        "province_distribution": _distribution(listings.exclude(province=""), "province", limit=20),
+        "city_distribution": _distribution(listings.exclude(city=""), "province", "city", limit=30),
+        "category_distribution": _distribution(listings, "category_id", "category__title", limit=30),
+        "top_viewed_listings": list(
+            listings.order_by("-view_count", "-created_at").values("id", "title", "view_count", "status")[:10]
+        ),
+        "top_revealed_listings": list(
+            listings.order_by("-contact_reveal_count", "-created_at").values("id", "title", "contact_reveal_count", "status")[:10]
+        ),
+        "match_effectiveness": {
+            "total_matches": total_matches,
+            "active_matches": active_matches,
+            "contacted_matches": contacted_matches,
+            "contacted_rate_percent": round((contacted_matches / total_matches) * 100, 2) if total_matches else 0,
+            "reveals_per_published_listing": round(reveals_count / max(KindnessListing.objects.published().count(), 1), 2),
+            "status_distribution": match_distribution,
+        },
+        "report_distribution": _distribution(KindnessListingReport.objects.all(), "status", "reason"),
+        "generated_at": timezone.now(),
     }
 
 

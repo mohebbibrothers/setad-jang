@@ -499,6 +499,7 @@ SPECTACULAR_SETTINGS = {
         "LMSCertificateStatusEnum": "apps.lms.choices.CertificateStatus",
         "LMSBadgeLevelEnum": "apps.lms.choices.BadgeLevel",
         "LMSVideoProviderEnum": "apps.lms.choices.VideoProvider",
+        "KindnessMatchStatusEnum": "apps.kindness_wall.choices.MatchStatus",
         "HealthStatusEnum": ("ok", "error", "degraded"),
     },
     "POSTPROCESSING_HOOKS": [

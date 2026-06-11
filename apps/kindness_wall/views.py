@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from django.http import HttpResponse
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -20,24 +21,38 @@ from apps.core.schemas import (
     build_success_response_serializer,
 )
 from apps.kindness_wall import selectors, services
+from apps.kindness_wall.export import (
+    build_kindness_export_filename,
+    build_listings_workbook,
+    build_reports_workbook,
+)
 from apps.kindness_wall.filters import (
+    KindnessContactRevealAdminFilter,
+    KindnessDuplicateCandidateAdminFilter,
     KindnessListingAdminFilter,
     KindnessListingPublicFilter,
+    KindnessMatchAdminFilter,
     KindnessReportAdminFilter,
 )
 from apps.kindness_wall.permissions import IsKindnessAdminUser
 from apps.kindness_wall.serializers import (
     KindnessAdminAnalyticsSerializer,
+    KindnessAdminCategoryInputSerializer,
+    KindnessAdminContactRevealSerializer,
+    KindnessAdminMatchSerializer,
     KindnessAdminReviewSerializer,
     KindnessAdminSuspendSerializer,
     KindnessCategorySerializer,
     KindnessContactRevealSerializer,
+    KindnessDuplicateCandidateSerializer,
+    KindnessDuplicateReviewSerializer,
     KindnessListingCreateUpdateSerializer,
     KindnessListingDetailSerializer,
     KindnessListingListSerializer,
     KindnessListingReportCreateSerializer,
     KindnessListingReportSerializer,
     KindnessMatchSerializer,
+    KindnessReportReviewInputSerializer,
     KindnessUserListingDetailSerializer,
 )
 from apps.kindness_wall.throttles import (
@@ -359,6 +374,81 @@ class KindnessMatchContactedView(APIView):
         return SuccessResponse(data=KindnessMatchSerializer(match).data, message="پیشنهاد به‌عنوان تماس‌گرفته‌شده ثبت شد.")
 
 
+class KindnessAdminCategoryListCreateView(APIView):
+    """Admin category tree list/create endpoint."""
+
+    permission_classes = [IsKindnessAdminUser]
+    serializer_class = KindnessCategorySerializer
+
+    @extend_schema(operation_id="kindness_admin_categories_list", tags=[TAG_ADMIN], responses={200: CATEGORY_LIST_RESPONSE})
+    def get(self, request: Request) -> SuccessResponse:
+        """Return all active/inactive categories for tree management."""
+        return SuccessResponse(data=KindnessCategorySerializer(selectors.get_admin_categories(), many=True).data)
+
+    @extend_schema(operation_id="kindness_admin_categories_create", tags=[TAG_ADMIN], request=KindnessAdminCategoryInputSerializer, responses={201: build_success_response_serializer(name="KindnessAdminCategoryResponse", data_serializer=KindnessCategorySerializer), 400: ERROR_RESPONSE})
+    def post(self, request: Request) -> CreatedResponse | ErrorResponse:
+        """Create a tree category via service layer."""
+        serializer = KindnessAdminCategoryInputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            category = services.create_category(**serializer.validated_data)
+        except services.KindnessCategoryTreeError as exc:
+            return _service_error_response(exc)
+        log_action_async(user_id=request.user.pk, action=audit_actions.KINDNESS_CATEGORY_CREATED, resource_type="kindness_category", resource_id=str(category.pk), **extract_audit_metadata(request))
+        return CreatedResponse(data=KindnessCategorySerializer(category).data, message="دسته‌بندی دیوار مهربانی ساخته شد.")
+
+
+class KindnessAdminCategoryDetailView(APIView):
+    """Admin category retrieve/update/deactivate endpoint."""
+
+    permission_classes = [IsKindnessAdminUser]
+    serializer_class = KindnessCategorySerializer
+
+    def get(self, request: Request, category_id: int) -> SuccessResponse | ErrorResponse:
+        """Return one category for admin editing."""
+        category = selectors.get_admin_category_by_id(category_id=category_id)
+        if category is None:
+            return ErrorResponse(message="دسته‌بندی یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+        return SuccessResponse(data=KindnessCategorySerializer(category).data)
+
+    def patch(self, request: Request, category_id: int) -> SuccessResponse | ErrorResponse:
+        """Update category metadata/tree location."""
+        category = selectors.get_admin_category_by_id(category_id=category_id)
+        if category is None:
+            return ErrorResponse(message="دسته‌بندی یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+        serializer = KindnessAdminCategoryInputSerializer(data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        try:
+            if serializer.validated_data.get("is_active") is True and not category.is_active:
+                category = services.restore_category(category=category)
+                remaining = {key: value for key, value in serializer.validated_data.items() if key != "is_active"}
+                if remaining:
+                    category = services.update_category(category=category, **remaining)
+            elif serializer.validated_data.get("is_active") is False and category.is_active:
+                category = services.deactivate_category(category=category)
+                remaining = {key: value for key, value in serializer.validated_data.items() if key != "is_active"}
+                if remaining:
+                    category = services.update_category(category=category, **remaining)
+            else:
+                category = services.update_category(category=category, **serializer.validated_data)
+        except services.KindnessCategoryTreeError as exc:
+            return _service_error_response(exc)
+        log_action_async(user_id=request.user.pk, action=audit_actions.KINDNESS_CATEGORY_UPDATED, resource_type="kindness_category", resource_id=str(category.pk), **extract_audit_metadata(request))
+        return SuccessResponse(data=KindnessCategorySerializer(category).data, message="دسته‌بندی بروزرسانی شد.")
+
+    def delete(self, request: Request, category_id: int) -> DeletedResponse | ErrorResponse:
+        """Soft-delete/deactivate category with hierarchy safety checks."""
+        category = selectors.get_admin_category_by_id(category_id=category_id)
+        if category is None:
+            return ErrorResponse(message="دسته‌بندی یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+        try:
+            services.deactivate_category(category=category)
+        except services.KindnessCategoryTreeError as exc:
+            return _service_error_response(exc)
+        log_action_async(user_id=request.user.pk, action=audit_actions.KINDNESS_CATEGORY_DELETED, resource_type="kindness_category", resource_id=str(category.pk), **extract_audit_metadata(request))
+        return DeletedResponse(message="دسته‌بندی غیرفعال شد.")
+
+
 class KindnessAdminListingListView(APIView):
     """Admin list all listings."""
 
@@ -501,14 +591,14 @@ class KindnessAdminReportReviewView(APIView):
         report = selectors.get_admin_report_by_id(report_id=report_id)
         if report is None:
             return ErrorResponse(message="گزارش یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
-        serializer = KindnessAdminReviewSerializer(data=request.data)
+        serializer = KindnessReportReviewInputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         report = services.review_listing_report(
             report=report,
             admin=request.user,
-            status=serializer.validated_data.get("reason") or "reviewed",
+            status=serializer.validated_data["status"],
             admin_note=serializer.validated_data.get("admin_note", ""),
-            suspend_listing_on_review=serializer.validated_data.get("needs_edit", False),
+            suspend_listing_on_review=serializer.validated_data.get("suspend_listing", False),
         )
         log_action_async(user_id=request.user.pk, action=audit_actions.KINDNESS_REPORT_REVIEWED, resource_type="kindness_listing_report", resource_id=str(report.pk), **extract_audit_metadata(request))
         return SuccessResponse(data=KindnessListingReportSerializer(report).data, message="گزارش بررسی شد.")
@@ -523,3 +613,134 @@ class KindnessAdminAnalyticsView(APIView):
     def get(self, request: Request) -> SuccessResponse:
         """Return analytics summary."""
         return SuccessResponse(data=services.get_admin_analytics_summary())
+
+
+class KindnessAdminMatchListView(APIView):
+    """Admin list/filter generated matches."""
+
+    permission_classes = [IsKindnessAdminUser]
+    serializer_class = KindnessAdminMatchSerializer
+
+    @extend_schema(operation_id="kindness_admin_matches_list", tags=[TAG_ADMIN], responses={200: build_paginated_success_response_serializer(name="KindnessAdminMatchListResponse", item_serializer=KindnessAdminMatchSerializer)})
+    def get(self, request: Request) -> Response:
+        """Return all matches with professional moderation filters."""
+        queryset = selectors.get_admin_matches()
+        filterset = KindnessMatchAdminFilter(request.query_params, queryset=queryset)
+        if filterset.is_valid():
+            queryset = filterset.qs
+        paginator = StandardPagination()
+        page = paginator.paginate_queryset(queryset, request, view=self)
+        return paginator.get_paginated_response(KindnessAdminMatchSerializer(page, many=True).data)
+
+
+class KindnessAdminMatchDetailView(APIView):
+    """Admin match detail endpoint."""
+
+    permission_classes = [IsKindnessAdminUser]
+    serializer_class = KindnessAdminMatchSerializer
+
+    @extend_schema(operation_id="kindness_admin_matches_retrieve", tags=[TAG_ADMIN], responses={200: build_success_response_serializer(name="KindnessAdminMatchDetailResponse", data_serializer=KindnessAdminMatchSerializer), 404: ERROR_RESPONSE})
+    def get(self, request: Request, match_id: int) -> SuccessResponse | ErrorResponse:
+        """Return one match with source/target listing context."""
+        match = selectors.get_admin_match_by_id(match_id=match_id)
+        if match is None:
+            return ErrorResponse(message="پیشنهاد تطبیق یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+        return SuccessResponse(data=KindnessAdminMatchSerializer(match).data)
+
+
+class KindnessAdminContactRevealListView(APIView):
+    """Admin contact reveal audit trail."""
+
+    permission_classes = [IsKindnessAdminUser]
+    serializer_class = KindnessAdminContactRevealSerializer
+
+    @extend_schema(operation_id="kindness_admin_contact_reveals_list", tags=[TAG_ADMIN], responses={200: build_paginated_success_response_serializer(name="KindnessAdminContactRevealListResponse", item_serializer=KindnessAdminContactRevealSerializer)})
+    def get(self, request: Request) -> Response:
+        """Return paginated contact reveal records."""
+        queryset = selectors.get_admin_contact_reveals()
+        filterset = KindnessContactRevealAdminFilter(request.query_params, queryset=queryset)
+        if filterset.is_valid():
+            queryset = filterset.qs
+        paginator = StandardPagination()
+        page = paginator.paginate_queryset(queryset, request, view=self)
+        return paginator.get_paginated_response(KindnessAdminContactRevealSerializer(page, many=True).data)
+
+
+class KindnessAdminDuplicateCandidateListView(APIView):
+    """Admin list likely duplicate listing candidates."""
+
+    permission_classes = [IsKindnessAdminUser]
+    serializer_class = KindnessDuplicateCandidateSerializer
+
+    @extend_schema(operation_id="kindness_admin_duplicates_list", tags=[TAG_ADMIN], responses={200: build_paginated_success_response_serializer(name="KindnessAdminDuplicateListResponse", item_serializer=KindnessDuplicateCandidateSerializer)})
+    def get(self, request: Request) -> Response:
+        """Return duplicate candidates generated by the matching engine."""
+        queryset = selectors.get_admin_duplicate_candidates()
+        filterset = KindnessDuplicateCandidateAdminFilter(request.query_params, queryset=queryset)
+        if filterset.is_valid():
+            queryset = filterset.qs
+        paginator = StandardPagination()
+        page = paginator.paginate_queryset(queryset, request, view=self)
+        return paginator.get_paginated_response(KindnessDuplicateCandidateSerializer(page, many=True).data)
+
+
+class KindnessAdminDuplicateCandidateReviewView(APIView):
+    """Admin review endpoint for duplicate candidates."""
+
+    permission_classes = [IsKindnessAdminUser]
+    serializer_class = KindnessDuplicateCandidateSerializer
+
+    @extend_schema(operation_id="kindness_admin_duplicates_review", tags=[TAG_ADMIN], request=KindnessDuplicateReviewSerializer, responses={200: build_success_response_serializer(name="KindnessAdminDuplicateReviewResponse", data_serializer=KindnessDuplicateCandidateSerializer), 404: ERROR_RESPONSE})
+    def post(self, request: Request, duplicate_id: int) -> SuccessResponse | ErrorResponse:
+        """Confirm or dismiss a likely duplicate candidate."""
+        duplicate = selectors.get_admin_duplicate_candidate_by_id(duplicate_id=duplicate_id)
+        if duplicate is None:
+            return ErrorResponse(message="کاندیدای تکراری یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+        serializer = KindnessDuplicateReviewSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            duplicate = services.review_duplicate_candidate(duplicate=duplicate, **serializer.validated_data)
+        except services.KindnessListingStateError as exc:
+            return _service_error_response(exc)
+        log_action_async(user_id=request.user.pk, action=audit_actions.KINDNESS_DUPLICATE_REVIEWED, resource_type="kindness_duplicate_candidate", resource_id=str(duplicate.pk), **extract_audit_metadata(request))
+        return SuccessResponse(data=KindnessDuplicateCandidateSerializer(duplicate).data, message="وضعیت کاندیدای تکراری بروزرسانی شد.")
+
+
+class KindnessAdminListingExportView(APIView):
+    """Admin Excel export for listings."""
+
+    permission_classes = [IsKindnessAdminUser]
+
+    @extend_schema(operation_id="kindness_admin_listings_export", tags=[TAG_ADMIN], responses={200: None})
+    def get(self, request: Request) -> HttpResponse:
+        """Export filtered listings as an RTL Excel workbook."""
+        queryset = selectors.get_admin_listings()
+        filterset = KindnessListingAdminFilter(request.query_params, queryset=queryset)
+        if filterset.is_valid():
+            queryset = filterset.qs
+        workbook = build_listings_workbook(listings=queryset)
+        filename = build_kindness_export_filename(export_type="listings")
+        log_action_async(user_id=request.user.pk, action=audit_actions.KINDNESS_LISTINGS_EXPORTED, resource_type="kindness_listing", resource_id="bulk", extra_data={"filename": filename}, **extract_audit_metadata(request))
+        response = HttpResponse(workbook.getvalue(), content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return response
+
+
+class KindnessAdminReportExportView(APIView):
+    """Admin Excel export for moderation reports."""
+
+    permission_classes = [IsKindnessAdminUser]
+
+    @extend_schema(operation_id="kindness_admin_reports_export", tags=[TAG_ADMIN], responses={200: None})
+    def get(self, request: Request) -> HttpResponse:
+        """Export filtered reports as an RTL Excel workbook."""
+        queryset = selectors.get_admin_reports()
+        filterset = KindnessReportAdminFilter(request.query_params, queryset=queryset)
+        if filterset.is_valid():
+            queryset = filterset.qs
+        workbook = build_reports_workbook(reports=queryset)
+        filename = build_kindness_export_filename(export_type="reports")
+        log_action_async(user_id=request.user.pk, action=audit_actions.KINDNESS_REPORTS_EXPORTED, resource_type="kindness_listing_report", resource_id="bulk", extra_data={"filename": filename}, **extract_audit_metadata(request))
+        response = HttpResponse(workbook.getvalue(), content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return response

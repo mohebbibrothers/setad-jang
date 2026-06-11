@@ -2,8 +2,11 @@
 
 from rest_framework import serializers
 
+from apps.kindness_wall.choices import DuplicateStatus, ReportStatus
 from apps.kindness_wall.models import (
     KindnessCategory,
+    KindnessContactReveal,
+    KindnessDuplicateCandidate,
     KindnessListing,
     KindnessListingImage,
     KindnessListingReport,
@@ -16,8 +19,45 @@ class KindnessCategorySerializer(serializers.ModelSerializer):
 
     class Meta:
         model = KindnessCategory
-        fields = ("id", "parent_id", "title", "slug", "description", "icon", "cover_image", "path", "depth", "order")
+        fields = (
+            "id",
+            "parent_id",
+            "title",
+            "slug",
+            "description",
+            "icon",
+            "cover_image",
+            "path",
+            "depth",
+            "order",
+            "is_active",
+            "listings_count",
+            "published_listings_count",
+        )
         read_only_fields = fields
+
+
+class KindnessAdminCategoryInputSerializer(serializers.Serializer):
+    """Admin input serializer for creating/updating tree categories."""
+
+    parent_id = serializers.PrimaryKeyRelatedField(
+        queryset=KindnessCategory.all_objects.all(),
+        source="parent",
+        required=False,
+        allow_null=True,
+    )
+    title = serializers.CharField(max_length=180)
+    description = serializers.CharField(required=False, allow_blank=True, default="")
+    icon = serializers.CharField(max_length=80, required=False, allow_blank=True, default="")
+    order = serializers.IntegerField(required=False, min_value=0)
+    is_active = serializers.BooleanField(required=False)
+
+    def validate_title(self, value: str) -> str:
+        """Normalize and validate category title."""
+        value = value.strip()
+        if len(value) < 2:
+            raise serializers.ValidationError("عنوان دسته‌بندی باید حداقل ۲ کاراکتر باشد.")
+        return value
 
 
 class KindnessListingImageSerializer(serializers.ModelSerializer):
@@ -93,6 +133,34 @@ class KindnessMatchSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
+class KindnessAdminMatchSerializer(serializers.ModelSerializer):
+    """Admin serializer exposing both sides of a generated match."""
+
+    source_listing = KindnessListingListSerializer(read_only=True)
+    target_listing = KindnessListingListSerializer(read_only=True)
+
+    class Meta:
+        model = KindnessMatch
+        fields = (
+            "id",
+            "source_listing",
+            "target_listing",
+            "score",
+            "score_breakdown",
+            "reason_codes",
+            "explanation",
+            "status",
+            "algorithm_version",
+            "generated_at",
+            "dismissed_by_id",
+            "dismissed_at",
+            "contacted_at",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = fields
+
+
 class KindnessListingCreateUpdateSerializer(serializers.Serializer):
     """Input serializer for user listing create/update."""
 
@@ -151,6 +219,39 @@ class KindnessContactRevealSerializer(serializers.Serializer):
     owner_full_name = serializers.CharField()
 
 
+class KindnessAdminContactRevealSerializer(serializers.ModelSerializer):
+    """Admin audit serializer for contact reveal rows."""
+
+    listing_title = serializers.CharField(source="listing.title", read_only=True)
+    viewer_full_name = serializers.SerializerMethodField()
+    owner_full_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = KindnessContactReveal
+        fields = (
+            "id",
+            "listing_id",
+            "listing_title",
+            "viewer_id",
+            "viewer_full_name",
+            "listing_owner_id",
+            "owner_full_name",
+            "phone_snapshot",
+            "ip_address",
+            "request_id",
+            "created_at",
+        )
+        read_only_fields = fields
+
+    def get_viewer_full_name(self, obj: KindnessContactReveal) -> str:
+        """Return viewer display name."""
+        return getattr(obj.viewer, "full_name", "") or str(obj.viewer)
+
+    def get_owner_full_name(self, obj: KindnessContactReveal) -> str:
+        """Return listing owner display name."""
+        return getattr(obj.listing_owner, "full_name", "") or str(obj.listing_owner)
+
+
 class KindnessListingReportCreateSerializer(serializers.Serializer):
     """Input serializer for reporting a listing."""
 
@@ -170,9 +271,23 @@ class KindnessListingReportCreateSerializer(serializers.Serializer):
 class KindnessListingReportSerializer(serializers.ModelSerializer):
     """Report output serializer."""
 
+    listing_title = serializers.CharField(source="listing.title", read_only=True)
+
     class Meta:
         model = KindnessListingReport
-        fields = ("id", "listing_id", "reported_by_id", "reason", "description", "status", "reviewed_by_id", "reviewed_at", "admin_note", "created_at")
+        fields = (
+            "id",
+            "listing_id",
+            "listing_title",
+            "reported_by_id",
+            "reason",
+            "description",
+            "status",
+            "reviewed_by_id",
+            "reviewed_at",
+            "admin_note",
+            "created_at",
+        )
         read_only_fields = fields
 
 
@@ -194,6 +309,31 @@ class KindnessMatchActionSerializer(serializers.Serializer):
     """Input serializer for match state actions."""
 
 
+class KindnessDuplicateReviewSerializer(serializers.Serializer):
+    """Input serializer for duplicate candidate review."""
+
+    status = serializers.CharField()
+    reason = serializers.CharField(required=False, allow_blank=True, default="")
+
+    def validate_status(self, value: str) -> str:
+        """Validate duplicate review status without generating ambiguous OpenAPI enums."""
+        if value not in DuplicateStatus.values:
+            raise serializers.ValidationError("وضعیت بررسی تکراری بودن نامعتبر است.")
+        return value
+
+
+class KindnessDuplicateCandidateSerializer(serializers.ModelSerializer):
+    """Admin serializer for likely duplicate listings."""
+
+    listing = KindnessListingListSerializer(read_only=True)
+    candidate_listing = KindnessListingListSerializer(read_only=True)
+
+    class Meta:
+        model = KindnessDuplicateCandidate
+        fields = ("id", "listing", "candidate_listing", "score", "reason", "status", "created_at", "updated_at")
+        read_only_fields = fields
+
+
 class KindnessAdminAnalyticsSerializer(serializers.Serializer):
     """Admin analytics summary serializer."""
 
@@ -205,3 +345,28 @@ class KindnessAdminAnalyticsSerializer(serializers.Serializer):
     contact_reveals = serializers.IntegerField()
     active_matches = serializers.IntegerField()
     pending_reports = serializers.IntegerField()
+    duplicate_candidates = serializers.IntegerField()
+    status_distribution = serializers.ListField(child=serializers.DictField())
+    type_distribution = serializers.ListField(child=serializers.DictField())
+    province_distribution = serializers.ListField(child=serializers.DictField())
+    city_distribution = serializers.ListField(child=serializers.DictField())
+    category_distribution = serializers.ListField(child=serializers.DictField())
+    top_viewed_listings = serializers.ListField(child=serializers.DictField())
+    top_revealed_listings = serializers.ListField(child=serializers.DictField())
+    match_effectiveness = serializers.DictField()
+    report_distribution = serializers.ListField(child=serializers.DictField())
+    generated_at = serializers.DateTimeField()
+
+
+class KindnessReportReviewInputSerializer(serializers.Serializer):
+    """Dedicated report-review input with explicit finite states."""
+
+    status = serializers.CharField(required=False, default=ReportStatus.REVIEWED)
+    admin_note = serializers.CharField(required=False, allow_blank=True, default="")
+    suspend_listing = serializers.BooleanField(required=False, default=False)
+
+    def validate_status(self, value: str) -> str:
+        """Validate report review status without ambiguous schema enum names."""
+        if value not in ReportStatus.values:
+            raise serializers.ValidationError("وضعیت گزارش نامعتبر است.")
+        return value
