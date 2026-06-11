@@ -508,6 +508,11 @@ SPECTACULAR_SETTINGS = {
         "LMSBadgeLevelEnum": "apps.lms.choices.BadgeLevel",
         "LMSVideoProviderEnum": "apps.lms.choices.VideoProvider",
         "KindnessMatchStatusEnum": "apps.kindness_wall.choices.MatchStatus",
+        "SupportTicketStatusEnum": "apps.support_desk.choices.TicketStatus",
+        "SupportTicketPriorityEnum": "apps.support_desk.choices.TicketPriority",
+        "SupportTicketSeverityEnum": "apps.support_desk.choices.TicketSeverity",
+        "SupportAttachmentKindEnum": "apps.support_desk.choices.AttachmentKind",
+        "SupportAttachmentVisibilityEnum": "apps.support_desk.choices.AttachmentVisibility",
         "HealthStatusEnum": ("ok", "error", "degraded"),
     },
     "POSTPROCESSING_HOOKS": [

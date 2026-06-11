@@ -26,6 +26,7 @@ from apps.support_desk.models import (
     SupportTag,
     SupportTicket,
     SupportTicketAssignment,
+    SupportTicketAttachment,
     SupportTicketMessage,
     SupportTicketSatisfaction,
     SupportTicketStatusHistory,
@@ -257,6 +258,46 @@ def create_ticket(
 
 
 @transaction.atomic
+def update_draft_ticket(
+    *,
+    ticket: SupportTicket,
+    user: Any,
+    ticket_type: SupportTicketType | None = None,
+    department: SupportDepartment | None = None,
+    category: SupportCategory | None = None,
+    subject: str | None = None,
+    description: str | None = None,
+) -> SupportTicket:
+    """Update an owner draft ticket before submission."""
+    if ticket.owner_id != user.pk:
+        raise SupportPermissionError("فقط مالک تیکت می‌تواند آن را ویرایش کند.")
+    if ticket.status != TicketStatus.DRAFT:
+        raise SupportTicketStateError("فقط تیکت پیش‌نویس قبل از ارسال قابل ویرایش است.")
+    if ticket_type is not None:
+        ticket.ticket_type = ticket_type
+        ticket.department = department or ticket_type.default_department or ticket.department
+        ticket.category = category or ticket_type.default_category or ticket.category
+        ticket.priority = ticket_type.default_priority or ticket.priority
+        ticket.severity = ticket_type.default_severity or ticket.severity
+    if department is not None:
+        ticket.department = department
+    if category is not None:
+        ticket.category = category
+    if ticket.category.department_id != ticket.department_id:
+        raise SupportDeskServiceError("دسته‌بندی انتخاب‌شده متعلق به دپارتمان تیکت نیست.")
+    if subject is not None:
+        ticket.subject = subject.strip()
+    if description is not None:
+        ticket.description_snapshot = description.strip()
+    ticket.last_activity_at = timezone.now()
+    ticket.save()
+    _auto_tag_ticket(ticket=ticket, text=f"{ticket.subject} {ticket.description_snapshot}")
+    detect_duplicate_candidates(ticket=ticket)
+    sync_category_counters(category=ticket.category)
+    return ticket
+
+
+@transaction.atomic
 def submit_ticket(*, ticket: SupportTicket, user: Any, now=None) -> SupportTicket:
     """Submit a draft ticket and calculate SLA deadlines."""
     if ticket.owner_id != user.pk:
@@ -389,6 +430,40 @@ def add_internal_note(*, ticket: SupportTicket, admin: Any, body: str) -> Suppor
     message = SupportTicketMessage.objects.create(ticket=ticket, author=admin, message_type=TicketMessageType.INTERNAL_NOTE, body=body.strip(), is_internal=True, is_from_staff=True)
     sync_ticket_counters(ticket=ticket)
     return message
+
+
+@transaction.atomic
+def add_attachment(
+    *,
+    ticket: SupportTicket,
+    user: Any,
+    file_obj,
+    original_filename: str,
+    content_type: str = "",
+    attachment_kind: str = "other",
+    visibility: str = "public",
+    message: SupportTicketMessage | None = None,
+) -> SupportTicketAttachment:
+    """Attach a validated file to a ticket through the service layer."""
+    if ticket.owner_id != user.pk and not _is_admin(user):
+        raise SupportPermissionError("فقط مالک تیکت یا ادمین می‌تواند ضمیمه ثبت کند.")
+    if visibility == "internal_only" and not _is_admin(user):
+        raise SupportPermissionError("ضمیمه داخلی فقط توسط ادمین قابل ثبت است.")
+    if ticket.status in _TERMINAL_STATUSES and not _is_admin(user):
+        raise SupportTicketStateError("در وضعیت فعلی امکان افزودن ضمیمه توسط کاربر وجود ندارد.")
+    attachment = SupportTicketAttachment.objects.create(
+        ticket=ticket,
+        message=message,
+        uploaded_by=user,
+        file=file_obj,
+        original_filename=original_filename[:260],
+        content_type=content_type[:120],
+        file_size=getattr(file_obj, "size", 0) or 0,
+        attachment_kind=attachment_kind,
+        visibility=visibility,
+    )
+    sync_ticket_counters(ticket=ticket)
+    return attachment
 
 
 @transaction.atomic
