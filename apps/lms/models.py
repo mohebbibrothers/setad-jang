@@ -574,6 +574,7 @@ class Certificate(BaseModel):
     verification_slug = models.SlugField(max_length=80, unique=True, blank=True)
     status = models.CharField(max_length=20, choices=CertificateStatus.choices, default=CertificateStatus.ISSUED)
     full_name_snapshot = models.CharField(max_length=255)
+    gender_snapshot = models.CharField(max_length=20, blank=True)
     national_code_snapshot = models.CharField(max_length=20)
     course_title_snapshot = models.CharField(max_length=255)
     instructor_name_snapshot = models.CharField(max_length=180)
@@ -597,6 +598,9 @@ class Certificate(BaseModel):
             models.Index(fields=["certificate_code"]),
             models.Index(fields=["verification_slug"]),
             models.Index(fields=["user", "status", "-issued_at"]),
+        ]
+        constraints = [
+            models.UniqueConstraint(fields=["user", "course"], name="uniq_lms_certificate_user_course"),
         ]
 
     def save(self, *args: Any, **kwargs: Any) -> None:

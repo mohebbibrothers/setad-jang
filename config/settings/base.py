@@ -488,7 +488,10 @@ SPECTACULAR_SETTINGS = {
         "LMSEnrollmentStatusEnum": "apps.lms.choices.EnrollmentStatus",
         "LMSDiscussionStatusEnum": "apps.lms.choices.DiscussionStatus",
         "LMSDiscussionReportStatusEnum": "apps.lms.choices.DiscussionReportStatus",
+        "LMSQuizAttemptStatusEnum": "apps.lms.choices.QuizAttemptStatus",
+        "LMSCertificateStatusEnum": "apps.lms.choices.CertificateStatus",
         "LMSBadgeLevelEnum": "apps.lms.choices.BadgeLevel",
+        "LMSVideoProviderEnum": "apps.lms.choices.VideoProvider",
         "HealthStatusEnum": ("ok", "error", "degraded"),
     },
     "POSTPROCESSING_HOOKS": [

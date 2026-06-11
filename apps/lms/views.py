@@ -29,6 +29,9 @@ from apps.lms.filters import (
 )
 from apps.lms.permissions import IsLMSAdminUser
 from apps.lms.serializers import (
+    CertificateRevokeSerializer,
+    CertificateSerializer,
+    CertificateVerifySerializer,
     CourseCreateUpdateSerializer,
     CourseDetailSerializer,
     CourseReportSerializer,
@@ -73,6 +76,7 @@ from apps.lms.services import (
     QuizAttemptSubmissionError,
     QuizNotAvailableError,
     QuizValidationError,
+    revoke_certificate,
 )
 from apps.lms.throttles import LMSDiscussionThrottle, LMSEnrollThrottle, LMSProgressThrottle
 
@@ -102,6 +106,9 @@ QUIZ_QUESTION_RESPONSE = build_success_response_serializer(name="LMSQuizQuestion
 QUIZ_OPTION_RESPONSE = build_success_response_serializer(name="LMSQuizOptionResponse", data_serializer=QuizOptionAdminSerializer)
 QUIZ_ATTEMPT_RESPONSE = build_success_response_serializer(name="LMSQuizAttemptResponse", data_serializer=QuizAttemptDetailSerializer)
 QUIZ_UNLOCK_RESPONSE = build_success_response_serializer(name="LMSQuizUnlockResponse", data_serializer=QuizUnlockSerializer)
+CERTIFICATE_RESPONSE = build_success_response_serializer(name="LMSCertificateResponse", data_serializer=CertificateSerializer)
+CERTIFICATE_VERIFY_RESPONSE = build_success_response_serializer(name="LMSCertificateVerifyResponse", data_serializer=CertificateVerifySerializer)
+CERTIFICATE_LIST_RESPONSE = build_paginated_success_response_serializer(name="LMSCertificateListResponse", item_serializer=CertificateSerializer)
 SKILL_LIST_RESPONSE = build_success_response_serializer(name="LMSSkillListResponse", data_serializer=LMSUserSkillSerializer, many=True)
 COURSE_REPORT_RESPONSE = build_success_response_serializer(name="LMSCourseReportResponse", data_serializer=CourseReportSerializer)
 
@@ -705,6 +712,84 @@ class LMSAdminQuizUnlockView(APIView):
         )
         log_action_async(user_id=request.user.pk, action=audit_actions.LMS_QUIZ_UNLOCKED, resource_type="lms_quiz_unlock", resource_id=str(unlock.pk), extra_data={"quiz_id": quiz.pk, "user_id": user.pk}, **extract_audit_metadata(request))
         return CreatedResponse(data=QuizUnlockSerializer(unlock).data, message="آزمون برای کاربر بازگشایی شد.")
+
+
+class LMSUserCertificateListView(APIView):
+    """List certificates owned by the current user."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(operation_id="lms_user_certificates_list", tags=[TAG_LMS_USER], responses={200: CERTIFICATE_LIST_RESPONSE})
+    def get(self, request: Request) -> Response:
+        """Return paginated user certificates."""
+        queryset = selectors.get_user_certificates(user_id=request.user.pk)
+        paginator = StandardPagination()
+        page = paginator.paginate_queryset(queryset, request, view=self)
+        serializer = CertificateSerializer(page, many=True, context={"request": request})
+        return paginator.get_paginated_response(serializer.data, message="لیست مدارک شما دریافت شد.")
+
+
+class LMSUserCertificateDetailView(APIView):
+    """Retrieve one certificate owned by the current user."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(operation_id="lms_user_certificates_retrieve", tags=[TAG_LMS_USER], responses={200: CERTIFICATE_RESPONSE, 404: LMS_ERROR_RESPONSE})
+    def get(self, request: Request, certificate_id: int) -> SuccessResponse | ErrorResponse:
+        """Return one owned certificate."""
+        certificate = selectors.get_user_certificate_by_id(
+            user_id=request.user.pk,
+            certificate_id=certificate_id,
+        )
+        if certificate is None:
+            return ErrorResponse(message="مدرکی با این شناسه یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+        return SuccessResponse(data=CertificateSerializer(certificate, context={"request": request}).data)
+
+
+class LMSCertificateVerifyView(APIView):
+    """Public certificate verification endpoint."""
+
+    permission_classes = [AllowAny]
+
+    @extend_schema(operation_id="lms_public_certificates_verify", tags=[TAG_LMS_PUBLIC], responses={200: CERTIFICATE_VERIFY_RESPONSE, 404: LMS_ERROR_RESPONSE})
+    def get(self, request: Request, verification_slug: str) -> SuccessResponse | ErrorResponse:
+        """Verify certificate validity publicly."""
+        certificate = selectors.get_certificate_by_verification_slug(verification_slug=verification_slug)
+        if certificate is None or certificate.status != "issued" or not certificate.is_active:
+            return ErrorResponse(message="مدرک معتبر یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+        return SuccessResponse(
+            data=CertificateVerifySerializer(certificate, context={"request": request}).data,
+            message="اعتبار مدرک با موفقیت تأیید شد.",
+        )
+
+
+class LMSAdminCertificateRevokeView(APIView):
+    """Admin endpoint for revoking a certificate."""
+
+    permission_classes = [IsLMSAdminUser]
+
+    @extend_schema(operation_id="lms_admin_certificates_revoke", tags=[TAG_LMS_ADMIN], request=CertificateRevokeSerializer, responses={200: CERTIFICATE_RESPONSE, 400: LMS_ERROR_RESPONSE, 404: LMS_ERROR_RESPONSE})
+    def post(self, request: Request, certificate_id: int) -> SuccessResponse | ErrorResponse:
+        """Revoke one certificate and derived skill."""
+        certificate = selectors.get_admin_certificate_by_id(certificate_id=certificate_id)
+        if certificate is None:
+            return ErrorResponse(message="مدرک یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+        serializer = CertificateRevokeSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        certificate = revoke_certificate(
+            certificate=certificate,
+            revoked_by=request.user,
+            reason=serializer.validated_data["reason"],
+        )
+        log_action_async(
+            user_id=request.user.pk,
+            action=audit_actions.LMS_CERTIFICATE_REVOKED,
+            resource_type="lms_certificate",
+            resource_id=str(certificate.pk),
+            extra_data={"course_id": certificate.course_id, "user_id": certificate.user_id},
+            **extract_audit_metadata(request),
+        )
+        return SuccessResponse(data=CertificateSerializer(certificate, context={"request": request}).data, message="مدرک با موفقیت باطل شد.")
 
 
 class LMSAdminCategoryListCreateView(APIView):

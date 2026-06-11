@@ -9,12 +9,21 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Any
 
+from django.core.files.base import ContentFile
 from django.db import transaction
 from django.db.models import Count, Sum
 from django.utils import timezone
 
-from apps.lms.choices import BadgeLevel, CourseStatus, EnrollmentStatus
-from apps.lms.models import Course, Enrollment, Lesson, LessonProgress, LMSCategory, LMSUserSkill
+from apps.lms.choices import BadgeLevel, CertificateStatus, CourseStatus, EnrollmentStatus
+from apps.lms.models import (
+    Certificate,
+    Course,
+    Enrollment,
+    Lesson,
+    LessonProgress,
+    LMSCategory,
+    LMSUserSkill,
+)
 
 
 class LMSServiceError(Exception):
@@ -853,6 +862,8 @@ def submit_quiz_attempt(*, attempt, answers: list[dict[str, int]]):
             "updated_at",
         ]
     )
+    if is_passed:
+        issue_certificate_for_attempt(attempt=locked_attempt)
     return locked_attempt
 
 
@@ -870,3 +881,70 @@ def unlock_quiz_for_user(*, quiz, user: Any, unlocked_by: Any, reason: str, extr
         extra_attempts=extra_attempts,
         valid_until=valid_until,
     )
+
+
+# ============================================================
+# Certificates / Skills
+# ============================================================
+
+
+class CertificateIssueError(LMSServiceError):
+    """Raised when certificate issuance is not allowed."""
+
+
+@transaction.atomic
+def issue_certificate_for_attempt(*, attempt) -> Certificate:
+    """Issue or return certificate for a passed quiz attempt and grant skill/badge."""
+    if not attempt.is_passed:
+        raise CertificateIssueError("صدور مدرک فقط برای آزمون قبول‌شده امکان‌پذیر است.")
+
+    from apps.lms.certificate import build_certificate_pdf_bytes
+
+    user = attempt.user
+    profile = getattr(user, "profile", None)
+    full_name = getattr(user, "full_name", "") or f"{user.first_name} {user.last_name}".strip()
+    national_code = getattr(profile, "national_code", "") if profile else ""
+    gender = getattr(profile, "gender", "") if profile else ""
+
+    certificate, created = Certificate.objects.get_or_create(
+        user=user,
+        course=attempt.course,
+        defaults={
+            "enrollment": attempt.enrollment,
+            "quiz_attempt": attempt,
+            "status": CertificateStatus.ISSUED,
+            "full_name_snapshot": full_name,
+            "gender_snapshot": gender,
+            "national_code_snapshot": national_code,
+            "course_title_snapshot": attempt.course.title,
+            "instructor_name_snapshot": attempt.course.instructor_name,
+            "score_out_of_20": attempt.score_out_of_20,
+        },
+    )
+    if created and not certificate.pdf_file:
+        certificate.pdf_file.save(
+            f"certificate-{certificate.certificate_code}.pdf",
+            ContentFile(build_certificate_pdf_bytes(certificate)),
+            save=True,
+        )
+
+    create_skill_for_certificate(certificate=certificate)
+    if attempt.enrollment.status != EnrollmentStatus.COMPLETED:
+        attempt.enrollment.status = EnrollmentStatus.COMPLETED
+        attempt.enrollment.completed_at = timezone.now()
+        attempt.enrollment.save(update_fields=["status", "completed_at", "updated_at"])
+        sync_course_counters(course=attempt.course)
+    return certificate
+
+
+@transaction.atomic
+def revoke_certificate(*, certificate: Certificate, revoked_by: Any, reason: str) -> Certificate:
+    """Revoke a certificate and hide derived skill from active profile views."""
+    certificate.status = CertificateStatus.REVOKED
+    certificate.revoked_by = revoked_by
+    certificate.revoked_at = timezone.now()
+    certificate.revocation_reason = reason
+    certificate.save(update_fields=["status", "revoked_by", "revoked_at", "revocation_reason", "updated_at"])
+    if hasattr(certificate, "skill"):
+        certificate.skill.soft_delete()
+    return certificate

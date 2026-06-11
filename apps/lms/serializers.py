@@ -4,6 +4,7 @@ from rest_framework import serializers
 
 from apps.lms.choices import DiscussionReportStatus, DiscussionStatus
 from apps.lms.models import (
+    Certificate,
     Course,
     Enrollment,
     Lesson,
@@ -605,3 +606,71 @@ class QuizUnlockSerializer(serializers.ModelSerializer):
         model = QuizUnlock
         fields = ("id", "quiz_id", "course_id", "user_id", "unlocked_by_id", "reason", "extra_attempts", "valid_until", "created_at")
         read_only_fields = fields
+
+
+class CertificateSerializer(serializers.ModelSerializer):
+    """User/admin certificate representation."""
+
+    course_title = serializers.CharField(source="course.title", read_only=True)
+    statement = serializers.SerializerMethodField()
+    verification_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Certificate
+        fields = (
+            "id",
+            "certificate_code",
+            "verification_slug",
+            "status",
+            "course_id",
+            "course_title",
+            "full_name_snapshot",
+            "gender_snapshot",
+            "national_code_snapshot",
+            "course_title_snapshot",
+            "instructor_name_snapshot",
+            "score_out_of_20",
+            "issued_at",
+            "revoked_at",
+            "revocation_reason",
+            "pdf_file",
+            "statement",
+            "verification_url",
+        )
+        read_only_fields = fields
+
+    def get_statement(self, obj: Certificate) -> str:
+        """Return official certificate statement."""
+        from apps.lms.certificate import build_certificate_text
+
+        return build_certificate_text(obj)
+
+    def get_verification_url(self, obj: Certificate) -> str:
+        """Return absolute verification URL when request is available."""
+        request = self.context.get("request")
+        path = f"/api/v1/lms/certificates/verify/{obj.verification_slug}/"
+        return request.build_absolute_uri(path) if request else path
+
+
+class CertificateVerifySerializer(CertificateSerializer):
+    """Public certificate verification serializer."""
+
+    class Meta(CertificateSerializer.Meta):
+        fields = (
+            "certificate_code",
+            "status",
+            "full_name_snapshot",
+            "gender_snapshot",
+            "national_code_snapshot",
+            "course_title_snapshot",
+            "instructor_name_snapshot",
+            "score_out_of_20",
+            "issued_at",
+            "statement",
+        )
+
+
+class CertificateRevokeSerializer(serializers.Serializer):
+    """Input serializer for admin certificate revocation."""
+
+    reason = serializers.CharField()

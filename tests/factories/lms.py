@@ -12,6 +12,7 @@ import factory
 from django.utils import timezone
 from factory.django import DjangoModelFactory
 
+from apps.authentication.choices import Gender
 from apps.lms.choices import (
     BadgeLevel,
     CertificateStatus,
@@ -184,12 +185,13 @@ class CertificateFactory(DjangoModelFactory):
     class Meta:
         model = Certificate
 
-    user = factory.SubFactory(UserFactory)
-    course = factory.SubFactory(PublishedCourseFactory)
-    enrollment = factory.SubFactory(EnrollmentFactory)
     quiz_attempt = factory.SubFactory(QuizAttemptFactory)
+    user = factory.SelfAttribute("quiz_attempt.user")
+    course = factory.SelfAttribute("quiz_attempt.course")
+    enrollment = factory.SelfAttribute("quiz_attempt.enrollment")
     status = CertificateStatus.ISSUED
     full_name_snapshot = "کاربر تست"
+    gender_snapshot = Gender.MALE
     national_code_snapshot = "0012345678"
     course_title_snapshot = factory.SelfAttribute("course.title")
     instructor_name_snapshot = factory.SelfAttribute("course.instructor_name")

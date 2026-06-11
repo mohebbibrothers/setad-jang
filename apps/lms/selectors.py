@@ -206,3 +206,29 @@ def get_admin_quiz_question_by_id(*, question_id: int):
     from apps.lms.models import QuizQuestion
 
     return QuizQuestion.all_objects.select_related("quiz", "quiz__course").filter(pk=question_id).first()
+
+
+def get_user_certificates(*, user_id: int) -> QuerySet:
+    """Return certificates owned by a user."""
+    from apps.lms.models import Certificate
+
+    return Certificate.objects.select_related("course", "user").filter(user_id=user_id).order_by("-issued_at")
+
+
+def get_user_certificate_by_id(*, user_id: int, certificate_id: int):
+    """Return one certificate with owner protection."""
+    return get_user_certificates(user_id=user_id).filter(pk=certificate_id).first()
+
+
+def get_certificate_by_verification_slug(*, verification_slug: str):
+    """Return a certificate by public verification slug."""
+    from apps.lms.models import Certificate
+
+    return Certificate.objects.select_related("course", "user").filter(verification_slug=verification_slug).first()
+
+
+def get_admin_certificate_by_id(*, certificate_id: int):
+    """Return one certificate for admin actions."""
+    from apps.lms.models import Certificate
+
+    return Certificate.all_objects.select_related("course", "user").filter(pk=certificate_id).first()
