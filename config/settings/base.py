@@ -513,6 +513,7 @@ SPECTACULAR_SETTINGS = {
         "SupportTicketSeverityEnum": "apps.support_desk.choices.TicketSeverity",
         "SupportAttachmentKindEnum": "apps.support_desk.choices.AttachmentKind",
         "SupportAttachmentVisibilityEnum": "apps.support_desk.choices.AttachmentVisibility",
+        "SupportDuplicateReviewStatusEnum": "apps.support_desk.choices.DuplicateReviewStatus",
         "HealthStatusEnum": ("ok", "error", "degraded"),
     },
     "POSTPROCESSING_HOOKS": [

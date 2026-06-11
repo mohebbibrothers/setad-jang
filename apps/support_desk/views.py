@@ -20,10 +20,28 @@ from apps.core.schemas import (
     build_success_response_serializer,
 )
 from apps.support_desk import selectors, services
-from apps.support_desk.filters import SupportUserTicketFilter
+from apps.support_desk.filters import (
+    SupportAdminTicketFilter,
+    SupportDuplicateCandidateAdminFilter,
+    SupportUserTicketFilter,
+)
+from apps.support_desk.permissions import IsSupportAdminUser
 from apps.support_desk.serializers import (
+    SupportAdminAssignSerializer,
+    SupportAdminReasonSerializer,
+    SupportAdminStatusSerializer,
+    SupportAdminTicketDetailSerializer,
+    SupportAdminTicketMessageSerializer,
+    SupportCannedResponseInputSerializer,
+    SupportCannedResponseSerializer,
+    SupportCategoryInputSerializer,
     SupportCategorySerializer,
+    SupportDepartmentInputSerializer,
     SupportDepartmentSerializer,
+    SupportDuplicateCandidateSerializer,
+    SupportDuplicateReviewSerializer,
+    SupportSLAPolicyInputSerializer,
+    SupportSLAPolicySerializer,
     SupportTicketAttachmentCreateSerializer,
     SupportTicketAttachmentSerializer,
     SupportTicketCreateUpdateSerializer,
@@ -34,6 +52,7 @@ from apps.support_desk.serializers import (
     SupportTicketReplySerializer,
     SupportTicketSatisfactionCreateSerializer,
     SupportTicketSuggestSerializer,
+    SupportTicketTypeInputSerializer,
     SupportTicketTypeSerializer,
     SupportTriageSuggestionSerializer,
 )
@@ -309,3 +328,446 @@ class SupportUserTicketSatisfactionView(APIView):
             return _service_error_response(exc, status_code=status.HTTP_403_FORBIDDEN)
         log_action_async(user_id=request.user.pk, action=audit_actions.SUPPORT_SATISFACTION_SUBMITTED, resource_type="support_ticket", resource_id=ticket.ticket_number, extra_data={"rating": satisfaction.rating}, **extract_audit_metadata(request))
         return CreatedResponse(data={"ticket_number": ticket.ticket_number, "rating": satisfaction.rating}, message="امتیاز رضایت شما ثبت شد.")
+
+
+ADMIN_TICKET_LIST_RESPONSE = build_paginated_success_response_serializer(name="SupportAdminTicketListResponse", item_serializer=SupportTicketListSerializer)
+ADMIN_TICKET_DETAIL_RESPONSE = build_success_response_serializer(name="SupportAdminTicketDetailResponse", data_serializer=SupportAdminTicketDetailSerializer)
+ADMIN_DEPARTMENT_RESPONSE = build_success_response_serializer(name="SupportAdminDepartmentResponse", data_serializer=SupportDepartmentSerializer)
+ADMIN_CATEGORY_RESPONSE = build_success_response_serializer(name="SupportAdminCategoryResponse", data_serializer=SupportCategorySerializer)
+ADMIN_TICKET_TYPE_RESPONSE = build_success_response_serializer(name="SupportAdminTicketTypeResponse", data_serializer=SupportTicketTypeSerializer)
+ADMIN_SLA_RESPONSE = build_success_response_serializer(name="SupportAdminSLAPolicyResponse", data_serializer=SupportSLAPolicySerializer)
+ADMIN_CANNED_RESPONSE = build_success_response_serializer(name="SupportAdminCannedResponseResponse", data_serializer=SupportCannedResponseSerializer)
+ADMIN_DUPLICATE_RESPONSE = build_success_response_serializer(name="SupportAdminDuplicateCandidateResponse", data_serializer=SupportDuplicateCandidateSerializer)
+
+
+class SupportAdminDepartmentListCreateView(APIView):
+    """Admin department list/create endpoint."""
+
+    permission_classes = [IsSupportAdminUser]
+    serializer_class = SupportDepartmentSerializer
+
+    @extend_schema(operation_id="support_admin_departments_list", tags=[TAG_SUPPORT_TAXONOMY], responses={200: build_success_response_serializer(name="SupportAdminDepartmentListResponse", data_serializer=SupportDepartmentSerializer, many=True)})
+    def get(self, request: Request) -> SuccessResponse:
+        """Return all departments for admin taxonomy management."""
+        return SuccessResponse(data=SupportDepartmentSerializer(selectors.get_admin_departments(), many=True).data)
+
+    def post(self, request: Request) -> CreatedResponse:
+        """Create support department."""
+        serializer = SupportDepartmentInputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        department = services.create_department(**serializer.validated_data)
+        log_action_async(user_id=request.user.pk, action=audit_actions.SUPPORT_DEPARTMENT_CREATED, resource_type="support_department", resource_id=str(department.pk), **extract_audit_metadata(request))
+        return CreatedResponse(data=SupportDepartmentSerializer(department).data, message="دپارتمان پشتیبانی ساخته شد.")
+
+
+class SupportAdminDepartmentDetailView(APIView):
+    """Admin department detail/update/deactivate endpoint."""
+
+    permission_classes = [IsSupportAdminUser]
+    serializer_class = SupportDepartmentSerializer
+
+    @extend_schema(operation_id="support_admin_departments_retrieve", tags=[TAG_SUPPORT_TAXONOMY], responses={200: ADMIN_DEPARTMENT_RESPONSE, 404: SUPPORT_ERROR_RESPONSE})
+    def get(self, request: Request, department_id: int) -> SuccessResponse | ErrorResponse:
+        """Return one department."""
+        department = selectors.get_admin_department_by_id(department_id=department_id)
+        if department is None:
+            return ErrorResponse(message="دپارتمان یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+        return SuccessResponse(data=SupportDepartmentSerializer(department).data)
+
+    def patch(self, request: Request, department_id: int) -> SuccessResponse | ErrorResponse:
+        """Update department."""
+        department = selectors.get_admin_department_by_id(department_id=department_id)
+        if department is None:
+            return ErrorResponse(message="دپارتمان یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+        serializer = SupportDepartmentInputSerializer(data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        department = services.update_department(department=department, **serializer.validated_data)
+        log_action_async(user_id=request.user.pk, action=audit_actions.SUPPORT_DEPARTMENT_UPDATED, resource_type="support_department", resource_id=str(department.pk), **extract_audit_metadata(request))
+        return SuccessResponse(data=SupportDepartmentSerializer(department).data, message="دپارتمان بروزرسانی شد.")
+
+    def delete(self, request: Request, department_id: int) -> SuccessResponse | ErrorResponse:
+        """Deactivate department safely."""
+        department = selectors.get_admin_department_by_id(department_id=department_id)
+        if department is None:
+            return ErrorResponse(message="دپارتمان یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+        try:
+            department = services.deactivate_department(department=department)
+        except services.SupportDeskServiceError as exc:
+            return _service_error_response(exc)
+        log_action_async(user_id=request.user.pk, action=audit_actions.SUPPORT_DEPARTMENT_DEACTIVATED, resource_type="support_department", resource_id=str(department.pk), **extract_audit_metadata(request))
+        return SuccessResponse(data=SupportDepartmentSerializer(department).data, message="دپارتمان غیرفعال شد.")
+
+
+class SupportAdminCategoryListCreateView(APIView):
+    """Admin category tree list/create endpoint."""
+
+    permission_classes = [IsSupportAdminUser]
+    serializer_class = SupportCategorySerializer
+
+    def get(self, request: Request) -> SuccessResponse:
+        """Return all categories for admin tree management."""
+        return SuccessResponse(data=SupportCategorySerializer(selectors.get_admin_category_tree(), many=True).data)
+
+    def post(self, request: Request) -> CreatedResponse | ErrorResponse:
+        """Create support category."""
+        serializer = SupportCategoryInputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            category = services.create_category(**serializer.validated_data)
+        except services.SupportTaxonomyTreeError as exc:
+            return _service_error_response(exc)
+        log_action_async(user_id=request.user.pk, action=audit_actions.SUPPORT_CATEGORY_CREATED, resource_type="support_category", resource_id=str(category.pk), **extract_audit_metadata(request))
+        return CreatedResponse(data=SupportCategorySerializer(category).data, message="دسته‌بندی پشتیبانی ساخته شد.")
+
+
+class SupportAdminCategoryDetailView(APIView):
+    """Admin category detail/update/deactivate endpoint."""
+
+    permission_classes = [IsSupportAdminUser]
+    serializer_class = SupportCategorySerializer
+
+    def patch(self, request: Request, category_id: int) -> SuccessResponse | ErrorResponse:
+        """Update category tree node."""
+        category = selectors.get_admin_category_by_id(category_id=category_id)
+        if category is None:
+            return ErrorResponse(message="دسته‌بندی یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+        serializer = SupportCategoryInputSerializer(data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        try:
+            category = services.update_category(category=category, **serializer.validated_data)
+        except services.SupportTaxonomyTreeError as exc:
+            return _service_error_response(exc)
+        log_action_async(user_id=request.user.pk, action=audit_actions.SUPPORT_CATEGORY_UPDATED, resource_type="support_category", resource_id=str(category.pk), **extract_audit_metadata(request))
+        return SuccessResponse(data=SupportCategorySerializer(category).data, message="دسته‌بندی بروزرسانی شد.")
+
+    def delete(self, request: Request, category_id: int) -> SuccessResponse | ErrorResponse:
+        """Deactivate category safely."""
+        category = selectors.get_admin_category_by_id(category_id=category_id)
+        if category is None:
+            return ErrorResponse(message="دسته‌بندی یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+        try:
+            category = services.deactivate_category(category=category)
+        except services.SupportTaxonomyTreeError as exc:
+            return _service_error_response(exc)
+        log_action_async(user_id=request.user.pk, action=audit_actions.SUPPORT_CATEGORY_DEACTIVATED, resource_type="support_category", resource_id=str(category.pk), **extract_audit_metadata(request))
+        return SuccessResponse(data=SupportCategorySerializer(category).data, message="دسته‌بندی غیرفعال شد.")
+
+
+class SupportAdminTicketTypeListCreateView(APIView):
+    """Admin ticket type list/create endpoint."""
+
+    permission_classes = [IsSupportAdminUser]
+    serializer_class = SupportTicketTypeSerializer
+
+    def get(self, request: Request) -> SuccessResponse:
+        """Return ticket types."""
+        return SuccessResponse(data=SupportTicketTypeSerializer(selectors.get_admin_ticket_types(), many=True).data)
+
+    def post(self, request: Request) -> CreatedResponse | ErrorResponse:
+        """Create ticket type."""
+        serializer = SupportTicketTypeInputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            ticket_type = services.create_ticket_type(**serializer.validated_data)
+        except services.SupportDeskServiceError as exc:
+            return _service_error_response(exc)
+        log_action_async(user_id=request.user.pk, action=audit_actions.SUPPORT_TICKET_TYPE_CREATED, resource_type="support_ticket_type", resource_id=str(ticket_type.pk), **extract_audit_metadata(request))
+        return CreatedResponse(data=SupportTicketTypeSerializer(ticket_type).data, message="نوع تیکت ساخته شد.")
+
+
+class SupportAdminTicketTypeDetailView(APIView):
+    """Admin ticket type update endpoint."""
+
+    permission_classes = [IsSupportAdminUser]
+    serializer_class = SupportTicketTypeSerializer
+
+    def patch(self, request: Request, ticket_type_id: int) -> SuccessResponse | ErrorResponse:
+        """Update ticket type."""
+        ticket_type = selectors.get_admin_ticket_type_by_id(ticket_type_id=ticket_type_id)
+        if ticket_type is None:
+            return ErrorResponse(message="نوع تیکت یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+        serializer = SupportTicketTypeInputSerializer(data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        try:
+            ticket_type = services.update_ticket_type(ticket_type=ticket_type, **serializer.validated_data)
+        except services.SupportDeskServiceError as exc:
+            return _service_error_response(exc)
+        log_action_async(user_id=request.user.pk, action=audit_actions.SUPPORT_TICKET_TYPE_UPDATED, resource_type="support_ticket_type", resource_id=str(ticket_type.pk), **extract_audit_metadata(request))
+        return SuccessResponse(data=SupportTicketTypeSerializer(ticket_type).data, message="نوع تیکت بروزرسانی شد.")
+
+
+class SupportAdminSLAPolicyListCreateView(APIView):
+    """Admin SLA policy list/create endpoint."""
+
+    permission_classes = [IsSupportAdminUser]
+    serializer_class = SupportSLAPolicySerializer
+
+    def get(self, request: Request) -> SuccessResponse:
+        """Return SLA policies."""
+        return SuccessResponse(data=SupportSLAPolicySerializer(selectors.get_admin_sla_policies(), many=True).data)
+
+    def post(self, request: Request) -> CreatedResponse:
+        """Create SLA policy."""
+        serializer = SupportSLAPolicyInputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        policy = services.create_sla_policy(**serializer.validated_data)
+        log_action_async(user_id=request.user.pk, action=audit_actions.SUPPORT_SLA_POLICY_CREATED, resource_type="support_sla_policy", resource_id=str(policy.pk), **extract_audit_metadata(request))
+        return CreatedResponse(data=SupportSLAPolicySerializer(policy).data, message="سیاست SLA ساخته شد.")
+
+
+class SupportAdminSLAPolicyDetailView(APIView):
+    """Admin SLA policy update endpoint."""
+
+    permission_classes = [IsSupportAdminUser]
+    serializer_class = SupportSLAPolicySerializer
+
+    def patch(self, request: Request, policy_id: int) -> SuccessResponse | ErrorResponse:
+        """Update SLA policy."""
+        policy = selectors.get_admin_sla_policy_by_id(policy_id=policy_id)
+        if policy is None:
+            return ErrorResponse(message="سیاست SLA یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+        serializer = SupportSLAPolicyInputSerializer(data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        policy = services.update_sla_policy(policy=policy, **serializer.validated_data)
+        log_action_async(user_id=request.user.pk, action=audit_actions.SUPPORT_SLA_POLICY_UPDATED, resource_type="support_sla_policy", resource_id=str(policy.pk), **extract_audit_metadata(request))
+        return SuccessResponse(data=SupportSLAPolicySerializer(policy).data, message="سیاست SLA بروزرسانی شد.")
+
+
+class SupportAdminCannedResponseListCreateView(APIView):
+    """Admin canned response list/create endpoint."""
+
+    permission_classes = [IsSupportAdminUser]
+    serializer_class = SupportCannedResponseSerializer
+
+    def get(self, request: Request) -> SuccessResponse:
+        """Return canned responses."""
+        return SuccessResponse(data=SupportCannedResponseSerializer(selectors.get_admin_canned_responses(), many=True).data)
+
+    def post(self, request: Request) -> CreatedResponse | ErrorResponse:
+        """Create canned response."""
+        serializer = SupportCannedResponseInputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            canned = services.create_canned_response(**serializer.validated_data)
+        except services.SupportDeskServiceError as exc:
+            return _service_error_response(exc)
+        log_action_async(user_id=request.user.pk, action=audit_actions.SUPPORT_CANNED_RESPONSE_CREATED, resource_type="support_canned_response", resource_id=str(canned.pk), **extract_audit_metadata(request))
+        return CreatedResponse(data=SupportCannedResponseSerializer(canned).data, message="پاسخ آماده ساخته شد.")
+
+
+class SupportAdminCannedResponseDetailView(APIView):
+    """Admin canned response update/use endpoint."""
+
+    permission_classes = [IsSupportAdminUser]
+    serializer_class = SupportCannedResponseSerializer
+
+    def patch(self, request: Request, canned_response_id: int) -> SuccessResponse | ErrorResponse:
+        """Update canned response."""
+        canned = selectors.get_admin_canned_response_by_id(canned_response_id=canned_response_id)
+        if canned is None:
+            return ErrorResponse(message="پاسخ آماده یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+        serializer = SupportCannedResponseInputSerializer(data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        try:
+            canned = services.update_canned_response(canned_response=canned, **serializer.validated_data)
+        except services.SupportDeskServiceError as exc:
+            return _service_error_response(exc)
+        return SuccessResponse(data=SupportCannedResponseSerializer(canned).data, message="پاسخ آماده بروزرسانی شد.")
+
+
+class SupportAdminCannedResponseUseView(APIView):
+    """Admin canned response usage counter endpoint."""
+
+    permission_classes = [IsSupportAdminUser]
+    serializer_class = SupportCannedResponseSerializer
+
+    def post(self, request: Request, canned_response_id: int) -> SuccessResponse | ErrorResponse:
+        """Mark canned response as used."""
+        canned = selectors.get_admin_canned_response_by_id(canned_response_id=canned_response_id)
+        if canned is None:
+            return ErrorResponse(message="پاسخ آماده یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+        canned = services.use_canned_response(canned_response=canned)
+        log_action_async(user_id=request.user.pk, action=audit_actions.SUPPORT_CANNED_RESPONSE_USED, resource_type="support_canned_response", resource_id=str(canned.pk), **extract_audit_metadata(request))
+        return SuccessResponse(data=SupportCannedResponseSerializer(canned).data, message="استفاده از پاسخ آماده ثبت شد.")
+
+
+class SupportAdminTicketListView(APIView):
+    """Admin ticket queue endpoint."""
+
+    permission_classes = [IsSupportAdminUser]
+    serializer_class = SupportTicketListSerializer
+
+    @extend_schema(operation_id="support_admin_tickets_list", tags=[TAG_SUPPORT_USER], responses={200: ADMIN_TICKET_LIST_RESPONSE})
+    def get(self, request: Request) -> Response:
+        """Return filtered admin ticket queue."""
+        queryset = selectors.get_admin_tickets()
+        filterset = SupportAdminTicketFilter(request.query_params, queryset=queryset)
+        if filterset.is_valid():
+            queryset = filterset.qs
+        paginator = StandardPagination()
+        page = paginator.paginate_queryset(queryset, request, view=self)
+        return paginator.get_paginated_response(SupportTicketListSerializer(page, many=True).data)
+
+
+class SupportAdminTicketDetailView(APIView):
+    """Admin ticket detail endpoint."""
+
+    permission_classes = [IsSupportAdminUser]
+    serializer_class = SupportAdminTicketDetailSerializer
+
+    @extend_schema(operation_id="support_admin_tickets_retrieve", tags=[TAG_SUPPORT_USER], responses={200: ADMIN_TICKET_DETAIL_RESPONSE, 404: SUPPORT_ERROR_RESPONSE})
+    def get(self, request: Request, ticket_number: str) -> SuccessResponse | ErrorResponse:
+        """Return ticket with internal timeline."""
+        ticket = selectors.get_admin_ticket_by_number(ticket_number=ticket_number)
+        if ticket is None:
+            return ErrorResponse(message="تیکت یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+        return SuccessResponse(data=SupportAdminTicketDetailSerializer(ticket).data)
+
+
+class SupportAdminTicketReplyView(APIView):
+    """Admin public reply endpoint."""
+
+    permission_classes = [IsSupportAdminUser]
+    serializer_class = SupportAdminTicketMessageSerializer
+
+    def post(self, request: Request, ticket_number: str) -> CreatedResponse | ErrorResponse:
+        """Add admin public reply."""
+        ticket = selectors.get_admin_ticket_by_number(ticket_number=ticket_number)
+        if ticket is None:
+            return ErrorResponse(message="تیکت یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+        serializer = SupportTicketReplySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            message = services.add_admin_reply(ticket=ticket, admin=request.user, **serializer.validated_data)
+        except (services.SupportPermissionError, services.SupportTicketStateError) as exc:
+            return _service_error_response(exc, status_code=status.HTTP_403_FORBIDDEN)
+        log_action_async(user_id=request.user.pk, action=audit_actions.SUPPORT_TICKET_REPLIED, resource_type="support_ticket", resource_id=ticket.ticket_number, **extract_audit_metadata(request))
+        return CreatedResponse(data=SupportAdminTicketMessageSerializer(message).data, message="پاسخ ادمین ثبت شد.")
+
+
+class SupportAdminTicketInternalNoteView(APIView):
+    """Admin internal note endpoint."""
+
+    permission_classes = [IsSupportAdminUser]
+    serializer_class = SupportAdminTicketMessageSerializer
+
+    def post(self, request: Request, ticket_number: str) -> CreatedResponse | ErrorResponse:
+        """Add internal note."""
+        ticket = selectors.get_admin_ticket_by_number(ticket_number=ticket_number)
+        if ticket is None:
+            return ErrorResponse(message="تیکت یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+        serializer = SupportTicketReplySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        message = services.add_internal_note(ticket=ticket, admin=request.user, **serializer.validated_data)
+        log_action_async(user_id=request.user.pk, action=audit_actions.SUPPORT_TICKET_INTERNAL_NOTE_ADDED, resource_type="support_ticket", resource_id=ticket.ticket_number, **extract_audit_metadata(request))
+        return CreatedResponse(data=SupportAdminTicketMessageSerializer(message).data, message="یادداشت داخلی ثبت شد.")
+
+
+class SupportAdminTicketAssignView(APIView):
+    """Admin ticket assignment endpoint."""
+
+    permission_classes = [IsSupportAdminUser]
+    serializer_class = SupportAdminTicketDetailSerializer
+
+    def post(self, request: Request, ticket_number: str) -> SuccessResponse | ErrorResponse:
+        """Assign ticket to admin/department."""
+        ticket = selectors.get_admin_ticket_by_number(ticket_number=ticket_number)
+        if ticket is None:
+            return ErrorResponse(message="تیکت یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+        serializer = SupportAdminAssignSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        ticket = services.assign_ticket(ticket=ticket, admin=request.user, **serializer.validated_data)
+        log_action_async(user_id=request.user.pk, action=audit_actions.SUPPORT_TICKET_ASSIGNED, resource_type="support_ticket", resource_id=ticket.ticket_number, **extract_audit_metadata(request))
+        return SuccessResponse(data=SupportAdminTicketDetailSerializer(ticket).data, message="تیکت ارجاع شد.")
+
+
+class SupportAdminTicketStatusView(APIView):
+    """Admin ticket status endpoint."""
+
+    permission_classes = [IsSupportAdminUser]
+    serializer_class = SupportAdminTicketDetailSerializer
+
+    def post(self, request: Request, ticket_number: str) -> SuccessResponse | ErrorResponse:
+        """Change ticket status."""
+        ticket = selectors.get_admin_ticket_by_number(ticket_number=ticket_number)
+        if ticket is None:
+            return ErrorResponse(message="تیکت یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+        serializer = SupportAdminStatusSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        ticket = services.change_ticket_status(ticket=ticket, admin=request.user, **serializer.validated_data)
+        log_action_async(user_id=request.user.pk, action=audit_actions.SUPPORT_TICKET_STATUS_CHANGED, resource_type="support_ticket", resource_id=ticket.ticket_number, **extract_audit_metadata(request))
+        return SuccessResponse(data=SupportAdminTicketDetailSerializer(ticket).data, message="وضعیت تیکت تغییر کرد.")
+
+
+class SupportAdminTicketEscalateView(APIView):
+    """Admin ticket escalation endpoint."""
+
+    permission_classes = [IsSupportAdminUser]
+    serializer_class = SupportAdminTicketDetailSerializer
+
+    def post(self, request: Request, ticket_number: str) -> SuccessResponse | ErrorResponse:
+        """Escalate ticket."""
+        ticket = selectors.get_admin_ticket_by_number(ticket_number=ticket_number)
+        if ticket is None:
+            return ErrorResponse(message="تیکت یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+        serializer = SupportAdminReasonSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        ticket = services.escalate_ticket(ticket=ticket, admin=request.user, reason=serializer.validated_data.get("reason", "ارجاع فوری"))
+        log_action_async(user_id=request.user.pk, action=audit_actions.SUPPORT_TICKET_ESCALATED, resource_type="support_ticket", resource_id=ticket.ticket_number, **extract_audit_metadata(request))
+        return SuccessResponse(data=SupportAdminTicketDetailSerializer(ticket).data, message="تیکت ارجاع فوری شد.")
+
+
+class SupportAdminTicketCloseView(APIView):
+    """Admin ticket close endpoint."""
+
+    permission_classes = [IsSupportAdminUser]
+    serializer_class = SupportAdminTicketDetailSerializer
+
+    def post(self, request: Request, ticket_number: str) -> SuccessResponse | ErrorResponse:
+        """Close ticket by admin."""
+        ticket = selectors.get_admin_ticket_by_number(ticket_number=ticket_number)
+        if ticket is None:
+            return ErrorResponse(message="تیکت یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+        serializer = SupportAdminReasonSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            ticket = services.close_ticket(ticket=ticket, actor=request.user, reason=serializer.validated_data.get("reason", ""))
+        except (services.SupportPermissionError, services.SupportTicketStateError) as exc:
+            return _service_error_response(exc, status_code=status.HTTP_403_FORBIDDEN)
+        log_action_async(user_id=request.user.pk, action=audit_actions.SUPPORT_TICKET_CLOSED, resource_type="support_ticket", resource_id=ticket.ticket_number, **extract_audit_metadata(request))
+        return SuccessResponse(data=SupportAdminTicketDetailSerializer(ticket).data, message="تیکت بسته شد.")
+
+
+class SupportAdminDuplicateCandidateListView(APIView):
+    """Admin duplicate candidate list endpoint."""
+
+    permission_classes = [IsSupportAdminUser]
+    serializer_class = SupportDuplicateCandidateSerializer
+
+    def get(self, request: Request) -> Response:
+        """Return duplicate candidates."""
+        queryset = selectors.get_admin_duplicate_candidates()
+        filterset = SupportDuplicateCandidateAdminFilter(request.query_params, queryset=queryset)
+        if filterset.is_valid():
+            queryset = filterset.qs
+        paginator = StandardPagination()
+        page = paginator.paginate_queryset(queryset, request, view=self)
+        return paginator.get_paginated_response(SupportDuplicateCandidateSerializer(page, many=True).data)
+
+
+class SupportAdminDuplicateCandidateReviewView(APIView):
+    """Admin duplicate candidate review endpoint."""
+
+    permission_classes = [IsSupportAdminUser]
+    serializer_class = SupportDuplicateCandidateSerializer
+
+    def post(self, request: Request, duplicate_id: int) -> SuccessResponse | ErrorResponse:
+        """Review duplicate candidate."""
+        duplicate = selectors.get_admin_duplicate_candidate_by_id(duplicate_id=duplicate_id)
+        if duplicate is None:
+            return ErrorResponse(message="کاندیدای تکراری یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+        serializer = SupportDuplicateReviewSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        duplicate = services.review_duplicate_candidate(duplicate=duplicate, admin=request.user, **serializer.validated_data)
+        log_action_async(user_id=request.user.pk, action=audit_actions.SUPPORT_DUPLICATE_REVIEWED, resource_type="support_duplicate_candidate", resource_id=str(duplicate.pk), **extract_audit_metadata(request))
+        return SuccessResponse(data=SupportDuplicateCandidateSerializer(duplicate).data, message="وضعیت کاندیدای تکراری بروزرسانی شد.")

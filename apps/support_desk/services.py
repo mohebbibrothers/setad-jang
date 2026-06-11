@@ -100,6 +100,41 @@ _TERMINAL_STATUSES = {TicketStatus.CLOSED, TicketStatus.ARCHIVED, TicketStatus.S
 # ---------------------------------------------------------------------------
 
 
+@transaction.atomic
+def create_department(*, title: str, description: str = "", default_assignee: Any | None = None, order: int = 0) -> SupportDepartment:
+    """Create an admin-managed support department."""
+    return SupportDepartment.objects.create(title=title.strip(), description=description.strip(), default_assignee=default_assignee, order=order)
+
+
+@transaction.atomic
+def update_department(*, department: SupportDepartment, **fields: Any) -> SupportDepartment:
+    """Update support department metadata through service layer."""
+    allowed = {"title", "description", "default_assignee", "order", "is_active"}
+    update_fields: list[str] = []
+    for field, value in fields.items():
+        if field not in allowed:
+            continue
+        if isinstance(value, str):
+            value = value.strip()
+        if getattr(department, field) != value:
+            setattr(department, field, value)
+            update_fields.append(field)
+    if update_fields:
+        update_fields.append("updated_at")
+        department.save(update_fields=list(set(update_fields)))
+    return department
+
+
+@transaction.atomic
+def deactivate_department(*, department: SupportDepartment) -> SupportDepartment:
+    """Deactivate a department only when it has no open tickets."""
+    if SupportTicket.objects.open_queue().filter(department=department).exists():
+        raise SupportDeskServiceError("دپارتمانی که تیکت باز دارد قابل غیرفعال‌سازی نیست.")
+    department.is_active = False
+    department.save(update_fields=["is_active", "updated_at"])
+    return department
+
+
 def _assert_valid_category_parent(*, category: SupportCategory | None = None, parent: SupportCategory | None = None, department: SupportDepartment | None = None) -> None:
     """Prevent self-parenting, cross-department moves and tree cycles."""
     if parent is None:
@@ -202,6 +237,147 @@ def _apply_sla(*, ticket: SupportTicket, policy: SupportSLAPolicy | None, now=No
         occurred_at=now,
         metadata={"policy_id": policy.pk, "first_response_minutes": policy.first_response_minutes, "resolution_minutes": policy.resolution_minutes},
     )
+
+
+@transaction.atomic
+def create_sla_policy(
+    *,
+    title: str,
+    department: SupportDepartment | None = None,
+    priority: str = TicketPriority.NORMAL,
+    severity: str = TicketSeverity.MINOR,
+    first_response_minutes: int = 24 * 60,
+    resolution_minutes: int = 72 * 60,
+    business_hours_only: bool = False,
+    pause_when_waiting_for_user: bool = True,
+    escalate_on_breach: bool = True,
+    order: int = 0,
+) -> SupportSLAPolicy:
+    """Create an admin-managed SLA policy."""
+    return SupportSLAPolicy.objects.create(
+        title=title.strip(),
+        department=department,
+        priority=priority,
+        severity=severity,
+        first_response_minutes=first_response_minutes,
+        resolution_minutes=resolution_minutes,
+        business_hours_only=business_hours_only,
+        pause_when_waiting_for_user=pause_when_waiting_for_user,
+        escalate_on_breach=escalate_on_breach,
+        order=order,
+    )
+
+
+@transaction.atomic
+def update_sla_policy(*, policy: SupportSLAPolicy, **fields: Any) -> SupportSLAPolicy:
+    """Update an SLA policy through the service layer."""
+    allowed = {"title", "department", "priority", "severity", "first_response_minutes", "resolution_minutes", "business_hours_only", "pause_when_waiting_for_user", "escalate_on_breach", "order", "is_active"}
+    update_fields: list[str] = []
+    for field, value in fields.items():
+        if field not in allowed:
+            continue
+        if isinstance(value, str) and field == "title":
+            value = value.strip()
+        if getattr(policy, field) != value:
+            setattr(policy, field, value)
+            update_fields.append(field)
+    if update_fields:
+        update_fields.append("updated_at")
+        policy.save(update_fields=list(set(update_fields)))
+    return policy
+
+
+@transaction.atomic
+def create_ticket_type(
+    *,
+    code: str,
+    title: str,
+    description: str = "",
+    default_department: SupportDepartment | None = None,
+    default_category: SupportCategory | None = None,
+    default_priority: str = TicketPriority.NORMAL,
+    default_severity: str = TicketSeverity.MINOR,
+    default_sla_policy: SupportSLAPolicy | None = None,
+    order: int = 0,
+) -> SupportTicketType:
+    """Create an admin-managed dynamic ticket type."""
+    if default_category is not None and default_department is not None and default_category.department_id != default_department.pk:
+        raise SupportDeskServiceError("دسته پیش‌فرض باید متعلق به دپارتمان پیش‌فرض باشد.")
+    return SupportTicketType.objects.create(
+        code=code.strip(),
+        title=title.strip(),
+        description=description.strip(),
+        default_department=default_department,
+        default_category=default_category,
+        default_priority=default_priority,
+        default_severity=default_severity,
+        default_sla_policy=default_sla_policy,
+        order=order,
+    )
+
+
+@transaction.atomic
+def update_ticket_type(*, ticket_type: SupportTicketType, **fields: Any) -> SupportTicketType:
+    """Update a dynamic ticket type through service layer."""
+    allowed = {"code", "title", "description", "default_department", "default_category", "default_priority", "default_severity", "default_sla_policy", "order", "is_active"}
+    next_department = fields.get("default_department", ticket_type.default_department)
+    next_category = fields.get("default_category", ticket_type.default_category)
+    if next_category is not None and next_department is not None and next_category.department_id != next_department.pk:
+        raise SupportDeskServiceError("دسته پیش‌فرض باید متعلق به دپارتمان پیش‌فرض باشد.")
+    update_fields: list[str] = []
+    for field, value in fields.items():
+        if field not in allowed:
+            continue
+        if isinstance(value, str) and field in {"code", "title", "description"}:
+            value = value.strip()
+        if getattr(ticket_type, field) != value:
+            setattr(ticket_type, field, value)
+            update_fields.append(field)
+    if update_fields:
+        update_fields.append("updated_at")
+        ticket_type.save(update_fields=list(set(update_fields)))
+    return ticket_type
+
+
+@transaction.atomic
+def create_canned_response(*, title: str, body: str, department: SupportDepartment | None = None, category: SupportCategory | None = None) -> Any:
+    """Create an admin-managed canned response."""
+    if category is not None and department is not None and category.department_id != department.pk:
+        raise SupportDeskServiceError("دسته پاسخ آماده باید متعلق به همان دپارتمان باشد.")
+    from apps.support_desk.models import SupportCannedResponse
+
+    return SupportCannedResponse.objects.create(title=title.strip(), body=body.strip(), department=department, category=category)
+
+
+@transaction.atomic
+def update_canned_response(*, canned_response: Any, **fields: Any) -> Any:
+    """Update a canned response through service layer."""
+    allowed = {"title", "body", "department", "category", "is_active"}
+    next_department = fields.get("department", canned_response.department)
+    next_category = fields.get("category", canned_response.category)
+    if next_category is not None and next_department is not None and next_category.department_id != next_department.pk:
+        raise SupportDeskServiceError("دسته پاسخ آماده باید متعلق به همان دپارتمان باشد.")
+    update_fields: list[str] = []
+    for field, value in fields.items():
+        if field not in allowed:
+            continue
+        if isinstance(value, str):
+            value = value.strip()
+        if getattr(canned_response, field) != value:
+            setattr(canned_response, field, value)
+            update_fields.append(field)
+    if update_fields:
+        update_fields.append("updated_at")
+        canned_response.save(update_fields=list(set(update_fields)))
+    return canned_response
+
+
+@transaction.atomic
+def use_canned_response(*, canned_response: Any) -> Any:
+    """Increment canned response usage counter."""
+    canned_response.usage_count += 1
+    canned_response.save(update_fields=["usage_count", "updated_at"])
+    return canned_response
 
 
 @transaction.atomic

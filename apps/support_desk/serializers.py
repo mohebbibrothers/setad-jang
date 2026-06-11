@@ -2,10 +2,12 @@
 
 from rest_framework import serializers
 
-from apps.support_desk.choices import AttachmentKind, AttachmentVisibility
+from apps.support_desk.choices import AttachmentKind, AttachmentVisibility, TicketStatus
 from apps.support_desk.models import (
+    SupportCannedResponse,
     SupportCategory,
     SupportDepartment,
+    SupportDuplicateCandidate,
     SupportSLAPolicy,
     SupportTicket,
     SupportTicketAttachment,
@@ -19,8 +21,25 @@ class SupportDepartmentSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = SupportDepartment
-        fields = ("id", "uuid", "title", "slug", "description", "order")
+        fields = ("id", "uuid", "title", "slug", "description", "order", "is_active")
         read_only_fields = fields
+
+
+class SupportDepartmentInputSerializer(serializers.Serializer):
+    """Admin input serializer for departments."""
+
+    title = serializers.CharField(max_length=180)
+    description = serializers.CharField(required=False, allow_blank=True, default="")
+    default_assignee_id = serializers.PrimaryKeyRelatedField(queryset=SupportDepartment._meta.get_field("default_assignee").remote_field.model.objects.all(), source="default_assignee", required=False, allow_null=True)
+    order = serializers.IntegerField(required=False, min_value=0, default=0)
+    is_active = serializers.BooleanField(required=False)
+
+    def validate_title(self, value: str) -> str:
+        """Normalize department title."""
+        value = value.strip()
+        if len(value) < 2:
+            raise serializers.ValidationError("عنوان دپارتمان باید حداقل ۲ کاراکتر باشد.")
+        return value
 
 
 class SupportCategorySerializer(serializers.ModelSerializer):
@@ -30,8 +49,27 @@ class SupportCategorySerializer(serializers.ModelSerializer):
 
     class Meta:
         model = SupportCategory
-        fields = ("id", "parent_id", "department", "title", "slug", "path", "depth", "description", "icon", "order")
+        fields = ("id", "parent_id", "department", "title", "slug", "path", "depth", "description", "icon", "order", "is_active")
         read_only_fields = fields
+
+
+class SupportCategoryInputSerializer(serializers.Serializer):
+    """Admin input serializer for support tree categories."""
+
+    department_id = serializers.PrimaryKeyRelatedField(queryset=SupportDepartment.all_objects.all(), source="department")
+    parent_id = serializers.PrimaryKeyRelatedField(queryset=SupportCategory.all_objects.all(), source="parent", required=False, allow_null=True)
+    title = serializers.CharField(max_length=180)
+    description = serializers.CharField(required=False, allow_blank=True, default="")
+    icon = serializers.CharField(required=False, allow_blank=True, default="", max_length=80)
+    order = serializers.IntegerField(required=False, min_value=0, default=0)
+    is_active = serializers.BooleanField(required=False)
+
+    def validate_title(self, value: str) -> str:
+        """Normalize category title."""
+        value = value.strip()
+        if len(value) < 2:
+            raise serializers.ValidationError("عنوان دسته‌بندی باید حداقل ۲ کاراکتر باشد.")
+        return value
 
 
 class SupportSLAPolicySummarySerializer(serializers.ModelSerializer):
@@ -39,8 +77,51 @@ class SupportSLAPolicySummarySerializer(serializers.ModelSerializer):
 
     class Meta:
         model = SupportSLAPolicy
-        fields = ("id", "title", "first_response_minutes", "resolution_minutes", "pause_when_waiting_for_user")
+        fields = ("id", "title", "first_response_minutes", "resolution_minutes", "pause_when_waiting_for_user", "is_active")
         read_only_fields = fields
+
+
+class SupportSLAPolicySerializer(serializers.ModelSerializer):
+    """Admin SLA policy serializer."""
+
+    department = SupportDepartmentSerializer(read_only=True)
+
+    class Meta:
+        model = SupportSLAPolicy
+        fields = (
+            "id",
+            "title",
+            "slug",
+            "department",
+            "priority",
+            "severity",
+            "first_response_minutes",
+            "resolution_minutes",
+            "business_hours_only",
+            "pause_when_waiting_for_user",
+            "escalate_on_breach",
+            "order",
+            "is_active",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = fields
+
+
+class SupportSLAPolicyInputSerializer(serializers.Serializer):
+    """Admin input serializer for SLA policies."""
+
+    title = serializers.CharField(max_length=180)
+    department_id = serializers.PrimaryKeyRelatedField(queryset=SupportDepartment.all_objects.all(), source="department", required=False, allow_null=True)
+    priority = serializers.CharField(required=False, default="normal")
+    severity = serializers.CharField(required=False, default="minor")
+    first_response_minutes = serializers.IntegerField(min_value=1, required=False, default=24 * 60)
+    resolution_minutes = serializers.IntegerField(min_value=1, required=False, default=72 * 60)
+    business_hours_only = serializers.BooleanField(required=False, default=False)
+    pause_when_waiting_for_user = serializers.BooleanField(required=False, default=True)
+    escalate_on_breach = serializers.BooleanField(required=False, default=True)
+    order = serializers.IntegerField(required=False, min_value=0, default=0)
+    is_active = serializers.BooleanField(required=False)
 
 
 class SupportTicketTypeSerializer(serializers.ModelSerializer):
@@ -63,8 +144,24 @@ class SupportTicketTypeSerializer(serializers.ModelSerializer):
             "default_severity",
             "default_sla_policy",
             "order",
+            "is_active",
         )
         read_only_fields = fields
+
+
+class SupportTicketTypeInputSerializer(serializers.Serializer):
+    """Admin input serializer for dynamic ticket types."""
+
+    code = serializers.SlugField(max_length=80)
+    title = serializers.CharField(max_length=180)
+    description = serializers.CharField(required=False, allow_blank=True, default="")
+    default_department_id = serializers.PrimaryKeyRelatedField(queryset=SupportDepartment.all_objects.all(), source="default_department", required=False, allow_null=True)
+    default_category_id = serializers.PrimaryKeyRelatedField(queryset=SupportCategory.all_objects.all(), source="default_category", required=False, allow_null=True)
+    default_priority = serializers.CharField(required=False, default="normal")
+    default_severity = serializers.CharField(required=False, default="minor")
+    default_sla_policy_id = serializers.PrimaryKeyRelatedField(queryset=SupportSLAPolicy.all_objects.all(), source="default_sla_policy", required=False, allow_null=True)
+    order = serializers.IntegerField(required=False, min_value=0, default=0)
+    is_active = serializers.BooleanField(required=False)
 
 
 class SupportTicketMessageSerializer(serializers.ModelSerializer):
@@ -80,6 +177,14 @@ class SupportTicketMessageSerializer(serializers.ModelSerializer):
     def get_author_display(self, obj: SupportTicketMessage) -> str:
         """Return safe display name for a message author."""
         return getattr(obj.author, "full_name", "") or str(obj.author)
+
+
+class SupportAdminTicketMessageSerializer(SupportTicketMessageSerializer):
+    """Admin timeline serializer including internal note visibility."""
+
+    class Meta(SupportTicketMessageSerializer.Meta):
+        fields = (*SupportTicketMessageSerializer.Meta.fields, "author_id", "is_internal", "metadata")
+        read_only_fields = fields
 
 
 class SupportTicketAttachmentSerializer(serializers.ModelSerializer):
@@ -166,6 +271,26 @@ class SupportTicketDetailSerializer(SupportTicketListSerializer):
         read_only_fields = fields
 
 
+class SupportAdminTicketDetailSerializer(SupportTicketDetailSerializer):
+    """Admin ticket detail serializer including internal timeline data."""
+
+    messages = SupportAdminTicketMessageSerializer(many=True, read_only=True)
+
+    class Meta(SupportTicketDetailSerializer.Meta):
+        fields = (
+            *SupportTicketDetailSerializer.Meta.fields,
+            "owner_id",
+            "assigned_to_id",
+            "applied_sla_policy_id",
+            "internal_note_count",
+            "escalated_at",
+            "escalated_by_id",
+            "escalation_reason",
+            "search_document",
+        )
+        read_only_fields = fields
+
+
 class SupportTicketCreateUpdateSerializer(serializers.Serializer):
     """Input serializer for creating/updating user tickets."""
 
@@ -190,7 +315,7 @@ class SupportTicketCreateUpdateSerializer(serializers.Serializer):
 
 
 class SupportTicketReplySerializer(serializers.Serializer):
-    """Input serializer for user replies."""
+    """Input serializer for user/admin replies."""
 
     body = serializers.CharField()
 
@@ -222,6 +347,33 @@ class SupportTicketReopenSerializer(serializers.Serializer):
     reason = serializers.CharField(required=False, allow_blank=True, default="")
 
 
+class SupportAdminAssignSerializer(serializers.Serializer):
+    """Admin input serializer for assignment."""
+
+    assignee_id = serializers.PrimaryKeyRelatedField(queryset=SupportDepartment._meta.get_field("default_assignee").remote_field.model.objects.all(), source="assignee", required=False, allow_null=True)
+    department_id = serializers.PrimaryKeyRelatedField(queryset=SupportDepartment.all_objects.all(), source="department", required=False, allow_null=True)
+    reason = serializers.CharField(required=False, allow_blank=True, default="")
+
+
+class SupportAdminStatusSerializer(serializers.Serializer):
+    """Admin input serializer for status changes."""
+
+    status = serializers.CharField()
+    reason = serializers.CharField(required=False, allow_blank=True, default="")
+
+    def validate_status(self, value: str) -> str:
+        """Validate ticket status without schema enum collisions."""
+        if value not in TicketStatus.values:
+            raise serializers.ValidationError("وضعیت تیکت نامعتبر است.")
+        return value
+
+
+class SupportAdminReasonSerializer(serializers.Serializer):
+    """Admin input serializer for reason-based actions."""
+
+    reason = serializers.CharField(required=False, allow_blank=True, default="")
+
+
 class SupportTicketSuggestSerializer(serializers.Serializer):
     """Input serializer for smart triage suggestions."""
 
@@ -244,6 +396,47 @@ class SupportTriageSuggestionSerializer(serializers.Serializer):
     similar_ticket_ids = serializers.ListField(child=serializers.IntegerField())
     reason_codes = serializers.ListField(child=serializers.CharField())
     score = serializers.IntegerField()
+
+
+class SupportCannedResponseSerializer(serializers.ModelSerializer):
+    """Admin canned response serializer."""
+
+    department = SupportDepartmentSerializer(read_only=True)
+    category = SupportCategorySerializer(read_only=True)
+
+    class Meta:
+        model = SupportCannedResponse
+        fields = ("id", "department", "category", "title", "body", "usage_count", "is_active", "created_at", "updated_at")
+        read_only_fields = fields
+
+
+class SupportCannedResponseInputSerializer(serializers.Serializer):
+    """Admin input serializer for canned responses."""
+
+    department_id = serializers.PrimaryKeyRelatedField(queryset=SupportDepartment.all_objects.all(), source="department", required=False, allow_null=True)
+    category_id = serializers.PrimaryKeyRelatedField(queryset=SupportCategory.all_objects.all(), source="category", required=False, allow_null=True)
+    title = serializers.CharField(max_length=180)
+    body = serializers.CharField()
+    is_active = serializers.BooleanField(required=False)
+
+
+class SupportDuplicateCandidateSerializer(serializers.ModelSerializer):
+    """Admin duplicate candidate serializer."""
+
+    ticket_number = serializers.CharField(source="ticket.ticket_number", read_only=True)
+    candidate_ticket_number = serializers.CharField(source="candidate_ticket.ticket_number", read_only=True)
+
+    class Meta:
+        model = SupportDuplicateCandidate
+        fields = ("id", "ticket_id", "ticket_number", "candidate_ticket_id", "candidate_ticket_number", "score", "reason", "status", "reviewed_by_id", "reviewed_at", "created_at")
+        read_only_fields = fields
+
+
+class SupportDuplicateReviewSerializer(serializers.Serializer):
+    """Admin duplicate review input serializer."""
+
+    status = serializers.CharField()
+    reason = serializers.CharField(required=False, allow_blank=True, default="")
 
 
 class SupportAttachmentVisibilityGuardSerializer(serializers.Serializer):
