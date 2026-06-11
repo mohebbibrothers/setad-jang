@@ -402,3 +402,156 @@ def update_lesson_progress(
     locked_enrollment.save(update_fields=["last_accessed_lesson", "updated_at"])
     _sync_enrollment_progress(enrollment=locked_enrollment)
     return progress
+
+
+# ============================================================
+# Lesson Q&A / Discussion
+# ============================================================
+
+
+class LMSDiscussionAccessError(LMSServiceError):
+    """Raised when a user cannot interact with a lesson discussion."""
+
+
+class LMSDiscussionModerationError(LMSServiceError):
+    """Raised when a discussion moderation action is invalid."""
+
+
+def ensure_user_enrolled_for_lesson(*, user: Any, lesson: Lesson) -> Enrollment:
+    """Return active/completed enrollment that allows discussion access for a lesson."""
+    enrollment = Enrollment.objects.filter(
+        user=user,
+        course=lesson.course,
+        status__in=[EnrollmentStatus.ACTIVE, EnrollmentStatus.COMPLETED],
+    ).first()
+    if enrollment is None:
+        raise LMSDiscussionAccessError("برای مشارکت در پرسش‌وپاسخ باید در این کلاس ثبت‌نام کرده باشید.")
+    return enrollment
+
+
+@transaction.atomic
+def create_lesson_question(*, lesson: Lesson, user: Any, title: str, body: str):
+    """Create an immediately visible lesson question for an enrolled user."""
+    from apps.lms.choices import DiscussionStatus
+    from apps.lms.models import LessonQuestion
+
+    ensure_user_enrolled_for_lesson(user=user, lesson=lesson)
+    question = LessonQuestion.objects.create(
+        lesson=lesson,
+        user=user,
+        title=title.strip(),
+        body=body.strip(),
+        status=DiscussionStatus.VISIBLE,
+        last_activity_at=timezone.now(),
+    )
+    return question
+
+
+@transaction.atomic
+def create_lesson_answer(*, question, user: Any, body: str, is_instructor_answer: bool = False):
+    """Create an answer under a lesson question and update counters/activity."""
+    from apps.lms.choices import DiscussionStatus
+    from apps.lms.models import LessonAnswer
+
+    ensure_user_enrolled_for_lesson(user=user, lesson=question.lesson)
+    answer = LessonAnswer.objects.create(
+        question=question,
+        user=user,
+        body=body.strip(),
+        status=DiscussionStatus.VISIBLE,
+        is_instructor_answer=is_instructor_answer,
+    )
+    question.answer_count = question.answers.filter(status=DiscussionStatus.VISIBLE).count()
+    question.last_activity_at = timezone.now()
+    question.save(update_fields=["answer_count", "last_activity_at", "updated_at"])
+    return answer
+
+
+@transaction.atomic
+def accept_lesson_answer(*, question, answer, user: Any):
+    """Mark an answer as accepted by question owner or admin/staff."""
+    if answer.question_id != question.pk:
+        raise LMSDiscussionModerationError("این پاسخ متعلق به سؤال انتخاب‌شده نیست.")
+    is_admin = bool(getattr(user, "is_staff", False) or getattr(user, "is_superuser", False) or getattr(user, "role", "") == "admin")
+    if question.user_id != user.pk and not is_admin:
+        raise LMSDiscussionAccessError("فقط صاحب سؤال یا ادمین می‌تواند پاسخ را تأیید کند.")
+    question.answers.update(is_accepted=False)
+    answer.is_accepted = True
+    answer.save(update_fields=["is_accepted", "updated_at"])
+    question.is_answered = True
+    question.save(update_fields=["is_answered", "updated_at"])
+    return answer
+
+
+@transaction.atomic
+def report_lesson_question(*, question, reported_by: Any, reason: str, description: str = ""):
+    """Report a question for admin moderation."""
+    from apps.lms.models import LessonDiscussionReport
+
+    ensure_user_enrolled_for_lesson(user=reported_by, lesson=question.lesson)
+    return LessonDiscussionReport.objects.create(
+        question=question,
+        reported_by=reported_by,
+        reason=reason.strip(),
+        description=description.strip(),
+    )
+
+
+@transaction.atomic
+def report_lesson_answer(*, answer, reported_by: Any, reason: str, description: str = ""):
+    """Report an answer for admin moderation."""
+    from apps.lms.models import LessonDiscussionReport
+
+    ensure_user_enrolled_for_lesson(user=reported_by, lesson=answer.question.lesson)
+    return LessonDiscussionReport.objects.create(
+        answer=answer,
+        reported_by=reported_by,
+        reason=reason.strip(),
+        description=description.strip(),
+    )
+
+
+@transaction.atomic
+def moderate_lesson_question(*, question, status: str, is_pinned: bool | None = None) -> Any:
+    """Admin moderation for a question."""
+    from apps.lms.choices import DiscussionStatus
+
+    if status not in DiscussionStatus.values:
+        raise LMSDiscussionModerationError("وضعیت گفتگو نامعتبر است.")
+    question.status = status
+    if is_pinned is not None:
+        question.is_pinned = is_pinned
+    question.save(update_fields=["status", "is_pinned", "updated_at"])
+    return question
+
+
+@transaction.atomic
+def moderate_lesson_answer(*, answer, status: str, is_accepted: bool | None = None) -> Any:
+    """Admin moderation for an answer."""
+    from apps.lms.choices import DiscussionStatus
+
+    if status not in DiscussionStatus.values:
+        raise LMSDiscussionModerationError("وضعیت گفتگو نامعتبر است.")
+    answer.status = status
+    if is_accepted is not None:
+        if is_accepted:
+            answer.question.answers.update(is_accepted=False)
+            answer.question.is_answered = True
+            answer.question.save(update_fields=["is_answered", "updated_at"])
+        answer.is_accepted = is_accepted
+    answer.save(update_fields=["status", "is_accepted", "updated_at"])
+    return answer
+
+
+@transaction.atomic
+def review_discussion_report(*, report, reviewed_by: Any, status: str) -> Any:
+    """Mark a discussion report as reviewed/rejected."""
+    from apps.lms.choices import DiscussionReportStatus
+
+    if status not in DiscussionReportStatus.values:
+        raise LMSDiscussionModerationError("وضعیت گزارش نامعتبر است.")
+    report.status = status
+    report.reviewed_by = reviewed_by
+    report.reviewed_at = timezone.now()
+    report.save(update_fields=["status", "reviewed_by", "reviewed_at", "updated_at"])
+    return report

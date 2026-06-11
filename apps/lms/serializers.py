@@ -2,7 +2,18 @@
 
 from rest_framework import serializers
 
-from apps.lms.models import Course, Enrollment, Lesson, LessonProgress, LMSCategory, LMSUserSkill
+from apps.lms.choices import DiscussionReportStatus, DiscussionStatus
+from apps.lms.models import (
+    Course,
+    Enrollment,
+    Lesson,
+    LessonAnswer,
+    LessonDiscussionReport,
+    LessonProgress,
+    LessonQuestion,
+    LMSCategory,
+    LMSUserSkill,
+)
 
 
 class LMSCategorySerializer(serializers.ModelSerializer):
@@ -235,3 +246,135 @@ class EnrollmentDetailSerializer(EnrollmentSerializer):
 
     class Meta(EnrollmentSerializer.Meta):
         fields = (*EnrollmentSerializer.Meta.fields, "last_accessed_lesson_id", "lesson_progress")
+
+
+class LessonAnswerSerializer(serializers.ModelSerializer):
+    """Output serializer for lesson answers."""
+
+    user_id = serializers.IntegerField(read_only=True)
+    user_display = serializers.SerializerMethodField()
+
+    class Meta:
+        model = LessonAnswer
+        fields = (
+            "id",
+            "user_id",
+            "user_display",
+            "body",
+            "status",
+            "is_instructor_answer",
+            "is_accepted",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = fields
+
+    def get_user_display(self, obj) -> str:
+        """Return safe display name for answer author."""
+        return getattr(obj.user, "full_name", "") or getattr(obj.user, "email", "کاربر")
+
+
+class LessonQuestionSerializer(serializers.ModelSerializer):
+    """Output serializer for lesson questions with nested visible answers."""
+
+    user_id = serializers.IntegerField(read_only=True)
+    user_display = serializers.SerializerMethodField()
+    answers = LessonAnswerSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = LessonQuestion
+        fields = (
+            "id",
+            "lesson_id",
+            "user_id",
+            "user_display",
+            "title",
+            "body",
+            "status",
+            "is_pinned",
+            "is_answered",
+            "answer_count",
+            "last_activity_at",
+            "answers",
+            "created_at",
+        )
+        read_only_fields = fields
+
+    def get_user_display(self, obj) -> str:
+        """Return safe display name for question author."""
+        return getattr(obj.user, "full_name", "") or getattr(obj.user, "email", "کاربر")
+
+
+class LessonQuestionCreateSerializer(serializers.Serializer):
+    """Input serializer for creating a lesson question."""
+
+    title = serializers.CharField(max_length=255)
+    body = serializers.CharField()
+
+    def validate_title(self, value: str) -> str:
+        """Require meaningful question title."""
+        value = value.strip()
+        if len(value) < 5:
+            raise serializers.ValidationError("عنوان سؤال باید حداقل ۵ کاراکتر باشد.")
+        return value
+
+    def validate_body(self, value: str) -> str:
+        """Require meaningful question body."""
+        value = value.strip()
+        if len(value) < 10:
+            raise serializers.ValidationError("متن سؤال باید حداقل ۱۰ کاراکتر باشد.")
+        return value
+
+
+class LessonAnswerCreateSerializer(serializers.Serializer):
+    """Input serializer for creating a lesson answer."""
+
+    body = serializers.CharField()
+
+    def validate_body(self, value: str) -> str:
+        """Require meaningful answer body."""
+        value = value.strip()
+        if len(value) < 5:
+            raise serializers.ValidationError("متن پاسخ باید حداقل ۵ کاراکتر باشد.")
+        return value
+
+
+class DiscussionReportCreateSerializer(serializers.Serializer):
+    """Input serializer for reporting a question or answer."""
+
+    reason = serializers.CharField(max_length=150)
+    description = serializers.CharField(required=False, allow_blank=True, default="")
+
+
+class DiscussionModerationSerializer(serializers.Serializer):
+    """Input serializer for admin discussion moderation."""
+
+    status = serializers.ChoiceField(choices=DiscussionStatus.choices)
+    is_pinned = serializers.BooleanField(required=False)
+    is_accepted = serializers.BooleanField(required=False)
+
+
+class DiscussionReportReviewSerializer(serializers.Serializer):
+    """Input serializer for admin report review."""
+
+    status = serializers.ChoiceField(choices=DiscussionReportStatus.choices)
+
+
+class DiscussionReportSerializer(serializers.ModelSerializer):
+    """Output serializer for discussion reports."""
+
+    class Meta:
+        model = LessonDiscussionReport
+        fields = (
+            "id",
+            "question_id",
+            "answer_id",
+            "reported_by_id",
+            "reason",
+            "description",
+            "status",
+            "reviewed_by_id",
+            "reviewed_at",
+            "created_at",
+        )
+        read_only_fields = fields

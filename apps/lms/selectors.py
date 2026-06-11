@@ -111,3 +111,61 @@ def get_user_enrollment_for_course(*, user_id: int, course_id: int) -> Enrollmen
 def get_lesson_for_progress(*, lesson_id: int) -> Lesson | None:
     """Return an active lesson with course for progress updates."""
     return Lesson.objects.select_related("course").filter(pk=lesson_id, is_active=True).first()
+
+
+def get_lesson_questions(*, lesson_id: int) -> QuerySet:
+    """Return visible/flagged questions for a lesson with visible answers prefetched."""
+    from django.db.models import Prefetch
+
+    from apps.lms.choices import DiscussionStatus
+    from apps.lms.models import LessonAnswer, LessonQuestion
+
+    return (
+        LessonQuestion.objects.filter(
+            lesson_id=lesson_id,
+            status__in=[DiscussionStatus.VISIBLE, DiscussionStatus.FLAGGED],
+        )
+        .select_related("user", "lesson", "lesson__course")
+        .prefetch_related(
+            Prefetch(
+                "answers",
+                queryset=LessonAnswer.objects.filter(
+                    status__in=[DiscussionStatus.VISIBLE, DiscussionStatus.FLAGGED],
+                ).select_related("user"),
+            )
+        )
+        .order_by("-is_pinned", "-last_activity_at")
+    )
+
+
+def get_lesson_question_by_id(*, question_id: int):
+    """Return a question by id with relations loaded."""
+    from apps.lms.models import LessonQuestion
+
+    return (
+        LessonQuestion.objects.select_related("user", "lesson", "lesson__course")
+        .prefetch_related("answers__user")
+        .filter(pk=question_id)
+        .first()
+    )
+
+
+def get_lesson_answer_by_id(*, answer_id: int):
+    """Return an answer by id with question/lesson relations."""
+    from apps.lms.models import LessonAnswer
+
+    return LessonAnswer.objects.select_related("question", "question__lesson", "user").filter(pk=answer_id).first()
+
+
+def get_admin_discussion_reports() -> QuerySet:
+    """Return discussion reports for admin moderation."""
+    from apps.lms.models import LessonDiscussionReport
+
+    return LessonDiscussionReport.objects.select_related(
+        "reported_by", "reviewed_by", "question", "answer"
+    ).order_by("-created_at")
+
+
+def get_admin_discussion_report_by_id(*, report_id: int):
+    """Return one discussion report for admin moderation."""
+    return get_admin_discussion_reports().filter(pk=report_id).first()

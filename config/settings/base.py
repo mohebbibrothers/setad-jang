@@ -486,6 +486,8 @@ SPECTACULAR_SETTINGS = {
         "LMSCourseLevelEnum": "apps.lms.choices.CourseLevel",
         "LMSCourseStatusEnum": "apps.lms.choices.CourseStatus",
         "LMSEnrollmentStatusEnum": "apps.lms.choices.EnrollmentStatus",
+        "LMSDiscussionStatusEnum": "apps.lms.choices.DiscussionStatus",
+        "LMSDiscussionReportStatusEnum": "apps.lms.choices.DiscussionReportStatus",
         "LMSBadgeLevelEnum": "apps.lms.choices.BadgeLevel",
         "HealthStatusEnum": ("ok", "error", "degraded"),
     },
