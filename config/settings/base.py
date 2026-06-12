@@ -67,6 +67,7 @@ LOCAL_APPS = [
     "apps.lms.apps.LMSConfig",
     "apps.kindness_wall.apps.KindnessWallConfig",
     "apps.support_desk.apps.SupportDeskConfig",
+    "apps.notifications.apps.NotificationsConfig",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -801,6 +802,9 @@ CELERY_TASK_ROUTES = {
         "queue": "default",
     },
     "apps.support_desk.tasks.daily_support_digest_task": {
+        "queue": "default",
+    },
+    "apps.notifications.tasks.dispatch_notification_event_task": {
         "queue": "default",
     },
 }

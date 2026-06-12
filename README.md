@@ -11,7 +11,7 @@
   <img alt="PostgreSQL" src="https://img.shields.io/badge/PostgreSQL-production-4169E1?style=for-the-badge&logo=postgresql&logoColor=white" />
   <img alt="Redis" src="https://img.shields.io/badge/Redis-cache%20%2B%20broker-DC382D?style=for-the-badge&logo=redis&logoColor=white" />
   <img alt="Celery" src="https://img.shields.io/badge/Celery-worker%20%2B%20beat-37814A?style=for-the-badge&logo=celery&logoColor=white" />
-  <img alt="Tests" src="https://img.shields.io/badge/tests-1073%2B%20passed-brightgreen?style=for-the-badge" />
+  <img alt="Tests" src="https://img.shields.io/badge/tests-1082%2B%20passed-brightgreen?style=for-the-badge" />
   <img alt="Security" src="https://img.shields.io/badge/security-pip--audit%20%2B%20bandit%20%2B%20detect--secrets-blue?style=for-the-badge" />
 </p>
 
@@ -87,7 +87,7 @@ python manage.py check                           ✅ No issues
 python manage.py check --deploy                  ✅ No issues
 python manage.py makemigrations --check --dry-run ✅ No changes detected
 python manage.py spectacular --validate          ✅ Clean OpenAPI schema
-python -m pytest with coverage gate                              ✅ 1073+ passed
+python -m pytest with coverage gate                              ✅ 1082+ passed
 ```
 
 Policyهای enforced:
@@ -939,6 +939,46 @@ apps.support_desk.tasks.daily_support_digest_task
 
 ---
 
+
+## Apex Notification Engine
+
+Apex A2 یک notification engine مشترک اضافه کرده است:
+
+```text
+apps/notifications/
+```
+
+قابلیت‌ها:
+
+```text
+NotificationTemplate
+NotificationEvent
+NotificationDelivery
+NotificationPreference
+channel abstraction: in_app, email, sms, webhook
+service-layer event creation and dispatch
+Celery async dispatch task
+user inbox APIs
+user preferences
+admin event/delivery/template inspection
+provider integration with Django email and configured SMS adapter
+```
+
+API summary:
+
+```text
+GET  /api/v1/notifications/me/
+POST /api/v1/notifications/me/{id}/read/
+POST /api/v1/notifications/me/read-all/
+GET  /api/v1/notifications/me/preferences/
+POST /api/v1/notifications/me/preferences/
+GET  /api/v1/notifications/admin/events/
+GET  /api/v1/notifications/admin/deliveries/
+GET  /api/v1/notifications/admin/templates/
+```
+
+این engine برای اتصال رویدادهای Support Desk، Kindness Wall، LMS، Madadkar، R4J، Tabyin و Auth آماده است.
+
 ## 18. Redis / Cache / Celery / Observability
 
 ### Redis
@@ -990,6 +1030,7 @@ Madadkar expired campaign close every 10 min
 Support SLA breach detection every 5 min
 Support stale draft cleanup daily
 Support daily digest daily
+Notification event async dispatch
 ```
 
 ### Structured logging

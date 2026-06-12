@@ -135,6 +135,11 @@ api_v1_urlpatterns = [
         "api/v1/support/",
         include(("apps.support_desk.urls", "support_desk"), namespace="support_desk"),
     ),
+    # ── Notifications ───────────────────────────────────────
+    path(
+        "api/v1/notifications/",
+        include(("apps.notifications.urls", "notifications"), namespace="notifications"),
+    ),
 ]
 
 # ============================================================
