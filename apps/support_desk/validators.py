@@ -4,12 +4,15 @@ from pathlib import Path
 
 from django.core.exceptions import ValidationError
 
+from apps.core.file_security import validate_uploaded_file_security
+
 ALLOWED_ATTACHMENT_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".pdf", ".txt", ".doc", ".docx", ".xlsx"}
 MAX_ATTACHMENT_SIZE_BYTES = 10 * 1024 * 1024
 
 
 def validate_attachment_extension(file_obj) -> None:
     """Validate support attachment file extension."""
+    validate_uploaded_file_security(file_obj)
     extension = Path(file_obj.name or "").suffix.lower()
     if extension not in ALLOWED_ATTACHMENT_EXTENSIONS:
         raise ValidationError("پسوند فایل ضمیمه مجاز نیست.")

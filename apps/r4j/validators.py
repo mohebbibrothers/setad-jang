@@ -27,6 +27,8 @@ from typing import Final
 from django.core.exceptions import ValidationError
 from django.utils.text import slugify
 
+from apps.core.file_security import validate_uploaded_file_security
+
 # ============================================================
 # Constants — Bounty
 # ============================================================
@@ -248,6 +250,7 @@ def validate_photo_extension(value: object) -> None:
     Raises:
         ValidationError: اگر پسوند غیرمجاز باشد.
     """
+    validate_uploaded_file_security(value)
     if hasattr(value, "name") and value.name:
         ext = os.path.splitext(value.name)[1].lower()
         if ext not in PHOTO_ALLOWED_EXTENSIONS:
@@ -293,6 +296,7 @@ def validate_attachment_extension(value: object) -> None:
     Raises:
         ValidationError: اگر پسوند غیرمجاز باشد.
     """
+    validate_uploaded_file_security(value)
     if hasattr(value, "name") and value.name:
         ext = os.path.splitext(value.name)[1].lower()
         if ext not in ATTACHMENT_ALLOWED_EXTENSIONS:

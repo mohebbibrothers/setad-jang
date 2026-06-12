@@ -163,6 +163,34 @@ STATICFILES_DIRS = [BASE_DIR / "static"]
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
+MEDIA_STORAGE_BACKEND = config("MEDIA_STORAGE_BACKEND", default="local").strip().lower()
+FILE_SCAN_PROVIDER = config("FILE_SCAN_PROVIDER", default="extension_blocklist").strip().lower()
+
+AWS_ACCESS_KEY_ID = config("AWS_ACCESS_KEY_ID", default="")
+AWS_SECRET_ACCESS_KEY = config("AWS_SECRET_ACCESS_KEY", default="")
+AWS_STORAGE_BUCKET_NAME = config("AWS_STORAGE_BUCKET_NAME", default="")
+AWS_S3_REGION_NAME = config("AWS_S3_REGION_NAME", default="")
+AWS_S3_ENDPOINT_URL = config("AWS_S3_ENDPOINT_URL", default="")
+AWS_S3_CUSTOM_DOMAIN = config("AWS_S3_CUSTOM_DOMAIN", default="")
+AWS_S3_OBJECT_PARAMETERS = {"CacheControl": "max-age=86400"}
+AWS_QUERYSTRING_AUTH = True
+AWS_DEFAULT_ACL = None
+
+if MEDIA_STORAGE_BACKEND == "s3":
+    STORAGES = {
+        "default": {"BACKEND": "apps.core.storage.PrivateMediaStorage"},
+        "public_media": {"BACKEND": "apps.core.storage.PublicMediaStorage"},
+        "private_media": {"BACKEND": "apps.core.storage.PrivateMediaStorage"},
+        "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
+    }
+else:
+    STORAGES = {
+        "default": {"BACKEND": "apps.core.storage.LocalPublicMediaStorage"},
+        "public_media": {"BACKEND": "apps.core.storage.LocalPublicMediaStorage"},
+        "private_media": {"BACKEND": "apps.core.storage.LocalPrivateMediaStorage"},
+        "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
+    }
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # ============================================================================

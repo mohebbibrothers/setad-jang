@@ -11,7 +11,7 @@
   <img alt="PostgreSQL" src="https://img.shields.io/badge/PostgreSQL-production-4169E1?style=for-the-badge&logo=postgresql&logoColor=white" />
   <img alt="Redis" src="https://img.shields.io/badge/Redis-cache%20%2B%20broker-DC382D?style=for-the-badge&logo=redis&logoColor=white" />
   <img alt="Celery" src="https://img.shields.io/badge/Celery-worker%20%2B%20beat-37814A?style=for-the-badge&logo=celery&logoColor=white" />
-  <img alt="Tests" src="https://img.shields.io/badge/tests-1037%2B%20passed-brightgreen?style=for-the-badge" />
+  <img alt="Tests" src="https://img.shields.io/badge/tests-1043%2B%20passed-brightgreen?style=for-the-badge" />
   <img alt="Security" src="https://img.shields.io/badge/security-pip--audit%20%2B%20bandit%20%2B%20detect--secrets-blue?style=for-the-badge" />
 </p>
 
@@ -86,7 +86,7 @@ python manage.py check                           ✅ No issues
 python manage.py check --deploy                  ✅ No issues
 python manage.py makemigrations --check --dry-run ✅ No changes detected
 python manage.py spectacular --validate          ✅ Clean OpenAPI schema
-python -m pytest -q                              ✅ 1037+ passed
+python -m pytest -q                              ✅ 1043+ passed
 ```
 
 Policyهای enforced:
@@ -1128,6 +1128,27 @@ Celery worker + beat
 Flower protected or internal-only
 Docker healthcheck readiness
 backup/restore policy
+```
+
+### Media / Object Storage / CDN
+
+```text
+MEDIA_STORAGE_BACKEND=local برای development
+MEDIA_STORAGE_BACKEND=s3 برای production/MinIO/S3
+public_media storage برای فایل‌های public و CDN-friendly
+private_media storage برای فایل‌های private با signed URL
+AWS_S3_CUSTOM_DOMAIN برای CDN domain
+FILE_SCAN_PROVIDER=extension_blocklist به‌عنوان baseline security scanner
+```
+
+برای LMS، ویدیوها و فایل‌های حجیم نباید در production از خود Django سرو شوند. مسیر حرفه‌ای:
+
+```text
+Django metadata/permission را مدیریت می‌کند
+Object Storage فایل را نگه می‌دارد
+CDN فایل‌های public/heavy را تحویل می‌دهد
+Private files با signed URL تحویل می‌شوند
+Worker/Celery برای scan/cleanup/processing قابل استفاده است
 ```
 
 ### Providers
