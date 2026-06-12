@@ -350,6 +350,25 @@ def check_tabyin_sync() -> dict[str, Any]:
         }
 
 
+# ─── Provider Readiness Diagnostics ─────────────────────────
+
+
+def check_provider_readiness() -> dict[str, Any]:
+    """Return non-critical external provider readiness diagnostics."""
+    try:
+        from apps.core.provider_readiness import get_provider_readiness_summary
+
+        summary = get_provider_readiness_summary()
+        all_ready = all(item["ready"] for item in summary.values())
+        return {
+            "status": STATUS_OK if all_ready else STATUS_DEGRADED,
+            "providers": summary,
+        }
+    except Exception as exc:
+        logger.exception("Provider readiness health check failed error_type=%s", type(exc).__name__)
+        return {"status": STATUS_ERROR, "detail": _safe_error_detail(exc)}
+
+
 # ─── Aggregate Result ───────────────────────────────────────
 
 
@@ -385,4 +404,5 @@ def build_detailed_checks() -> dict[str, dict[str, Any]]:
     return {
         **build_readiness_checks(),
         "tabyin_sync": check_tabyin_sync(),
+        "provider_readiness": check_provider_readiness(),
     }

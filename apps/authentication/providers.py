@@ -20,8 +20,9 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
-from typing import Final
+from typing import Any, Final
 
+import requests
 from django.conf import settings
 from django.core.mail import send_mail
 
@@ -33,6 +34,7 @@ _LEGACY_PROVIDER_SMS: Final[str] = "sms"
 
 _EMAIL_BACKEND_DJANGO: Final[str] = "django_email"
 _SMS_BACKEND_CONSOLE: Final[str] = "console"
+_SMS_BACKEND_HTTP: Final[str] = "http"
 
 
 # ============================================================
@@ -181,6 +183,64 @@ class ConsoleSMSOTPProvider(OTPDeliveryProvider):
         return True
 
 
+class HTTPAPIOTPProvider(OTPDeliveryProvider):
+    """Generic HTTP SMS provider ready for licensed SMS vendors.
+
+    The adapter is intentionally configuration-driven. Many SMS panels accept a
+    JSON POST payload with recipient/message/sender and an API token. If a future
+    licensed vendor needs a custom shape, a small adapter can be added while the
+    OTP service contract remains unchanged.
+    """
+
+    channel = _CHANNEL_PHONE
+    provider_name = _SMS_BACKEND_HTTP
+
+    def _build_message(self, code: str, purpose: str) -> str:
+        """Build a concise SMS body."""
+        return f"کد تأیید ستاد جنگ: {code}\nاعتبار: ۵ دقیقه"
+
+    def _build_payload(self, *, recipient: str, code: str, purpose: str) -> dict[str, Any]:
+        """Build generic provider payload."""
+        return {
+            "to": recipient,
+            "message": self._build_message(code, purpose),
+            "sender": getattr(settings, "SMS_SENDER", ""),
+            "purpose": purpose,
+        }
+
+    def send(self, recipient: str, code: str, purpose: str) -> bool:
+        """Send SMS OTP through a configured HTTP API."""
+        api_url = getattr(settings, "SMS_API_URL", "")
+        api_key = getattr(settings, "SMS_API_KEY", "")
+        timeout = getattr(settings, "SMS_TIMEOUT_SECONDS", 10)
+        if not api_url or not api_key:
+            raise OTPDeliveryFailedError("SMS HTTP provider is not configured.")
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        }
+        try:
+            response = requests.post(
+                api_url,
+                json=self._build_payload(recipient=recipient, code=code, purpose=purpose),
+                headers=headers,
+                timeout=timeout,
+            )
+        except requests.RequestException as exc:
+            logger.warning("SMS HTTP provider network failure recipient=%s error=%s", recipient, exc)
+            raise OTPDeliveryFailedError("SMS HTTP provider request failed.") from exc
+        if response.status_code >= 400:
+            logger.warning(
+                "SMS HTTP provider rejected request recipient=%s status=%s body=%s",
+                recipient,
+                response.status_code,
+                response.text[:200],
+            )
+            raise OTPDeliveryFailedError("SMS HTTP provider rejected request.")
+        logger.info("OTP SMS delivered recipient=%s purpose=%s provider=%s", recipient, purpose, self.provider_name)
+        return True
+
+
 # ============================================================
 # Factory helpers
 # ============================================================
@@ -229,6 +289,8 @@ def get_sms_otp_provider() -> OTPDeliveryProvider:
 
     if provider_backend == _SMS_BACKEND_CONSOLE:
         return ConsoleSMSOTPProvider()
+    if provider_backend == _SMS_BACKEND_HTTP:
+        return HTTPAPIOTPProvider()
 
     raise UnsupportedOTPProviderError(
         f"Unsupported SMS OTP provider backend: {provider_backend}",

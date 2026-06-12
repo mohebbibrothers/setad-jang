@@ -11,7 +11,7 @@
   <img alt="PostgreSQL" src="https://img.shields.io/badge/PostgreSQL-production-4169E1?style=for-the-badge&logo=postgresql&logoColor=white" />
   <img alt="Redis" src="https://img.shields.io/badge/Redis-cache%20%2B%20broker-DC382D?style=for-the-badge&logo=redis&logoColor=white" />
   <img alt="Celery" src="https://img.shields.io/badge/Celery-worker%20%2B%20beat-37814A?style=for-the-badge&logo=celery&logoColor=white" />
-  <img alt="Tests" src="https://img.shields.io/badge/tests-1043%2B%20passed-brightgreen?style=for-the-badge" />
+  <img alt="Tests" src="https://img.shields.io/badge/tests-1052%2B%20passed-brightgreen?style=for-the-badge" />
   <img alt="Security" src="https://img.shields.io/badge/security-pip--audit%20%2B%20bandit%20%2B%20detect--secrets-blue?style=for-the-badge" />
 </p>
 
@@ -86,7 +86,7 @@ python manage.py check                           ✅ No issues
 python manage.py check --deploy                  ✅ No issues
 python manage.py makemigrations --check --dry-run ✅ No changes detected
 python manage.py spectacular --validate          ✅ Clean OpenAPI schema
-python -m pytest -q                              ✅ 1043+ passed
+python -m pytest -q                              ✅ 1052+ passed
 ```
 
 Policyهای enforced:
@@ -354,7 +354,7 @@ GET /api/v1/health/ready/
 GET /api/v1/health/detailed/
 ```
 
-Health checks شامل database/cache/Celery-relevant dependencies است و secret-safe طراحی شده است.
+Health checks شامل database/cache/Celery-relevant dependencies است و secret-safe طراحی شده است. detailed health علاوه بر این‌ها وضعیت non-critical provider readiness مثل email/sms/payment را هم بدون ارسال واقعی پیام یا پرداخت گزارش می‌کند.
 
 ---
 
@@ -1048,13 +1048,20 @@ SMS provider واقعی به مجوز نیاز دارد. تا قبل از مجو
 - dev/test از email/console/mock استفاده می‌کند.
 - بعد از مجوز، فقط env/provider credentials باید عوض شود.
 
-هدف production readiness:
+هدف production readiness پس از اخذ مجوز:
 
-```text
+```env
 OTP_PROVIDER=sms
-SMS_PROVIDER=<licensed-provider>
+OTP_SMS_PROVIDER=http
+SMS_API_URL=https://sms-provider.example/send
 SMS_API_KEY=...
+SMS_SENDER=...
+SMS_TIMEOUT_SECONDS=10
 ```
+
+Adapter عمومی HTTP آماده است و payload استاندارد `to/message/sender/purpose` ارسال می‌کند. اگر vendor نهایی schema متفاوتی بخواهد، فقط adapter جدید اضافه می‌شود؛ OTP service و business flow تغییر نمی‌کند.
+
+Provider readiness بدون ارسال SMS واقعی قابل بررسی است و در detailed health به‌صورت diagnostic گزارش می‌شود.
 
 ### Zarinpal
 

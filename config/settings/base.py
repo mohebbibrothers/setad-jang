@@ -571,9 +571,10 @@ EMAIL_BACKEND = config(
     "EMAIL_BACKEND",
     default="apps.core.email_backends.ReadableConsoleEmailBackend",
 )
-EMAIL_HOST = config("EMAIL_HOST", default="smtp.gmail.com")
+EMAIL_HOST = config("EMAIL_HOST", default="smtp-relay.brevo.com")
 EMAIL_PORT = config("EMAIL_PORT", default=587, cast=int)
 EMAIL_USE_TLS = config("EMAIL_USE_TLS", default=True, cast=bool)
+EMAIL_TIMEOUT = config("EMAIL_TIMEOUT", default=15, cast=int)
 EMAIL_HOST_USER = config("EMAIL_HOST_USER", default="")
 EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD", default="")
 DEFAULT_FROM_EMAIL = config(
@@ -586,6 +587,12 @@ DEFAULT_FROM_EMAIL = config(
 # ============================================================================
 
 OTP_PROVIDER = config("OTP_PROVIDER", default="email")
+OTP_EMAIL_PROVIDER = config("OTP_EMAIL_PROVIDER", default="django_email")
+OTP_SMS_PROVIDER = config("OTP_SMS_PROVIDER", default="console")
+SMS_API_URL = config("SMS_API_URL", default="")
+SMS_API_KEY = config("SMS_API_KEY", default="")
+SMS_SENDER = config("SMS_SENDER", default="")
+SMS_TIMEOUT_SECONDS = config("SMS_TIMEOUT_SECONDS", default=10, cast=int)
 LOGIN_URL = "/admin/login/"
 
 # ============================================================================
