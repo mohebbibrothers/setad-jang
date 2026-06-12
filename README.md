@@ -11,7 +11,7 @@
   <img alt="PostgreSQL" src="https://img.shields.io/badge/PostgreSQL-production-4169E1?style=for-the-badge&logo=postgresql&logoColor=white" />
   <img alt="Redis" src="https://img.shields.io/badge/Redis-cache%20%2B%20broker-DC382D?style=for-the-badge&logo=redis&logoColor=white" />
   <img alt="Celery" src="https://img.shields.io/badge/Celery-worker%20%2B%20beat-37814A?style=for-the-badge&logo=celery&logoColor=white" />
-  <img alt="Tests" src="https://img.shields.io/badge/tests-1061%2B%20passed-brightgreen?style=for-the-badge" />
+  <img alt="Tests" src="https://img.shields.io/badge/tests-1067%2B%20passed-brightgreen?style=for-the-badge" />
   <img alt="Security" src="https://img.shields.io/badge/security-pip--audit%20%2B%20bandit%20%2B%20detect--secrets-blue?style=for-the-badge" />
 </p>
 
@@ -38,8 +38,9 @@
 - [17. Support Desk](#17-support-desk)
 - [18. Redis / Cache / Celery / Observability](#18-redis--cache--celery--observability)
 - [19. Providers: SMS / Payment / Email](#19-providers-sms--payment--email)
-- [20. Production Checklist](#20-production-checklist)
-- [21. فلسفه مهندسی](#21-فلسفه-مهندسی)
+- [20. Production Runbooks](#20-production-runbooks)
+- [21. Production Checklist](#21-production-checklist)
+- [22. فلسفه مهندسی](#22-فلسفه-مهندسی)
 
 ---
 
@@ -86,7 +87,7 @@ python manage.py check                           ✅ No issues
 python manage.py check --deploy                  ✅ No issues
 python manage.py makemigrations --check --dry-run ✅ No changes detected
 python manage.py spectacular --validate          ✅ Clean OpenAPI schema
-python -m pytest with coverage gate                              ✅ 1061+ passed
+python -m pytest with coverage gate                              ✅ 1067+ passed
 ```
 
 Policyهای enforced:
@@ -1109,7 +1110,37 @@ DEFAULT_FROM_EMAIL=noreply@your-domain.com
 
 ---
 
-## 20. Production Checklist
+## 20. Production Runbooks
+
+Runbookهای production در مسیر زیر هستند:
+
+```text
+docs/production/ENVIRONMENT_MATRIX.md
+docs/production/DEPLOYMENT_RUNBOOK.md
+docs/production/BACKUP_RESTORE_RUNBOOK.md
+docs/production/INCIDENT_RESPONSE_RUNBOOK.md
+docs/production/SECRET_ROTATION_RUNBOOK.md
+docs/production/RELEASE_CHECKLIST.md
+docs/production/PRODUCTION_10_10_STATUS.md
+```
+
+این اسناد پوشش می‌دهند:
+
+```text
+environment matrix
+deployment order
+rollback
+backup/restore
+incident response
+secret rotation
+release checklist
+provider go-live checklist
+production 10/10 status
+```
+
+---
+
+## 21. Production Checklist
 
 ### Security
 
@@ -1182,7 +1213,7 @@ Slow query monitoring در فاز hardening بعدی قابل تکمیل است
 
 ---
 
-## 21. فلسفه مهندسی
+## 22. فلسفه مهندسی
 
 ```text
 Correctness before speed
