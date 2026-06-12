@@ -84,6 +84,9 @@ make verify
 
 ```text
 python -m pip check                              ✅ No broken requirements
+python -m pip_audit                              ✅ No known vulnerabilities
+python -m bandit                                 ✅ Clean production SAST gate
+detect-secrets scan                              ✅ Baseline-controlled secret scan
 python -m ruff check .                           ✅ All checks passed
 python manage.py check                           ✅ No issues
 python manage.py check --deploy                  ✅ No issues
@@ -102,6 +105,9 @@ Service layer owns mutations
 Selector layer owns read queries
 Audit log for sensitive operations
 Schema validation after changes
+Dependency vulnerability scan before verify
+Bandit production SAST gate
+Detect-secrets baseline gate
 Full regression before major push
 ```
 
@@ -1304,6 +1310,9 @@ make verify
 
 ```text
 pip check
+pip-audit
+bandit production scan
+detect-secrets baseline scan
 ruff check .
 python manage.py check
 python manage.py check --deploy
@@ -1326,6 +1335,7 @@ GitHub Actions:
 - pip cache
 - dependency install
 - pip check
+- security gate: pip-audit, Bandit, detect-secrets
 - Ruff
 - Django check
 - deploy check
@@ -1370,9 +1380,11 @@ CORS محدود
 worker queueها: default,tabyin_sync,madadkar
 Celery beat فعال
 monitoring برای logs/health/flower
-Zarinpal merchant id واقعی
-MADADKAR_PAYMENT_PROVIDER=zarinpal
-SMS provider واقعی
+security gate clean در CI
+Zarinpal merchant id واقعی پس از اخذ مجوز
+MADADKAR_PAYMENT_PROVIDER=zarinpal بعد از مجوز؛ sandbox تا قبل از آن
+SMS provider واقعی پس از اخذ مجوز؛ contract/provider آماده بماند
+Email SMTP رایگان transactional با تنظیمات SMTP امن، مثل Brevo SMTP
 Object storage برای media در مقیاس production
 ```
 

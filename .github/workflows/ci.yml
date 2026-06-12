@@ -75,6 +75,9 @@ jobs:
       - name: Verify dependency graph
         run: make pip-check
 
+      - name: Security gate
+        run: make security
+
       - name: Ruff lint
         run: make lint
 

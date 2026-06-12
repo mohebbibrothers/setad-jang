@@ -95,7 +95,7 @@ def _build_filters_signature(request: Request) -> str:
 
     parts = [f"{k}={request.query_params.get(k, '')}" for k in relevant_keys]
     raw = "|".join(parts)
-    return hashlib.md5(raw.encode("utf-8")).hexdigest()[:16]
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
 
 
 # ============================================================

@@ -8,8 +8,13 @@
 ruff==0.14.4
 
 # ── Testing ────────────────────────────────────────────────
-pytest==8.3.4
+pytest==9.0.3
 pytest-django==4.9.0
 pytest-cov==6.0.0
 factory-boy==3.3.1
 responses==0.25.7
+
+# ── Security auditing ──────────────────────────────────────
+pip-audit==2.9.0
+bandit==1.9.4
+detect-secrets==1.5.0
