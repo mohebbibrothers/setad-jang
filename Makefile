@@ -21,7 +21,7 @@ PROD_CHECK_ENV := \
 	SECRET_KEY=realistic-production-secret-key-with-more-than-fifty-characters-2026 \
 	SECURE_SSL_REDIRECT=True
 
-.PHONY: help install lint check deploy-check migrations-check schema-check schema-update test pip-check pip-audit bandit secrets-scan security verify verify-fast docker-up docker-down
+.PHONY: help install lint check deploy-check migrations-check schema-check schema-update test coverage pip-check pip-audit bandit secrets-scan security verify verify-fast docker-up docker-down
 
 help:
 	@printf '%s\n' 'Setad Jang commands:'
@@ -33,6 +33,7 @@ help:
 	@printf '%s\n' '  make schema-check      Validate OpenAPI schema into /tmp'
 	@printf '%s\n' '  make schema-update     Regenerate committed schema.yaml'
 	@printf '%s\n' '  make test              Run full pytest suite'
+	@printf '%s\n' '  make coverage          Run full pytest suite with coverage threshold'
 	@printf '%s\n' '  make security          Run dependency/SAST/secrets security gate'
 	@printf '%s\n' '  make verify            Run full local/CI quality gate'
 
@@ -75,9 +76,12 @@ security: pip-audit bandit secrets-scan
 test:
 	$(PYTHON) -m pytest -q
 
+coverage:
+	$(PYTHON) -m pytest --cov=apps --cov=config --cov-report=term --cov-fail-under=82 -q
+
 verify-fast: lint check migrations-check schema-check
 
-verify: pip-check security lint check deploy-check migrations-check schema-check test
+verify: pip-check security lint check deploy-check migrations-check schema-check coverage
 
 docker-up:
 	docker-compose up --build -d

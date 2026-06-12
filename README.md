@@ -11,7 +11,7 @@
   <img alt="PostgreSQL" src="https://img.shields.io/badge/PostgreSQL-production-4169E1?style=for-the-badge&logo=postgresql&logoColor=white" />
   <img alt="Redis" src="https://img.shields.io/badge/Redis-cache%20%2B%20broker-DC382D?style=for-the-badge&logo=redis&logoColor=white" />
   <img alt="Celery" src="https://img.shields.io/badge/Celery-worker%20%2B%20beat-37814A?style=for-the-badge&logo=celery&logoColor=white" />
-  <img alt="Tests" src="https://img.shields.io/badge/tests-1052%2B%20passed-brightgreen?style=for-the-badge" />
+  <img alt="Tests" src="https://img.shields.io/badge/tests-1061%2B%20passed-brightgreen?style=for-the-badge" />
   <img alt="Security" src="https://img.shields.io/badge/security-pip--audit%20%2B%20bandit%20%2B%20detect--secrets-blue?style=for-the-badge" />
 </p>
 
@@ -86,7 +86,7 @@ python manage.py check                           ✅ No issues
 python manage.py check --deploy                  ✅ No issues
 python manage.py makemigrations --check --dry-run ✅ No changes detected
 python manage.py spectacular --validate          ✅ Clean OpenAPI schema
-python -m pytest -q                              ✅ 1052+ passed
+python -m pytest with coverage gate                              ✅ 1061+ passed
 ```
 
 Policyهای enforced:
@@ -164,7 +164,7 @@ python manage.py createsuperuser
 
 ```bash
 make test
-pytest -q
+pytest with coverage gate
 ```
 
 ---
@@ -269,7 +269,7 @@ Django check
 Django deploy check
 migration drift check
 OpenAPI validate
-full pytest
+full pytest with coverage threshold
 ```
 
 ### CI
@@ -287,7 +287,7 @@ full pytest
 - deploy check
 - migration drift check
 - OpenAPI schema validation
-- full pytest
+- full pytest with coverage threshold
 - schema artifact upload
 
 ---

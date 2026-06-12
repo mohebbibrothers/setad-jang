@@ -93,8 +93,8 @@ jobs:
       - name: OpenAPI schema validation
         run: make schema-check SCHEMA_OUTPUT=schema-ci.yaml
 
-      - name: Test suite
-        run: make test
+      - name: Test suite with coverage gate
+        run: make coverage
 
       - name: Upload validated schema artifact
         if: always()
