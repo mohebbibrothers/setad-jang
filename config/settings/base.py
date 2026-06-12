@@ -19,6 +19,8 @@ from pathlib import Path
 from celery.schedules import crontab
 from decouple import Csv, config
 
+from config.observability import bootstrap_observability
+
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 # ============================================================================
@@ -75,6 +77,7 @@ INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
 
 MIDDLEWARE = [
     "apps.core.middleware.RequestIDMiddleware",
+    "apps.core.middleware.PrometheusMetricsMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "corsheaders.middleware.CorsMiddleware",
@@ -564,8 +567,16 @@ LOGIN_URL = "/admin/login/"
 REDIS_URL = config("REDIS_URL", default="redis://127.0.0.1:6379/1")
 
 # ============================================================================
-# Logging
+# Observability / Logging
 # ============================================================================
+
+LOG_FORMAT = config("LOG_FORMAT", default="text").strip().lower()
+PROMETHEUS_METRICS_ENABLED = config("PROMETHEUS_METRICS_ENABLED", default=True, cast=bool)
+SENTRY_DSN = config("SENTRY_DSN", default="")
+SENTRY_TRACES_SAMPLE_RATE = config("SENTRY_TRACES_SAMPLE_RATE", default=0.0, cast=float)
+SENTRY_PROFILES_SAMPLE_RATE = config("SENTRY_PROFILES_SAMPLE_RATE", default=0.0, cast=float)
+OTEL_ENABLED = config("OTEL_ENABLED", default=False, cast=bool)
+OTEL_SERVICE_NAME = config("OTEL_SERVICE_NAME", default="setad-jang-api")
 
 LOGGING = {
     "version": 1,
@@ -584,11 +595,14 @@ LOGGING = {
             "format": "[{levelname}] [{request_id}] {message}",
             "style": "{",
         },
+        "json": {
+            "()": "apps.core.logging.JSONLogFormatter",
+        },
     },
     "handlers": {
         "console": {
             "class": "logging.StreamHandler",
-            "formatter": "verbose",
+            "formatter": "json" if LOG_FORMAT == "json" else "verbose",
             "filters": ["request_id"],
         },
     },
@@ -819,4 +833,17 @@ MADADKAR_ZARINPAL_SANDBOX = config(
     "MADADKAR_ZARINPAL_SANDBOX",
     default=True,
     cast=bool,
+)
+
+# ============================================================================
+# Observability bootstrap (optional, env-driven)
+# ============================================================================
+
+bootstrap_observability(
+    sentry_dsn=SENTRY_DSN,
+    sentry_environment=("production" if not DEBUG else "development"),
+    sentry_traces_sample_rate=SENTRY_TRACES_SAMPLE_RATE,
+    sentry_profiles_sample_rate=SENTRY_PROFILES_SAMPLE_RATE,
+    otel_enabled=OTEL_ENABLED,
+    otel_service_name=OTEL_SERVICE_NAME,
 )

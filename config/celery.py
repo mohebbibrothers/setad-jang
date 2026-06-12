@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import logging
 import os
+import time
 
 from celery import Celery
 from celery.signals import (
@@ -68,6 +69,7 @@ app.autodiscover_tasks()
 # ============================================================
 
 logger = logging.getLogger("celery")
+_TASK_START_TIMES: dict[str, float] = {}
 
 # ============================================================
 # Signal handlers — Lifecycle monitoring
@@ -98,6 +100,7 @@ def on_worker_shutting_down(sender, sig, how, exitcode, **kwargs):
 @task_prerun.connect
 def on_task_prerun(sender, task_id, task, args, kwargs, **kw):
     """لاگ قبل از اجرای هر task — برای trace و debug."""
+    _TASK_START_TIMES[task_id] = time.monotonic()
     logger.info(
         "Task starting task=%s id=%s",
         task.name,
@@ -107,7 +110,14 @@ def on_task_prerun(sender, task_id, task, args, kwargs, **kw):
 
 @task_postrun.connect
 def on_task_postrun(sender, task_id, task, args, kwargs, retval, state, **kw):
-    """لاگ بعد از اتمام هر task — شامل state نهایی."""
+    """لاگ بعد از اتمام هر task — شامل state نهایی و metrics."""
+    from apps.core.metrics import CELERY_TASK_DURATION_SECONDS, CELERY_TASKS_TOTAL
+
+    task_name = task.name
+    CELERY_TASKS_TOTAL.labels(task=task_name, state=state).inc()
+    started_at = _TASK_START_TIMES.pop(task_id, None)
+    if started_at is not None:
+        CELERY_TASK_DURATION_SECONDS.labels(task=task_name).observe(time.monotonic() - started_at)
     logger.info(
         "Task completed task=%s id=%s state=%s",
         task.name,

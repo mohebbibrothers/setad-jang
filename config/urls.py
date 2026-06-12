@@ -28,6 +28,8 @@ from drf_spectacular.views import (
     SpectacularSwaggerView,
 )
 
+from apps.core.metrics_views import PrometheusMetricsView
+
 # ============================================================
 # Root / Documentation URLs
 # ============================================================
@@ -77,6 +79,8 @@ api_v1_urlpatterns = [
         "api/v1/health/",
         include(("apps.core.health.urls", "health"), namespace="health"),
     ),
+    # ── Prometheus metrics ──────────────────────────────────
+    path("api/v1/metrics/", PrometheusMetricsView.as_view(), name="prometheus-metrics"),
     # ── Authentication ──────────────────────────────────────
     path(
         "api/v1/auth/",

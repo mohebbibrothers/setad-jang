@@ -40,6 +40,9 @@ license-expression==30.4.4
 markdown-it-py==4.2.0
 mdurl==0.1.2
 msgpack==1.1.2
+opentelemetry-api==1.39.1
+opentelemetry-sdk==1.39.1
+opentelemetry-semantic-conventions==0.60b1
 packageurl-python==0.17.6
 packaging==26.2
 pillow==12.2.0
@@ -69,6 +72,7 @@ responses==0.25.7
 rich==15.0.0
 rpds-py==0.30.0
 ruff==0.14.4
+sentry-sdk==2.48.0
 six==1.17.0
 sortedcontainers==2.4.0
 sqlparse==0.5.5
@@ -82,3 +86,5 @@ uritemplate==4.2.0
 urllib3==2.7.0
 vine==5.1.0
 wcwidth==0.7.0
+wrapt==2.2.1
+zipp==4.1.0

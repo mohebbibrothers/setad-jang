@@ -24,6 +24,7 @@ import logging
 import uuid
 from collections.abc import Callable
 
+from django.conf import settings
 from django.http import HttpRequest, HttpResponse
 
 logger = logging.getLogger("apps.core.middleware")
@@ -135,6 +136,33 @@ class RequestIDMiddleware:
 # ============================================================
 # Logging filter
 # ============================================================
+
+
+class PrometheusMetricsMiddleware:
+    """Middleware that records bounded-cardinality Prometheus HTTP metrics."""
+
+    def __init__(self, get_response: Callable[[HttpRequest], HttpResponse]) -> None:
+        self._get_response = get_response
+
+    def __call__(self, request: HttpRequest) -> HttpResponse:
+        if not getattr(settings, "PROMETHEUS_METRICS_ENABLED", True):
+            return self._get_response(request)
+        from apps.core import metrics
+
+        started_at = metrics.monotonic_time()
+        response = self._get_response(request)
+        normalized_path = metrics.normalize_path(request.path)
+        duration = metrics.monotonic_time() - started_at
+        metrics.HTTP_REQUESTS_TOTAL.labels(
+            method=request.method,
+            path=normalized_path,
+            status=str(response.status_code),
+        ).inc()
+        metrics.HTTP_REQUEST_DURATION_SECONDS.labels(
+            method=request.method,
+            path=normalized_path,
+        ).observe(duration)
+        return response
 
 
 class RequestIDLogFilter(logging.Filter):

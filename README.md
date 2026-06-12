@@ -11,7 +11,7 @@
   <img alt="PostgreSQL" src="https://img.shields.io/badge/PostgreSQL-production-4169E1?style=for-the-badge&logo=postgresql&logoColor=white" />
   <img alt="Redis" src="https://img.shields.io/badge/Redis-cache%20%2B%20broker-DC382D?style=for-the-badge&logo=redis&logoColor=white" />
   <img alt="Celery" src="https://img.shields.io/badge/Celery-worker%20%2B%20beat-37814A?style=for-the-badge&logo=celery&logoColor=white" />
-  <img alt="Tests" src="https://img.shields.io/badge/tests-1032%2B%20passed-brightgreen?style=for-the-badge" />
+  <img alt="Tests" src="https://img.shields.io/badge/tests-1037%2B%20passed-brightgreen?style=for-the-badge" />
   <img alt="Security" src="https://img.shields.io/badge/security-pip--audit%20%2B%20bandit%20%2B%20detect--secrets-blue?style=for-the-badge" />
 </p>
 
@@ -36,7 +36,7 @@
 - [15. LMS](#15-lms)
 - [16. Kindness Wall](#16-kindness-wall)
 - [17. Support Desk](#17-support-desk)
-- [18. Redis / Cache / Celery](#18-redis--cache--celery)
+- [18. Redis / Cache / Celery / Observability](#18-redis--cache--celery--observability)
 - [19. Providers: SMS / Payment / Email](#19-providers-sms--payment--email)
 - [20. Production Checklist](#20-production-checklist)
 - [21. فلسفه مهندسی](#21-فلسفه-مهندسی)
@@ -86,7 +86,7 @@ python manage.py check                           ✅ No issues
 python manage.py check --deploy                  ✅ No issues
 python manage.py makemigrations --check --dry-run ✅ No changes detected
 python manage.py spectacular --validate          ✅ Clean OpenAPI schema
-python -m pytest -q                              ✅ 1032+ passed
+python -m pytest -q                              ✅ 1037+ passed
 ```
 
 Policyهای enforced:
@@ -897,7 +897,7 @@ apps.support_desk.tasks.daily_support_digest_task
 
 ---
 
-## 18. Redis / Cache / Celery
+## 18. Redis / Cache / Celery / Observability
 
 ### Redis
 
@@ -949,6 +949,92 @@ Support SLA breach detection every 5 min
 Support stale draft cleanup daily
 Support daily digest daily
 ```
+
+### Structured logging
+
+Production logging می‌تواند JSON شود:
+
+```env
+LOG_FORMAT=json
+```
+
+فرمت JSON شامل موارد زیر است:
+
+```text
+timestamp
+level
+logger
+message
+request_id
+module
+function
+line
+exception.type/message/stacktrace
+```
+
+در development مقدار پیش‌فرض خواناتر است:
+
+```env
+LOG_FORMAT=text
+```
+
+### Request ID
+
+هر request دارای header زیر است:
+
+```text
+X-Request-ID
+```
+
+اگر client/proxy مقدار معتبر بدهد حفظ می‌شود، در غیر این صورت server مقدار جدید می‌سازد. همین مقدار وارد logها هم می‌شود.
+
+### Prometheus metrics
+
+Endpoint:
+
+```text
+GET /api/v1/metrics/
+```
+
+فعال/غیرفعال:
+
+```env
+PROMETHEUS_METRICS_ENABLED=True
+```
+
+Metrics فعلی:
+
+```text
+setadjang_http_requests_total
+setadjang_http_request_duration_seconds
+setadjang_celery_tasks_total
+setadjang_celery_task_duration_seconds
+```
+
+برای کنترل cardinality، pathها normalize می‌شوند؛ مثل `{id}` و `{token}`.
+
+### Sentry
+
+Sentry کاملاً اختیاری و env-driven است:
+
+```env
+SENTRY_DSN=
+SENTRY_TRACES_SAMPLE_RATE=0.0
+SENTRY_PROFILES_SAMPLE_RATE=0.0
+```
+
+اگر DSN خالی باشد initialize نمی‌شود. `send_default_pii=False` تنظیم شده تا PII به‌صورت پیش‌فرض ارسال نشود.
+
+### OpenTelemetry
+
+Tracer provider اختیاری:
+
+```env
+OTEL_ENABLED=False
+OTEL_SERVICE_NAME=setad-jang-api
+```
+
+Exporter wiring در deployment layer قابل اضافه شدن است بدون تغییر business code.
 
 ---
 
@@ -1054,15 +1140,16 @@ Object storage برای media
 Signed URLs برای فایل‌های private
 ```
 
-### Observability آینده
+### Observability
 
 ```text
-Sentry
-OpenTelemetry
-Prometheus metrics
-Structured JSON logging
-Slow query monitoring
-Celery task metrics
+Structured JSON logging آماده است
+Sentry env-driven آماده است
+OpenTelemetry tracer provider آماده است
+Prometheus metrics endpoint آماده است
+HTTP request latency metrics آماده است
+Celery task metrics آماده است
+Slow query monitoring در فاز hardening بعدی قابل تکمیل است
 ```
 
 ---

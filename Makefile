@@ -68,7 +68,7 @@ bandit:
 	$(PYTHON) -m bandit -q -r apps config -x '*/migrations/*,*/tests/*,*/tests.py' -s B101,B105
 
 secrets-scan:
-	detect-secrets scan --baseline .secrets.baseline --all-files --force-use-all-plugins --exclude-files '(^\\.git/|^media/|^staticfiles/|^schema\\.yaml|^\\.secrets\\.baseline$$|^\\.pytest_cache/|^\\.ruff_cache/)'
+	detect-secrets scan --baseline .secrets.baseline --all-files --force-use-all-plugins --exclude-files '(^\.git/|^media/|^staticfiles/|^schema\.yaml|^\.secrets\.baseline$$|^\.pytest_cache/|^\.ruff_cache/)'
 
 security: pip-audit bandit secrets-scan
 
