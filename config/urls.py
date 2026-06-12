@@ -140,6 +140,11 @@ api_v1_urlpatterns = [
         "api/v1/notifications/",
         include(("apps.notifications.urls", "notifications"), namespace="notifications"),
     ),
+    # ── User Activity Timeline ──────────────────────────────
+    path(
+        "api/v1/activity/",
+        include(("apps.activity.urls", "activity"), namespace="activity"),
+    ),
 ]
 
 # ============================================================

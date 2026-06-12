@@ -54,12 +54,16 @@ def create_notification_event(
         for channel in channels:
             if _preference_enabled(user=recipient, event_type=event_type, channel=channel):
                 subject, body = render_notification(event_type=event_type, channel=channel, payload=payload)
-                NotificationDelivery.objects.get_or_create(
+                _delivery, created = NotificationDelivery.objects.get_or_create(
                     event=event,
                     recipient=recipient,
                     channel=channel,
                     defaults={"subject": subject, "body": body},
                 )
+                if created:
+                    from apps.activity.services import record_activity_from_notification_event
+
+                    record_activity_from_notification_event(event=event, recipient=recipient)
     return event
 
 

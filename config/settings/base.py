@@ -68,6 +68,7 @@ LOCAL_APPS = [
     "apps.kindness_wall.apps.KindnessWallConfig",
     "apps.support_desk.apps.SupportDeskConfig",
     "apps.notifications.apps.NotificationsConfig",
+    "apps.activity.apps.ActivityConfig",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
