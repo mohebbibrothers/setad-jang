@@ -46,12 +46,14 @@ class TestNotificationServiceContracts:
     def test_create_event_renders_templates_and_respects_preferences(self) -> None:
         user = UserFactory(email="notify@example.com")
         muted = UserFactory(email="muted@example.com")
-        NotificationTemplate.objects.create(
+        NotificationTemplate.objects.update_or_create(
             code="support.reply",
             channel=NotificationChannel.IN_APP,
-            title="پاسخ پشتیبانی",
-            subject_template="تیکت {ticket_number}",
-            body_template="پاسخ جدید برای {ticket_number}: {message}",
+            defaults={
+                "title": "پاسخ پشتیبانی",
+                "subject_template": "تیکت {ticket_number}",
+                "body_template": "پاسخ جدید برای {ticket_number}: {message}",
+            },
         )
         set_preference(user=muted, event_type="support.reply", channel=NotificationChannel.IN_APP, enabled=False)
 
@@ -125,12 +127,10 @@ class TestNotificationServiceContracts:
         assert mark_all_read(user=user) >= 1
 
     def test_render_notification_fallback_is_safe_for_missing_template_vars(self) -> None:
-        NotificationTemplate.objects.create(
+        NotificationTemplate.objects.update_or_create(
             code="missing.var",
             channel=NotificationChannel.IN_APP,
-            title="Missing",
-            subject_template="سلام {name}",
-            body_template="کد {missing}",
+            defaults={"title": "Missing", "subject_template": "سلام {name}", "body_template": "کد {missing}"},
         )
 
         subject, body = render_notification(event_type="missing.var", channel=NotificationChannel.IN_APP, payload={"name": "علی"})

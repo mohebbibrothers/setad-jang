@@ -587,6 +587,11 @@ DEFAULT_FROM_EMAIL = config(
 # Authentication / OTP
 # ============================================================================
 
+NOTIFICATIONS_ASYNC_DISPATCH = config("NOTIFICATIONS_ASYNC_DISPATCH", default=True, cast=bool)
+NOTIFICATIONS_EMAIL_ENABLED = config("NOTIFICATIONS_EMAIL_ENABLED", default=False, cast=bool)
+NOTIFICATIONS_SMS_ENABLED = config("NOTIFICATIONS_SMS_ENABLED", default=False, cast=bool)
+KINDNESS_MATCH_NOTIFICATION_THRESHOLD = config("KINDNESS_MATCH_NOTIFICATION_THRESHOLD", default=80, cast=int)
+
 OTP_PROVIDER = config("OTP_PROVIDER", default="email")
 OTP_EMAIL_PROVIDER = config("OTP_EMAIL_PROVIDER", default="django_email")
 OTP_SMS_PROVIDER = config("OTP_SMS_PROVIDER", default="console")

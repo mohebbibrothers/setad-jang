@@ -297,7 +297,12 @@ def regenerate_matches_for_listing(*, listing: KindnessListing) -> list[Kindness
     KindnessMatch.objects.filter(source_listing=listing).exclude(pk__in=stale_ids).update(status=MatchStatus.STALE)
     listing.last_matched_at = timezone.now()
     listing.save(update_fields=["last_matched_at", "updated_at"])
-    return sorted(matches, key=lambda item: item.score, reverse=True)[:MAX_MATCHES_PER_LISTING]
+    top_matches = sorted(matches, key=lambda item: item.score, reverse=True)[:MAX_MATCHES_PER_LISTING]
+    if top_matches:
+        from apps.notifications.domain import notify_kindness_high_match
+
+        notify_kindness_high_match(source_listing=listing, match=top_matches[0])
+    return top_matches
 
 
 def _text_similarity_score(left: str, right: str, *, multiplier: int) -> int:
@@ -469,6 +474,9 @@ def reveal_contact(*, listing: KindnessListing, viewer: Any, ip_address: str | N
     )
     listing.contact_reveal_count = listing.contact_reveals.count()
     listing.save(update_fields=["contact_reveal_count", "updated_at"])
+    from apps.notifications.domain import notify_kindness_contact_revealed
+
+    notify_kindness_contact_revealed(reveal=reveal)
     return reveal
 
 

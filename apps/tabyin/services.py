@@ -161,6 +161,9 @@ def approve_user_submission(
         content.pk,
         getattr(admin, "pk", None),
     )
+    from apps.notifications.domain import notify_tabyin_submission_reviewed
+
+    notify_tabyin_submission_reviewed(submission=content, actor=admin, approved=True)
     return content
 
 
@@ -196,6 +199,9 @@ def reject_user_submission(
         content.pk,
         getattr(admin, "pk", None),
     )
+    from apps.notifications.domain import notify_tabyin_submission_reviewed
+
+    notify_tabyin_submission_reviewed(submission=content, actor=admin, approved=False)
     return content
 
 

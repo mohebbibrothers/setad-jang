@@ -1060,7 +1060,9 @@ def verify_payment(*, authority: str) -> Payment:
             locked_payment.ref_id,
             locked_payment.amount,
         )
+        from apps.notifications.domain import notify_madadkar_payment_success
 
+        notify_madadkar_payment_success(payment=locked_payment)
         return locked_payment
 
 

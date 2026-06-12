@@ -595,6 +595,9 @@ def add_admin_reply(*, ticket: SupportTicket, admin: Any, body: str, now=None) -
     _change_status(ticket=ticket, actor=admin, to_status=TicketStatus.WAITING_FOR_USER, reason="پاسخ ادمین ارسال شد", now=now)
     _pause_sla_if_needed(ticket=ticket, now=now)
     sync_ticket_counters(ticket=ticket)
+    from apps.notifications.domain import notify_support_reply
+
+    notify_support_reply(ticket=ticket, message=message)
     return message
 
 
@@ -682,7 +685,11 @@ def resolve_ticket(*, ticket: SupportTicket, admin: Any, reason: str = "") -> Su
     """Mark a ticket as resolved by admin."""
     if ticket.status in _TERMINAL_STATUSES:
         raise SupportTicketStateError("تیکت بسته/آرشیو/اسپم قابل حل مجدد نیست.")
-    return change_ticket_status(ticket=ticket, admin=admin, status=TicketStatus.RESOLVED, reason=reason or "تیکت حل شد.")
+    ticket = change_ticket_status(ticket=ticket, admin=admin, status=TicketStatus.RESOLVED, reason=reason or "تیکت حل شد.")
+    from apps.notifications.domain import notify_support_resolved
+
+    notify_support_resolved(ticket=ticket, actor=admin)
+    return ticket
 
 
 @transaction.atomic

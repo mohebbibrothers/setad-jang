@@ -271,7 +271,7 @@ def badge_level_for_score(score: Decimal) -> str:
 @transaction.atomic
 def create_skill_for_certificate(*, certificate) -> LMSUserSkill:
     """Create or return the profile-visible skill granted by a certificate."""
-    skill, _created = LMSUserSkill.objects.get_or_create(
+    skill, created = LMSUserSkill.objects.get_or_create(
         user=certificate.user,
         course=certificate.course,
         defaults={
@@ -280,6 +280,10 @@ def create_skill_for_certificate(*, certificate) -> LMSUserSkill:
             "badge_level": badge_level_for_score(certificate.score_out_of_20),
         },
     )
+    if created:
+        from apps.notifications.domain import notify_lms_certificate_issued
+
+        notify_lms_certificate_issued(certificate=certificate)
     return skill
 
 
