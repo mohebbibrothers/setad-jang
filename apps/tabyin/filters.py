@@ -1,8 +1,8 @@
 """فیلترهای محتوای تبیین."""
 
 import django_filters
-from django.db.models import Q
 
+from apps.core.search import SearchField, apply_smart_search
 from apps.tabyin.choices import MediaType
 from apps.tabyin.models import TabyinAttachment, TabyinContent
 
@@ -41,8 +41,13 @@ class PublicTabyinContentFilter(django_filters.FilterSet):
         return queryset.filter(id__in=content_ids)
 
     def filter_search(self, queryset, name, value):
-        """جستجو در عنوان و توضیحات."""
-        return queryset.filter(Q(title__icontains=value) | Q(description__icontains=value))
+        """جستجو با PostgreSQL FTS/trigram و fallback امن."""
+        return apply_smart_search(
+            queryset,
+            search_term=value,
+            fields=[SearchField("title", "A"), SearchField("description", "B"), SearchField("author_username", "C")],
+            trigram_fields=["title", "description"],
+        )
 
 
 class AdminTabyinContentFilter(django_filters.FilterSet):
@@ -92,5 +97,10 @@ class AdminTabyinContentFilter(django_filters.FilterSet):
         return queryset.filter(id__in=content_ids)
 
     def filter_search(self, queryset, name, value):
-        """جستجو در عنوان و توضیحات."""
-        return queryset.filter(Q(title__icontains=value) | Q(description__icontains=value))
+        """جستجو با PostgreSQL FTS/trigram و fallback امن."""
+        return apply_smart_search(
+            queryset,
+            search_term=value,
+            fields=[SearchField("title", "A"), SearchField("description", "B"), SearchField("author_username", "C")],
+            trigram_fields=["title", "description"],
+        )

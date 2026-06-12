@@ -31,7 +31,9 @@ Filters اپ R4J.
 from __future__ import annotations
 
 import django_filters
-from django.db.models import Q, QuerySet
+from django.db.models import QuerySet
+
+from apps.core.search import SearchField, apply_smart_search
 
 from .choices import BountyStatus, Gender, ReportStatus
 from .models import R4JBounty, R4JCriminal, R4JReport
@@ -76,12 +78,13 @@ class R4JCriminalPublicFilter(django_filters.FilterSet):
         distinct لازم است چون join روی aliases ممکن است
         duplicate row تولید کند.
         """
-        return queryset.filter(
-            Q(first_name__icontains=value)
-            | Q(last_name__icontains=value)
-            | Q(slug__icontains=value)
-            | Q(aliases__alias__icontains=value),
-        ).distinct()
+        searched = apply_smart_search(
+            queryset,
+            search_term=value,
+            fields=[SearchField("first_name", "A"), SearchField("last_name", "A"), SearchField("slug", "B"), SearchField("aliases__alias", "B")],
+            trigram_fields=["first_name", "last_name", "slug", "aliases__alias"],
+        )
+        return searched.distinct()
 
 
 class R4JCriminalAdminFilter(R4JCriminalPublicFilter):
@@ -109,13 +112,19 @@ class R4JCriminalAdminFilter(R4JCriminalPublicFilter):
 
         این search فقط در admin scope استفاده می‌شود.
         """
-        return queryset.filter(
-            Q(first_name__icontains=value)
-            | Q(last_name__icontains=value)
-            | Q(slug__icontains=value)
-            | Q(national_code__icontains=value)
-            | Q(aliases__alias__icontains=value),
-        ).distinct()
+        searched = apply_smart_search(
+            queryset,
+            search_term=value,
+            fields=[
+                SearchField("first_name", "A"),
+                SearchField("last_name", "A"),
+                SearchField("slug", "B"),
+                SearchField("national_code", "B"),
+                SearchField("aliases__alias", "B"),
+            ],
+            trigram_fields=["first_name", "last_name", "slug", "national_code", "aliases__alias"],
+        )
+        return searched.distinct()
 
 
 # ============================================================

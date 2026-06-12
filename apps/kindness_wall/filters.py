@@ -3,6 +3,7 @@
 import django_filters
 from django.db.models import Q
 
+from apps.core.search import SearchField, apply_smart_search
 from apps.kindness_wall.choices import DuplicateStatus, ListingType, MatchStatus, ReportStatus
 from apps.kindness_wall.models import (
     KindnessContactReveal,
@@ -27,8 +28,13 @@ class KindnessListingPublicFilter(django_filters.FilterSet):
         fields: list[str] = []
 
     def filter_search(self, queryset, name, value):
-        """Search title/description/search document."""
-        return queryset.filter(Q(title__icontains=value) | Q(description__icontains=value) | Q(search_document__icontains=value))
+        """Search listings with PostgreSQL FTS/trigram and SQLite fallback."""
+        return apply_smart_search(
+            queryset,
+            search_term=value,
+            fields=[SearchField("title", "A"), SearchField("description", "B"), SearchField("search_document", "C")],
+            trigram_fields=["title", "description"],
+        )
 
 
 class KindnessListingAdminFilter(KindnessListingPublicFilter):

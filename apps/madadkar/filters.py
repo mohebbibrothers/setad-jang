@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from django_filters import rest_framework as filters
 
+from apps.core.search import SearchField, apply_smart_search
 from apps.madadkar.choices import CampaignStatus
 from apps.madadkar.models import Campaign, Sponsor
 
@@ -71,11 +72,12 @@ class CampaignPublicFilter(filters.FilterSet):
         return queryset.filter(purchased_shares__lt=F("total_shares"))
 
     def filter_search(self, queryset, name, value):
-        """جستجوی متنی در عنوان و توضیحات."""
-        if not value:
-            return queryset
-        return queryset.filter(title__icontains=value) | queryset.filter(
-            description__icontains=value,
+        """جستجوی متنی production-grade با fallback امن."""
+        return apply_smart_search(
+            queryset,
+            search_term=value,
+            fields=[SearchField("title", "A"), SearchField("description", "B"), SearchField("sponsor__name", "C")],
+            trigram_fields=["title", "description", "sponsor__name"],
         )
 
 
@@ -157,13 +159,12 @@ class CampaignAdminFilter(filters.FilterSet):
         return queryset.filter(purchased_shares__lt=F("total_shares"))
 
     def filter_search(self, queryset, name, value):
-        """جستجوی متنی در عنوان، توضیحات و نام مددکار."""
-        if not value:
-            return queryset
-        return (
-            queryset.filter(title__icontains=value)
-            | queryset.filter(description__icontains=value)
-            | queryset.filter(sponsor__name__icontains=value)
+        """جستجوی متنی production-grade در عنوان، توضیحات و نام مددکار."""
+        return apply_smart_search(
+            queryset,
+            search_term=value,
+            fields=[SearchField("title", "A"), SearchField("description", "B"), SearchField("sponsor__name", "C")],
+            trigram_fields=["title", "description", "sponsor__name"],
         )
 
 

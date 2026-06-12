@@ -6,8 +6,8 @@ in permissions/services.
 """
 
 import django_filters
-from django.db.models import Q
 
+from apps.core.search import SearchField, apply_smart_search
 from apps.lms.choices import CourseLevel, CourseStatus
 from apps.lms.models import Course, Enrollment, LMSCategory
 
@@ -24,13 +24,18 @@ class CoursePublicFilter(django_filters.FilterSet):
         fields: list[str] = []
 
     def filter_search(self, queryset, name, value):
-        """Search course title, subtitle, description, and instructor."""
-        return queryset.filter(
-            Q(title__icontains=value)
-            | Q(subtitle__icontains=value)
-            | Q(short_description__icontains=value)
-            | Q(description__icontains=value)
-            | Q(instructor_name__icontains=value)
+        """Search courses with PostgreSQL FTS/trigram and SQLite fallback."""
+        return apply_smart_search(
+            queryset,
+            search_term=value,
+            fields=[
+                SearchField("title", "A"),
+                SearchField("subtitle", "B"),
+                SearchField("short_description", "B"),
+                SearchField("description", "C"),
+                SearchField("instructor_name", "C"),
+            ],
+            trigram_fields=["title", "subtitle", "instructor_name"],
         )
 
 

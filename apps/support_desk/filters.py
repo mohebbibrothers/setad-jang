@@ -1,8 +1,8 @@
 """django-filter filtersets for Support Desk."""
 
 import django_filters
-from django.db.models import Q
 
+from apps.core.search import SearchField, apply_smart_search
 from apps.support_desk.choices import TicketPriority, TicketSeverity, TicketStatus
 from apps.support_desk.models import SupportDuplicateCandidate, SupportTicket
 
@@ -23,12 +23,17 @@ class SupportUserTicketFilter(django_filters.FilterSet):
         fields: list[str] = []
 
     def filter_search(self, queryset, name, value):
-        """Search user tickets by number, subject and search document."""
-        return queryset.filter(
-            Q(ticket_number__icontains=value)
-            | Q(subject__icontains=value)
-            | Q(description_snapshot__icontains=value)
-            | Q(search_document__icontains=value)
+        """Search tickets with PostgreSQL FTS/trigram and SQLite fallback."""
+        return apply_smart_search(
+            queryset,
+            search_term=value,
+            fields=[
+                SearchField("ticket_number", "A"),
+                SearchField("subject", "A"),
+                SearchField("description_snapshot", "B"),
+                SearchField("search_document", "C"),
+            ],
+            trigram_fields=["ticket_number", "subject"],
         )
 
 

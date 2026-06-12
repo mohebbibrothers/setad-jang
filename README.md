@@ -11,7 +11,7 @@
   <img alt="PostgreSQL" src="https://img.shields.io/badge/PostgreSQL-production-4169E1?style=for-the-badge&logo=postgresql&logoColor=white" />
   <img alt="Redis" src="https://img.shields.io/badge/Redis-cache%20%2B%20broker-DC382D?style=for-the-badge&logo=redis&logoColor=white" />
   <img alt="Celery" src="https://img.shields.io/badge/Celery-worker%20%2B%20beat-37814A?style=for-the-badge&logo=celery&logoColor=white" />
-  <img alt="Tests" src="https://img.shields.io/badge/tests-1067%2B%20passed-brightgreen?style=for-the-badge" />
+  <img alt="Tests" src="https://img.shields.io/badge/tests-1073%2B%20passed-brightgreen?style=for-the-badge" />
   <img alt="Security" src="https://img.shields.io/badge/security-pip--audit%20%2B%20bandit%20%2B%20detect--secrets-blue?style=for-the-badge" />
 </p>
 
@@ -87,7 +87,7 @@ python manage.py check                           ✅ No issues
 python manage.py check --deploy                  ✅ No issues
 python manage.py makemigrations --check --dry-run ✅ No changes detected
 python manage.py spectacular --validate          ✅ Clean OpenAPI schema
-python -m pytest with coverage gate                              ✅ 1067+ passed
+python -m pytest with coverage gate                              ✅ 1073+ passed
 ```
 
 Policyهای enforced:
@@ -324,6 +324,47 @@ make schema-update
 - cache helpers با namespace versioning
 - health checks
 - OpenAPI schema helpers
+
+
+### Cross-App Search Foundation
+
+Apex A1 یک search foundation مشترک اضافه کرده است که برای production روی PostgreSQL از full-text search و trigram similarity استفاده می‌کند و برای local/test روی SQLite به fallback امن `icontains` برمی‌گردد.
+
+فایل اصلی:
+
+```text
+apps/core/search.py
+```
+
+قابلیت‌ها:
+
+```text
+Persian/Arabic query normalization
+weighted searchable fields
+PostgreSQL SearchVector/SearchRank
+pg_trgm TrigramSimilarity
+SQLite-safe fallback
+bounded query length برای جلوگیری از abuse
+shared helper برای Tabyin, Kindness Wall, Support Desk, LMS, R4J, Madadkar
+```
+
+PostgreSQL extensions در migration هسته فعال می‌شوند، بدون شکستن SQLite:
+
+```text
+pg_trgm
+unaccent
+```
+
+اپ‌هایی که به search مشترک وصل شده‌اند:
+
+```text
+tabyin content search
+kindness wall listing search
+support desk ticket search
+lms course search
+r4j criminal search
+madadkar campaign search
+```
 
 ### Response envelope
 
