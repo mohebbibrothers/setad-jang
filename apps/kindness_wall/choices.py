@@ -77,3 +77,28 @@ class DuplicateStatus(models.TextChoices):
     ACTIVE = "active", "فعال"
     DISMISSED = "dismissed", "نادیده‌گرفته‌شده"
     CONFIRMED = "confirmed", "تأیید تکراری بودن"
+
+
+class RiskSignalType(models.TextChoices):
+    """Safety/risk signals detected in Kindness Wall."""
+
+    CONTACT_REVEAL_VELOCITY = "contact_reveal_velocity", "نمایش سریع شماره تماس"
+    LISTING_CONTACT_SPIKE = "listing_contact_spike", "افزایش غیرعادی نمایش شماره آگهی"
+    DUPLICATE_ABUSE = "duplicate_abuse", "الگوی تکرار مشکوک"
+
+
+class RiskSeverity(models.TextChoices):
+    """Risk signal severity."""
+
+    LOW = "low", "کم"
+    MEDIUM = "medium", "متوسط"
+    HIGH = "high", "زیاد"
+    CRITICAL = "critical", "بحرانی"
+
+
+class RiskStatus(models.TextChoices):
+    """Risk signal review status."""
+
+    OPEN = "open", "باز"
+    REVIEWED = "reviewed", "بررسی‌شده"
+    DISMISSED = "dismissed", "ردشده"

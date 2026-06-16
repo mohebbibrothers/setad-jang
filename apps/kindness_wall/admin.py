@@ -13,6 +13,7 @@ from apps.kindness_wall.models import (
     KindnessListingReport,
     KindnessListingTag,
     KindnessMatch,
+    KindnessRiskSignal,
     KindnessTag,
 )
 
@@ -164,3 +165,14 @@ class KindnessDuplicateCandidateAdmin(admin.ModelAdmin):
 
 admin.site.register(KindnessListingImage)
 admin.site.register(KindnessListingTag)
+
+
+@admin.register(KindnessRiskSignal)
+class KindnessRiskSignalAdmin(admin.ModelAdmin):
+    """Admin review queue for Kindness Wall risk signals."""
+
+    list_display = ("signal_type", "severity", "status", "user", "listing", "created_at")
+    list_filter = ("signal_type", "severity", "status")
+    search_fields = ("description", "user__email", "listing__title")
+    raw_id_fields = ("user", "listing", "reviewed_by")
+    readonly_fields = ("created_at", "updated_at")

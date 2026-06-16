@@ -27,6 +27,9 @@ from apps.kindness_wall.choices import (
     MatchStatus,
     ReportReason,
     ReportStatus,
+    RiskSeverity,
+    RiskSignalType,
+    RiskStatus,
     TagSource,
 )
 from apps.kindness_wall.managers import (
@@ -367,6 +370,33 @@ class KindnessBookmark(BaseModel):
     class Meta:
         constraints = [models.UniqueConstraint(fields=["user", "listing"], name="uniq_kindness_bookmark")]
         indexes = [models.Index(fields=["user", "-created_at"])]
+
+
+class KindnessRiskSignal(BaseModel):
+    """Safety/risk signal generated from suspicious Kindness Wall behavior."""
+
+    signal_type = models.CharField(max_length=40, choices=RiskSignalType.choices, db_index=True)
+    severity = models.CharField(max_length=20, choices=RiskSeverity.choices, default=RiskSeverity.MEDIUM, db_index=True)
+    status = models.CharField(max_length=20, choices=RiskStatus.choices, default=RiskStatus.OPEN, db_index=True)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name="kindness_risk_signals")
+    listing = models.ForeignKey(KindnessListing, on_delete=models.CASCADE, null=True, blank=True, related_name="risk_signals")
+    description = models.TextField(blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    reviewed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="kindness_reviewed_risk_signals")
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = "سیگنال ریسک دیوار مهربانی"
+        verbose_name_plural = "سیگنال‌های ریسک دیوار مهربانی"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["signal_type", "status", "-created_at"]),
+            models.Index(fields=["user", "status", "-created_at"]),
+            models.Index(fields=["listing", "status", "-created_at"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.signal_type}:{self.severity}:{self.status}"
 
 
 class KindnessDuplicateCandidate(BaseModel):

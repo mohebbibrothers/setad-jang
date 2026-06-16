@@ -50,6 +50,7 @@ def _kindness_summary() -> dict[str, int]:
         KindnessDuplicateCandidate,
         KindnessListing,
         KindnessListingReport,
+        KindnessRiskSignal,
     )
 
     return {
@@ -58,6 +59,7 @@ def _kindness_summary() -> dict[str, int]:
         "pending_reports": KindnessListingReport.objects.filter(status=ReportStatus.PENDING).count(),
         "active_duplicate_candidates": KindnessDuplicateCandidate.objects.filter(status=DuplicateStatus.ACTIVE).count(),
         "contact_reveals_total": KindnessContactReveal.objects.count(),
+        "open_risk_signals": KindnessRiskSignal.objects.filter(status="open").count(),
     }
 
 

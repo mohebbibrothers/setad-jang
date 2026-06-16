@@ -11,7 +11,7 @@
   <img alt="PostgreSQL" src="https://img.shields.io/badge/PostgreSQL-production-4169E1?style=for-the-badge&logo=postgresql&logoColor=white" />
   <img alt="Redis" src="https://img.shields.io/badge/Redis-cache%20%2B%20broker-DC382D?style=for-the-badge&logo=redis&logoColor=white" />
   <img alt="Celery" src="https://img.shields.io/badge/Celery-worker%20%2B%20beat-37814A?style=for-the-badge&logo=celery&logoColor=white" />
-  <img alt="Tests" src="https://img.shields.io/badge/tests-1110%2B%20passed-brightgreen?style=for-the-badge" />
+  <img alt="Tests" src="https://img.shields.io/badge/tests-1118%2B%20passed-brightgreen?style=for-the-badge" />
   <img alt="Security" src="https://img.shields.io/badge/security-pip--audit%20%2B%20bandit%20%2B%20detect--secrets-blue?style=for-the-badge" />
 </p>
 
@@ -87,7 +87,7 @@ python manage.py check                           ✅ No issues
 python manage.py check --deploy                  ✅ No issues
 python manage.py makemigrations --check --dry-run ✅ No changes detected
 python manage.py spectacular --validate          ✅ Clean OpenAPI schema
-python -m pytest with coverage gate                              ✅ 1110+ passed
+python -m pytest with coverage gate                              ✅ 1118+ passed
 ```
 
 Policyهای enforced:
@@ -864,6 +864,32 @@ GET  /api/v1/lms/admin/courses/{id}/export/
 
 ---
 
+
+## Apex Kindness Geo Matching and Risk Signals
+
+Kindness Wall now has geo-aware matching and safety/risk signals:
+
+```text
+Haversine distance scoring for listings with lat/lng
+nearby_5km / nearby_25km / nearby_75km reason codes
+city/province fallback preserved
+KindnessRiskSignal model
+contact reveal velocity detection
+listing contact spike detection
+admin risk signal queue foundation
+command center open risk signal counter
+```
+
+Risk signal types:
+
+```text
+contact_reveal_velocity
+listing_contact_spike
+duplicate_abuse
+```
+
+This improves both match quality and human-safety monitoring in the Kindness Wall app.
+
 ## 16. Kindness Wall
 
 اپ `kindness_wall` دیوار مهربانی است: آگهی کمک/نیاز بدون خریدوفروش.
@@ -918,6 +944,31 @@ GET/POST/PATCH/DELETE admin categories/listings/reports/matches/contact-reveals/
 ```
 
 ---
+
+
+## Apex Support Business Hours SLA
+
+Support Desk now supports enterprise business-hours SLA calculation:
+
+```text
+SupportBusinessCalendar
+SupportHoliday
+business_hours_only SLA policies
+department-specific calendars
+holiday-aware working-minute calculation
+admin calendar/holiday APIs
+```
+
+Admin APIs:
+
+```text
+GET/POST /api/v1/support/admin/business-calendars/
+PATCH    /api/v1/support/admin/business-calendars/{calendar_id}/
+GET/POST /api/v1/support/admin/holidays/
+PATCH    /api/v1/support/admin/holidays/{holiday_id}/
+```
+
+When `business_hours_only=True`, first response and resolution deadlines are computed using the resolved business calendar instead of raw wall-clock minutes.
 
 ## 17. Support Desk
 

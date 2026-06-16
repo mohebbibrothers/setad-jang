@@ -8,7 +8,14 @@ from django.db import transaction
 from django.db.models import Count
 from django.utils import timezone
 
-from apps.kindness_wall.choices import DuplicateStatus, ListingStatus, MatchStatus, ReportStatus
+from apps.kindness_wall.choices import (
+    DuplicateStatus,
+    ListingStatus,
+    MatchStatus,
+    ReportStatus,
+    RiskSeverity,
+    RiskSignalType,
+)
 from apps.kindness_wall.matching import calculate_match_score, tokenize
 from apps.kindness_wall.models import (
     KindnessBookmark,
@@ -19,6 +26,7 @@ from apps.kindness_wall.models import (
     KindnessListingReport,
     KindnessListingTag,
     KindnessMatch,
+    KindnessRiskSignal,
     KindnessTag,
 )
 
@@ -454,6 +462,57 @@ def expire_due_listings(*, now=None) -> int:
     return int(updated)
 
 
+def create_risk_signal(
+    *,
+    signal_type: str,
+    severity: str,
+    user: Any | None = None,
+    listing: KindnessListing | None = None,
+    description: str = "",
+    metadata: dict[str, Any] | None = None,
+) -> KindnessRiskSignal:
+    """Create a safety/risk signal for admin review."""
+    return KindnessRiskSignal.objects.create(
+        signal_type=signal_type,
+        severity=severity,
+        user=user if getattr(user, "pk", None) else None,
+        listing=listing,
+        description=description,
+        metadata=metadata or {},
+    )
+
+
+def evaluate_contact_reveal_risk(*, reveal: KindnessContactReveal, window_minutes: int = 60) -> list[KindnessRiskSignal]:
+    """Generate risk signals for suspicious contact reveal velocity/spikes."""
+    since = timezone.now() - timezone.timedelta(minutes=window_minutes)
+    signals: list[KindnessRiskSignal] = []
+    viewer_count = KindnessContactReveal.objects.filter(viewer=reveal.viewer, created_at__gte=since).count()
+    if viewer_count >= 5:
+        signals.append(
+            create_risk_signal(
+                signal_type=RiskSignalType.CONTACT_REVEAL_VELOCITY,
+                severity=RiskSeverity.HIGH if viewer_count >= 10 else RiskSeverity.MEDIUM,
+                user=reveal.viewer,
+                listing=reveal.listing,
+                description="کاربر در بازه کوتاه شماره تماس‌های زیادی مشاهده کرده است.",
+                metadata={"window_minutes": window_minutes, "viewer_reveal_count": viewer_count},
+            )
+        )
+    listing_count = KindnessContactReveal.objects.filter(listing=reveal.listing, created_at__gte=since).count()
+    if listing_count >= 10:
+        signals.append(
+            create_risk_signal(
+                signal_type=RiskSignalType.LISTING_CONTACT_SPIKE,
+                severity=RiskSeverity.HIGH,
+                user=reveal.listing.owner,
+                listing=reveal.listing,
+                description="آگهی در بازه کوتاه تعداد زیادی نمایش شماره تماس داشته است.",
+                metadata={"window_minutes": window_minutes, "listing_reveal_count": listing_count},
+            )
+        )
+    return signals
+
+
 @transaction.atomic
 def reveal_contact(*, listing: KindnessListing, viewer: Any, ip_address: str | None = None, user_agent: str = "", request_id: str = "") -> KindnessContactReveal:
     """Reveal listing contact phone to an authenticated user and record audit trail."""
@@ -474,6 +533,7 @@ def reveal_contact(*, listing: KindnessListing, viewer: Any, ip_address: str | N
     )
     listing.contact_reveal_count = listing.contact_reveals.count()
     listing.save(update_fields=["contact_reveal_count", "updated_at"])
+    evaluate_contact_reveal_risk(reveal=reveal)
     from apps.notifications.domain import notify_kindness_contact_revealed
 
     notify_kindness_contact_revealed(reveal=reveal)

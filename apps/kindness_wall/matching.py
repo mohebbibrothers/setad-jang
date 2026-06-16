@@ -8,6 +8,7 @@ and returns both a total score and a transparent breakdown for user/admin UX.
 
 from __future__ import annotations
 
+import math
 import re
 from collections.abc import Iterable
 from dataclasses import dataclass, field
@@ -163,7 +164,18 @@ def _category_score(*, source, target, reasons: list[str]) -> int:
 
 
 def _location_score(*, source, target, reasons: list[str]) -> int:
-    """Calculate location score based on city/province."""
+    """Calculate location score based on geo distance, city and province."""
+    distance_km = _distance_km(source=source, target=target)
+    if distance_km is not None:
+        if distance_km <= 5:
+            reasons.append("nearby_5km")
+            return 20
+        if distance_km <= 25:
+            reasons.append("nearby_25km")
+            return 16
+        if distance_km <= 75:
+            reasons.append("nearby_75km")
+            return 10
     if source.city and target.city and normalize_text(source.city) == normalize_text(target.city):
         reasons.append("same_city")
         return 15
@@ -173,6 +185,18 @@ def _location_score(*, source, target, reasons: list[str]) -> int:
     if not source.city or not target.city:
         return 2
     return 0
+
+
+def _distance_km(*, source, target) -> float | None:
+    """Return haversine distance in kilometers when both listings have coordinates."""
+    if None in {source.latitude, source.longitude, target.latitude, target.longitude}:
+        return None
+    lat1, lon1, lat2, lon2 = map(float, [source.latitude, source.longitude, target.latitude, target.longitude])
+    radius_km = 6371.0
+    dlat = math.radians(lat2 - lat1)
+    dlon = math.radians(lon2 - lon1)
+    a = math.sin(dlat / 2) ** 2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2) ** 2
+    return radius_km * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
 
 def _freshness_score(*, target) -> int:
@@ -197,6 +221,9 @@ def _build_explanation(*, score: int, reasons: list[str]) -> str:
         "same_category": "دسته‌بندی دقیقاً یکسان است",
         "same_parent_category": "زیرمجموعه یک دسته والد هستند",
         "same_root_category": "در یک شاخه اصلی قرار دارند",
+        "nearby_5km": "فاصله مکانی بسیار نزدیک است",
+        "nearby_25km": "فاصله مکانی نزدیک است",
+        "nearby_75km": "در محدوده مکانی قابل قبول قرار دارند",
         "same_city": "شهر مشترک است",
         "same_province": "استان مشترک است",
         "title_overlap": "عنوان‌ها کلیدواژه‌های مشترک دارند",
