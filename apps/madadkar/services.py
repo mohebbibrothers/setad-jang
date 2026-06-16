@@ -47,6 +47,8 @@ from apps.madadkar.choices import (
     ParticipationStatus,
     PaymentEventKind,
     PaymentStatus,
+    ReconciliationItemStatus,
+    ReconciliationStatus,
 )
 from apps.madadkar.models import (
     Campaign,
@@ -54,6 +56,8 @@ from apps.madadkar.models import (
     Participation,
     Payment,
     PaymentEvent,
+    PaymentReconciliationBatch,
+    PaymentReconciliationItem,
     Sponsor,
 )
 from apps.madadkar.payment_providers import get_payment_provider
@@ -1160,3 +1164,114 @@ def close_campaign_due_to_deadline(*, campaign: Campaign) -> Campaign:
         campaign.pk,
     )
     return campaign
+
+
+# ===========================================================================
+# Payment reconciliation services
+# ===========================================================================
+
+@transaction.atomic
+def reconcile_provider_payments(*, provider_name: str, rows: list[dict[str, Any]], source_name: str = "") -> PaymentReconciliationBatch:
+    """Reconcile provider settlement/report rows with internal payment ledger.
+
+    Expected row keys are intentionally generic:
+    - authority
+    - ref_id
+    - amount
+    - status
+
+    This service performs no external I/O; it compares a provider report snapshot
+    with internal Payment records and stores an auditable reconciliation batch.
+    """
+    batch = PaymentReconciliationBatch.objects.create(
+        provider_name=provider_name.strip().lower(),
+        source_name=source_name.strip(),
+        total_rows=len(rows),
+    )
+    seen_refs: set[str] = set()
+    for row in rows:
+        authority = str(row.get("authority") or "").strip()
+        ref_id = str(row.get("ref_id") or "").strip()
+        provider_status = str(row.get("status") or "").strip().lower()
+        provider_amount = int(row.get("amount") or 0)
+        duplicate_ref = bool(ref_id and ref_id in seen_refs)
+        if ref_id:
+            seen_refs.add(ref_id)
+        payment = _find_payment_for_reconciliation(provider_name=batch.provider_name, authority=authority, ref_id=ref_id)
+        item_status, reason = _classify_reconciliation_row(
+            payment=payment,
+            provider_amount=provider_amount,
+            provider_status=provider_status,
+            duplicate_ref=duplicate_ref,
+        )
+        PaymentReconciliationItem.objects.create(
+            batch=batch,
+            payment=payment,
+            authority=authority,
+            provider_ref_id=ref_id,
+            provider_amount=provider_amount,
+            provider_status=provider_status,
+            internal_amount=payment.amount if payment else None,
+            internal_status=payment.status if payment else "",
+            status=item_status,
+            reason=reason,
+            raw_payload=row,
+        )
+    _finalize_reconciliation_batch(batch=batch)
+    return batch
+
+
+def _find_payment_for_reconciliation(*, provider_name: str, authority: str, ref_id: str) -> Payment | None:
+    """Find internal payment by authority first, then provider ref_id."""
+    queryset = Payment.objects.filter(gateway_name=provider_name)
+    if authority:
+        payment = queryset.filter(authority=authority).first()
+        if payment is not None:
+            return payment
+    if ref_id:
+        return queryset.filter(ref_id=ref_id).first()
+    return None
+
+
+def _classify_reconciliation_row(*, payment: Payment | None, provider_amount: int, provider_status: str, duplicate_ref: bool) -> tuple[str, str]:
+    """Classify one provider row compared to internal payment state."""
+    if duplicate_ref:
+        return ReconciliationItemStatus.DUPLICATE_PROVIDER_REF, "شناسه مرجع در گزارش درگاه تکراری است."
+    if payment is None:
+        return ReconciliationItemStatus.MISSING_INTERNAL, "پرداخت متناظر در سیستم داخلی پیدا نشد."
+    if provider_amount and provider_amount != payment.amount:
+        return ReconciliationItemStatus.AMOUNT_MISMATCH, "مبلغ گزارش درگاه با مبلغ داخلی تطابق ندارد."
+    provider_success = provider_status in {"success", "paid", "verified", "100", "101"}
+    if provider_success and payment.status != PaymentStatus.SUCCESS:
+        return ReconciliationItemStatus.STATUS_MISMATCH, "درگاه پرداخت را موفق می‌داند اما وضعیت داخلی موفق نیست."
+    if not provider_success and payment.status == PaymentStatus.SUCCESS:
+        return ReconciliationItemStatus.STATUS_MISMATCH, "وضعیت داخلی موفق است اما گزارش درگاه موفق نیست."
+    return ReconciliationItemStatus.MATCHED, "تطبیق موفق."
+
+
+def _finalize_reconciliation_batch(*, batch: PaymentReconciliationBatch) -> PaymentReconciliationBatch:
+    """Aggregate reconciliation item counters and mark batch completed."""
+    items = batch.items.all()
+    batch.matched_count = items.filter(status=ReconciliationItemStatus.MATCHED).count()
+    batch.missing_internal_count = items.filter(status=ReconciliationItemStatus.MISSING_INTERNAL).count()
+    batch.duplicate_provider_ref_count = items.filter(status=ReconciliationItemStatus.DUPLICATE_PROVIDER_REF).count()
+    batch.mismatch_count = items.exclude(status=ReconciliationItemStatus.MATCHED).count()
+    batch.status = ReconciliationStatus.COMPLETED
+    batch.completed_at = timezone.now()
+    batch.summary = {
+        "matched": batch.matched_count,
+        "mismatches": batch.mismatch_count,
+        "missing_internal": batch.missing_internal_count,
+        "duplicate_provider_ref": batch.duplicate_provider_ref_count,
+    }
+    batch.save(update_fields=[
+        "matched_count",
+        "missing_internal_count",
+        "duplicate_provider_ref_count",
+        "mismatch_count",
+        "status",
+        "completed_at",
+        "summary",
+        "updated_at",
+    ])
+    return batch

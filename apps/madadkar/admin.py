@@ -17,6 +17,8 @@ from apps.madadkar.models import (
     Participation,
     Payment,
     PaymentEvent,
+    PaymentReconciliationBatch,
+    PaymentReconciliationItem,
     Sponsor,
 )
 
@@ -288,3 +290,24 @@ class PaymentEventAdmin(admin.ModelAdmin):
     def has_delete_permission(self, request, obj=None) -> bool:
         """حذف رویداد پرداخت ممنوع است."""
         return False
+
+
+@admin.register(PaymentReconciliationBatch)
+class PaymentReconciliationBatchAdmin(admin.ModelAdmin):
+    """Admin inspection for payment reconciliation batches."""
+
+    list_display = ("provider_name", "status", "total_rows", "matched_count", "mismatch_count", "created_at")
+    list_filter = ("provider_name", "status")
+    search_fields = ("provider_name", "source_name")
+    readonly_fields = [field.name for field in PaymentReconciliationBatch._meta.fields]
+
+
+@admin.register(PaymentReconciliationItem)
+class PaymentReconciliationItemAdmin(admin.ModelAdmin):
+    """Admin inspection for payment reconciliation items."""
+
+    list_display = ("batch", "payment", "authority", "provider_ref_id", "provider_amount", "internal_amount", "status")
+    list_filter = ("status", "batch__provider_name")
+    search_fields = ("authority", "provider_ref_id", "payment__authority", "payment__ref_id")
+    raw_id_fields = ("batch", "payment")
+    readonly_fields = [field.name for field in PaymentReconciliationItem._meta.fields]

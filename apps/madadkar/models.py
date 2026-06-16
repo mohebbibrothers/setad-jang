@@ -28,6 +28,8 @@ from apps.madadkar.choices import (
     ParticipationStatus,
     PaymentEventKind,
     PaymentStatus,
+    ReconciliationItemStatus,
+    ReconciliationStatus,
 )
 from apps.madadkar.managers import (
     CampaignAcceptingSharesManager,
@@ -674,3 +676,60 @@ class PaymentEvent(BaseModel):
     def restore(self) -> None:
         """بازیابی روی ledger append-only معنا ندارد."""
         raise PermissionError("بازیابی رویدادهای پرداخت مجاز نیست.")
+
+
+# ---------------------------------------------------------------------------
+# Payment Reconciliation
+# ---------------------------------------------------------------------------
+
+class PaymentReconciliationBatch(BaseModel):
+    """Batch report comparing external provider rows with internal payments."""
+
+    provider_name = models.CharField(max_length=50, verbose_name="نام درگاه")
+    source_name = models.CharField(max_length=180, blank=True, verbose_name="نام فایل/گزارش")
+    status = models.CharField(max_length=20, choices=ReconciliationStatus.choices, default=ReconciliationStatus.DRAFT)
+    total_rows = models.PositiveIntegerField(default=0)
+    matched_count = models.PositiveIntegerField(default=0)
+    mismatch_count = models.PositiveIntegerField(default=0)
+    missing_internal_count = models.PositiveIntegerField(default=0)
+    duplicate_provider_ref_count = models.PositiveIntegerField(default=0)
+    summary = models.JSONField(default=dict, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = "Batch تطبیق پرداخت"
+        verbose_name_plural = "Batchهای تطبیق پرداخت"
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["provider_name", "status", "-created_at"])]
+
+    def __str__(self) -> str:
+        return f"Reconciliation {self.provider_name} #{self.pk}"
+
+
+class PaymentReconciliationItem(BaseModel):
+    """One provider row reconciliation result."""
+
+    batch = models.ForeignKey(PaymentReconciliationBatch, on_delete=models.CASCADE, related_name="items")
+    payment = models.ForeignKey(Payment, on_delete=models.SET_NULL, null=True, blank=True, related_name="reconciliation_items")
+    authority = models.CharField(max_length=100, blank=True)
+    provider_ref_id = models.CharField(max_length=100, blank=True)
+    provider_amount = models.PositiveBigIntegerField(default=0)
+    provider_status = models.CharField(max_length=50, blank=True)
+    internal_amount = models.PositiveBigIntegerField(null=True, blank=True)
+    internal_status = models.CharField(max_length=20, blank=True)
+    status = models.CharField(max_length=40, choices=ReconciliationItemStatus.choices)
+    reason = models.TextField(blank=True)
+    raw_payload = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        verbose_name = "ردیف تطبیق پرداخت"
+        verbose_name_plural = "ردیف‌های تطبیق پرداخت"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["batch", "status"]),
+            models.Index(fields=["authority"]),
+            models.Index(fields=["provider_ref_id"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.batch_id}:{self.status}:{self.authority or self.provider_ref_id}"

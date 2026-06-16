@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from django.db.models import Sum
 from django.utils import timezone
 
 
@@ -102,7 +103,7 @@ def _r4j_summary() -> dict[str, int]:
 def _madadkar_summary() -> dict[str, int]:
     """Return Madadkar campaign/payment counters."""
     from apps.madadkar.choices import CampaignStatus, PaymentStatus
-    from apps.madadkar.models import Campaign, Payment
+    from apps.madadkar.models import Campaign, Payment, PaymentReconciliationBatch
 
     return {
         "published_campaigns": Campaign.objects.filter(status=CampaignStatus.PUBLISHED).count(),
@@ -110,6 +111,8 @@ def _madadkar_summary() -> dict[str, int]:
         "pending_payments": Payment.objects.filter(status=PaymentStatus.PENDING).count(),
         "failed_payments": Payment.objects.filter(status=PaymentStatus.FAILED).count(),
         "successful_payments": Payment.objects.filter(status=PaymentStatus.SUCCESS).count(),
+        "reconciliation_batches": PaymentReconciliationBatch.objects.count(),
+        "reconciliation_mismatches": PaymentReconciliationBatch.objects.aggregate(total=Sum("mismatch_count"))["total"] or 0,
     }
 
 

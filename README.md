@@ -11,7 +11,7 @@
   <img alt="PostgreSQL" src="https://img.shields.io/badge/PostgreSQL-production-4169E1?style=for-the-badge&logo=postgresql&logoColor=white" />
   <img alt="Redis" src="https://img.shields.io/badge/Redis-cache%20%2B%20broker-DC382D?style=for-the-badge&logo=redis&logoColor=white" />
   <img alt="Celery" src="https://img.shields.io/badge/Celery-worker%20%2B%20beat-37814A?style=for-the-badge&logo=celery&logoColor=white" />
-  <img alt="Tests" src="https://img.shields.io/badge/tests-1097%2B%20passed-brightgreen?style=for-the-badge" />
+  <img alt="Tests" src="https://img.shields.io/badge/tests-1102%2B%20passed-brightgreen?style=for-the-badge" />
   <img alt="Security" src="https://img.shields.io/badge/security-pip--audit%20%2B%20bandit%20%2B%20detect--secrets-blue?style=for-the-badge" />
 </p>
 
@@ -87,7 +87,7 @@ python manage.py check                           ✅ No issues
 python manage.py check --deploy                  ✅ No issues
 python manage.py makemigrations --check --dry-run ✅ No changes detected
 python manage.py spectacular --validate          ✅ Clean OpenAPI schema
-python -m pytest with coverage gate                              ✅ 1097+ passed
+python -m pytest with coverage gate                              ✅ 1102+ passed
 ```
 
 Policyهای enforced:
@@ -590,6 +590,25 @@ POST /api/v1/tabyin/admin/submissions/{id}/review/
 
 ---
 
+
+## Apex Tamper-Evident Audit Hash Chain
+
+Audit logs now include a forensic hash chain:
+
+```text
+previous_hash
+event_hash
+hash_version
+```
+
+Verification command:
+
+```bash
+python manage.py verify_audit_chain
+```
+
+Any direct database tampering with hash-covered fields breaks the chain and is detected by the command.
+
 ## 12. Audit Logs
 
 اپ `audit_logs` برای forensic audit trail طراحی شده است.
@@ -651,6 +670,36 @@ PATCH/DELETE /api/v1/r4j/admin/bounties/{id}/
 ```
 
 ---
+
+
+## Apex Madadkar Payment Reconciliation
+
+Madadkar now has finance-grade reconciliation models and services for comparing provider settlement/report rows with internal payment ledger records.
+
+Models:
+
+```text
+PaymentReconciliationBatch
+PaymentReconciliationItem
+```
+
+Classifications:
+
+```text
+matched
+missing_internal
+amount_mismatch
+status_mismatch
+duplicate_provider_ref
+```
+
+Service:
+
+```python
+reconcile_provider_payments(provider_name="sandbox", rows=[...], source_name="settlement.csv")
+```
+
+This enables future Zarinpal settlement reconciliation without rewriting payment flows.
 
 ## 14. Madadkar
 
