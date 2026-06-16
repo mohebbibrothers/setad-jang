@@ -23,6 +23,7 @@ class ParticipationStatus(models.TextChoices):
     PAID = "paid", "پرداخت‌شده"
     FAILED = "failed", "ناموفق"
     EXPIRED = "expired", "منقضی‌شده"
+    REFUNDED = "refunded", "بازپرداخت‌شده"
 
 
 class PaymentStatus(models.TextChoices):
@@ -59,3 +60,46 @@ class PaymentEventKind(models.TextChoices):
     VERIFY_FAILED = "verify_failed", "تأیید ناموفق"
     AMOUNT_MISMATCH = "amount_mismatch", "عدم تطابق مبلغ"
     EXPIRED = "expired", "انقضای پرداخت"
+    REFUND_REQUESTED = "refund_requested", "درخواست بازپرداخت"
+    REFUND_APPROVED = "refund_approved", "تأیید بازپرداخت"
+    REFUND_REJECTED = "refund_rejected", "رد بازپرداخت"
+    REFUND_COMPLETED = "refund_completed", "تکمیل بازپرداخت"
+    REFUND_FAILED = "refund_failed", "شکست بازپرداخت"
+    ADJUSTMENT_APPLIED = "adjustment_applied", "اعمال اصلاح مالی"
+
+
+class RefundStatus(models.TextChoices):
+    """وضعیت workflow بازپرداخت مددکار."""
+
+    PENDING_REVIEW = "pending_review", "در انتظار بررسی"
+    APPROVED = "approved", "تأییدشده"
+    REJECTED = "rejected", "ردشده"
+    COMPLETED = "completed", "تکمیل‌شده"
+    FAILED = "failed", "ناموفق"
+
+
+class RefundReason(models.TextChoices):
+    """دلیل استاندارد درخواست بازپرداخت."""
+
+    DUPLICATE_PAYMENT = "duplicate_payment", "پرداخت تکراری"
+    USER_REQUEST = "user_request", "درخواست کاربر"
+    CAMPAIGN_CANCELED = "campaign_canceled", "لغو حرکت"
+    PROVIDER_REVERSAL = "provider_reversal", "برگشت از سمت درگاه"
+    ADMIN_CORRECTION = "admin_correction", "اصلاح ادمین"
+    OTHER = "other", "سایر"
+
+
+class FinancialAdjustmentType(models.TextChoices):
+    """نوع اصلاح مالی کمپین."""
+
+    CREDIT = "credit", "افزایش مبلغ مؤثر"
+    DEBIT = "debit", "کاهش مبلغ مؤثر"
+
+
+class FinancialAdjustmentStatus(models.TextChoices):
+    """وضعیت workflow اصلاح مالی."""
+
+    PENDING_REVIEW = "pending_review", "در انتظار بررسی"
+    APPROVED = "approved", "تأییدشده"
+    REJECTED = "rejected", "ردشده"
+    APPLIED = "applied", "اعمال‌شده"

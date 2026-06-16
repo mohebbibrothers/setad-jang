@@ -4431,6 +4431,130 @@ paths:
               schema:
                 $ref: '#/components/schemas/LMSErrorResponse'
           description: ''
+  /api/v1/madadkar/admin/adjustments/:
+    get:
+      operationId: madadkar_admin_adjustments_list
+      description: List and create financial adjustment workflow rows — admin.
+      summary: لیست اصلاحات مالی — ادمین
+      tags:
+      - مددکار — مدیریت (تحلیل و گزارش)
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MadadkarAdminAdjustmentsListResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MadadkarGenericErrorResponse'
+          description: ''
+    post:
+      operationId: madadkar_admin_adjustments_create
+      description: List and create financial adjustment workflow rows — admin.
+      summary: ثبت اصلاح مالی — ادمین
+      tags:
+      - مددکار — مدیریت (تحلیل و گزارش)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FinancialAdjustmentCreate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/FinancialAdjustmentCreate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/FinancialAdjustmentCreate'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MadadkarAdminAdjustmentDetailResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MadadkarGenericErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MadadkarGenericErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MadadkarGenericErrorResponse'
+          description: ''
+  /api/v1/madadkar/admin/adjustments/{adjustment_id}/{action}/:
+    post:
+      operationId: madadkar_admin_adjustment_action
+      description: Approve, reject, and apply financial adjustments — admin.
+      summary: عملیات اصلاح مالی — ادمین
+      parameters:
+      - in: path
+        name: action
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: adjustment_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - مددکار — مدیریت (تحلیل و گزارش)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FinancialAdjustmentReject'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/FinancialAdjustmentReject'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/FinancialAdjustmentReject'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MadadkarAdminAdjustmentDetailResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MadadkarGenericErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MadadkarGenericErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MadadkarGenericErrorResponse'
+          description: ''
   /api/v1/madadkar/admin/campaigns/:
     get:
       operationId: madadkar_admin_campaigns_list
@@ -4806,6 +4930,41 @@ paths:
               schema:
                 $ref: '#/components/schemas/MadadkarGenericErrorResponse'
           description: ''
+  /api/v1/madadkar/admin/campaigns/{campaign_id}/financial-control/:
+    get:
+      operationId: madadkar_admin_campaign_financial_control
+      description: Campaign-level financial controls summary including refunds and
+        adjustments.
+      summary: کنترل مالی حرکت — ادمین
+      parameters:
+      - in: path
+        name: campaign_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - مددکار — مدیریت (تحلیل و گزارش)
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MadadkarAdminFinancialControlResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MadadkarGenericErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MadadkarGenericErrorResponse'
+          description: ''
   /api/v1/madadkar/admin/campaigns/{campaign_id}/images/:
     get:
       operationId: madadkar_admin_campaign_images_list
@@ -5119,6 +5278,118 @@ paths:
                 $ref: '#/components/schemas/MadadkarAdminPaymentsListResponse'
           description: ''
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MadadkarGenericErrorResponse'
+          description: ''
+  /api/v1/madadkar/admin/refunds/:
+    get:
+      operationId: madadkar_admin_refunds_list
+      description: List and create reviewed payment refund requests — admin.
+      summary: لیست بازپرداخت‌ها — ادمین
+      tags:
+      - مددکار — مدیریت (تحلیل و گزارش)
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MadadkarAdminRefundsListResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MadadkarGenericErrorResponse'
+          description: ''
+    post:
+      operationId: madadkar_admin_refunds_create
+      description: List and create reviewed payment refund requests — admin.
+      summary: ثبت درخواست بازپرداخت — ادمین
+      tags:
+      - مددکار — مدیریت (تحلیل و گزارش)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentRefundRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PaymentRefundRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PaymentRefundRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MadadkarAdminRefundDetailResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MadadkarGenericErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MadadkarGenericErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MadadkarGenericErrorResponse'
+          description: ''
+  /api/v1/madadkar/admin/refunds/{refund_id}/{action}/:
+    post:
+      operationId: madadkar_admin_refund_approve
+      description: Approve, reject, and complete payment refund workflow rows — admin.
+      summary: تأیید بازپرداخت — ادمین
+      parameters:
+      - in: path
+        name: action
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: refund_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - مددکار — مدیریت (تحلیل و گزارش)
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MadadkarAdminRefundDetailResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MadadkarGenericErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MadadkarGenericErrorResponse'
+          description: ''
+        '404':
           content:
             application/json:
               schema:
@@ -11758,6 +12029,43 @@ components:
       - total_amount
       - total_shares
       - updated_at
+    CampaignFinancialControlSummary:
+      type: object
+      description: Serializer for admin campaign financial-control summary.
+      properties:
+        campaign_id:
+          type: integer
+          readOnly: true
+        gross_paid_amount:
+          type: integer
+          readOnly: true
+        completed_refund_amount:
+          type: integer
+          readOnly: true
+        completed_refund_count:
+          type: integer
+          readOnly: true
+        applied_adjustment_delta:
+          type: integer
+          readOnly: true
+        applied_adjustment_count:
+          type: integer
+          readOnly: true
+        net_effective_amount:
+          type: integer
+          readOnly: true
+        remaining_shares:
+          type: integer
+          readOnly: true
+      required:
+      - applied_adjustment_count
+      - applied_adjustment_delta
+      - campaign_id
+      - completed_refund_amount
+      - completed_refund_count
+      - gross_paid_amount
+      - net_effective_amount
+      - remaining_shares
     CampaignImageCreate:
       type: object
       description: ورودی افزودن تصویر به گالری.
@@ -12896,6 +13204,145 @@ components:
       - status
       - total_seconds_snapshot
       - watched_seconds
+    FinancialAdjustment:
+      type: object
+      description: Read serializer for campaign financial adjustment workflow rows.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        campaign:
+          type: integer
+          readOnly: true
+          title: حرکت
+        campaign_title:
+          type: string
+          readOnly: true
+        payment:
+          type: integer
+          readOnly: true
+          nullable: true
+          title: پرداخت مرتبط
+        payment_authority:
+          type: string
+          readOnly: true
+          nullable: true
+        requested_by:
+          allOf:
+          - $ref: '#/components/schemas/AdminUserSummary'
+          readOnly: true
+        reviewed_by:
+          allOf:
+          - $ref: '#/components/schemas/AdminUserSummary'
+          readOnly: true
+        adjustment_type:
+          allOf:
+          - $ref: '#/components/schemas/MadadkarFinancialAdjustmentTypeEnum'
+          readOnly: true
+        adjustment_type_display:
+          type: string
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/MadadkarFinancialAdjustmentStatusEnum'
+          readOnly: true
+        status_display:
+          type: string
+          readOnly: true
+        amount:
+          type: integer
+          readOnly: true
+          title: مبلغ اصلاح
+        signed_amount:
+          type: integer
+          readOnly: true
+        reason:
+          type: string
+          readOnly: true
+          title: دلیل
+        note:
+          type: string
+          readOnly: true
+        rejection_reason:
+          type: string
+          readOnly: true
+        reviewed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        applied_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: تاریخ ایجاد
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: تاریخ بروزرسانی
+      required:
+      - adjustment_type
+      - adjustment_type_display
+      - amount
+      - applied_at
+      - campaign
+      - campaign_title
+      - created_at
+      - id
+      - note
+      - payment
+      - payment_authority
+      - reason
+      - rejection_reason
+      - requested_by
+      - reviewed_at
+      - reviewed_by
+      - signed_amount
+      - status
+      - status_display
+      - updated_at
+    FinancialAdjustmentCreate:
+      type: object
+      description: Input serializer for creating a financial adjustment request.
+      properties:
+        campaign_id:
+          type: integer
+          minimum: 1
+        payment_id:
+          type: integer
+          minimum: 1
+          nullable: true
+        adjustment_type:
+          $ref: '#/components/schemas/MadadkarFinancialAdjustmentTypeEnum'
+        amount:
+          type: integer
+          minimum: 1
+        reason:
+          type: string
+          maxLength: 240
+        note:
+          type: string
+          default: ''
+      required:
+      - adjustment_type
+      - amount
+      - campaign_id
+      - reason
+    FinancialAdjustmentReject:
+      type: object
+      description: Input serializer for rejecting a financial adjustment request.
+      properties:
+        rejection_reason:
+          type: string
+          maxLength: 500
+      required:
+      - rejection_reason
     ForgotPassword:
       type: object
       description: ForgotPasswordSerializer implementation for the authentication
@@ -13915,7 +14362,7 @@ components:
           readOnly: true
         reason:
           allOf:
-          - $ref: '#/components/schemas/ReasonEnum'
+          - $ref: '#/components/schemas/KindnessReportReasonEnum'
           readOnly: true
         description:
           type: string
@@ -13958,7 +14405,7 @@ components:
       description: Input serializer for reporting a listing.
       properties:
         reason:
-          $ref: '#/components/schemas/ReasonEnum'
+          $ref: '#/components/schemas/KindnessReportReasonEnum'
         description:
           type: string
           default: ''
@@ -14068,6 +14515,26 @@ components:
         * `contacted` - تماس گرفته‌شده
         * `stale` - قدیمی
         * `expired` - منقضی‌شده
+    KindnessReportReasonEnum:
+      enum:
+      - spam
+      - fraud
+      - wrong_category
+      - inappropriate
+      - duplicate
+      - expired
+      - contact_invalid
+      - other
+      type: string
+      description: |-
+        * `spam` - اسپم
+        * `fraud` - مشکوک به سوءاستفاده
+        * `wrong_category` - دسته‌بندی اشتباه
+        * `inappropriate` - محتوای نامناسب
+        * `duplicate` - تکراری
+        * `expired` - منقضی‌شده
+        * `contact_invalid` - شماره تماس نامعتبر
+        * `other` - سایر
     KindnessUserBookmarkListResponse:
       type: object
       properties:
@@ -15583,6 +16050,58 @@ components:
           type: string
       required:
       - refresh
+    MadadkarAdminAdjustmentDetailResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          default: true
+        status_code:
+          type: integer
+          default: 200
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/FinancialAdjustment'
+      required:
+      - data
+      - message
+    MadadkarAdminAdjustmentsListResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/MadadkarAdminAdjustmentsListResponseData'
+        success:
+          type: boolean
+          default: true
+        status_code:
+          type: integer
+          default: 200
+        message:
+          type: string
+      required:
+      - data
+      - message
+    MadadkarAdminAdjustmentsListResponseData:
+      type: object
+      properties:
+        count:
+          type: integer
+        next:
+          type: string
+          format: uri
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/FinancialAdjustment'
+      required:
+      - count
+      - results
     MadadkarAdminCampaignAnalyticsResponse:
       type: object
       properties:
@@ -15685,6 +16204,22 @@ components:
       required:
       - count
       - results
+    MadadkarAdminFinancialControlResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          default: true
+        status_code:
+          type: integer
+          default: 200
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/CampaignFinancialControlSummary'
+      required:
+      - data
+      - message
     MadadkarAdminLeaderboardResponse:
       type: object
       properties:
@@ -15775,6 +16310,58 @@ components:
       required:
       - count
       - results
+    MadadkarAdminRefundDetailResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          default: true
+        status_code:
+          type: integer
+          default: 200
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/PaymentRefund'
+      required:
+      - data
+      - message
+    MadadkarAdminRefundsListResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/MadadkarAdminRefundsListResponseData'
+        success:
+          type: boolean
+          default: true
+        status_code:
+          type: integer
+          default: 200
+        message:
+          type: string
+      required:
+      - data
+      - message
+    MadadkarAdminRefundsListResponseData:
+      type: object
+      properties:
+        count:
+          type: integer
+        next:
+          type: string
+          format: uri
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/PaymentRefund'
+      required:
+      - count
+      - results
     MadadkarAdminSponsorDetailResponse:
       type: object
       properties:
@@ -15854,6 +16441,26 @@ components:
           nullable: true
       required:
       - message
+    MadadkarFinancialAdjustmentStatusEnum:
+      enum:
+      - pending_review
+      - approved
+      - rejected
+      - applied
+      type: string
+      description: |-
+        * `pending_review` - در انتظار بررسی
+        * `approved` - تأییدشده
+        * `rejected` - ردشده
+        * `applied` - اعمال‌شده
+    MadadkarFinancialAdjustmentTypeEnum:
+      enum:
+      - credit
+      - debit
+      type: string
+      description: |-
+        * `credit` - افزایش مبلغ مؤثر
+        * `debit` - کاهش مبلغ مؤثر
     MadadkarGenericErrorResponse:
       type: object
       properties:
@@ -15891,12 +16498,14 @@ components:
       - paid
       - failed
       - expired
+      - refunded
       type: string
       description: |-
         * `pending_payment` - در انتظار پرداخت
         * `paid` - پرداخت‌شده
         * `failed` - ناموفق
         * `expired` - منقضی‌شده
+        * `refunded` - بازپرداخت‌شده
     MadadkarPaymentStatusEnum:
       enum:
       - pending
@@ -16027,6 +16636,36 @@ components:
       required:
       - count
       - results
+    MadadkarRefundReasonEnum:
+      enum:
+      - duplicate_payment
+      - user_request
+      - campaign_canceled
+      - provider_reversal
+      - admin_correction
+      - other
+      type: string
+      description: |-
+        * `duplicate_payment` - پرداخت تکراری
+        * `user_request` - درخواست کاربر
+        * `campaign_canceled` - لغو حرکت
+        * `provider_reversal` - برگشت از سمت درگاه
+        * `admin_correction` - اصلاح ادمین
+        * `other` - سایر
+    MadadkarRefundStatusEnum:
+      enum:
+      - pending_review
+      - approved
+      - rejected
+      - completed
+      - failed
+      type: string
+      description: |-
+        * `pending_review` - در انتظار بررسی
+        * `approved` - تأییدشده
+        * `rejected` - ردشده
+        * `completed` - تکمیل‌شده
+        * `failed` - ناموفق
     MadadkarUserParticipationDetailResponse:
       type: object
       properties:
@@ -17350,6 +17989,134 @@ components:
           maxLength: 100
         address:
           type: string
+    PaymentRefund:
+      type: object
+      description: Read serializer for refund workflow rows.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        payment:
+          type: integer
+          readOnly: true
+          title: پرداخت
+        payment_authority:
+          type: string
+          readOnly: true
+        campaign_id:
+          type: integer
+          readOnly: true
+        requested_by:
+          allOf:
+          - $ref: '#/components/schemas/AdminUserSummary'
+          readOnly: true
+        reviewed_by:
+          allOf:
+          - $ref: '#/components/schemas/AdminUserSummary'
+          readOnly: true
+        amount:
+          type: integer
+          readOnly: true
+          title: مبلغ بازپرداخت
+        reason:
+          allOf:
+          - $ref: '#/components/schemas/MadadkarRefundReasonEnum'
+          readOnly: true
+          title: دلیل
+        reason_display:
+          type: string
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/MadadkarRefundStatusEnum'
+          readOnly: true
+          title: وضعیت
+        status_display:
+          type: string
+          readOnly: true
+        idempotency_key:
+          type: string
+          readOnly: true
+          nullable: true
+        provider_ref_id:
+          type: string
+          readOnly: true
+          title: شناسه بازپرداخت درگاه
+        note:
+          type: string
+          readOnly: true
+          title: یادداشت
+        rejection_reason:
+          type: string
+          readOnly: true
+          title: دلیل رد
+        is_full_refund:
+          type: boolean
+          readOnly: true
+        reviewed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        completed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: تاریخ ایجاد
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: تاریخ بروزرسانی
+      required:
+      - amount
+      - campaign_id
+      - completed_at
+      - created_at
+      - id
+      - idempotency_key
+      - is_full_refund
+      - note
+      - payment
+      - payment_authority
+      - provider_ref_id
+      - reason
+      - reason_display
+      - rejection_reason
+      - requested_by
+      - reviewed_at
+      - reviewed_by
+      - status
+      - status_display
+      - updated_at
+    PaymentRefundRequest:
+      type: object
+      description: Input serializer for creating a payment refund request.
+      properties:
+        payment_id:
+          type: integer
+          minimum: 1
+        amount:
+          type: integer
+          minimum: 1
+        reason:
+          allOf:
+          - $ref: '#/components/schemas/MadadkarRefundReasonEnum'
+          default: other
+        note:
+          type: string
+          default: ''
+        idempotency_key:
+          type: string
+          default: ''
+      required:
+      - amount
+      - payment_id
     PaymentUserSummary:
       type: object
       description: خلاصه پرداخت برای نمایش در داخل Participation detail.
@@ -20185,26 +20952,6 @@ components:
       - checks
       - status
       - timestamp
-    ReasonEnum:
-      enum:
-      - spam
-      - fraud
-      - wrong_category
-      - inappropriate
-      - duplicate
-      - expired
-      - contact_invalid
-      - other
-      type: string
-      description: |-
-        * `spam` - اسپم
-        * `fraud` - مشکوک به سوءاستفاده
-        * `wrong_category` - دسته‌بندی اشتباه
-        * `inappropriate` - محتوای نامناسب
-        * `duplicate` - تکراری
-        * `expired` - منقضی‌شده
-        * `contact_invalid` - شماره تماس نامعتبر
-        * `other` - سایر
     RefreshTokenInput:
       type: object
       description: RefreshTokenInputSerializer implementation for the authentication

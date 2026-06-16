@@ -33,10 +33,13 @@ URL routing اپ مددکار.
 from django.urls import path
 
 from .views import (
+    MadadkarAdminAdjustmentActionView,
+    MadadkarAdminAdjustmentListCreateView,
     MadadkarAdminCampaignAnalyticsView,
     MadadkarAdminCampaignCloseView,
     MadadkarAdminCampaignDetailView,
     MadadkarAdminCampaignExportView,
+    MadadkarAdminCampaignFinancialControlView,
     MadadkarAdminCampaignImageDeleteView,
     MadadkarAdminCampaignImageListCreateView,
     MadadkarAdminCampaignLeaderboardView,
@@ -44,6 +47,8 @@ from .views import (
     MadadkarAdminCampaignParticipantsListView,
     MadadkarAdminCampaignPublishView,
     MadadkarAdminPaymentListView,
+    MadadkarAdminRefundActionView,
+    MadadkarAdminRefundListCreateView,
     MadadkarAdminSponsorDetailView,
     MadadkarAdminSponsorListCreateView,
     MadadkarPaymentVerifyView,
@@ -195,6 +200,35 @@ urlpatterns = [
         "admin/campaigns/<int:campaign_id>/export/",
         MadadkarAdminCampaignExportView.as_view(),
         name="admin-campaign-export",
+    ),
+    path(
+        "admin/campaigns/<int:campaign_id>/financial-control/",
+        MadadkarAdminCampaignFinancialControlView.as_view(),
+        name="admin-campaign-financial-control",
+    ),
+
+    # ====================================================
+    # Admin — Refunds / Adjustments
+    # ====================================================
+    path(
+        "admin/refunds/",
+        MadadkarAdminRefundListCreateView.as_view(),
+        name="admin-refund-list-create",
+    ),
+    path(
+        "admin/refunds/<int:refund_id>/<str:action>/",
+        MadadkarAdminRefundActionView.as_view(),
+        name="admin-refund-action",
+    ),
+    path(
+        "admin/adjustments/",
+        MadadkarAdminAdjustmentListCreateView.as_view(),
+        name="admin-adjustment-list-create",
+    ),
+    path(
+        "admin/adjustments/<int:adjustment_id>/<str:action>/",
+        MadadkarAdminAdjustmentActionView.as_view(),
+        name="admin-adjustment-action",
     ),
 
     # ====================================================

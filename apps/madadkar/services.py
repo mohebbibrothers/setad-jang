@@ -44,20 +44,26 @@ from django.utils import timezone
 
 from apps.madadkar.choices import (
     CampaignStatus,
+    FinancialAdjustmentStatus,
+    FinancialAdjustmentType,
     ParticipationStatus,
     PaymentEventKind,
     PaymentStatus,
     ReconciliationItemStatus,
     ReconciliationStatus,
+    RefundReason,
+    RefundStatus,
 )
 from apps.madadkar.models import (
     Campaign,
+    CampaignFinancialAdjustment,
     CampaignImage,
     Participation,
     Payment,
     PaymentEvent,
     PaymentReconciliationBatch,
     PaymentReconciliationItem,
+    PaymentRefund,
     Sponsor,
 )
 from apps.madadkar.payment_providers import get_payment_provider
@@ -126,6 +132,14 @@ class PaymentAmountMismatchError(MadadkarServiceError):
     """مبلغ تأیید‌شده توسط درگاه با مبلغ stored برابر نیست (تهدید tampering)."""
 
 
+class RefundWorkflowError(MadadkarServiceError):
+    """خطای workflow بازپرداخت مددکار."""
+
+
+class FinancialAdjustmentWorkflowError(MadadkarServiceError):
+    """خطای workflow اصلاح مالی مددکار."""
+
+
 # ===========================================================================
 # Helpers
 # ===========================================================================
@@ -188,9 +202,19 @@ def _sync_campaign_counters(*, campaign: Campaign) -> Campaign:
         paid_amount=Sum("total_amount"),
         unique_users=Count("user_id", distinct=True),
     )
+    completed_refunds = PaymentRefund.objects.filter(
+        payment__participation__campaign=campaign,
+        payment__participation__status=ParticipationStatus.PAID,
+        status=RefundStatus.COMPLETED,
+    ).aggregate(total=Sum("amount"))["total"] or 0
+    applied_adjustments = CampaignFinancialAdjustment.objects.filter(
+        campaign=campaign,
+        status=FinancialAdjustmentStatus.APPLIED,
+    )
+    adjustment_delta = sum(adjustment.signed_amount for adjustment in applied_adjustments)
 
     campaign.purchased_shares = aggregates["reserved_shares"] or 0
-    campaign.purchased_amount = paid_aggregates["paid_amount"] or 0
+    campaign.purchased_amount = max((paid_aggregates["paid_amount"] or 0) - completed_refunds + adjustment_delta, 0)
     campaign.participant_count = paid_aggregates["unique_users"] or 0
     campaign.save(
         update_fields=[
@@ -1164,6 +1188,228 @@ def close_campaign_due_to_deadline(*, campaign: Campaign) -> Campaign:
         campaign.pk,
     )
     return campaign
+
+
+# ===========================================================================
+# Refund / adjustment workflow services
+# ===========================================================================
+
+def _completed_refund_total(*, payment: Payment) -> int:
+    """Return already completed refund amount for a payment."""
+    return PaymentRefund.objects.filter(payment=payment, status=RefundStatus.COMPLETED).aggregate(total=Sum("amount"))["total"] or 0
+
+
+def _open_refund_total(*, payment: Payment) -> int:
+    """Return refund amount already locked by non-terminal refund requests."""
+    return PaymentRefund.objects.filter(
+        payment=payment,
+        status__in=[RefundStatus.PENDING_REVIEW, RefundStatus.APPROVED],
+    ).aggregate(total=Sum("amount"))["total"] or 0
+
+
+@transaction.atomic
+def request_payment_refund(
+    *,
+    payment: Payment,
+    amount: int,
+    reason: str = RefundReason.OTHER,
+    requested_by: Any = None,
+    note: str = "",
+    idempotency_key: str | None = None,
+) -> PaymentRefund:
+    """Create a reviewed refund request for a successful payment."""
+    locked_payment = Payment.objects.select_for_update().select_related("participation", "participation__campaign").get(pk=payment.pk)
+    if locked_payment.status != PaymentStatus.SUCCESS:
+        raise RefundWorkflowError("فقط پرداخت‌های موفق قابل بازپرداخت هستند.")
+    if amount <= 0:
+        raise RefundWorkflowError("مبلغ بازپرداخت باید بزرگ‌تر از صفر باشد.")
+    available = locked_payment.amount - _completed_refund_total(payment=locked_payment) - _open_refund_total(payment=locked_payment)
+    if amount > available:
+        raise RefundWorkflowError("مبلغ بازپرداخت از مانده قابل بازپرداخت بیشتر است.")
+    if idempotency_key:
+        existing = PaymentRefund.objects.filter(idempotency_key=idempotency_key).first()
+        if existing is not None:
+            return existing
+    refund = PaymentRefund.objects.create(
+        payment=locked_payment,
+        requested_by=requested_by,
+        amount=amount,
+        reason=reason,
+        note=note,
+        idempotency_key=idempotency_key,
+        status=RefundStatus.PENDING_REVIEW,
+    )
+    _record_payment_event(
+        payment=locked_payment,
+        event_kind=PaymentEventKind.REFUND_REQUESTED,
+        previous_status=locked_payment.status,
+        new_status=locked_payment.status,
+        metadata={"refund_id": refund.pk, "amount": amount, "reason": reason},
+    )
+    return refund
+
+
+@transaction.atomic
+def approve_payment_refund(*, refund: PaymentRefund, reviewed_by: Any = None, note: str = "") -> PaymentRefund:
+    """Approve a pending refund request without applying financial effects yet."""
+    locked_refund = PaymentRefund.objects.select_for_update().select_related("payment").get(pk=refund.pk)
+    if locked_refund.status != RefundStatus.PENDING_REVIEW:
+        raise RefundWorkflowError("فقط درخواست‌های در انتظار بررسی قابل تأیید هستند.")
+    locked_refund.status = RefundStatus.APPROVED
+    locked_refund.reviewed_by = reviewed_by
+    locked_refund.reviewed_at = timezone.now()
+    if note:
+        locked_refund.note = note
+    locked_refund.save(update_fields=["status", "reviewed_by", "reviewed_at", "note", "updated_at"])
+    _record_payment_event(
+        payment=locked_refund.payment,
+        event_kind=PaymentEventKind.REFUND_APPROVED,
+        previous_status=locked_refund.payment.status,
+        new_status=locked_refund.payment.status,
+        metadata={"refund_id": locked_refund.pk, "amount": locked_refund.amount},
+    )
+    return locked_refund
+
+
+@transaction.atomic
+def reject_payment_refund(*, refund: PaymentRefund, reviewed_by: Any = None, rejection_reason: str = "") -> PaymentRefund:
+    """Reject a pending refund request with immutable payment ledger evidence."""
+    locked_refund = PaymentRefund.objects.select_for_update().select_related("payment").get(pk=refund.pk)
+    if locked_refund.status != RefundStatus.PENDING_REVIEW:
+        raise RefundWorkflowError("فقط درخواست‌های در انتظار بررسی قابل رد هستند.")
+    locked_refund.status = RefundStatus.REJECTED
+    locked_refund.reviewed_by = reviewed_by
+    locked_refund.reviewed_at = timezone.now()
+    locked_refund.rejection_reason = rejection_reason
+    locked_refund.save(update_fields=["status", "reviewed_by", "reviewed_at", "rejection_reason", "updated_at"])
+    _record_payment_event(
+        payment=locked_refund.payment,
+        event_kind=PaymentEventKind.REFUND_REJECTED,
+        previous_status=locked_refund.payment.status,
+        new_status=locked_refund.payment.status,
+        metadata={"refund_id": locked_refund.pk, "reason": rejection_reason},
+    )
+    return locked_refund
+
+
+@transaction.atomic
+def complete_payment_refund(*, refund: PaymentRefund, provider_ref_id: str = "") -> PaymentRefund:
+    """Mark an approved refund as completed and resync campaign accounting."""
+    locked_refund = PaymentRefund.objects.select_for_update().select_related("payment", "payment__participation").get(pk=refund.pk)
+    if locked_refund.status != RefundStatus.APPROVED:
+        raise RefundWorkflowError("فقط بازپرداخت‌های تأییدشده قابل تکمیل هستند.")
+    locked_payment = Payment.objects.select_for_update().get(pk=locked_refund.payment_id)
+    campaign = Campaign.objects.select_for_update().get(pk=locked_payment.participation.campaign_id)
+    locked_refund.status = RefundStatus.COMPLETED
+    locked_refund.provider_ref_id = provider_ref_id
+    locked_refund.completed_at = timezone.now()
+    locked_refund.save(update_fields=["status", "provider_ref_id", "completed_at", "updated_at"])
+    if locked_refund.amount >= locked_payment.amount:
+        participation = locked_payment.participation
+        participation.status = ParticipationStatus.REFUNDED
+        participation.save(update_fields=["status", "updated_at"])
+    _record_payment_event(
+        payment=locked_payment,
+        event_kind=PaymentEventKind.REFUND_COMPLETED,
+        previous_status=locked_payment.status,
+        new_status=locked_payment.status,
+        metadata={
+            "refund_id": locked_refund.pk,
+            "amount": locked_refund.amount,
+            "provider_ref_id": provider_ref_id,
+            "full_refund": locked_refund.amount >= locked_payment.amount,
+        },
+    )
+    _sync_campaign_counters(campaign=campaign)
+    return locked_refund
+
+
+@transaction.atomic
+def create_financial_adjustment(
+    *,
+    campaign: Campaign,
+    amount: int,
+    adjustment_type: str,
+    reason: str,
+    requested_by: Any = None,
+    payment: Payment | None = None,
+    note: str = "",
+) -> CampaignFinancialAdjustment:
+    """Create a two-step manual financial adjustment for campaign accounting."""
+    if amount <= 0:
+        raise FinancialAdjustmentWorkflowError("مبلغ اصلاح مالی باید بزرگ‌تر از صفر باشد.")
+    if adjustment_type not in FinancialAdjustmentType.values:
+        raise FinancialAdjustmentWorkflowError("نوع اصلاح مالی نامعتبر است.")
+    if payment is not None and payment.participation.campaign_id != campaign.pk:
+        raise FinancialAdjustmentWorkflowError("پرداخت انتخاب‌شده متعلق به این حرکت نیست.")
+    return CampaignFinancialAdjustment.objects.create(
+        campaign=campaign,
+        payment=payment,
+        requested_by=requested_by,
+        amount=amount,
+        adjustment_type=adjustment_type,
+        reason=reason,
+        note=note,
+        status=FinancialAdjustmentStatus.PENDING_REVIEW,
+    )
+
+
+@transaction.atomic
+def approve_financial_adjustment(*, adjustment: CampaignFinancialAdjustment, reviewed_by: Any = None) -> CampaignFinancialAdjustment:
+    """Approve a pending financial adjustment before final application."""
+    locked_adjustment = CampaignFinancialAdjustment.objects.select_for_update().get(pk=adjustment.pk)
+    if locked_adjustment.status != FinancialAdjustmentStatus.PENDING_REVIEW:
+        raise FinancialAdjustmentWorkflowError("فقط اصلاحات در انتظار بررسی قابل تأیید هستند.")
+    locked_adjustment.status = FinancialAdjustmentStatus.APPROVED
+    locked_adjustment.reviewed_by = reviewed_by
+    locked_adjustment.reviewed_at = timezone.now()
+    locked_adjustment.save(update_fields=["status", "reviewed_by", "reviewed_at", "updated_at"])
+    return locked_adjustment
+
+
+@transaction.atomic
+def reject_financial_adjustment(
+    *,
+    adjustment: CampaignFinancialAdjustment,
+    reviewed_by: Any = None,
+    rejection_reason: str = "",
+) -> CampaignFinancialAdjustment:
+    """Reject a pending financial adjustment with reviewer evidence."""
+    locked_adjustment = CampaignFinancialAdjustment.objects.select_for_update().get(pk=adjustment.pk)
+    if locked_adjustment.status != FinancialAdjustmentStatus.PENDING_REVIEW:
+        raise FinancialAdjustmentWorkflowError("فقط اصلاحات در انتظار بررسی قابل رد هستند.")
+    locked_adjustment.status = FinancialAdjustmentStatus.REJECTED
+    locked_adjustment.reviewed_by = reviewed_by
+    locked_adjustment.reviewed_at = timezone.now()
+    locked_adjustment.rejection_reason = rejection_reason
+    locked_adjustment.save(update_fields=["status", "reviewed_by", "reviewed_at", "rejection_reason", "updated_at"])
+    return locked_adjustment
+
+
+@transaction.atomic
+def apply_financial_adjustment(*, adjustment: CampaignFinancialAdjustment) -> CampaignFinancialAdjustment:
+    """Apply an approved financial adjustment and resync campaign counters."""
+    locked_adjustment = CampaignFinancialAdjustment.objects.select_for_update().select_related("campaign", "payment").get(pk=adjustment.pk)
+    if locked_adjustment.status != FinancialAdjustmentStatus.APPROVED:
+        raise FinancialAdjustmentWorkflowError("فقط اصلاحات تأییدشده قابل اعمال هستند.")
+    campaign = Campaign.objects.select_for_update().get(pk=locked_adjustment.campaign_id)
+    locked_adjustment.status = FinancialAdjustmentStatus.APPLIED
+    locked_adjustment.applied_at = timezone.now()
+    locked_adjustment.save(update_fields=["status", "applied_at", "updated_at"])
+    if locked_adjustment.payment is not None:
+        _record_payment_event(
+            payment=locked_adjustment.payment,
+            event_kind=PaymentEventKind.ADJUSTMENT_APPLIED,
+            previous_status=locked_adjustment.payment.status,
+            new_status=locked_adjustment.payment.status,
+            metadata={
+                "adjustment_id": locked_adjustment.pk,
+                "amount": locked_adjustment.amount,
+                "type": locked_adjustment.adjustment_type,
+            },
+        )
+    _sync_campaign_counters(campaign=campaign)
+    return locked_adjustment
 
 
 # ===========================================================================

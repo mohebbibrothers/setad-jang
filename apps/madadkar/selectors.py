@@ -20,9 +20,11 @@ from django.utils import timezone
 from apps.madadkar.choices import CampaignStatus, ParticipationStatus
 from apps.madadkar.models import (
     Campaign,
+    CampaignFinancialAdjustment,
     CampaignImage,
     Participation,
     Payment,
+    PaymentRefund,
     Sponsor,
 )
 
@@ -423,5 +425,69 @@ def get_campaign_analytics(*, campaign: Campaign) -> dict:
         "total_paid_shares": paid_aggregates["total_shares"] or 0,
         "unique_paid_users": paid_aggregates["unique_users"] or 0,
         "progress_percent": campaign.progress_percent,
+        "remaining_shares": campaign.remaining_shares,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Refund / adjustment selectors — admin scope
+# ---------------------------------------------------------------------------
+
+def get_admin_refunds_queryset() -> QuerySet[PaymentRefund]:
+    """Return all refund workflow rows with payment/campaign/user eager loading."""
+    return (
+        PaymentRefund.objects
+        .select_related(
+            "payment",
+            "payment__participation",
+            "payment__participation__campaign",
+            "requested_by",
+            "reviewed_by",
+        )
+        .order_by("-created_at")
+    )
+
+
+def get_admin_refund_by_id(*, refund_id: int) -> PaymentRefund | None:
+    """Return one refund workflow row for admin review."""
+    return get_admin_refunds_queryset().filter(pk=refund_id).first()
+
+
+def get_admin_adjustments_queryset() -> QuerySet[CampaignFinancialAdjustment]:
+    """Return all financial adjustments with campaign/payment/user eager loading."""
+    return (
+        CampaignFinancialAdjustment.objects
+        .select_related("campaign", "payment", "requested_by", "reviewed_by")
+        .order_by("-created_at")
+    )
+
+
+def get_admin_adjustment_by_id(*, adjustment_id: int) -> CampaignFinancialAdjustment | None:
+    """Return one financial adjustment for admin review."""
+    return get_admin_adjustments_queryset().filter(pk=adjustment_id).first()
+
+
+def get_campaign_financial_control_summary(*, campaign: Campaign) -> dict:
+    """Build a campaign accounting-control summary including refunds and adjustments."""
+    completed_refunds = PaymentRefund.objects.filter(
+        payment__participation__campaign=campaign,
+        status="completed",
+    ).aggregate(total=Sum("amount"), count=Count("id"))
+    applied_adjustments = CampaignFinancialAdjustment.objects.filter(
+        campaign=campaign,
+        status="applied",
+    )
+    adjustment_delta = sum(adjustment.signed_amount for adjustment in applied_adjustments)
+    return {
+        "campaign_id": campaign.pk,
+        "gross_paid_amount": Participation.objects.filter(
+            campaign=campaign,
+            status=ParticipationStatus.PAID,
+        ).aggregate(total=Sum("total_amount"))["total"] or 0,
+        "completed_refund_amount": completed_refunds["total"] or 0,
+        "completed_refund_count": completed_refunds["count"] or 0,
+        "applied_adjustment_delta": adjustment_delta,
+        "applied_adjustment_count": applied_adjustments.count(),
+        "net_effective_amount": campaign.purchased_amount,
         "remaining_shares": campaign.remaining_shares,
     }

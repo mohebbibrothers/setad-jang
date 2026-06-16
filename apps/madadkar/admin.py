@@ -13,12 +13,14 @@ from django.utils.html import format_html
 
 from apps.madadkar.models import (
     Campaign,
+    CampaignFinancialAdjustment,
     CampaignImage,
     Participation,
     Payment,
     PaymentEvent,
     PaymentReconciliationBatch,
     PaymentReconciliationItem,
+    PaymentRefund,
     Sponsor,
 )
 
@@ -311,3 +313,83 @@ class PaymentReconciliationItemAdmin(admin.ModelAdmin):
     search_fields = ("authority", "provider_ref_id", "payment__authority", "payment__ref_id")
     raw_id_fields = ("batch", "payment")
     readonly_fields = [field.name for field in PaymentReconciliationItem._meta.fields]
+
+
+# ---------------------------------------------------------------------------
+# Refund / financial adjustment controls
+# ---------------------------------------------------------------------------
+
+@admin.register(PaymentRefund)
+class PaymentRefundAdmin(admin.ModelAdmin):
+    """Read-oriented admin for refund workflow evidence."""
+
+    list_display = ("id", "payment", "amount", "reason", "status", "requested_by", "reviewed_by", "created_at")
+    list_filter = ("status", "reason")
+    search_fields = ("payment__authority", "payment__ref_id", "provider_ref_id")
+    readonly_fields = (
+        "payment",
+        "requested_by",
+        "reviewed_by",
+        "amount",
+        "reason",
+        "status",
+        "idempotency_key",
+        "provider_ref_id",
+        "note",
+        "rejection_reason",
+        "reviewed_at",
+        "completed_at",
+        "created_at",
+        "updated_at",
+    )
+    ordering = ("-created_at",)
+
+    def has_add_permission(self, request) -> bool:
+        """Refunds must be created through audited service/API workflow."""
+        return False
+
+    def has_change_permission(self, request, obj=None) -> bool:
+        """Refund workflow mutation is restricted to audited API actions."""
+        return False
+
+    def has_delete_permission(self, request, obj=None) -> bool:
+        """Refund evidence must not be deleted from admin."""
+        return False
+
+
+@admin.register(CampaignFinancialAdjustment)
+class CampaignFinancialAdjustmentAdmin(admin.ModelAdmin):
+    """Read-oriented admin for financial adjustment workflow evidence."""
+
+    list_display = ("id", "campaign", "adjustment_type", "amount", "status", "requested_by", "reviewed_by", "created_at")
+    list_filter = ("status", "adjustment_type")
+    search_fields = ("campaign__title", "payment__authority", "reason")
+    readonly_fields = (
+        "campaign",
+        "payment",
+        "requested_by",
+        "reviewed_by",
+        "adjustment_type",
+        "status",
+        "amount",
+        "reason",
+        "note",
+        "rejection_reason",
+        "reviewed_at",
+        "applied_at",
+        "created_at",
+        "updated_at",
+    )
+    ordering = ("-created_at",)
+
+    def has_add_permission(self, request) -> bool:
+        """Adjustments must be created through audited service/API workflow."""
+        return False
+
+    def has_change_permission(self, request, obj=None) -> bool:
+        """Adjustment workflow mutation is restricted to audited API actions."""
+        return False
+
+    def has_delete_permission(self, request, obj=None) -> bool:
+        """Adjustment evidence must not be deleted from admin."""
+        return False

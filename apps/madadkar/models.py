@@ -25,11 +25,15 @@ from django.utils.text import slugify
 from apps.core.models import BaseModel
 from apps.madadkar.choices import (
     CampaignStatus,
+    FinancialAdjustmentStatus,
+    FinancialAdjustmentType,
     ParticipationStatus,
     PaymentEventKind,
     PaymentStatus,
     ReconciliationItemStatus,
     ReconciliationStatus,
+    RefundReason,
+    RefundStatus,
 )
 from apps.madadkar.managers import (
     CampaignAcceptingSharesManager,
@@ -676,6 +680,140 @@ class PaymentEvent(BaseModel):
     def restore(self) -> None:
         """بازیابی روی ledger append-only معنا ندارد."""
         raise PermissionError("بازیابی رویدادهای پرداخت مجاز نیست.")
+
+
+# ---------------------------------------------------------------------------
+# Refund / Adjustment Workflow
+# ---------------------------------------------------------------------------
+
+class PaymentRefund(BaseModel):
+    """Controlled refund workflow for successful Madadkar payments."""
+
+    payment = models.ForeignKey(
+        Payment,
+        on_delete=models.PROTECT,
+        related_name="refunds",
+        verbose_name="پرداخت",
+    )
+    requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="madadkar_refunds_requested",
+        verbose_name="درخواست‌کننده",
+    )
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="madadkar_refunds_reviewed",
+        verbose_name="بررسی‌کننده",
+    )
+    amount = models.PositiveBigIntegerField(verbose_name="مبلغ بازپرداخت")
+    reason = models.CharField(max_length=40, choices=RefundReason.choices, verbose_name="دلیل")
+    status = models.CharField(
+        max_length=30,
+        choices=RefundStatus.choices,
+        default=RefundStatus.PENDING_REVIEW,
+        db_index=True,
+        verbose_name="وضعیت",
+    )
+    idempotency_key = models.CharField(max_length=120, null=True, blank=True, unique=True)
+    provider_ref_id = models.CharField(max_length=120, blank=True, verbose_name="شناسه بازپرداخت درگاه")
+    note = models.TextField(blank=True, verbose_name="یادداشت")
+    rejection_reason = models.TextField(blank=True, verbose_name="دلیل رد")
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = "بازپرداخت مددکار"
+        verbose_name_plural = "بازپرداخت‌های مددکار"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["payment", "status"], name="madadkar_ref_payment_status_idx"),
+            models.Index(fields=["status", "-created_at"], name="madadkar_ref_status_time_idx"),
+        ]
+        constraints = [
+            models.CheckConstraint(condition=models.Q(amount__gte=1), name="madadkar_ref_amount_min"),
+        ]
+
+    def __str__(self) -> str:
+        return f"Refund #{self.pk}: payment={self.payment_id} amount={self.amount} status={self.status}"
+
+    @property
+    def is_full_refund(self) -> bool:
+        """Whether this refund covers the entire payment amount."""
+        return self.amount >= self.payment.amount
+
+
+class CampaignFinancialAdjustment(BaseModel):
+    """Auditable manual financial adjustment for campaign accounting."""
+
+    campaign = models.ForeignKey(
+        Campaign,
+        on_delete=models.PROTECT,
+        related_name="financial_adjustments",
+        verbose_name="حرکت",
+    )
+    payment = models.ForeignKey(
+        Payment,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="financial_adjustments",
+        verbose_name="پرداخت مرتبط",
+    )
+    requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="madadkar_adjustments_requested",
+    )
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="madadkar_adjustments_reviewed",
+    )
+    adjustment_type = models.CharField(max_length=20, choices=FinancialAdjustmentType.choices)
+    status = models.CharField(
+        max_length=30,
+        choices=FinancialAdjustmentStatus.choices,
+        default=FinancialAdjustmentStatus.PENDING_REVIEW,
+        db_index=True,
+    )
+    amount = models.PositiveBigIntegerField(verbose_name="مبلغ اصلاح")
+    reason = models.CharField(max_length=240, verbose_name="دلیل")
+    note = models.TextField(blank=True)
+    rejection_reason = models.TextField(blank=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    applied_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = "اصلاح مالی کمپین"
+        verbose_name_plural = "اصلاحات مالی کمپین"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["campaign", "status"], name="madadkar_adj_campaign_status_idx"),
+            models.Index(fields=["status", "-created_at"], name="madadkar_adj_status_time_idx"),
+        ]
+        constraints = [
+            models.CheckConstraint(condition=models.Q(amount__gte=1), name="madadkar_adj_amount_min"),
+        ]
+
+    def __str__(self) -> str:
+        return f"Adjustment #{self.pk}: campaign={self.campaign_id} amount={self.amount} status={self.status}"
+
+    @property
+    def signed_amount(self) -> int:
+        """Return positive credit or negative debit amount for reporting."""
+        if self.adjustment_type == FinancialAdjustmentType.CREDIT:
+            return self.amount
+        return -self.amount
 
 
 # ---------------------------------------------------------------------------

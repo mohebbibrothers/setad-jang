@@ -750,6 +750,11 @@ This enables future Zarinpal settlement reconciliation without rewriting payment
 - sandbox payment provider
 - Zarinpal provider آماده برای بعد از مجوز
 - immutable payment event ledger
+- provider settlement reconciliation
+- refund workflow با request/approve/reject/complete
+- campaign financial adjustment workflow با create/approve/reject/apply
+- financial-control summary با gross/refunds/adjustments/net amount
+- audit logging برای همه عملیات حساس مالی
 - admin analytics
 - Excel export participants
 - Celery cleanup tasks
@@ -789,6 +794,15 @@ POST /api/v1/madadkar/admin/campaigns/{id}/publish/
 POST /api/v1/madadkar/admin/campaigns/{id}/close/
 GET /api/v1/madadkar/admin/campaigns/{id}/analytics/
 GET /api/v1/madadkar/admin/campaigns/{id}/export/
+GET /api/v1/madadkar/admin/campaigns/{id}/financial-control/
+GET/POST /api/v1/madadkar/admin/refunds/
+POST /api/v1/madadkar/admin/refunds/{id}/approve/
+POST /api/v1/madadkar/admin/refunds/{id}/reject/
+POST /api/v1/madadkar/admin/refunds/{id}/complete/
+GET/POST /api/v1/madadkar/admin/adjustments/
+POST /api/v1/madadkar/admin/adjustments/{id}/approve/
+POST /api/v1/madadkar/admin/adjustments/{id}/reject/
+POST /api/v1/madadkar/admin/adjustments/{id}/apply/
 ```
 
 ### Celery tasks

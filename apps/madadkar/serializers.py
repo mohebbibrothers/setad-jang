@@ -23,12 +23,18 @@ from __future__ import annotations
 
 from rest_framework import serializers
 
-from apps.madadkar.choices import CampaignStatus
+from apps.madadkar.choices import (
+    CampaignStatus,
+    FinancialAdjustmentType,
+    RefundReason,
+)
 from apps.madadkar.models import (
     Campaign,
+    CampaignFinancialAdjustment,
     CampaignImage,
     Participation,
     Payment,
+    PaymentRefund,
     Sponsor,
 )
 from apps.madadkar.validators import (
@@ -714,3 +720,135 @@ class AdminPaymentListSerializer(serializers.ModelSerializer):
             "created_at",
         )
         read_only_fields = fields
+
+
+# ===========================================================================
+# Refund / adjustment serializers — admin financial controls
+# ===========================================================================
+
+class PaymentRefundSerializer(serializers.ModelSerializer):
+    """Read serializer for refund workflow rows."""
+
+    payment_authority = serializers.CharField(source="payment.authority", read_only=True)
+    campaign_id = serializers.IntegerField(source="payment.participation.campaign_id", read_only=True)
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+    reason_display = serializers.CharField(source="get_reason_display", read_only=True)
+    requested_by = AdminUserSummarySerializer(read_only=True)
+    reviewed_by = AdminUserSummarySerializer(read_only=True)
+    is_full_refund = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        model = PaymentRefund
+        fields = (
+            "id",
+            "payment",
+            "payment_authority",
+            "campaign_id",
+            "requested_by",
+            "reviewed_by",
+            "amount",
+            "reason",
+            "reason_display",
+            "status",
+            "status_display",
+            "idempotency_key",
+            "provider_ref_id",
+            "note",
+            "rejection_reason",
+            "is_full_refund",
+            "reviewed_at",
+            "completed_at",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = fields
+
+
+class PaymentRefundRequestSerializer(serializers.Serializer):
+    """Input serializer for creating a payment refund request."""
+
+    payment_id = serializers.IntegerField(min_value=1)
+    amount = serializers.IntegerField(min_value=1)
+    reason = serializers.ChoiceField(choices=RefundReason.choices, default=RefundReason.OTHER)
+    note = serializers.CharField(required=False, allow_blank=True, default="")
+    idempotency_key = serializers.CharField(required=False, allow_blank=True, default="")
+
+
+class PaymentRefundRejectSerializer(serializers.Serializer):
+    """Input serializer for rejecting a refund request."""
+
+    rejection_reason = serializers.CharField(max_length=500)
+
+
+class PaymentRefundCompleteSerializer(serializers.Serializer):
+    """Input serializer for marking an approved refund as completed."""
+
+    provider_ref_id = serializers.CharField(required=False, allow_blank=True, default="")
+
+
+class FinancialAdjustmentSerializer(serializers.ModelSerializer):
+    """Read serializer for campaign financial adjustment workflow rows."""
+
+    campaign_title = serializers.CharField(source="campaign.title", read_only=True)
+    payment_authority = serializers.CharField(source="payment.authority", read_only=True, allow_null=True)
+    requested_by = AdminUserSummarySerializer(read_only=True)
+    reviewed_by = AdminUserSummarySerializer(read_only=True)
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+    adjustment_type_display = serializers.CharField(source="get_adjustment_type_display", read_only=True)
+    signed_amount = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = CampaignFinancialAdjustment
+        fields = (
+            "id",
+            "campaign",
+            "campaign_title",
+            "payment",
+            "payment_authority",
+            "requested_by",
+            "reviewed_by",
+            "adjustment_type",
+            "adjustment_type_display",
+            "status",
+            "status_display",
+            "amount",
+            "signed_amount",
+            "reason",
+            "note",
+            "rejection_reason",
+            "reviewed_at",
+            "applied_at",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = fields
+
+
+class FinancialAdjustmentCreateSerializer(serializers.Serializer):
+    """Input serializer for creating a financial adjustment request."""
+
+    campaign_id = serializers.IntegerField(min_value=1)
+    payment_id = serializers.IntegerField(required=False, min_value=1, allow_null=True)
+    adjustment_type = serializers.ChoiceField(choices=FinancialAdjustmentType.choices)
+    amount = serializers.IntegerField(min_value=1)
+    reason = serializers.CharField(max_length=240)
+    note = serializers.CharField(required=False, allow_blank=True, default="")
+
+
+class FinancialAdjustmentRejectSerializer(serializers.Serializer):
+    """Input serializer for rejecting a financial adjustment request."""
+
+    rejection_reason = serializers.CharField(max_length=500)
+
+
+class CampaignFinancialControlSummarySerializer(serializers.Serializer):
+    """Serializer for admin campaign financial-control summary."""
+
+    campaign_id = serializers.IntegerField(read_only=True)
+    gross_paid_amount = serializers.IntegerField(read_only=True)
+    completed_refund_amount = serializers.IntegerField(read_only=True)
+    completed_refund_count = serializers.IntegerField(read_only=True)
+    applied_adjustment_delta = serializers.IntegerField(read_only=True)
+    applied_adjustment_count = serializers.IntegerField(read_only=True)
+    net_effective_amount = serializers.IntegerField(read_only=True)
+    remaining_shares = serializers.IntegerField(read_only=True)
