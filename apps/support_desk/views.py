@@ -41,6 +41,8 @@ from apps.support_desk.serializers import (
     SupportAdminStatusSerializer,
     SupportAdminTicketDetailSerializer,
     SupportAdminTicketMessageSerializer,
+    SupportBusinessCalendarInputSerializer,
+    SupportBusinessCalendarSerializer,
     SupportCannedResponseInputSerializer,
     SupportCannedResponseSerializer,
     SupportCategoryInputSerializer,
@@ -49,6 +51,8 @@ from apps.support_desk.serializers import (
     SupportDepartmentSerializer,
     SupportDuplicateCandidateSerializer,
     SupportDuplicateReviewSerializer,
+    SupportHolidayInputSerializer,
+    SupportHolidaySerializer,
     SupportSLAPolicyInputSerializer,
     SupportSLAPolicySerializer,
     SupportTicketAttachmentCreateSerializer,
@@ -503,6 +507,76 @@ class SupportAdminTicketTypeDetailView(APIView):
             return _service_error_response(exc)
         log_action_async(user_id=request.user.pk, action=audit_actions.SUPPORT_TICKET_TYPE_UPDATED, resource_type="support_ticket_type", resource_id=str(ticket_type.pk), **extract_audit_metadata(request))
         return SuccessResponse(data=SupportTicketTypeSerializer(ticket_type).data, message="نوع تیکت بروزرسانی شد.")
+
+
+class SupportAdminBusinessCalendarListCreateView(APIView):
+    """Admin business calendar list/create endpoint."""
+
+    permission_classes = [IsSupportAdminUser]
+    serializer_class = SupportBusinessCalendarSerializer
+
+    def get(self, request: Request) -> SuccessResponse:
+        """Return business calendars."""
+        return SuccessResponse(data=SupportBusinessCalendarSerializer(selectors.get_admin_business_calendars(), many=True).data)
+
+    def post(self, request: Request) -> CreatedResponse:
+        """Create business calendar."""
+        serializer = SupportBusinessCalendarInputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        calendar = services.create_business_calendar(**serializer.validated_data)
+        return CreatedResponse(data=SupportBusinessCalendarSerializer(calendar).data, message="تقویم کاری ساخته شد.")
+
+
+class SupportAdminBusinessCalendarDetailView(APIView):
+    """Admin business calendar update endpoint."""
+
+    permission_classes = [IsSupportAdminUser]
+    serializer_class = SupportBusinessCalendarSerializer
+
+    def patch(self, request: Request, calendar_id: int) -> SuccessResponse | ErrorResponse:
+        """Update business calendar."""
+        calendar = selectors.get_admin_business_calendar_by_id(calendar_id=calendar_id)
+        if calendar is None:
+            return ErrorResponse(message="تقویم کاری یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+        serializer = SupportBusinessCalendarInputSerializer(data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        calendar = services.update_business_calendar(calendar=calendar, **serializer.validated_data)
+        return SuccessResponse(data=SupportBusinessCalendarSerializer(calendar).data, message="تقویم کاری بروزرسانی شد.")
+
+
+class SupportAdminHolidayListCreateView(APIView):
+    """Admin support holiday list/create endpoint."""
+
+    permission_classes = [IsSupportAdminUser]
+    serializer_class = SupportHolidaySerializer
+
+    def get(self, request: Request) -> SuccessResponse:
+        """Return support holidays."""
+        return SuccessResponse(data=SupportHolidaySerializer(selectors.get_admin_holidays(), many=True).data)
+
+    def post(self, request: Request) -> CreatedResponse:
+        """Create support holiday."""
+        serializer = SupportHolidayInputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        holiday = services.create_holiday(**serializer.validated_data)
+        return CreatedResponse(data=SupportHolidaySerializer(holiday).data, message="تعطیلی پشتیبانی ثبت شد.")
+
+
+class SupportAdminHolidayDetailView(APIView):
+    """Admin support holiday update endpoint."""
+
+    permission_classes = [IsSupportAdminUser]
+    serializer_class = SupportHolidaySerializer
+
+    def patch(self, request: Request, holiday_id: int) -> SuccessResponse | ErrorResponse:
+        """Update support holiday."""
+        holiday = selectors.get_admin_holiday_by_id(holiday_id=holiday_id)
+        if holiday is None:
+            return ErrorResponse(message="تعطیلی یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+        serializer = SupportHolidayInputSerializer(data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        holiday = services.update_holiday(holiday=holiday, **serializer.validated_data)
+        return SuccessResponse(data=SupportHolidaySerializer(holiday).data, message="تعطیلی بروزرسانی شد.")
 
 
 class SupportAdminSLAPolicyListCreateView(APIView):

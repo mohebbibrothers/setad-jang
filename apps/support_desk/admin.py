@@ -3,10 +3,12 @@
 from django.contrib import admin
 
 from apps.support_desk.models import (
+    SupportBusinessCalendar,
     SupportCannedResponse,
     SupportCategory,
     SupportDepartment,
     SupportDuplicateCandidate,
+    SupportHoliday,
     SupportSLAEvent,
     SupportSLAPolicy,
     SupportTag,
@@ -71,6 +73,26 @@ class SupportCategoryAdmin(admin.ModelAdmin):
     readonly_fields = ("slug", "path", "depth", "tickets_count", "open_tickets_count", "created_at", "updated_at")
     raw_id_fields = ("department", "parent")
     ordering = ("depth", "order", "title")
+
+
+@admin.register(SupportBusinessCalendar)
+class SupportBusinessCalendarAdmin(admin.ModelAdmin):
+    """Admin business-hours calendar management."""
+
+    list_display = ("title", "department", "timezone_name", "workday_start", "workday_end", "active_weekdays", "is_default", "is_active")
+    list_filter = ("is_default", "is_active", "department")
+    search_fields = ("title", "timezone_name")
+    raw_id_fields = ("department",)
+
+
+@admin.register(SupportHoliday)
+class SupportHolidayAdmin(admin.ModelAdmin):
+    """Admin holiday management for support calendars."""
+
+    list_display = ("calendar", "date", "title", "is_active")
+    list_filter = ("calendar", "date", "is_active")
+    search_fields = ("title",)
+    raw_id_fields = ("calendar",)
 
 
 @admin.register(SupportSLAPolicy)

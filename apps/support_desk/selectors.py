@@ -3,10 +3,12 @@
 from django.db.models import Prefetch, QuerySet
 
 from apps.support_desk.models import (
+    SupportBusinessCalendar,
     SupportCannedResponse,
     SupportCategory,
     SupportDepartment,
     SupportDuplicateCandidate,
+    SupportHoliday,
     SupportSLAPolicy,
     SupportTicket,
     SupportTicketAttachment,
@@ -34,6 +36,26 @@ def get_admin_department_by_id(*, department_id: int) -> SupportDepartment | Non
 def get_active_category_tree() -> QuerySet[SupportCategory]:
     """Return active category tree with department loaded."""
     return SupportCategory.objects.select_related("department", "parent").order_by("depth", "order", "title")
+
+
+def get_admin_business_calendars() -> QuerySet[SupportBusinessCalendar]:
+    """Return all business calendars for admin management."""
+    return SupportBusinessCalendar.objects.select_related("department").order_by("-is_default", "title")
+
+
+def get_admin_business_calendar_by_id(*, calendar_id: int) -> SupportBusinessCalendar | None:
+    """Return one business calendar."""
+    return get_admin_business_calendars().filter(pk=calendar_id).first()
+
+
+def get_admin_holidays() -> QuerySet[SupportHoliday]:
+    """Return all support holidays for admin management."""
+    return SupportHoliday.objects.select_related("calendar", "calendar__department").order_by("date")
+
+
+def get_admin_holiday_by_id(*, holiday_id: int) -> SupportHoliday | None:
+    """Return one holiday."""
+    return get_admin_holidays().filter(pk=holiday_id).first()
 
 
 def get_admin_category_tree() -> QuerySet[SupportCategory]:

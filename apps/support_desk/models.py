@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import secrets
 import uuid
+from datetime import time
 from typing import Any
 
 from django.conf import settings
@@ -173,6 +174,51 @@ class SupportCategory(BaseModel):
             self.depth = 0
             self.path = f"/{self.slug}/"
         super().save(*args, **kwargs)
+
+
+class SupportBusinessCalendar(BaseModel):
+    """Department-specific business hours calendar for SLA calculations."""
+
+    title = models.CharField(max_length=180)
+    department = models.ForeignKey(SupportDepartment, on_delete=models.PROTECT, null=True, blank=True, related_name="business_calendars")
+    timezone_name = models.CharField(max_length=80, default="Asia/Tehran")
+    workday_start = models.TimeField(default=time(9, 0))
+    workday_end = models.TimeField(default=time(17, 0))
+    active_weekdays = models.JSONField(default=list, blank=True, help_text="0=Monday ... 6=Sunday")
+    is_default = models.BooleanField(default=False)
+
+    class Meta:
+        verbose_name = "تقویم کاری پشتیبانی"
+        verbose_name_plural = "تقویم‌های کاری پشتیبانی"
+        ordering = ["-is_default", "title"]
+        indexes = [models.Index(fields=["department", "is_active", "is_default"])]
+
+    def __str__(self) -> str:
+        return self.title
+
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        """Default weekdays are Saturday-Wednesday for Iran-oriented support."""
+        if not self.active_weekdays:
+            self.active_weekdays = [5, 6, 0, 1, 2]
+        super().save(*args, **kwargs)
+
+
+class SupportHoliday(BaseModel):
+    """Holiday or exceptional non-working day for support SLA calendars."""
+
+    calendar = models.ForeignKey(SupportBusinessCalendar, on_delete=models.CASCADE, related_name="holidays")
+    date = models.DateField()
+    title = models.CharField(max_length=180)
+
+    class Meta:
+        verbose_name = "تعطیلی پشتیبانی"
+        verbose_name_plural = "تعطیلی‌های پشتیبانی"
+        ordering = ["date"]
+        constraints = [models.UniqueConstraint(fields=["calendar", "date"], name="uniq_support_holiday_calendar_date")]
+        indexes = [models.Index(fields=["calendar", "date"])]
+
+    def __str__(self) -> str:
+        return f"{self.calendar_id}:{self.date}"
 
 
 class SupportSLAPolicy(BaseModel):

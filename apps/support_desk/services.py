@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from django.db import transaction
 from django.db.models import Count
@@ -18,9 +20,11 @@ from apps.support_desk.choices import (
     TicketStatus,
 )
 from apps.support_desk.models import (
+    SupportBusinessCalendar,
     SupportCategory,
     SupportDepartment,
     SupportDuplicateCandidate,
+    SupportHoliday,
     SupportSLAEvent,
     SupportSLAPolicy,
     SupportTag,
@@ -135,6 +139,63 @@ def deactivate_department(*, department: SupportDepartment) -> SupportDepartment
     return department
 
 
+@transaction.atomic
+def create_business_calendar(*, title: str, department: SupportDepartment | None = None, timezone_name: str = "Asia/Tehran", workday_start=None, workday_end=None, active_weekdays: list[int] | None = None, is_default: bool = False) -> SupportBusinessCalendar:
+    """Create a business-hours calendar for SLA calculation."""
+    fields = {"title": title.strip(), "department": department, "timezone_name": timezone_name, "is_default": is_default}
+    if workday_start is not None:
+        fields["workday_start"] = workday_start
+    if workday_end is not None:
+        fields["workday_end"] = workday_end
+    if active_weekdays is not None:
+        fields["active_weekdays"] = active_weekdays
+    return SupportBusinessCalendar.objects.create(**fields)
+
+
+@transaction.atomic
+def update_business_calendar(*, calendar: SupportBusinessCalendar, **fields: Any) -> SupportBusinessCalendar:
+    """Update business-hours calendar metadata."""
+    allowed = {"title", "department", "timezone_name", "workday_start", "workday_end", "active_weekdays", "is_default", "is_active"}
+    update_fields: list[str] = []
+    for field, value in fields.items():
+        if field not in allowed:
+            continue
+        if isinstance(value, str):
+            value = value.strip()
+        if getattr(calendar, field) != value:
+            setattr(calendar, field, value)
+            update_fields.append(field)
+    if update_fields:
+        update_fields.append("updated_at")
+        calendar.save(update_fields=list(set(update_fields)))
+    return calendar
+
+
+@transaction.atomic
+def create_holiday(*, calendar: SupportBusinessCalendar, date, title: str) -> SupportHoliday:
+    """Create a holiday in a business calendar."""
+    return SupportHoliday.objects.create(calendar=calendar, date=date, title=title.strip())
+
+
+@transaction.atomic
+def update_holiday(*, holiday: SupportHoliday, **fields: Any) -> SupportHoliday:
+    """Update holiday metadata."""
+    allowed = {"calendar", "date", "title", "is_active"}
+    update_fields: list[str] = []
+    for field, value in fields.items():
+        if field not in allowed:
+            continue
+        if isinstance(value, str):
+            value = value.strip()
+        if getattr(holiday, field) != value:
+            setattr(holiday, field, value)
+            update_fields.append(field)
+    if update_fields:
+        update_fields.append("updated_at")
+        holiday.save(update_fields=list(set(update_fields)))
+    return holiday
+
+
 def _assert_valid_category_parent(*, category: SupportCategory | None = None, parent: SupportCategory | None = None, department: SupportDepartment | None = None) -> None:
     """Prevent self-parenting, cross-department moves and tree cycles."""
     if parent is None:
@@ -222,14 +283,67 @@ def resolve_sla_policy(*, department: SupportDepartment | None, ticket_type: Sup
     return candidates.filter(department__isnull=True).order_by("order", "title").first() or SupportSLAPolicy.objects.order_by("order", "title").first()
 
 
+def get_business_calendar_for_department(*, department: SupportDepartment | None) -> SupportBusinessCalendar | None:
+    """Resolve the best active business calendar for a department."""
+    if department is not None:
+        calendar = SupportBusinessCalendar.objects.filter(department=department, is_active=True).order_by("-is_default", "title").first()
+        if calendar is not None:
+            return calendar
+    return SupportBusinessCalendar.objects.filter(department__isnull=True, is_active=True).order_by("-is_default", "title").first()
+
+
+def add_business_minutes(*, start_at, minutes: int, calendar: SupportBusinessCalendar) -> Any:
+    """Add working minutes according to a support business calendar."""
+    if minutes <= 0:
+        return start_at
+    tz = ZoneInfo(calendar.timezone_name)
+    current = timezone.localtime(start_at, timezone=tz)
+    remaining = minutes
+    active_weekdays = set(calendar.active_weekdays or [5, 6, 0, 1, 2])
+    while remaining > 0:
+        current = _next_working_instant(current=current, calendar=calendar, active_weekdays=active_weekdays, tz=tz)
+        end_of_day = datetime.combine(current.date(), calendar.workday_end, tzinfo=tz)
+        available = max(0, int((end_of_day - current).total_seconds() // 60))
+        if available >= remaining:
+            return current + timedelta(minutes=remaining)
+        remaining -= available
+        current = datetime.combine(current.date() + timedelta(days=1), calendar.workday_start, tzinfo=tz)
+    return current
+
+
+def _next_working_instant(*, current, calendar: SupportBusinessCalendar, active_weekdays: set[int], tz: ZoneInfo):
+    """Move current datetime to the next valid working instant."""
+    while True:
+        start = datetime.combine(current.date(), calendar.workday_start, tzinfo=tz)
+        end = datetime.combine(current.date(), calendar.workday_end, tzinfo=tz)
+        is_active_weekday = current.weekday() in active_weekdays
+        is_holiday = SupportHoliday.objects.filter(calendar=calendar, date=current.date(), is_active=True).exists()
+        if is_active_weekday and not is_holiday:
+            if current < start:
+                return start
+            if start <= current < end:
+                return current
+        current = datetime.combine(current.date() + timedelta(days=1), calendar.workday_start, tzinfo=tz)
+
+
+def _calculate_sla_due_at(*, ticket: SupportTicket, policy: SupportSLAPolicy, minutes: int, now):
+    """Calculate SLA due date using either calendar or wall-clock minutes."""
+    if not policy.business_hours_only:
+        return now + timezone.timedelta(minutes=minutes)
+    calendar = get_business_calendar_for_department(department=ticket.department)
+    if calendar is None:
+        return now + timezone.timedelta(minutes=minutes)
+    return add_business_minutes(start_at=now, minutes=minutes, calendar=calendar)
+
+
 def _apply_sla(*, ticket: SupportTicket, policy: SupportSLAPolicy | None, now=None) -> None:
     """Apply SLA deadlines to a ticket and write an SLA event."""
     now = now or timezone.now()
     if policy is None:
         return
     ticket.applied_sla_policy = policy
-    ticket.first_response_due_at = now + timezone.timedelta(minutes=policy.first_response_minutes)
-    ticket.resolution_due_at = now + timezone.timedelta(minutes=policy.resolution_minutes)
+    ticket.first_response_due_at = _calculate_sla_due_at(ticket=ticket, policy=policy, minutes=policy.first_response_minutes, now=now)
+    ticket.resolution_due_at = _calculate_sla_due_at(ticket=ticket, policy=policy, minutes=policy.resolution_minutes, now=now)
     ticket.save(update_fields=["applied_sla_policy", "first_response_due_at", "resolution_due_at", "updated_at"])
     SupportSLAEvent.objects.create(
         ticket=ticket,

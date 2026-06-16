@@ -4,10 +4,12 @@ from rest_framework import serializers
 
 from apps.support_desk.choices import AttachmentKind, AttachmentVisibility, TicketStatus
 from apps.support_desk.models import (
+    SupportBusinessCalendar,
     SupportCannedResponse,
     SupportCategory,
     SupportDepartment,
     SupportDuplicateCandidate,
+    SupportHoliday,
     SupportSLAPolicy,
     SupportTicket,
     SupportTicketAttachment,
@@ -40,6 +42,50 @@ class SupportDepartmentInputSerializer(serializers.Serializer):
         if len(value) < 2:
             raise serializers.ValidationError("عنوان دپارتمان باید حداقل ۲ کاراکتر باشد.")
         return value
+
+
+class SupportBusinessCalendarSerializer(serializers.ModelSerializer):
+    """Admin business-hours calendar serializer."""
+
+    department = SupportDepartmentSerializer(read_only=True)
+
+    class Meta:
+        model = SupportBusinessCalendar
+        fields = ("id", "title", "department", "timezone_name", "workday_start", "workday_end", "active_weekdays", "is_default", "is_active", "created_at", "updated_at")
+        read_only_fields = fields
+
+
+class SupportBusinessCalendarInputSerializer(serializers.Serializer):
+    """Admin input serializer for business calendars."""
+
+    title = serializers.CharField(max_length=180)
+    department_id = serializers.PrimaryKeyRelatedField(queryset=SupportDepartment.all_objects.all(), source="department", required=False, allow_null=True)
+    timezone_name = serializers.CharField(max_length=80, required=False, default="Asia/Tehran")
+    workday_start = serializers.TimeField(required=False)
+    workday_end = serializers.TimeField(required=False)
+    active_weekdays = serializers.ListField(child=serializers.IntegerField(min_value=0, max_value=6), required=False)
+    is_default = serializers.BooleanField(required=False, default=False)
+    is_active = serializers.BooleanField(required=False)
+
+
+class SupportHolidaySerializer(serializers.ModelSerializer):
+    """Admin support holiday serializer."""
+
+    calendar = SupportBusinessCalendarSerializer(read_only=True)
+
+    class Meta:
+        model = SupportHoliday
+        fields = ("id", "calendar", "date", "title", "is_active", "created_at", "updated_at")
+        read_only_fields = fields
+
+
+class SupportHolidayInputSerializer(serializers.Serializer):
+    """Admin input serializer for support holidays."""
+
+    calendar_id = serializers.PrimaryKeyRelatedField(queryset=SupportBusinessCalendar.objects.all(), source="calendar")
+    date = serializers.DateField()
+    title = serializers.CharField(max_length=180)
+    is_active = serializers.BooleanField(required=False)
 
 
 class SupportCategorySerializer(serializers.ModelSerializer):
