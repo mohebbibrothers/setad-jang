@@ -12,6 +12,7 @@ import {
   loadCampaigns,
   loadCriminals,
   loadCourses,
+  loadLmsCategories,
   loadKindnessListings,
   loadTabyinItems,
 } from '@/lib/home-data';
@@ -32,9 +33,10 @@ export const metadata: Metadata = {
 export const revalidate = 300;
 
 export default async function HomePage() {
-  const [campaigns, criminals, courses, kindness, tabyin] = await Promise.all([
+  const [campaigns, criminals, lmsCategories, courses, kindness, tabyin] = await Promise.all([
     loadCampaigns(),
     loadCriminals(),
+    loadLmsCategories(),
     loadCourses(),
     loadKindnessListings(),
     loadTabyinItems(),
@@ -46,7 +48,7 @@ export default async function HomePage() {
       <ActivitiesPanel />
       <WarFundSection campaigns={campaigns} />
       <JusticeSection criminals={criminals} />
-      <EducationSection courses={courses} />
+      <EducationSection categories={lmsCategories} courses={courses} />
       <KindnessSection listings={kindness} />
       <TabyinSection items={tabyin} />
       <PublicReportSection />
