@@ -66,6 +66,9 @@ class AuditLogDetailSerializer(serializers.ModelSerializer):
             "method",
             "changes",
             "extra_data",
+            "previous_hash",
+            "event_hash",
+            "hash_version",
             "created_at",
         )
         read_only_fields = fields

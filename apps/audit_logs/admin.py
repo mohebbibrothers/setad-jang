@@ -40,6 +40,9 @@ class AuditLogAdmin(admin.ModelAdmin):
         "resource_id",
         "changes",
         "extra_data",
+        "previous_hash",
+        "event_hash",
+        "hash_version",
         "created_at",
         "updated_at",
     )
