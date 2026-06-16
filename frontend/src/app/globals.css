@@ -10,14 +10,22 @@
 :root {
   --font-vazir: 'Vazirmatn', 'Tahoma', sans-serif;
 
-  /* Brand */
-  --brand-50:  #EAF6F4;
-  --brand-500: #1F8A7A;
-  --brand-600: #1A7568;
-  --brand-700: #155F55;
-  --brand-900: #0B3530;
-  --accent-500: #F09A1A;
-  --ink-900: #0F1420;
+  /* Brand — eyedropped from designer's mockup */
+  --brand-50:  #E6F3F1;
+  --brand-100: #C2E0DB;
+  --brand-500: #0D8074;
+  --brand-600: #0A6E64;
+  --brand-700: #085C54;
+  --brand-900: #053832;
+  --mint-500:  #25C5BA;
+  --accent-500: #FF6B1A;
+  --gold-500:  #FFB033;
+  --ink-50:    #F5F8FA;
+  --ink-100:   #EAEEF2;
+  --ink-200:   #D9DEE5;
+  --ink-500:   #6B7480;
+  --ink-700:   #2E3644;
+  --ink-900:   #0F1420;
 
   --radius: 1rem;
 }
@@ -32,7 +40,7 @@
   }
 
   body {
-    @apply bg-surface-muted text-ink-800 antialiased;
+    @apply bg-white text-ink-800 antialiased;
     font-family: var(--font-vazir);
     font-feature-settings: 'ss01', 'ss02', 'kern';
     text-rendering: optimizeLegibility;

@@ -1,14 +1,20 @@
 import type { Metadata } from 'next';
 import { Hero } from '@/components/home/Hero';
-import { Pillars } from '@/components/home/Pillars';
-import { CampaignsTeaser } from '@/components/home/CampaignsTeaser';
-import { JusticeRail } from '@/components/home/JusticeRail';
-import { LearningShowcase } from '@/components/home/LearningShowcase';
-import { KindnessWall } from '@/components/home/KindnessWall';
-import { TabyinGrid } from '@/components/home/TabyinGrid';
-import { ReportCTA } from '@/components/home/ReportCTA';
-import { Stats } from '@/components/home/Stats';
-import { FAQ } from '@/components/home/FAQ';
+import { ActivitiesPanel } from '@/components/home/ActivitiesPanel';
+import { WarFundSection } from '@/components/home/WarFundSection';
+import { JusticeSection } from '@/components/home/JusticeSection';
+import { EducationSection } from '@/components/home/EducationSection';
+import { KindnessSection } from '@/components/home/KindnessSection';
+import { TabyinSection } from '@/components/home/TabyinSection';
+import { PublicReportSection } from '@/components/home/PublicReportSection';
+import { NewsletterBar } from '@/components/home/NewsletterBar';
+import {
+  loadCampaigns,
+  loadCriminals,
+  loadCourses,
+  loadKindnessListings,
+  loadTabyinItems,
+} from '@/lib/home-data';
 import { siteConfig } from '@/lib/site';
 
 export const metadata: Metadata = {
@@ -22,19 +28,29 @@ export const metadata: Metadata = {
   },
 };
 
-export default function HomePage() {
+// SSR with backend revalidation every 5 minutes
+export const revalidate = 300;
+
+export default async function HomePage() {
+  const [campaigns, criminals, courses, kindness, tabyin] = await Promise.all([
+    loadCampaigns(),
+    loadCriminals(),
+    loadCourses(),
+    loadKindnessListings(),
+    loadTabyinItems(),
+  ]);
+
   return (
     <>
       <Hero />
-      <Pillars />
-      <CampaignsTeaser />
-      <JusticeRail />
-      <LearningShowcase />
-      <Stats />
-      <TabyinGrid />
-      <KindnessWall />
-      <ReportCTA />
-      <FAQ />
+      <ActivitiesPanel />
+      <WarFundSection campaigns={campaigns} />
+      <JusticeSection criminals={criminals} />
+      <EducationSection courses={courses} />
+      <KindnessSection listings={kindness} />
+      <TabyinSection items={tabyin} />
+      <PublicReportSection />
+      <NewsletterBar />
     </>
   );
 }

@@ -18,31 +18,44 @@ const config: Config = {
         display: ['var(--font-vazir)', 'Vazirmatn', 'Tahoma', 'sans-serif'],
       },
       colors: {
-        // Brand palette — استخراج‌شده از لوگو و طرح گرافیست
+        // Brand palette — eyedropped from graphic designer's mockup
         brand: {
-          50:  '#EAF6F4',
-          100: '#CDE9E4',
-          200: '#9CD3CB',
-          300: '#6BBEB1',
-          400: '#3FA797',
-          500: '#1F8A7A', // primary teal
-          600: '#1A7568', // primary deep
-          700: '#155F55',
-          800: '#104A43',
-          900: '#0B3530',
-          950: '#062521',
+          50:  '#E6F3F1',
+          100: '#C2E0DB',
+          200: '#92CABF',
+          300: '#5DB3A4',
+          400: '#2FA08D',
+          500: '#0D8074', // primary teal — matches activities panel
+          600: '#0A6E64', // header/footer teal
+          700: '#085C54',
+          800: '#064A43',
+          900: '#053832',
+          950: '#022721',
+        },
+        // brighter cyan-teal used in "+ جدید" CTA buttons in design
+        mint: {
+          400: '#3FD0C2',
+          500: '#25C5BA',
+          600: '#1FB3A8',
         },
         accent: {
-          50:  '#FFF7E6',
-          100: '#FFEBC2',
-          200: '#FFD787',
-          300: '#FFC04D',
-          400: '#FFAB22',
-          500: '#F09A1A', // logo orange
-          600: '#D17F0C',
-          700: '#A66205',
-          800: '#7A4804',
-          900: '#553102',
+          50:  '#FFF1E6',
+          100: '#FFDCB8',
+          200: '#FFC085',
+          300: '#FFA552',
+          400: '#FF8C2E',
+          500: '#FF6B1A', // bright orange used for "مشارکت در مجازات" pill
+          600: '#E55214',
+          700: '#B83E0F',
+          800: '#8A2D0A',
+          900: '#5C1E07',
+        },
+        // golden yellow trophy CTA card
+        gold: {
+          400: '#FFC44D',
+          500: '#FFB033',
+          600: '#F0941A',
+          700: '#C77815',
         },
         ink: {
           50:  '#F7F8FA',
