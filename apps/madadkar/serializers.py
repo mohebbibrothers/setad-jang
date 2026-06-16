@@ -922,3 +922,44 @@ class MadadkarRiskSignalFilterSerializer(serializers.Serializer):
     user = serializers.IntegerField(required=False, min_value=1)
     campaign = serializers.IntegerField(required=False, min_value=1)
     ip_address = serializers.IPAddressField(required=False)
+
+
+# ===========================================================================
+# Campaign intelligence serializers — admin decision support
+# ===========================================================================
+
+class CampaignDailyTrendSerializer(serializers.Serializer):
+    """One day in campaign intelligence trend."""
+
+    date = serializers.DateField(read_only=True)
+    gross_amount = serializers.IntegerField(read_only=True)
+    refund_amount = serializers.IntegerField(read_only=True)
+    adjustment_delta = serializers.IntegerField(read_only=True)
+    net_amount = serializers.IntegerField(read_only=True)
+    successful_payments = serializers.IntegerField(read_only=True)
+
+
+class CampaignIntelligenceSerializer(serializers.Serializer):
+    """Admin campaign intelligence payload with financial, funnel, risk, and health metrics."""
+
+    campaign_id = serializers.IntegerField(read_only=True)
+    campaign_title = serializers.CharField(read_only=True)
+    generated_at = serializers.DateTimeField(read_only=True)
+    window_days = serializers.IntegerField(read_only=True)
+    financials = serializers.JSONField(read_only=True)
+    funnel = serializers.JSONField(read_only=True)
+    velocity = serializers.JSONField(read_only=True)
+    donor_concentration = serializers.JSONField(read_only=True)
+    risk = serializers.JSONField(read_only=True)
+    health = serializers.JSONField(read_only=True)
+    daily_trend = CampaignDailyTrendSerializer(many=True, read_only=True)
+
+
+class MadadkarIntelligenceOverviewSerializer(serializers.Serializer):
+    """Portfolio-level Madadkar intelligence overview for command decisions."""
+
+    generated_at = serializers.DateTimeField(read_only=True)
+    window_days = serializers.IntegerField(read_only=True)
+    portfolio = serializers.JSONField(read_only=True)
+    weakest_campaigns = serializers.JSONField(read_only=True)
+    strongest_campaigns = serializers.JSONField(read_only=True)

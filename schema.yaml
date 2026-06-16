@@ -5089,6 +5089,45 @@ paths:
               schema:
                 $ref: '#/components/schemas/MadadkarGenericErrorResponse'
           description: ''
+  /api/v1/madadkar/admin/campaigns/{campaign_id}/intelligence/:
+    get:
+      operationId: madadkar_admin_campaign_intelligence
+      description: Campaign-level decision intelligence for Madadkar admins.
+      summary: هوشمندی مالی و عملیاتی حرکت — ادمین
+      parameters:
+      - in: path
+        name: campaign_id
+        schema:
+          type: integer
+        required: true
+      - in: query
+        name: days
+        schema:
+          type: integer
+        description: بازه تحلیل روزانه؛ پیش‌فرض ۳۰، حداکثر ۳۶۵.
+      tags:
+      - مددکار — مدیریت (تحلیل و گزارش)
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MadadkarAdminCampaignIntelligenceResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MadadkarGenericErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MadadkarGenericErrorResponse'
+          description: ''
   /api/v1/madadkar/admin/campaigns/{campaign_id}/leaderboard/:
     get:
       operationId: madadkar_admin_campaign_leaderboard
@@ -5214,6 +5253,34 @@ paths:
                 $ref: '#/components/schemas/MadadkarGenericErrorResponse'
           description: ''
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MadadkarGenericErrorResponse'
+          description: ''
+  /api/v1/madadkar/admin/intelligence/overview/:
+    get:
+      operationId: madadkar_admin_intelligence_overview
+      description: Portfolio-level intelligence overview across Madadkar campaigns.
+      summary: نمای کلی هوشمندی مددکار — ادمین
+      parameters:
+      - in: query
+        name: days
+        schema:
+          type: integer
+        description: بازه تحلیل روزانه؛ پیش‌فرض ۳۰، حداکثر ۳۶۵.
+      tags:
+      - مددکار — مدیریت (تحلیل و گزارش)
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MadadkarAdminIntelligenceOverviewResponse'
+          description: ''
+        '403':
           content:
             application/json:
               schema:
@@ -12124,6 +12191,36 @@ components:
       - total_amount
       - total_shares
       - updated_at
+    CampaignDailyTrend:
+      type: object
+      description: One day in campaign intelligence trend.
+      properties:
+        date:
+          type: string
+          format: date
+          readOnly: true
+        gross_amount:
+          type: integer
+          readOnly: true
+        refund_amount:
+          type: integer
+          readOnly: true
+        adjustment_delta:
+          type: integer
+          readOnly: true
+        net_amount:
+          type: integer
+          readOnly: true
+        successful_payments:
+          type: integer
+          readOnly: true
+      required:
+      - adjustment_delta
+      - date
+      - gross_amount
+      - net_amount
+      - refund_amount
+      - successful_payments
     CampaignFinancialControlSummary:
       type: object
       description: Serializer for admin campaign financial-control summary.
@@ -12209,6 +12306,53 @@ components:
       - display_order
       - id
       - image
+    CampaignIntelligence:
+      type: object
+      description: Admin campaign intelligence payload with financial, funnel, risk,
+        and health metrics.
+      properties:
+        campaign_id:
+          type: integer
+          readOnly: true
+        campaign_title:
+          type: string
+          readOnly: true
+        generated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        window_days:
+          type: integer
+          readOnly: true
+        financials:
+          readOnly: true
+        funnel:
+          readOnly: true
+        velocity:
+          readOnly: true
+        donor_concentration:
+          readOnly: true
+        risk:
+          readOnly: true
+        health:
+          readOnly: true
+        daily_trend:
+          type: array
+          items:
+            $ref: '#/components/schemas/CampaignDailyTrend'
+          readOnly: true
+      required:
+      - campaign_id
+      - campaign_title
+      - daily_trend
+      - donor_concentration
+      - financials
+      - funnel
+      - generated_at
+      - health
+      - risk
+      - velocity
+      - window_days
     CampaignPublicDetail:
       type: object
       description: نمایش جزئیات حرکت در صفحه detail عمومی — همراه گالری و توضیحات
@@ -16263,6 +16407,22 @@ components:
       required:
       - data
       - message
+    MadadkarAdminCampaignIntelligenceResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          default: true
+        status_code:
+          type: integer
+          default: 200
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/CampaignIntelligence'
+      required:
+      - data
+      - message
     MadadkarAdminCampaignListResponse:
       type: object
       properties:
@@ -16312,6 +16472,22 @@ components:
           type: string
         data:
           $ref: '#/components/schemas/CampaignFinancialControlSummary'
+      required:
+      - data
+      - message
+    MadadkarAdminIntelligenceOverviewResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          default: true
+        status_code:
+          type: integer
+          default: 200
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/MadadkarIntelligenceOverview'
       required:
       - data
       - message
@@ -16623,6 +16799,29 @@ components:
       required:
       - message
       - status_code
+    MadadkarIntelligenceOverview:
+      type: object
+      description: Portfolio-level Madadkar intelligence overview for command decisions.
+      properties:
+        generated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        window_days:
+          type: integer
+          readOnly: true
+        portfolio:
+          readOnly: true
+        weakest_campaigns:
+          readOnly: true
+        strongest_campaigns:
+          readOnly: true
+      required:
+      - generated_at
+      - portfolio
+      - strongest_campaigns
+      - weakest_campaigns
+      - window_days
     MadadkarParticipationInitiatedResponse:
       type: object
       properties:

@@ -755,6 +755,8 @@ This enables future Zarinpal settlement reconciliation without rewriting payment
 - campaign financial adjustment workflow با create/approve/reject/apply
 - financial-control summary با gross/refunds/adjustments/net amount
 - fraud/risk scoring برای payment/refund/adjustment abuse
+- campaign intelligence dashboard با net/refund-adjusted metrics، funnel، velocity، donor concentration و health score
+- portfolio intelligence overview برای تشخیص ضعیف‌ترین و قوی‌ترین campaignها
 - admin risk-signal review workflow
 - command center open risk-signal counter
 - audit logging برای همه عملیات حساس مالی
@@ -808,6 +810,8 @@ POST /api/v1/madadkar/admin/adjustments/{id}/reject/
 POST /api/v1/madadkar/admin/adjustments/{id}/apply/
 GET /api/v1/madadkar/admin/risk-signals/
 POST /api/v1/madadkar/admin/risk-signals/{id}/review/
+GET /api/v1/madadkar/admin/campaigns/{id}/intelligence/
+GET /api/v1/madadkar/admin/intelligence/overview/
 ```
 
 ### Celery tasks

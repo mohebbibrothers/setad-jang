@@ -42,10 +42,12 @@ from .views import (
     MadadkarAdminCampaignFinancialControlView,
     MadadkarAdminCampaignImageDeleteView,
     MadadkarAdminCampaignImageListCreateView,
+    MadadkarAdminCampaignIntelligenceView,
     MadadkarAdminCampaignLeaderboardView,
     MadadkarAdminCampaignListCreateView,
     MadadkarAdminCampaignParticipantsListView,
     MadadkarAdminCampaignPublishView,
+    MadadkarAdminIntelligenceOverviewView,
     MadadkarAdminPaymentListView,
     MadadkarAdminRefundActionView,
     MadadkarAdminRefundListCreateView,
@@ -207,6 +209,16 @@ urlpatterns = [
         "admin/campaigns/<int:campaign_id>/financial-control/",
         MadadkarAdminCampaignFinancialControlView.as_view(),
         name="admin-campaign-financial-control",
+    ),
+    path(
+        "admin/campaigns/<int:campaign_id>/intelligence/",
+        MadadkarAdminCampaignIntelligenceView.as_view(),
+        name="admin-campaign-intelligence",
+    ),
+    path(
+        "admin/intelligence/overview/",
+        MadadkarAdminIntelligenceOverviewView.as_view(),
+        name="admin-intelligence-overview",
     ),
 
     # ====================================================

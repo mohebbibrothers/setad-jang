@@ -50,6 +50,16 @@ def support_attachment_upload_path(instance: SupportTicketAttachment, filename: 
     return f"support_desk/tickets/{instance.ticket_id}/attachments/{filename}"
 
 
+def default_workday_start() -> time:
+    """Return default support business-day start time without fixed-default warnings."""
+    return time(9, 0)
+
+
+def default_workday_end() -> time:
+    """Return default support business-day end time without fixed-default warnings."""
+    return time(17, 0)
+
+
 def _unique_slug(*, model: type[models.Model], value: str, max_length: int, exclude_pk: int | None = None) -> str:
     """Generate collision-safe unicode slug for a model."""
     base = slugify(value, allow_unicode=True)[:max_length] or uuid.uuid4().hex[:12]
@@ -182,8 +192,8 @@ class SupportBusinessCalendar(BaseModel):
     title = models.CharField(max_length=180)
     department = models.ForeignKey(SupportDepartment, on_delete=models.PROTECT, null=True, blank=True, related_name="business_calendars")
     timezone_name = models.CharField(max_length=80, default="Asia/Tehran")
-    workday_start = models.TimeField(default=time(9, 0))
-    workday_end = models.TimeField(default=time(17, 0))
+    workday_start = models.TimeField(default=default_workday_start)
+    workday_end = models.TimeField(default=default_workday_end)
     active_weekdays = models.JSONField(default=list, blank=True, help_text="0=Monday ... 6=Sunday")
     is_default = models.BooleanField(default=False)
 

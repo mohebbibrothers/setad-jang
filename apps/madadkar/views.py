@@ -84,11 +84,13 @@ from .serializers import (
     CampaignFinancialControlSummarySerializer,
     CampaignImageCreateSerializer,
     CampaignImageReadSerializer,
+    CampaignIntelligenceSerializer,
     CampaignPublicDetailSerializer,
     CampaignPublicListSerializer,
     FinancialAdjustmentCreateSerializer,
     FinancialAdjustmentRejectSerializer,
     FinancialAdjustmentSerializer,
+    MadadkarIntelligenceOverviewSerializer,
     MadadkarRiskSignalReviewSerializer,
     MadadkarRiskSignalSerializer,
     ParticipationInitiatedResponseSerializer,
@@ -256,6 +258,14 @@ ADMIN_RISK_SIGNALS_LIST_RESPONSE = build_paginated_success_response_serializer(
 ADMIN_RISK_SIGNAL_DETAIL_RESPONSE = build_success_response_serializer(
     name="MadadkarAdminRiskSignalDetailResponse",
     data_serializer=MadadkarRiskSignalSerializer,
+)
+ADMIN_CAMPAIGN_INTELLIGENCE_RESPONSE = build_success_response_serializer(
+    name="MadadkarAdminCampaignIntelligenceResponse",
+    data_serializer=CampaignIntelligenceSerializer,
+)
+ADMIN_INTELLIGENCE_OVERVIEW_RESPONSE = build_success_response_serializer(
+    name="MadadkarAdminIntelligenceOverviewResponse",
+    data_serializer=MadadkarIntelligenceOverviewSerializer,
 )
 
 
@@ -2095,6 +2105,79 @@ class MadadkarAdminCampaignFinancialControlView(APIView):
             return ErrorResponse(message="حرکتی با این شناسه یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
         summary = selectors.get_campaign_financial_control_summary(campaign=campaign)
         return SuccessResponse(data=CampaignFinancialControlSummarySerializer(summary).data, message="گزارش کنترل مالی با موفقیت دریافت شد.")
+
+
+# ============================================================
+# Admin — Campaign Intelligence
+# ============================================================
+
+class MadadkarAdminCampaignIntelligenceView(APIView):
+    """Campaign-level decision intelligence for Madadkar admins."""
+
+    permission_classes = [IsMadadkarAdminUser]
+
+    @extend_schema(
+        operation_id="madadkar_admin_campaign_intelligence",
+        tags=[TAG_MADADKAR_ADMIN_ANALYTICS],
+        summary="هوشمندی مالی و عملیاتی حرکت — ادمین",
+        parameters=[
+            OpenApiParameter(
+                name="days",
+                type=OpenApiTypes.INT,
+                location=OpenApiParameter.QUERY,
+                description="بازه تحلیل روزانه؛ پیش‌فرض ۳۰، حداکثر ۳۶۵.",
+            ),
+        ],
+        responses={200: ADMIN_CAMPAIGN_INTELLIGENCE_RESPONSE, 403: GENERIC_ERROR_RESPONSE, 404: GENERIC_ERROR_RESPONSE},
+    )
+    def get(self, request: Request, campaign_id: int) -> Response:
+        campaign = selectors.get_admin_campaign_by_id(campaign_id=campaign_id)
+        if campaign is None:
+            return ErrorResponse(message="حرکتی با این شناسه یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+        days = _parse_int_query_param(request=request, name="days", default=30, minimum=1, maximum=365)
+        intelligence = selectors.get_campaign_intelligence(campaign=campaign, days=days)
+        return SuccessResponse(
+            data=CampaignIntelligenceSerializer(intelligence).data,
+            message="هوشمندی حرکت با موفقیت دریافت شد.",
+        )
+
+
+class MadadkarAdminIntelligenceOverviewView(APIView):
+    """Portfolio-level intelligence overview across Madadkar campaigns."""
+
+    permission_classes = [IsMadadkarAdminUser]
+
+    @extend_schema(
+        operation_id="madadkar_admin_intelligence_overview",
+        tags=[TAG_MADADKAR_ADMIN_ANALYTICS],
+        summary="نمای کلی هوشمندی مددکار — ادمین",
+        parameters=[
+            OpenApiParameter(
+                name="days",
+                type=OpenApiTypes.INT,
+                location=OpenApiParameter.QUERY,
+                description="بازه تحلیل روزانه؛ پیش‌فرض ۳۰، حداکثر ۳۶۵.",
+            ),
+        ],
+        responses={200: ADMIN_INTELLIGENCE_OVERVIEW_RESPONSE, 403: GENERIC_ERROR_RESPONSE},
+    )
+    def get(self, request: Request) -> Response:
+        days = _parse_int_query_param(request=request, name="days", default=30, minimum=1, maximum=365)
+        overview = selectors.get_madadkar_intelligence_overview(days=days)
+        return SuccessResponse(
+            data=MadadkarIntelligenceOverviewSerializer(overview).data,
+            message="نمای هوشمندی مددکار با موفقیت دریافت شد.",
+        )
+
+
+def _parse_int_query_param(*, request: Request, name: str, default: int, minimum: int, maximum: int) -> int:
+    """Parse bounded integer query params for intelligence endpoints."""
+    raw_value = request.query_params.get(name, default)
+    try:
+        parsed = int(raw_value)
+    except (TypeError, ValueError):
+        parsed = default
+    return max(minimum, min(parsed, maximum))
 
 
 # ============================================================

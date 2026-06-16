@@ -17,7 +17,14 @@ from __future__ import annotations
 from django.db.models import Count, Prefetch, QuerySet, Sum
 from django.utils import timezone
 
-from apps.madadkar.choices import CampaignStatus, ParticipationStatus
+from apps.madadkar.choices import (
+    CampaignStatus,
+    FinancialAdjustmentStatus,
+    MadadkarRiskStatus,
+    ParticipationStatus,
+    PaymentStatus,
+    RefundStatus,
+)
 from apps.madadkar.models import (
     Campaign,
     CampaignFinancialAdjustment,
@@ -510,3 +517,237 @@ def get_admin_risk_signals_queryset() -> QuerySet[MadadkarRiskSignal]:
 def get_admin_risk_signal_by_id(*, signal_id: int) -> MadadkarRiskSignal | None:
     """Return one Madadkar risk signal for admin review."""
     return get_admin_risk_signals_queryset().filter(pk=signal_id).first()
+
+
+# ---------------------------------------------------------------------------
+# Campaign Intelligence selectors — admin scope
+# ---------------------------------------------------------------------------
+
+def get_campaign_intelligence(*, campaign: Campaign, days: int = 30) -> dict:
+    """Build refund-adjusted intelligence metrics for one campaign."""
+    safe_days = max(1, min(days, 365))
+    today = timezone.localdate()
+    start_date = today - timezone.timedelta(days=safe_days - 1)
+    payments = Payment.objects.filter(participation__campaign=campaign)
+    successful_payments = payments.filter(status=PaymentStatus.SUCCESS)
+    refunds = PaymentRefund.objects.filter(payment__participation__campaign=campaign, status=RefundStatus.COMPLETED)
+    adjustments = CampaignFinancialAdjustment.objects.filter(campaign=campaign, status=FinancialAdjustmentStatus.APPLIED)
+    trend = _build_campaign_daily_trend(
+        successful_payments=successful_payments,
+        refunds=refunds,
+        adjustments=adjustments,
+        start_date=start_date,
+        today=today,
+    )
+    gross_amount = successful_payments.aggregate(total=Sum("amount"))["total"] or 0
+    refund_amount = refunds.aggregate(total=Sum("amount"))["total"] or 0
+    adjustment_delta = sum(adjustment.signed_amount for adjustment in adjustments)
+    net_amount = max(gross_amount - refund_amount + adjustment_delta, 0)
+    total_attempts = payments.count()
+    success_count = successful_payments.count()
+    failed_count = payments.filter(status=PaymentStatus.FAILED).count()
+    pending_count = payments.filter(status=PaymentStatus.PENDING).count()
+    paid_users = successful_payments.values("user_id").distinct().count()
+    donor_concentration = _calculate_donor_concentration(successful_payments=successful_payments, gross_amount=gross_amount)
+    velocity = _calculate_campaign_velocity(campaign=campaign, net_amount=net_amount, trend=trend, today=today)
+    risk = _calculate_campaign_intelligence_risk(campaign=campaign)
+    health_score, health_flags = _calculate_campaign_health_score(
+        campaign=campaign,
+        success_count=success_count,
+        failed_count=failed_count,
+        pending_count=pending_count,
+        refund_amount=refund_amount,
+        gross_amount=gross_amount,
+        donor_concentration=donor_concentration,
+        open_risk_signals=risk["open_risk_signals"],
+        velocity=velocity,
+    )
+    return {
+        "campaign_id": campaign.pk,
+        "campaign_title": campaign.title,
+        "generated_at": timezone.now().isoformat(),
+        "window_days": safe_days,
+        "financials": {
+            "gross_amount": gross_amount,
+            "completed_refund_amount": refund_amount,
+            "applied_adjustment_delta": adjustment_delta,
+            "net_amount": net_amount,
+            "target_amount": campaign.total_amount,
+            "remaining_amount": max(campaign.total_amount - net_amount, 0),
+            "net_progress_percent": round((net_amount / campaign.total_amount) * 100, 2) if campaign.total_amount else 0,
+        },
+        "funnel": {
+            "payment_attempts": total_attempts,
+            "successful_payments": success_count,
+            "failed_payments": failed_count,
+            "pending_payments": pending_count,
+            "success_rate": round((success_count / total_attempts) * 100, 2) if total_attempts else 0,
+            "failure_rate": round((failed_count / total_attempts) * 100, 2) if total_attempts else 0,
+            "unique_paid_users": paid_users,
+        },
+        "velocity": velocity,
+        "donor_concentration": donor_concentration,
+        "risk": risk,
+        "health": {"score": health_score, "flags": health_flags},
+        "daily_trend": trend,
+    }
+
+
+def get_madadkar_intelligence_overview(*, days: int = 30) -> dict:
+    """Build portfolio-level Madadkar intelligence overview for admins."""
+    safe_days = max(1, min(days, 365))
+    campaigns = Campaign.objects.filter(is_active=True)
+    published_campaigns = campaigns.filter(status=CampaignStatus.PUBLISHED)
+    campaign_snapshots = [get_campaign_intelligence(campaign=campaign, days=safe_days) for campaign in published_campaigns.order_by("-published_at", "-created_at")[:25]]
+    weakest = sorted(campaign_snapshots, key=lambda item: item["health"]["score"])[:5]
+    strongest = sorted(campaign_snapshots, key=lambda item: item["health"]["score"], reverse=True)[:5]
+    return {
+        "generated_at": timezone.now().isoformat(),
+        "window_days": safe_days,
+        "portfolio": {
+            "active_campaigns": campaigns.count(),
+            "published_campaigns": published_campaigns.count(),
+            "completed_campaigns": campaigns.filter(status=CampaignStatus.COMPLETED).count(),
+            "total_open_risk_signals": MadadkarRiskSignal.objects.filter(status=MadadkarRiskStatus.OPEN).count(),
+            "total_net_amount": sum(item["financials"]["net_amount"] for item in campaign_snapshots),
+            "average_health_score": round(sum(item["health"]["score"] for item in campaign_snapshots) / len(campaign_snapshots), 2) if campaign_snapshots else 0,
+        },
+        "weakest_campaigns": _summarize_campaign_snapshots(weakest),
+        "strongest_campaigns": _summarize_campaign_snapshots(strongest),
+    }
+
+
+def _build_campaign_daily_trend(
+    *,
+    successful_payments: QuerySet[Payment],
+    refunds: QuerySet[PaymentRefund],
+    adjustments: QuerySet[CampaignFinancialAdjustment],
+    start_date,
+    today,
+) -> list[dict]:
+    """Build a deterministic daily gross/refund/adjustment/net trend."""
+    buckets = {
+        start_date + timezone.timedelta(days=offset): {
+            "date": (start_date + timezone.timedelta(days=offset)).isoformat(),
+            "gross_amount": 0,
+            "refund_amount": 0,
+            "adjustment_delta": 0,
+            "net_amount": 0,
+            "successful_payments": 0,
+        }
+        for offset in range((today - start_date).days + 1)
+    }
+    for payment in successful_payments.filter(created_at__date__gte=start_date, created_at__date__lte=today):
+        bucket = buckets[payment.created_at.date()]
+        bucket["gross_amount"] += payment.amount
+        bucket["successful_payments"] += 1
+    for refund in refunds.filter(completed_at__date__gte=start_date, completed_at__date__lte=today):
+        completed_at = refund.completed_at or refund.updated_at
+        buckets[completed_at.date()]["refund_amount"] += refund.amount
+    for adjustment in adjustments.filter(applied_at__date__gte=start_date, applied_at__date__lte=today):
+        applied_at = adjustment.applied_at or adjustment.updated_at
+        buckets[applied_at.date()]["adjustment_delta"] += adjustment.signed_amount
+    for bucket in buckets.values():
+        bucket["net_amount"] = max(bucket["gross_amount"] - bucket["refund_amount"] + bucket["adjustment_delta"], 0)
+    return list(buckets.values())
+
+
+def _calculate_donor_concentration(*, successful_payments: QuerySet[Payment], gross_amount: int) -> dict:
+    """Calculate donor concentration and top donor dependency risk."""
+    top = successful_payments.values("user_id").annotate(total=Sum("amount"), payments=Count("id")).order_by("-total").first()
+    top_amount = top["total"] if top else 0
+    top_share = round((top_amount / gross_amount) * 100, 2) if gross_amount else 0
+    return {
+        "top_donor_user_id": top["user_id"] if top else None,
+        "top_donor_amount": top_amount,
+        "top_donor_share_percent": top_share,
+        "is_concentrated": top_share >= 50,
+    }
+
+
+def _calculate_campaign_velocity(*, campaign: Campaign, net_amount: int, trend: list[dict], today) -> dict:
+    """Calculate completion velocity and estimated completion date."""
+    non_zero_days = [day for day in trend if day["net_amount"] > 0]
+    average_daily_net = round(sum(day["net_amount"] for day in trend) / len(trend), 2) if trend else 0
+    remaining_amount = max(campaign.total_amount - net_amount, 0)
+    if average_daily_net > 0 and remaining_amount > 0:
+        estimated_days = int((remaining_amount + average_daily_net - 1) // average_daily_net)
+        estimated_date = (today + timezone.timedelta(days=estimated_days)).isoformat()
+    elif remaining_amount == 0:
+        estimated_days = 0
+        estimated_date = today.isoformat()
+    else:
+        estimated_days = None
+        estimated_date = None
+    return {
+        "active_fundraising_days": len(non_zero_days),
+        "average_daily_net_amount": average_daily_net,
+        "estimated_completion_days": estimated_days,
+        "estimated_completion_date": estimated_date,
+        "is_stalled": campaign.status == CampaignStatus.PUBLISHED and len(non_zero_days) == 0,
+    }
+
+
+def _calculate_campaign_intelligence_risk(*, campaign: Campaign) -> dict:
+    """Summarize open risk-signal exposure for campaign intelligence."""
+    open_signals = MadadkarRiskSignal.objects.filter(campaign=campaign, status=MadadkarRiskStatus.OPEN)
+    return {
+        "open_risk_signals": open_signals.count(),
+        "high_or_critical_open_signals": open_signals.filter(severity__in=["high", "critical"]).count(),
+    }
+
+
+def _calculate_campaign_health_score(
+    *,
+    campaign: Campaign,
+    success_count: int,
+    failed_count: int,
+    pending_count: int,
+    refund_amount: int,
+    gross_amount: int,
+    donor_concentration: dict,
+    open_risk_signals: int,
+    velocity: dict,
+) -> tuple[int, list[str]]:
+    """Compute a transparent 0-100 campaign health score with flags."""
+    score = 100
+    flags: list[str] = []
+    if failed_count > success_count and failed_count >= 3:
+        score -= 20
+        flags.append("payment_failure_pressure")
+    if pending_count >= 5:
+        score -= 10
+        flags.append("pending_payment_backlog")
+    refund_rate = (refund_amount / gross_amount) if gross_amount else 0
+    if refund_rate >= 0.2:
+        score -= 25
+        flags.append("high_refund_rate")
+    if donor_concentration["is_concentrated"]:
+        score -= 15
+        flags.append("top_donor_dependency")
+    if open_risk_signals:
+        score -= min(open_risk_signals * 10, 30)
+        flags.append("open_risk_signals")
+    if velocity["is_stalled"]:
+        score -= 20
+        flags.append("stalled_campaign")
+    if campaign.has_deadline and campaign.deadline and campaign.deadline <= timezone.now() + timezone.timedelta(days=3) and campaign.remaining_shares > 0:
+        score -= 10
+        flags.append("deadline_pressure")
+    return max(score, 0), flags
+
+
+def _summarize_campaign_snapshots(snapshots: list[dict]) -> list[dict]:
+    """Return compact intelligence rows for overview lists."""
+    return [
+        {
+            "campaign_id": item["campaign_id"],
+            "campaign_title": item["campaign_title"],
+            "health_score": item["health"]["score"],
+            "net_amount": item["financials"]["net_amount"],
+            "net_progress_percent": item["financials"]["net_progress_percent"],
+            "open_risk_signals": item["risk"]["open_risk_signals"],
+            "flags": item["health"]["flags"],
+        }
+        for item in snapshots
+    ]
