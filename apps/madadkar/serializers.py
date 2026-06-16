@@ -32,6 +32,7 @@ from apps.madadkar.choices import (
 )
 from apps.madadkar.models import (
     Campaign,
+    CampaignDisbursement,
     CampaignFinancialAdjustment,
     CampaignImage,
     DonationReceipt,
@@ -1098,3 +1099,81 @@ class PaymentReconciliationImportSerializer(serializers.Serializer):
         if not name.endswith((".csv", ".xlsx")):
             raise serializers.ValidationError("فایل تطبیق باید CSV یا XLSX باشد.")
         return uploaded_file
+
+
+# ===========================================================================
+# Disbursement serializers — admin allocation ledger
+# ===========================================================================
+
+class CampaignDisbursementSerializer(serializers.ModelSerializer):
+    """Read serializer for campaign fund disbursement workflow rows."""
+
+    campaign_title = serializers.CharField(source="campaign.title", read_only=True)
+    requested_by = AdminUserSummarySerializer(read_only=True)
+    reviewed_by = AdminUserSummarySerializer(read_only=True)
+    paid_by = AdminUserSummarySerializer(read_only=True)
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+
+    class Meta:
+        model = CampaignDisbursement
+        fields = (
+            "id",
+            "campaign",
+            "campaign_title",
+            "requested_by",
+            "reviewed_by",
+            "paid_by",
+            "status",
+            "status_display",
+            "amount",
+            "recipient_name",
+            "recipient_identifier",
+            "recipient_bank_account",
+            "recipient_snapshot",
+            "purpose",
+            "note",
+            "rejection_reason",
+            "bank_tracking_reference",
+            "supporting_document",
+            "approved_at",
+            "rejected_at",
+            "paid_at",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = fields
+
+
+class CampaignDisbursementCreateSerializer(serializers.Serializer):
+    """Input serializer for requesting a campaign disbursement."""
+
+    campaign_id = serializers.IntegerField(min_value=1)
+    amount = serializers.IntegerField(min_value=1)
+    recipient_name = serializers.CharField(max_length=220)
+    recipient_identifier = serializers.CharField(required=False, allow_blank=True, default="")
+    recipient_bank_account = serializers.CharField(required=False, allow_blank=True, default="")
+    purpose = serializers.CharField(max_length=260)
+    note = serializers.CharField(required=False, allow_blank=True, default="")
+    supporting_document = serializers.JSONField(required=False, default=dict)
+
+
+class CampaignDisbursementRejectSerializer(serializers.Serializer):
+    """Input serializer for rejecting a requested disbursement."""
+
+    rejection_reason = serializers.CharField(max_length=500)
+
+
+class CampaignDisbursementMarkPaidSerializer(serializers.Serializer):
+    """Input serializer for marking approved disbursement as paid."""
+
+    bank_tracking_reference = serializers.CharField(max_length=120)
+
+
+class CampaignDisbursableSummarySerializer(serializers.Serializer):
+    """Serializer for campaign disbursable amount summary."""
+
+    campaign_id = serializers.IntegerField(read_only=True)
+    net_effective_amount = serializers.IntegerField(read_only=True)
+    committed_disbursement_amount = serializers.IntegerField(read_only=True)
+    paid_disbursement_amount = serializers.IntegerField(read_only=True)
+    disbursable_amount = serializers.IntegerField(read_only=True)

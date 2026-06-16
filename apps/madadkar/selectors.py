@@ -19,6 +19,7 @@ from django.utils import timezone
 
 from apps.madadkar.choices import (
     CampaignStatus,
+    DisbursementStatus,
     FinancialAdjustmentStatus,
     MadadkarRiskStatus,
     ParticipationStatus,
@@ -27,6 +28,7 @@ from apps.madadkar.choices import (
 )
 from apps.madadkar.models import (
     Campaign,
+    CampaignDisbursement,
     CampaignFinancialAdjustment,
     CampaignImage,
     DonationReceipt,
@@ -802,3 +804,38 @@ def get_admin_reconciliation_batch_by_id(*, batch_id: int) -> PaymentReconciliat
 def get_admin_reconciliation_items_queryset(*, batch: PaymentReconciliationBatch) -> QuerySet[PaymentReconciliationItem]:
     """Return reconciliation items for one batch with payment eager loading."""
     return batch.items.select_related("payment").order_by("created_at", "id")
+
+
+# ---------------------------------------------------------------------------
+# Disbursement selectors — admin scope
+# ---------------------------------------------------------------------------
+
+def get_admin_disbursements_queryset() -> QuerySet[CampaignDisbursement]:
+    """Return disbursement workflow rows with campaign/user eager loading."""
+    return (
+        CampaignDisbursement.objects
+        .select_related("campaign", "requested_by", "reviewed_by", "paid_by")
+        .order_by("-created_at")
+    )
+
+
+def get_admin_disbursement_by_id(*, disbursement_id: int) -> CampaignDisbursement | None:
+    """Return one disbursement workflow row for admin action."""
+    return get_admin_disbursements_queryset().filter(pk=disbursement_id).first()
+
+
+def get_campaign_disbursable_summary(*, campaign: Campaign) -> dict:
+    """Return campaign disbursable amount summary for allocation decisions."""
+    active = CampaignDisbursement.objects.filter(
+        campaign=campaign,
+        status__in=[DisbursementStatus.REQUESTED, DisbursementStatus.APPROVED, DisbursementStatus.PAID],
+    )
+    committed = active.aggregate(total=Sum("amount"))["total"] or 0
+    paid = active.filter(status=DisbursementStatus.PAID).aggregate(total=Sum("amount"))["total"] or 0
+    return {
+        "campaign_id": campaign.pk,
+        "net_effective_amount": campaign.purchased_amount,
+        "committed_disbursement_amount": committed,
+        "paid_disbursement_amount": paid,
+        "disbursable_amount": max(campaign.purchased_amount - committed, 0),
+    }

@@ -28,6 +28,7 @@ from django.utils.text import slugify
 from apps.core.models import BaseModel
 from apps.madadkar.choices import (
     CampaignStatus,
+    DisbursementStatus,
     FinancialAdjustmentStatus,
     FinancialAdjustmentType,
     MadadkarRiskSeverity,
@@ -820,6 +821,71 @@ class CampaignFinancialAdjustment(BaseModel):
         if self.adjustment_type == FinancialAdjustmentType.CREDIT:
             return self.amount
         return -self.amount
+
+
+# ---------------------------------------------------------------------------
+# Disbursement / Allocation Ledger
+# ---------------------------------------------------------------------------
+
+class CampaignDisbursement(BaseModel):
+    """Auditable workflow for allocating collected campaign funds to recipients."""
+
+    campaign = models.ForeignKey(
+        Campaign,
+        on_delete=models.PROTECT,
+        related_name="disbursements",
+        verbose_name="حرکت",
+    )
+    requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="madadkar_disbursements_requested",
+    )
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="madadkar_disbursements_reviewed",
+    )
+    paid_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="madadkar_disbursements_paid",
+    )
+    status = models.CharField(max_length=20, choices=DisbursementStatus.choices, default=DisbursementStatus.REQUESTED, db_index=True)
+    amount = models.PositiveBigIntegerField(verbose_name="مبلغ تخصیص")
+    recipient_name = models.CharField(max_length=220, verbose_name="نام گیرنده")
+    recipient_identifier = models.CharField(max_length=120, blank=True, verbose_name="شناسه/کد گیرنده")
+    recipient_bank_account = models.CharField(max_length=120, blank=True, verbose_name="حساب/شبا مقصد")
+    recipient_snapshot = models.JSONField(default=dict, blank=True)
+    purpose = models.CharField(max_length=260, verbose_name="هدف تخصیص")
+    note = models.TextField(blank=True)
+    rejection_reason = models.TextField(blank=True)
+    bank_tracking_reference = models.CharField(max_length=120, blank=True)
+    supporting_document = models.JSONField(default=dict, blank=True)
+    approved_at = models.DateTimeField(null=True, blank=True)
+    rejected_at = models.DateTimeField(null=True, blank=True)
+    paid_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = "تخصیص مالی مددکار"
+        verbose_name_plural = "تخصیص‌های مالی مددکار"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["campaign", "status", "-created_at"], name="madadkar_disb_campaign_status_idx"),
+            models.Index(fields=["status", "-created_at"], name="madadkar_disb_status_time_idx"),
+        ]
+        constraints = [
+            models.CheckConstraint(condition=models.Q(amount__gte=1), name="madadkar_disb_amount_min"),
+        ]
+
+    def __str__(self) -> str:
+        return f"Disbursement #{self.pk}: campaign={self.campaign_id} amount={self.amount} status={self.status}"
 
 
 # ---------------------------------------------------------------------------

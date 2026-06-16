@@ -86,6 +86,11 @@ from .serializers import (
     CampaignAdminDetailSerializer,
     CampaignAdminListSerializer,
     CampaignAdminUpdateSerializer,
+    CampaignDisbursableSummarySerializer,
+    CampaignDisbursementCreateSerializer,
+    CampaignDisbursementMarkPaidSerializer,
+    CampaignDisbursementRejectSerializer,
+    CampaignDisbursementSerializer,
     CampaignFinancialControlSummarySerializer,
     CampaignImageCreateSerializer,
     CampaignImageReadSerializer,
@@ -125,6 +130,7 @@ from .services import (
     CampaignInvalidDataError,
     CampaignInvalidStateError,
     CampaignNotAcceptingSharesError,
+    DisbursementWorkflowError,
     FinancialAdjustmentWorkflowError,
     InsufficientSharesError,
     InvalidShareCountError,
@@ -302,6 +308,18 @@ ADMIN_RECONCILIATION_BATCH_DETAIL_RESPONSE = build_success_response_serializer(
 ADMIN_RECONCILIATION_ITEM_LIST_RESPONSE = build_paginated_success_response_serializer(
     name="MadadkarAdminReconciliationItemListResponse",
     item_serializer=PaymentReconciliationItemSerializer,
+)
+ADMIN_DISBURSEMENT_LIST_RESPONSE = build_paginated_success_response_serializer(
+    name="MadadkarAdminDisbursementListResponse",
+    item_serializer=CampaignDisbursementSerializer,
+)
+ADMIN_DISBURSEMENT_DETAIL_RESPONSE = build_success_response_serializer(
+    name="MadadkarAdminDisbursementDetailResponse",
+    data_serializer=CampaignDisbursementSerializer,
+)
+ADMIN_DISBURSABLE_SUMMARY_RESPONSE = build_success_response_serializer(
+    name="MadadkarAdminDisbursableSummaryResponse",
+    data_serializer=CampaignDisbursableSummarySerializer,
 )
 
 
@@ -2431,6 +2449,191 @@ class MadadkarAdminRiskSignalReviewView(APIView):
             **metadata,
         )
         return SuccessResponse(data=MadadkarRiskSignalSerializer(reviewed).data, message="سیگنال ریسک با موفقیت بررسی شد.")
+
+
+# ============================================================
+# Admin — Disbursement / Allocation Ledger
+# ============================================================
+
+class MadadkarAdminDisbursementListCreateView(APIView):
+    """List and request campaign fund disbursements — admin."""
+
+    permission_classes = [IsMadadkarAdminUser]
+
+    @extend_schema(
+        operation_id="madadkar_admin_disbursements_list",
+        tags=[TAG_MADADKAR_ADMIN_ANALYTICS],
+        summary="لیست تخصیص‌های مالی مددکار — ادمین",
+        responses={200: ADMIN_DISBURSEMENT_LIST_RESPONSE, 403: GENERIC_ERROR_RESPONSE},
+    )
+    def get(self, request: Request) -> Response:
+        queryset = selectors.get_admin_disbursements_queryset()
+        status_filter = request.query_params.get("status")
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+        campaign_filter = request.query_params.get("campaign")
+        if campaign_filter:
+            with contextlib.suppress(TypeError, ValueError):
+                queryset = queryset.filter(campaign_id=int(campaign_filter))
+        paginator = StandardPagination()
+        page = paginator.paginate_queryset(queryset, request, view=self)
+        if page is not None:
+            serializer = CampaignDisbursementSerializer(page, many=True)
+            return paginator.get_paginated_response(serializer.data, message="لیست تخصیص‌های مالی با موفقیت دریافت شد.")
+        serializer = CampaignDisbursementSerializer(queryset, many=True)
+        return SuccessResponse(data=serializer.data, message="لیست تخصیص‌های مالی با موفقیت دریافت شد.")
+
+    @extend_schema(
+        operation_id="madadkar_admin_disbursements_create",
+        tags=[TAG_MADADKAR_ADMIN_ANALYTICS],
+        summary="درخواست تخصیص مالی از حرکت — ادمین",
+        request=CampaignDisbursementCreateSerializer,
+        responses={201: ADMIN_DISBURSEMENT_DETAIL_RESPONSE, 400: GENERIC_ERROR_RESPONSE, 403: GENERIC_ERROR_RESPONSE, 404: GENERIC_ERROR_RESPONSE},
+    )
+    def post(self, request: Request) -> Response:
+        serializer = CampaignDisbursementCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        campaign = selectors.get_admin_campaign_by_id(campaign_id=serializer.validated_data["campaign_id"])
+        if campaign is None:
+            return ErrorResponse(message="حرکتی با این شناسه یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+        try:
+            disbursement = services.request_campaign_disbursement(
+                campaign=campaign,
+                requested_by=request.user,
+                amount=serializer.validated_data["amount"],
+                recipient_name=serializer.validated_data["recipient_name"],
+                recipient_identifier=serializer.validated_data.get("recipient_identifier", ""),
+                recipient_bank_account=serializer.validated_data.get("recipient_bank_account", ""),
+                purpose=serializer.validated_data["purpose"],
+                note=serializer.validated_data.get("note", ""),
+                supporting_document=serializer.validated_data.get("supporting_document") or {},
+            )
+        except DisbursementWorkflowError as exc:
+            return ErrorResponse(message=str(exc))
+        metadata = extract_audit_metadata(request)
+        log_action_async(
+            user_id=request.user.pk,
+            action=audit_actions.MADADKAR_DISBURSEMENT_REQUESTED,
+            resource_type="madadkar_disbursement",
+            resource_id=str(disbursement.pk),
+            extra_data={"campaign_id": campaign.pk, "amount": disbursement.amount},
+            **metadata,
+        )
+        return CreatedResponse(data=CampaignDisbursementSerializer(disbursement).data, message="درخواست تخصیص مالی ثبت شد.")
+
+
+class MadadkarAdminDisbursementDetailView(APIView):
+    """Retrieve one campaign fund disbursement workflow row — admin."""
+
+    permission_classes = [IsMadadkarAdminUser]
+
+    @extend_schema(
+        operation_id="madadkar_admin_disbursement_retrieve",
+        tags=[TAG_MADADKAR_ADMIN_ANALYTICS],
+        summary="جزئیات تخصیص مالی — ادمین",
+        responses={200: ADMIN_DISBURSEMENT_DETAIL_RESPONSE, 403: GENERIC_ERROR_RESPONSE, 404: GENERIC_ERROR_RESPONSE},
+    )
+    def get(self, request: Request, disbursement_id: int) -> Response:
+        disbursement = selectors.get_admin_disbursement_by_id(disbursement_id=disbursement_id)
+        if disbursement is None:
+            return ErrorResponse(message="تخصیص مالی با این شناسه یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+        return SuccessResponse(data=CampaignDisbursementSerializer(disbursement).data, message="جزئیات تخصیص مالی با موفقیت دریافت شد.")
+
+
+class MadadkarAdminDisbursementActionView(APIView):
+    """Approve, reject, or mark disbursements as paid — admin."""
+
+    permission_classes = [IsMadadkarAdminUser]
+
+    @extend_schema(
+        operation_id="madadkar_admin_disbursement_action",
+        tags=[TAG_MADADKAR_ADMIN_ANALYTICS],
+        summary="عملیات تخصیص مالی — ادمین",
+        request=CampaignDisbursementMarkPaidSerializer,
+        responses={200: ADMIN_DISBURSEMENT_DETAIL_RESPONSE, 400: GENERIC_ERROR_RESPONSE, 403: GENERIC_ERROR_RESPONSE, 404: GENERIC_ERROR_RESPONSE},
+    )
+    def post(self, request: Request, disbursement_id: int, action: str) -> Response:
+        disbursement = selectors.get_admin_disbursement_by_id(disbursement_id=disbursement_id)
+        if disbursement is None:
+            return ErrorResponse(message="تخصیص مالی با این شناسه یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+        if action == "approve":
+            return self._approve(request=request, disbursement=disbursement)
+        if action == "reject":
+            return self._reject(request=request, disbursement=disbursement)
+        if action == "mark-paid":
+            return self._mark_paid(request=request, disbursement=disbursement)
+        return ErrorResponse(message="عملیات تخصیص مالی نامعتبر است.", status_code=status.HTTP_404_NOT_FOUND)
+
+    def _approve(self, *, request: Request, disbursement) -> Response:
+        """Approve requested disbursement and audit the action."""
+        try:
+            updated = services.approve_campaign_disbursement(disbursement=disbursement, reviewed_by=request.user)
+        except DisbursementWorkflowError as exc:
+            return ErrorResponse(message=str(exc))
+        _audit_disbursement_action(request=request, disbursement=updated, action=audit_actions.MADADKAR_DISBURSEMENT_APPROVED)
+        return SuccessResponse(data=CampaignDisbursementSerializer(updated).data, message="تخصیص مالی تأیید شد.")
+
+    def _reject(self, *, request: Request, disbursement) -> Response:
+        """Reject requested disbursement and audit the action."""
+        serializer = CampaignDisbursementRejectSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            updated = services.reject_campaign_disbursement(
+                disbursement=disbursement,
+                reviewed_by=request.user,
+                rejection_reason=serializer.validated_data["rejection_reason"],
+            )
+        except DisbursementWorkflowError as exc:
+            return ErrorResponse(message=str(exc))
+        _audit_disbursement_action(request=request, disbursement=updated, action=audit_actions.MADADKAR_DISBURSEMENT_REJECTED)
+        return SuccessResponse(data=CampaignDisbursementSerializer(updated).data, message="تخصیص مالی رد شد.")
+
+    def _mark_paid(self, *, request: Request, disbursement) -> Response:
+        """Mark approved disbursement as paid and audit the action."""
+        serializer = CampaignDisbursementMarkPaidSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            updated = services.mark_campaign_disbursement_paid(
+                disbursement=disbursement,
+                paid_by=request.user,
+                bank_tracking_reference=serializer.validated_data["bank_tracking_reference"],
+            )
+        except DisbursementWorkflowError as exc:
+            return ErrorResponse(message=str(exc))
+        _audit_disbursement_action(request=request, disbursement=updated, action=audit_actions.MADADKAR_DISBURSEMENT_PAID)
+        return SuccessResponse(data=CampaignDisbursementSerializer(updated).data, message="پرداخت تخصیص مالی ثبت شد.")
+
+
+class MadadkarAdminCampaignDisbursableSummaryView(APIView):
+    """Return disbursable amount summary for one campaign."""
+
+    permission_classes = [IsMadadkarAdminUser]
+
+    @extend_schema(
+        operation_id="madadkar_admin_campaign_disbursable_summary",
+        tags=[TAG_MADADKAR_ADMIN_ANALYTICS],
+        summary="مانده قابل تخصیص حرکت — ادمین",
+        responses={200: ADMIN_DISBURSABLE_SUMMARY_RESPONSE, 403: GENERIC_ERROR_RESPONSE, 404: GENERIC_ERROR_RESPONSE},
+    )
+    def get(self, request: Request, campaign_id: int) -> Response:
+        campaign = selectors.get_admin_campaign_by_id(campaign_id=campaign_id)
+        if campaign is None:
+            return ErrorResponse(message="حرکتی با این شناسه یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+        summary = selectors.get_campaign_disbursable_summary(campaign=campaign)
+        return SuccessResponse(data=CampaignDisbursableSummarySerializer(summary).data, message="مانده قابل تخصیص با موفقیت دریافت شد.")
+
+
+def _audit_disbursement_action(*, request: Request, disbursement, action: str) -> None:
+    """Audit sensitive disbursement workflow actions."""
+    metadata = extract_audit_metadata(request)
+    log_action_async(
+        user_id=request.user.pk,
+        action=action,
+        resource_type="madadkar_disbursement",
+        resource_id=str(disbursement.pk),
+        extra_data={"campaign_id": disbursement.campaign_id, "amount": disbursement.amount, "status": disbursement.status},
+        **metadata,
+    )
 
 
 # ============================================================

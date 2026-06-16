@@ -13,6 +13,7 @@ from django.utils.html import format_html
 
 from apps.madadkar.models import (
     Campaign,
+    CampaignDisbursement,
     CampaignFinancialAdjustment,
     CampaignImage,
     DonationReceipt,
@@ -473,4 +474,27 @@ class DonationReceiptAdmin(admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None) -> bool:
         """Receipt evidence must remain available for verification."""
+        return False
+
+
+@admin.register(CampaignDisbursement)
+class CampaignDisbursementAdmin(admin.ModelAdmin):
+    """Read-oriented admin for campaign disbursement workflow evidence."""
+
+    list_display = ("id", "campaign", "amount", "recipient_name", "status", "requested_by", "reviewed_by", "paid_by", "created_at")
+    list_filter = ("status", "campaign")
+    search_fields = ("campaign__title", "recipient_name", "recipient_identifier", "bank_tracking_reference")
+    readonly_fields = [field.name for field in CampaignDisbursement._meta.fields]
+    ordering = ("-created_at",)
+
+    def has_add_permission(self, request) -> bool:
+        """Disbursements must be requested through audited API workflow."""
+        return False
+
+    def has_change_permission(self, request, obj=None) -> bool:
+        """Disbursement transitions must use audited API actions."""
+        return False
+
+    def has_delete_permission(self, request, obj=None) -> bool:
+        """Disbursement evidence must not be deleted."""
         return False

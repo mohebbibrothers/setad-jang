@@ -4887,6 +4887,40 @@ paths:
               schema:
                 $ref: '#/components/schemas/MadadkarGenericErrorResponse'
           description: ''
+  /api/v1/madadkar/admin/campaigns/{campaign_id}/disbursable/:
+    get:
+      operationId: madadkar_admin_campaign_disbursable_summary
+      description: Return disbursable amount summary for one campaign.
+      summary: مانده قابل تخصیص حرکت — ادمین
+      parameters:
+      - in: path
+        name: campaign_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - مددکار — مدیریت (تحلیل و گزارش)
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MadadkarAdminDisbursableSummaryResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MadadkarGenericErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MadadkarGenericErrorResponse'
+          description: ''
   /api/v1/madadkar/admin/campaigns/{campaign_id}/export/:
     get:
       operationId: madadkar_admin_campaign_export
@@ -5239,6 +5273,164 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/MadadkarAdminCampaignDetailResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MadadkarGenericErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MadadkarGenericErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MadadkarGenericErrorResponse'
+          description: ''
+  /api/v1/madadkar/admin/disbursements/:
+    get:
+      operationId: madadkar_admin_disbursements_list
+      description: List and request campaign fund disbursements — admin.
+      summary: لیست تخصیص‌های مالی مددکار — ادمین
+      tags:
+      - مددکار — مدیریت (تحلیل و گزارش)
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MadadkarAdminDisbursementListResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MadadkarGenericErrorResponse'
+          description: ''
+    post:
+      operationId: madadkar_admin_disbursements_create
+      description: List and request campaign fund disbursements — admin.
+      summary: درخواست تخصیص مالی از حرکت — ادمین
+      tags:
+      - مددکار — مدیریت (تحلیل و گزارش)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CampaignDisbursementCreate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CampaignDisbursementCreate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CampaignDisbursementCreate'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MadadkarAdminDisbursementDetailResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MadadkarGenericErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MadadkarGenericErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MadadkarGenericErrorResponse'
+          description: ''
+  /api/v1/madadkar/admin/disbursements/{disbursement_id}/:
+    get:
+      operationId: madadkar_admin_disbursement_retrieve
+      description: Retrieve one campaign fund disbursement workflow row — admin.
+      summary: جزئیات تخصیص مالی — ادمین
+      parameters:
+      - in: path
+        name: disbursement_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - مددکار — مدیریت (تحلیل و گزارش)
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MadadkarAdminDisbursementDetailResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MadadkarGenericErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MadadkarGenericErrorResponse'
+          description: ''
+  /api/v1/madadkar/admin/disbursements/{disbursement_id}/{action}/:
+    post:
+      operationId: madadkar_admin_disbursement_action
+      description: Approve, reject, or mark disbursements as paid — admin.
+      summary: عملیات تخصیص مالی — ادمین
+      parameters:
+      - in: path
+        name: action
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: disbursement_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - مددکار — مدیریت (تحلیل و گزارش)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CampaignDisbursementMarkPaid'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CampaignDisbursementMarkPaid'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CampaignDisbursementMarkPaid'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MadadkarAdminDisbursementDetailResponse'
           description: ''
         '400':
           content:
@@ -12526,6 +12718,186 @@ components:
       - net_amount
       - refund_amount
       - successful_payments
+    CampaignDisbursableSummary:
+      type: object
+      description: Serializer for campaign disbursable amount summary.
+      properties:
+        campaign_id:
+          type: integer
+          readOnly: true
+        net_effective_amount:
+          type: integer
+          readOnly: true
+        committed_disbursement_amount:
+          type: integer
+          readOnly: true
+        paid_disbursement_amount:
+          type: integer
+          readOnly: true
+        disbursable_amount:
+          type: integer
+          readOnly: true
+      required:
+      - campaign_id
+      - committed_disbursement_amount
+      - disbursable_amount
+      - net_effective_amount
+      - paid_disbursement_amount
+    CampaignDisbursement:
+      type: object
+      description: Read serializer for campaign fund disbursement workflow rows.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        campaign:
+          type: integer
+          readOnly: true
+          title: حرکت
+        campaign_title:
+          type: string
+          readOnly: true
+        requested_by:
+          allOf:
+          - $ref: '#/components/schemas/AdminUserSummary'
+          readOnly: true
+        reviewed_by:
+          allOf:
+          - $ref: '#/components/schemas/AdminUserSummary'
+          readOnly: true
+        paid_by:
+          allOf:
+          - $ref: '#/components/schemas/AdminUserSummary'
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/MadadkarDisbursementStatusEnum'
+          readOnly: true
+        status_display:
+          type: string
+          readOnly: true
+        amount:
+          type: integer
+          readOnly: true
+          title: مبلغ تخصیص
+        recipient_name:
+          type: string
+          readOnly: true
+          title: نام گیرنده
+        recipient_identifier:
+          type: string
+          readOnly: true
+          title: شناسه/کد گیرنده
+        recipient_bank_account:
+          type: string
+          readOnly: true
+          title: حساب/شبا مقصد
+        recipient_snapshot:
+          readOnly: true
+        purpose:
+          type: string
+          readOnly: true
+          title: هدف تخصیص
+        note:
+          type: string
+          readOnly: true
+        rejection_reason:
+          type: string
+          readOnly: true
+        bank_tracking_reference:
+          type: string
+          readOnly: true
+        supporting_document:
+          readOnly: true
+        approved_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        rejected_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        paid_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: تاریخ ایجاد
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: تاریخ بروزرسانی
+      required:
+      - amount
+      - approved_at
+      - bank_tracking_reference
+      - campaign
+      - campaign_title
+      - created_at
+      - id
+      - note
+      - paid_at
+      - paid_by
+      - purpose
+      - recipient_bank_account
+      - recipient_identifier
+      - recipient_name
+      - recipient_snapshot
+      - rejected_at
+      - rejection_reason
+      - requested_by
+      - reviewed_by
+      - status
+      - status_display
+      - supporting_document
+      - updated_at
+    CampaignDisbursementCreate:
+      type: object
+      description: Input serializer for requesting a campaign disbursement.
+      properties:
+        campaign_id:
+          type: integer
+          minimum: 1
+        amount:
+          type: integer
+          minimum: 1
+        recipient_name:
+          type: string
+          maxLength: 220
+        recipient_identifier:
+          type: string
+          default: ''
+        recipient_bank_account:
+          type: string
+          default: ''
+        purpose:
+          type: string
+          maxLength: 260
+        note:
+          type: string
+          default: ''
+        supporting_document: {}
+      required:
+      - amount
+      - campaign_id
+      - purpose
+      - recipient_name
+    CampaignDisbursementMarkPaid:
+      type: object
+      description: Input serializer for marking approved disbursement as paid.
+      properties:
+        bank_tracking_reference:
+          type: string
+          maxLength: 120
+      required:
+      - bank_tracking_reference
     CampaignFinancialControlSummary:
       type: object
       description: Serializer for admin campaign financial-control summary.
@@ -16901,6 +17273,74 @@ components:
       required:
       - count
       - results
+    MadadkarAdminDisbursableSummaryResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          default: true
+        status_code:
+          type: integer
+          default: 200
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/CampaignDisbursableSummary'
+      required:
+      - data
+      - message
+    MadadkarAdminDisbursementDetailResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          default: true
+        status_code:
+          type: integer
+          default: 200
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/CampaignDisbursement'
+      required:
+      - data
+      - message
+    MadadkarAdminDisbursementListResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/MadadkarAdminDisbursementListResponseData'
+        success:
+          type: boolean
+          default: true
+        status_code:
+          type: integer
+          default: 200
+        message:
+          type: string
+      required:
+      - data
+      - message
+    MadadkarAdminDisbursementListResponseData:
+      type: object
+      properties:
+        count:
+          type: integer
+        next:
+          type: string
+          format: uri
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/CampaignDisbursement'
+      required:
+      - count
+      - results
     MadadkarAdminFinancialControlResponse:
       type: object
       properties:
@@ -17279,6 +17719,20 @@ components:
         * `published` - منتشرشده
         * `completed` - تکمیل‌شده
         * `closed` - بسته‌شده
+    MadadkarDisbursementStatusEnum:
+      enum:
+      - requested
+      - approved
+      - rejected
+      - paid
+      - canceled
+      type: string
+      description: |-
+        * `requested` - درخواست‌شده
+        * `approved` - تأییدشده
+        * `rejected` - ردشده
+        * `paid` - پرداخت‌شده
+        * `canceled` - لغوشده
     MadadkarEmptySuccessResponse:
       type: object
       properties:

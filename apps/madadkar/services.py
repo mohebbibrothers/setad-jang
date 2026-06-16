@@ -44,6 +44,7 @@ from django.utils import timezone
 
 from apps.madadkar.choices import (
     CampaignStatus,
+    DisbursementStatus,
     FinancialAdjustmentStatus,
     FinancialAdjustmentType,
     MadadkarRiskSeverity,
@@ -59,6 +60,7 @@ from apps.madadkar.choices import (
 )
 from apps.madadkar.models import (
     Campaign,
+    CampaignDisbursement,
     CampaignFinancialAdjustment,
     CampaignImage,
     DonationReceipt,
@@ -143,6 +145,10 @@ class RefundWorkflowError(MadadkarServiceError):
 
 class FinancialAdjustmentWorkflowError(MadadkarServiceError):
     """خطای workflow اصلاح مالی مددکار."""
+
+
+class DisbursementWorkflowError(MadadkarServiceError):
+    """خطای workflow تخصیص/خروج پول مددکار."""
 
 
 # ===========================================================================
@@ -1419,6 +1425,115 @@ def apply_financial_adjustment(*, adjustment: CampaignFinancialAdjustment) -> Ca
     _sync_campaign_counters(campaign=campaign)
     evaluate_adjustment_risk(adjustment=locked_adjustment)
     return locked_adjustment
+
+
+# ===========================================================================
+# Disbursement / allocation ledger services
+# ===========================================================================
+
+def calculate_campaign_disbursable_amount(*, campaign: Campaign) -> int:
+    """Return current net amount that is not committed to active disbursements."""
+    committed = CampaignDisbursement.objects.filter(
+        campaign=campaign,
+        status__in=[DisbursementStatus.REQUESTED, DisbursementStatus.APPROVED, DisbursementStatus.PAID],
+    ).aggregate(total=Sum("amount"))["total"] or 0
+    return max(campaign.purchased_amount - committed, 0)
+
+
+@transaction.atomic
+def request_campaign_disbursement(
+    *,
+    campaign: Campaign,
+    amount: int,
+    recipient_name: str,
+    purpose: str,
+    requested_by: Any = None,
+    recipient_identifier: str = "",
+    recipient_bank_account: str = "",
+    supporting_document: dict[str, Any] | None = None,
+    note: str = "",
+) -> CampaignDisbursement:
+    """Create a requested disbursement while preventing over-allocation."""
+    locked_campaign = Campaign.objects.select_for_update().get(pk=campaign.pk)
+    if amount <= 0:
+        raise DisbursementWorkflowError("مبلغ تخصیص باید بزرگ‌تر از صفر باشد.")
+    available = calculate_campaign_disbursable_amount(campaign=locked_campaign)
+    if amount > available:
+        raise DisbursementWorkflowError("مبلغ تخصیص از مانده قابل تخصیص حرکت بیشتر است.")
+    recipient_snapshot = {
+        "name": recipient_name.strip(),
+        "identifier": recipient_identifier.strip(),
+        "bank_account": recipient_bank_account.strip(),
+    }
+    return CampaignDisbursement.objects.create(
+        campaign=locked_campaign,
+        requested_by=requested_by,
+        amount=amount,
+        recipient_name=recipient_snapshot["name"],
+        recipient_identifier=recipient_snapshot["identifier"],
+        recipient_bank_account=recipient_snapshot["bank_account"],
+        recipient_snapshot=recipient_snapshot,
+        purpose=purpose.strip(),
+        note=note.strip(),
+        supporting_document=supporting_document or {},
+        status=DisbursementStatus.REQUESTED,
+    )
+
+
+@transaction.atomic
+def approve_campaign_disbursement(*, disbursement: CampaignDisbursement, reviewed_by: Any = None) -> CampaignDisbursement:
+    """Approve a requested disbursement after re-checking available funds."""
+    locked = CampaignDisbursement.objects.select_for_update().select_related("campaign").get(pk=disbursement.pk)
+    if locked.status != DisbursementStatus.REQUESTED:
+        raise DisbursementWorkflowError("فقط تخصیص‌های درخواست‌شده قابل تأیید هستند.")
+    available = calculate_campaign_disbursable_amount(campaign=locked.campaign) + locked.amount
+    if locked.amount > available:
+        raise DisbursementWorkflowError("مانده قابل تخصیص برای تأیید این درخواست کافی نیست.")
+    locked.status = DisbursementStatus.APPROVED
+    locked.reviewed_by = reviewed_by
+    locked.approved_at = timezone.now()
+    locked.save(update_fields=["status", "reviewed_by", "approved_at", "updated_at"])
+    return locked
+
+
+@transaction.atomic
+def reject_campaign_disbursement(
+    *,
+    disbursement: CampaignDisbursement,
+    reviewed_by: Any = None,
+    rejection_reason: str = "",
+) -> CampaignDisbursement:
+    """Reject a requested disbursement and release its committed amount."""
+    locked = CampaignDisbursement.objects.select_for_update().get(pk=disbursement.pk)
+    if locked.status != DisbursementStatus.REQUESTED:
+        raise DisbursementWorkflowError("فقط تخصیص‌های درخواست‌شده قابل رد هستند.")
+    locked.status = DisbursementStatus.REJECTED
+    locked.reviewed_by = reviewed_by
+    locked.rejection_reason = rejection_reason.strip()
+    locked.rejected_at = timezone.now()
+    locked.save(update_fields=["status", "reviewed_by", "rejection_reason", "rejected_at", "updated_at"])
+    return locked
+
+
+@transaction.atomic
+def mark_campaign_disbursement_paid(
+    *,
+    disbursement: CampaignDisbursement,
+    paid_by: Any = None,
+    bank_tracking_reference: str,
+) -> CampaignDisbursement:
+    """Mark an approved disbursement as paid with bank tracking reference."""
+    locked = CampaignDisbursement.objects.select_for_update().get(pk=disbursement.pk)
+    if locked.status != DisbursementStatus.APPROVED:
+        raise DisbursementWorkflowError("فقط تخصیص‌های تأییدشده قابل پرداخت هستند.")
+    if not bank_tracking_reference.strip():
+        raise DisbursementWorkflowError("شناسه پیگیری بانکی برای ثبت پرداخت الزامی است.")
+    locked.status = DisbursementStatus.PAID
+    locked.paid_by = paid_by
+    locked.bank_tracking_reference = bank_tracking_reference.strip()
+    locked.paid_at = timezone.now()
+    locked.save(update_fields=["status", "paid_by", "bank_tracking_reference", "paid_at", "updated_at"])
+    return locked
 
 
 # ===========================================================================

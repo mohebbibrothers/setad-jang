@@ -549,6 +549,7 @@ SPECTACULAR_SETTINGS = {
         "MadadkarRefundStatusEnum": "apps.madadkar.choices.RefundStatus",
         "MadadkarFinancialAdjustmentTypeEnum": "apps.madadkar.choices.FinancialAdjustmentType",
         "MadadkarFinancialAdjustmentStatusEnum": "apps.madadkar.choices.FinancialAdjustmentStatus",
+        "MadadkarDisbursementStatusEnum": "apps.madadkar.choices.DisbursementStatus",
         "MadadkarRiskSignalTypeEnum": "apps.madadkar.choices.MadadkarRiskSignalType",
         "MadadkarRiskSeverityEnum": "apps.madadkar.choices.MadadkarRiskSeverity",
         "MadadkarRiskStatusEnum": "apps.madadkar.choices.MadadkarRiskStatus",

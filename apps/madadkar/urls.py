@@ -38,6 +38,7 @@ from .views import (
     MadadkarAdminCampaignAnalyticsView,
     MadadkarAdminCampaignCloseView,
     MadadkarAdminCampaignDetailView,
+    MadadkarAdminCampaignDisbursableSummaryView,
     MadadkarAdminCampaignExportView,
     MadadkarAdminCampaignFinancialControlView,
     MadadkarAdminCampaignImageDeleteView,
@@ -47,6 +48,9 @@ from .views import (
     MadadkarAdminCampaignListCreateView,
     MadadkarAdminCampaignParticipantsListView,
     MadadkarAdminCampaignPublishView,
+    MadadkarAdminDisbursementActionView,
+    MadadkarAdminDisbursementDetailView,
+    MadadkarAdminDisbursementListCreateView,
     MadadkarAdminIntelligenceOverviewView,
     MadadkarAdminPaymentListView,
     MadadkarAdminReceiptResendView,
@@ -240,6 +244,11 @@ urlpatterns = [
         name="admin-campaign-intelligence",
     ),
     path(
+        "admin/campaigns/<int:campaign_id>/disbursable/",
+        MadadkarAdminCampaignDisbursableSummaryView.as_view(),
+        name="admin-campaign-disbursable",
+    ),
+    path(
         "admin/intelligence/overview/",
         MadadkarAdminIntelligenceOverviewView.as_view(),
         name="admin-intelligence-overview",
@@ -287,6 +296,21 @@ urlpatterns = [
     # ====================================================
     # Admin — Reconciliation
     # ====================================================
+    path(
+        "admin/disbursements/",
+        MadadkarAdminDisbursementListCreateView.as_view(),
+        name="admin-disbursement-list-create",
+    ),
+    path(
+        "admin/disbursements/<int:disbursement_id>/",
+        MadadkarAdminDisbursementDetailView.as_view(),
+        name="admin-disbursement-detail",
+    ),
+    path(
+        "admin/disbursements/<int:disbursement_id>/<str:action>/",
+        MadadkarAdminDisbursementActionView.as_view(),
+        name="admin-disbursement-action",
+    ),
     path(
         "admin/reconciliation/import/",
         MadadkarAdminReconciliationImportView.as_view(),

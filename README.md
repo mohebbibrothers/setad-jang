@@ -762,6 +762,8 @@ This enables future Zarinpal settlement reconciliation without rewriting payment
 - audited receipt access/resend workflow
 - settlement CSV/XLSX import و reconciliation API
 - discrepancy CSV export برای finance review
+- campaign disbursement/allocation ledger برای خروج پول و تخصیص منابع
+- disbursable amount calculation با جلوگیری از over-allocation
 - admin risk-signal review workflow
 - command center open risk-signal counter
 - audit logging برای همه عملیات حساس مالی
@@ -826,6 +828,12 @@ GET /api/v1/madadkar/admin/reconciliation/batches/
 GET /api/v1/madadkar/admin/reconciliation/batches/{id}/
 GET /api/v1/madadkar/admin/reconciliation/batches/{id}/items/
 GET /api/v1/madadkar/admin/reconciliation/batches/{id}/export/
+GET/POST /api/v1/madadkar/admin/disbursements/
+GET /api/v1/madadkar/admin/disbursements/{id}/
+POST /api/v1/madadkar/admin/disbursements/{id}/approve/
+POST /api/v1/madadkar/admin/disbursements/{id}/reject/
+POST /api/v1/madadkar/admin/disbursements/{id}/mark-paid/
+GET /api/v1/madadkar/admin/campaigns/{id}/disbursable/
 ```
 
 ### Celery tasks

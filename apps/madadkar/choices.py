@@ -132,3 +132,13 @@ class MadadkarRiskStatus(models.TextChoices):
     REVIEWED = "reviewed", "بررسی‌شده"
     DISMISSED = "dismissed", "ردشده"
     ESCALATED = "escalated", "ارجاع‌شده"
+
+
+class DisbursementStatus(models.TextChoices):
+    """Workflow status for campaign fund disbursements."""
+
+    REQUESTED = "requested", "درخواست‌شده"
+    APPROVED = "approved", "تأییدشده"
+    REJECTED = "rejected", "ردشده"
+    PAID = "paid", "پرداخت‌شده"
+    CANCELED = "canceled", "لغوشده"
