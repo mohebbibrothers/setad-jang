@@ -69,6 +69,7 @@ LOCAL_APPS = [
     "apps.support_desk.apps.SupportDeskConfig",
     "apps.notifications.apps.NotificationsConfig",
     "apps.activity.apps.ActivityConfig",
+    "apps.command_center.apps.CommandCenterConfig",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS

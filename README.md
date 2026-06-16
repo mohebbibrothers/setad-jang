@@ -11,7 +11,7 @@
   <img alt="PostgreSQL" src="https://img.shields.io/badge/PostgreSQL-production-4169E1?style=for-the-badge&logo=postgresql&logoColor=white" />
   <img alt="Redis" src="https://img.shields.io/badge/Redis-cache%20%2B%20broker-DC382D?style=for-the-badge&logo=redis&logoColor=white" />
   <img alt="Celery" src="https://img.shields.io/badge/Celery-worker%20%2B%20beat-37814A?style=for-the-badge&logo=celery&logoColor=white" />
-  <img alt="Tests" src="https://img.shields.io/badge/tests-1091%2B%20passed-brightgreen?style=for-the-badge" />
+  <img alt="Tests" src="https://img.shields.io/badge/tests-1093%2B%20passed-brightgreen?style=for-the-badge" />
   <img alt="Security" src="https://img.shields.io/badge/security-pip--audit%20%2B%20bandit%20%2B%20detect--secrets-blue?style=for-the-badge" />
 </p>
 
@@ -87,7 +87,7 @@ python manage.py check                           ✅ No issues
 python manage.py check --deploy                  ✅ No issues
 python manage.py makemigrations --check --dry-run ✅ No changes detected
 python manage.py spectacular --validate          ✅ Clean OpenAPI schema
-python -m pytest with coverage gate                              ✅ 1091+ passed
+python -m pytest with coverage gate                              ✅ 1093+ passed
 ```
 
 Policyهای enforced:
@@ -939,6 +939,33 @@ apps.support_desk.tasks.daily_support_digest_task
 
 ---
 
+
+
+## Apex Unified Admin Command Center
+
+Apex B4 یک مرکز فرماندهی مرکزی برای ادمین اضافه کرده است:
+
+```text
+GET /api/v1/admin/command-center/
+```
+
+این endpoint وضعیت عملیاتی همه اپ‌های مهم را یکجا نشان می‌دهد:
+
+```text
+Support Desk: open/unassigned/SLA breached/escalated tickets
+Kindness Wall: pending listings/reports/duplicates/contact reveals
+Tabyin: pending user submissions/deleted-in-source contents
+Public Reports: pending/reviewing/approved/rejected reports
+R4J: published criminals/pending reports/active bounties
+Madadkar: campaigns/payments success/failure/pending
+LMS: courses/enrollments/certificates
+Notifications: pending/failed events and deliveries
+Activity Timeline: total/recent activities
+Provider readiness: email/sms/payment
+Health summary: database/cache/celery broker status
+```
+
+این فاز پروژه را از مجموعه‌ای از اپ‌های مستقل به یک platform مدیریتی قابل مانیتور و عملیات نزدیک می‌کند.
 
 ## Apex Notification Engine
 

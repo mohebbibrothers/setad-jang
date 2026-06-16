@@ -145,6 +145,11 @@ api_v1_urlpatterns = [
         "api/v1/activity/",
         include(("apps.activity.urls", "activity"), namespace="activity"),
     ),
+    # ── Unified Admin Command Center ────────────────────────
+    path(
+        "api/v1/admin/command-center/",
+        include(("apps.command_center.urls", "command_center"), namespace="command_center"),
+    ),
 ]
 
 # ============================================================
