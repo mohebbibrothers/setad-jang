@@ -2,7 +2,7 @@
 
 from django.urls import path
 
-from .views import AdminAuditLogDetailAPIView, AdminAuditLogListAPIView
+from .views import AdminAuditLogDetailAPIView, AdminAuditLogExportAPIView, AdminAuditLogListAPIView
 
 app_name = "audit_logs"
 
@@ -12,6 +12,11 @@ urlpatterns = [
         "admin/logs/",
         AdminAuditLogListAPIView.as_view(),
         name="admin-log-list",
+    ),
+    path(
+        "admin/logs/export/",
+        AdminAuditLogExportAPIView.as_view(),
+        name="admin-log-export",
     ),
     path(
         "admin/logs/<int:audit_log_id>/",

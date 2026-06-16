@@ -72,3 +72,41 @@ class AuditLogDetailSerializer(serializers.ModelSerializer):
             "created_at",
         )
         read_only_fields = fields
+
+
+class AuditLogExportQuerySerializer(serializers.Serializer):
+    """Validation for admin forensic export query parameters."""
+
+    action = serializers.CharField(required=False, allow_blank=True)
+    user_id = serializers.IntegerField(required=False, min_value=1)
+    resource_type = serializers.CharField(required=False, allow_blank=True)
+    resource_id = serializers.CharField(required=False, allow_blank=True)
+    request_id = serializers.CharField(required=False, allow_blank=True)
+    ip_address = serializers.IPAddressField(required=False)
+    method = serializers.CharField(required=False, allow_blank=True)
+    path = serializers.CharField(required=False, allow_blank=True)
+    created_after = serializers.DateTimeField(required=False)
+    created_before = serializers.DateTimeField(required=False)
+    search = serializers.CharField(required=False, allow_blank=True)
+
+    def validate(self, attrs):
+        created_after = attrs.get("created_after")
+        created_before = attrs.get("created_before")
+        if created_after and created_before and created_after > created_before:
+            raise serializers.ValidationError(
+                {"created_after": "created_after نمی‌تواند بعد از created_before باشد."},
+            )
+        return attrs
+
+
+class AuditExportManifestSerializer(serializers.Serializer):
+    """OpenAPI schema for the forensic package manifest."""
+
+    schema_version = serializers.CharField()
+    generated_at = serializers.DateTimeField()
+    record_count = serializers.IntegerField()
+    filters = serializers.JSONField()
+    chain_verification = serializers.JSONField()
+    retention_policy = serializers.JSONField()
+    files = serializers.JSONField()
+    integrity_note = serializers.CharField()

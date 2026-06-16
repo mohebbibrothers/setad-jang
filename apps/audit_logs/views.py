@@ -14,7 +14,8 @@ Views اپ audit_logs — Admin API برای مشاهده و جستجوی لاگ
 
 from __future__ import annotations
 
-from drf_spectacular.utils import OpenApiParameter, OpenApiTypes, extend_schema
+from django.http import HttpResponse
+from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, OpenApiTypes, extend_schema
 from rest_framework import status
 from rest_framework.request import Request
 from rest_framework.views import APIView
@@ -28,9 +29,16 @@ from apps.core.schemas import (
     build_success_response_serializer,
 )
 
+from .chain import AuditChainVerificationError
+from .exporters import AuditExportFilters, build_audit_export_package
 from .filters import AuditLogFilter
 from .selectors import get_all_audit_logs, get_audit_log_by_id
-from .serializers import AuditLogDetailSerializer, AuditLogListSerializer
+from .serializers import (
+    AuditExportManifestSerializer,
+    AuditLogDetailSerializer,
+    AuditLogExportQuerySerializer,
+    AuditLogListSerializer,
+)
 
 # ============================================================
 # Tag Constants
@@ -52,6 +60,10 @@ AUDIT_LOG_LIST_RESPONSE = build_paginated_success_response_serializer(
 AUDIT_LOG_DETAIL_RESPONSE = build_success_response_serializer(
     name="AuditLogDetailResponse",
     data_serializer=AuditLogDetailSerializer,
+)
+AUDIT_EXPORT_MANIFEST_RESPONSE = build_success_response_serializer(
+    name="AuditExportManifestResponse",
+    data_serializer=AuditExportManifestSerializer,
 )
 
 # ============================================================
@@ -236,3 +248,94 @@ class AdminAuditLogDetailAPIView(APIView):
             data=AuditLogDetailSerializer(audit_log).data,
             message="جزئیات لاگ فعالیت با موفقیت دریافت شد.",
         )
+
+
+class AdminAuditLogExportAPIView(APIView):
+    """خروجی forensic package برای audit logs — ادمین."""
+
+    permission_classes = [IsAdminUser]
+
+    @extend_schema(
+        operation_id="audit_logs_admin_export_forensic_package",
+        tags=[TAG_AUDIT_ADMIN],
+        summary="خروجی بسته forensic لاگ‌های فعالیت",
+        description=(
+            "تولید بسته ZIP شامل `manifest.json`, `audit_logs.jsonl`, `audit_logs.csv` و "
+            "`audit_logs.xlsx`. قبل از export، زنجیره هش کامل audit trail بررسی می‌شود و خود "
+            "عملیات export نیز با action `AUDIT_PACKAGE_EXPORTED` ثبت می‌گردد."
+        ),
+        parameters=AUDIT_LOG_LIST_PARAMETERS,
+        responses={
+            200: OpenApiResponse(
+                response=OpenApiTypes.BINARY,
+                description="ZIP forensic package",
+            ),
+            400: GENERIC_ERROR_RESPONSE,
+            403: GENERIC_ERROR_RESPONSE,
+        },
+    )
+    def get(self, request: Request) -> HttpResponse | ErrorResponse:
+        serializer = AuditLogExportQuerySerializer(data=request.query_params)
+        if not serializer.is_valid():
+            return ErrorResponse(
+                message="پارامترهای خروجی audit نامعتبر است.",
+                errors=serializer.errors,
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        filters = _build_export_filters(serializer.validated_data)
+        try:
+            package = build_audit_export_package(
+                filters=filters,
+                actor_user_id=request.user.pk if request.user.is_authenticated else None,
+                actor_ip_address=_get_client_ip(request),
+                actor_request_id=getattr(request, "request_id", None)
+                or request.headers.get("X-Request-ID"),
+                actor_user_agent=request.headers.get("User-Agent", ""),
+                actor_path=request.path,
+                actor_method=request.method,
+                record_export_event=True,
+            )
+        except AuditChainVerificationError as exc:
+            return ErrorResponse(
+                message="زنجیره audit trail مخدوش است و خروجی forensic تولید نشد.",
+                errors={"chain": str(exc)},
+                status_code=status.HTTP_409_CONFLICT,
+            )
+        except ValueError as exc:
+            return ErrorResponse(
+                message="تولید خروجی audit امکان‌پذیر نیست.",
+                errors={"export": str(exc)},
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        response = HttpResponse(package.content, content_type="application/zip")
+        response["Content-Disposition"] = f'attachment; filename="{package.filename}"'
+        response["X-Audit-Package-SHA256"] = package.sha256
+        response["X-Audit-Package-Records"] = str(package.manifest["record_count"])
+        return response
+
+
+def _build_export_filters(validated_data: dict) -> AuditExportFilters:
+    """Translate validated API query params into service-layer export filters."""
+    return AuditExportFilters(
+        action=validated_data.get("action") or None,
+        user_id=validated_data.get("user_id"),
+        resource_type=validated_data.get("resource_type") or None,
+        resource_id=validated_data.get("resource_id") or None,
+        request_id=validated_data.get("request_id") or None,
+        ip_address=validated_data.get("ip_address") or None,
+        method=validated_data.get("method") or None,
+        path=validated_data.get("path") or None,
+        created_after=validated_data.get("created_after"),
+        created_before=validated_data.get("created_before"),
+        search=validated_data.get("search") or None,
+    )
+
+
+def _get_client_ip(request: Request) -> str | None:
+    """Extract client IP with X-Forwarded-For support for audited admin exports."""
+    forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
+    if forwarded_for:
+        return forwarded_for.split(",")[0].strip()
+    return request.META.get("REMOTE_ADDR")

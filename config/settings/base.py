@@ -169,6 +169,12 @@ MEDIA_ROOT = BASE_DIR / "media"
 MEDIA_STORAGE_BACKEND = config("MEDIA_STORAGE_BACKEND", default="local").strip().lower()
 FILE_SCAN_PROVIDER = config("FILE_SCAN_PROVIDER", default="extension_blocklist").strip().lower()
 
+AUDIT_LOG_ARCHIVE_ROOT = config("AUDIT_LOG_ARCHIVE_ROOT", default=str(BASE_DIR / "audit_exports"))
+AUDIT_LOG_RETENTION_DAYS = config("AUDIT_LOG_RETENTION_DAYS", default=2555, cast=int)
+AUDIT_LOG_LEGAL_HOLD_ENABLED = config("AUDIT_LOG_LEGAL_HOLD_ENABLED", default=True, cast=bool)
+AUDIT_LOG_RETENTION_DELETE_ENABLED = config("AUDIT_LOG_RETENTION_DELETE_ENABLED", default=False, cast=bool)
+AUDIT_LOG_EXPORT_MAX_RECORDS = config("AUDIT_LOG_EXPORT_MAX_RECORDS", default=100000, cast=int)
+
 AWS_ACCESS_KEY_ID = config("AWS_ACCESS_KEY_ID", default="")
 AWS_SECRET_ACCESS_KEY = config("AWS_SECRET_ACCESS_KEY", default="")
 AWS_STORAGE_BUCKET_NAME = config("AWS_STORAGE_BUCKET_NAME", default="")

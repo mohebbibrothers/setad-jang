@@ -593,7 +593,7 @@ POST /api/v1/tabyin/admin/submissions/{id}/review/
 
 ## Apex Tamper-Evident Audit Hash Chain
 
-Audit logs now include a forensic hash chain:
+Audit logs include a forensic hash chain:
 
 ```text
 previous_hash
@@ -611,7 +611,7 @@ Any direct database tampering with hash-covered fields breaks the chain and is d
 
 ## 12. Audit Logs
 
-اپ `audit_logs` برای forensic audit trail طراحی شده است.
+اپ `audit_logs` برای forensic audit trail طراحی شده است: append-only، tamper-evident و incident-response-ready.
 
 ### قابلیت‌ها
 
@@ -623,14 +623,47 @@ Any direct database tampering with hash-covered fields breaks the chain and is d
   - user agent
   - request id
 - admin list/detail
-- immutability hardening
+- immutability hardening در model/queryset/admin/API
+- tamper-evident hash-chain verification
+- forensic export package شامل:
+  - `manifest.json`
+  - `audit_logs.jsonl`
+  - `audit_logs.csv`
+  - `audit_logs.xlsx`
+- SHA-256 digest برای فایل‌های داخل package و header خروجی API
+- spreadsheet formula-injection hardening برای CSV/XLSX
+- audit شدن خود عملیات export با action `AUDIT_PACKAGE_EXPORTED`
+- retention policy محافظه‌کارانه، archive-first و non-destructive به‌صورت پیش‌فرض
 
 ### API summary
 
 ```text
 GET /api/v1/audit-logs/admin/logs/
+GET /api/v1/audit-logs/admin/logs/export/
 GET /api/v1/audit-logs/admin/logs/{id}/
 ```
+
+### Forensic commands
+
+```bash
+python manage.py verify_audit_chain
+python manage.py export_audit_package --output ./audit_exports
+python manage.py export_audit_package --output ./audit_exports --action LOGIN_SUCCESS
+python manage.py export_audit_package --output ./audit_exports --created-after 2026-06-01T00:00:00Z --created-before 2026-06-16T23:59:59Z
+python manage.py audit_retention_report
+```
+
+### Retention env
+
+```env
+AUDIT_LOG_ARCHIVE_ROOT=/var/lib/setad-jang/audit_exports
+AUDIT_LOG_RETENTION_DAYS=2555
+AUDIT_LOG_LEGAL_HOLD_ENABLED=True
+AUDIT_LOG_RETENTION_DELETE_ENABLED=False
+AUDIT_LOG_EXPORT_MAX_RECORDS=100000
+```
+
+نکته production: حذف خودکار audit logs عمداً غیرفعال است؛ retention فعلی archive-first است تا در incident response و legal hold هیچ evidence از بین نرود.
 
 ---
 

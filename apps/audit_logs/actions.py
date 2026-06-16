@@ -27,6 +27,9 @@ ADMIN_USER_UPDATED: Final[str] = "ADMIN_USER_UPDATED"
 ADMIN_USER_DEACTIVATED: Final[str] = "ADMIN_USER_DEACTIVATED"
 ADMIN_USER_ROLE_CHANGED: Final[str] = "ADMIN_USER_ROLE_CHANGED"
 
+# ── Audit Logs / Forensics ──────────────────────────
+AUDIT_PACKAGE_EXPORTED: Final[str] = "AUDIT_PACKAGE_EXPORTED"
+
 # ── Reports ─────────────────────────────────────────
 REPORT_CREATED: Final[str] = "REPORT_CREATED"
 REPORT_STATUS_CHANGED: Final[str] = "REPORT_STATUS_CHANGED"
