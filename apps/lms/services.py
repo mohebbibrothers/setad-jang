@@ -50,6 +50,14 @@ class LessonNotInEnrollmentCourseError(LMSServiceError):
     """Raised when a lesson does not belong to the user's enrolled course."""
 
 
+class LessonMediaAccessError(LMSServiceError):
+    """Raised when lesson media cannot be accessed by a user."""
+
+
+class LessonMediaUnavailableError(LMSServiceError):
+    """Raised when requested lesson media does not exist."""
+
+
 LESSON_COMPLETION_THRESHOLD_PERCENT = Decimal("90.00")
 
 
@@ -285,6 +293,52 @@ def create_skill_for_certificate(*, certificate) -> LMSUserSkill:
 
         notify_lms_certificate_issued(certificate=certificate)
     return skill
+
+
+# ============================================================
+# Secure media access
+# ============================================================
+
+
+def build_lesson_media_access(*, lesson: Lesson, user: Any, media_kind: str) -> dict[str, Any]:
+    """Return a signed/CDN-ready media access payload for an enrolled user.
+
+    For S3 private storage, Django storage `.url` returns a signed URL. For local
+    storage it returns a development URL. The view layer only orchestrates this
+    service and records audit.
+    """
+    enrollment = Enrollment.objects.filter(
+        user=user,
+        course=lesson.course,
+        status__in=[EnrollmentStatus.ACTIVE, EnrollmentStatus.COMPLETED],
+    ).first()
+    if enrollment is None and not lesson.is_preview:
+        raise LessonMediaAccessError("برای دسترسی به رسانه این جلسه باید در کلاس ثبت‌نام کرده باشید.")
+    if media_kind == "video":
+        if lesson.video_file:
+            return {
+                "media_kind": "video",
+                "provider": "uploaded_file",
+                "url": lesson.video_file.url,
+                "expires_in_seconds": 600,
+                "lesson_id": lesson.pk,
+                "course_id": lesson.course_id,
+            }
+        if lesson.video_url:
+            return {"media_kind": "video", "provider": "direct_url", "url": lesson.video_url, "expires_in_seconds": None, "lesson_id": lesson.pk, "course_id": lesson.course_id}
+        if lesson.embed_url:
+            return {"media_kind": "video", "provider": "embed", "url": lesson.embed_url, "expires_in_seconds": None, "lesson_id": lesson.pk, "course_id": lesson.course_id}
+    if media_kind == "attachment" and lesson.attachment_file:
+        return {
+            "media_kind": "attachment",
+            "provider": "uploaded_file",
+            "url": lesson.attachment_file.url,
+            "expires_in_seconds": 600,
+            "lesson_id": lesson.pk,
+            "course_id": lesson.course_id,
+            "title": lesson.attachment_title,
+        }
+    raise LessonMediaUnavailableError("رسانه درخواستی برای این جلسه موجود نیست.")
 
 
 # ============================================================

@@ -64,6 +64,18 @@ class LessonSummarySerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
+class LessonMediaAccessSerializer(serializers.Serializer):
+    """Signed/CDN-ready lesson media access payload."""
+
+    media_kind = serializers.CharField()
+    provider = serializers.CharField()
+    url = serializers.CharField()
+    expires_in_seconds = serializers.IntegerField(allow_null=True, required=False)
+    lesson_id = serializers.IntegerField()
+    course_id = serializers.IntegerField()
+    title = serializers.CharField(required=False, allow_blank=True)
+
+
 class LessonCreateUpdateSerializer(serializers.Serializer):
     """Input serializer for lesson create/update."""
 

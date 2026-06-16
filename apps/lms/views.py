@@ -49,6 +49,7 @@ from apps.lms.serializers import (
     LessonAnswerCreateSerializer,
     LessonAnswerSerializer,
     LessonCreateUpdateSerializer,
+    LessonMediaAccessSerializer,
     LessonProgressSerializer,
     LessonProgressUpdateSerializer,
     LessonQuestionCreateSerializer,
@@ -72,6 +73,8 @@ from apps.lms.serializers import (
 from apps.lms.services import (
     CourseNotEnrollabeError,
     EnrollmentNotActiveError,
+    LessonMediaAccessError,
+    LessonMediaUnavailableError,
     LessonNotInEnrollmentCourseError,
     LMSDiscussionAccessError,
     LMSDiscussionModerationError,
@@ -94,6 +97,7 @@ CATEGORY_LIST_RESPONSE = build_success_response_serializer(name="LMSCategoryList
 COURSE_RESPONSE = build_success_response_serializer(name="LMSCourseResponse", data_serializer=CourseDetailSerializer)
 COURSE_LIST_RESPONSE = build_paginated_success_response_serializer(name="LMSCourseListResponse", item_serializer=CourseSummarySerializer)
 LESSON_RESPONSE = build_success_response_serializer(name="LMSLessonResponse", data_serializer=LessonSummarySerializer)
+LESSON_MEDIA_RESPONSE = build_success_response_serializer(name="LMSLessonMediaAccessResponse", data_serializer=LessonMediaAccessSerializer)
 LESSON_LIST_RESPONSE = build_success_response_serializer(name="LMSLessonListResponse", data_serializer=LessonSummarySerializer, many=True)
 ENROLLMENT_RESPONSE = build_success_response_serializer(name="LMSEnrollmentResponse", data_serializer=EnrollmentSerializer)
 ENROLLMENT_DETAIL_RESPONSE = build_success_response_serializer(name="LMSEnrollmentDetailResponse", data_serializer=EnrollmentDetailSerializer)
@@ -331,6 +335,28 @@ class LMSUserSkillListView(APIView):
         """Return LMS skills for the current user."""
         skills = selectors.get_user_skills(user_id=request.user.pk)
         return SuccessResponse(data=LMSUserSkillSerializer(skills, many=True).data)
+
+
+class LMSLessonMediaAccessView(APIView):
+    """Return signed/CDN-ready media URL for an enrolled user's lesson."""
+
+    permission_classes = [IsAuthenticated]
+    serializer_class = LessonMediaAccessSerializer
+
+    @extend_schema(operation_id="lms_user_lessons_media_access", tags=[TAG_LMS_USER], responses={200: LESSON_MEDIA_RESPONSE, 403: LMS_ERROR_RESPONSE, 404: LMS_ERROR_RESPONSE})
+    def get(self, request: Request, lesson_id: int, media_kind: str) -> SuccessResponse | ErrorResponse:
+        """Return access payload for lesson video or attachment."""
+        lesson = selectors.get_lesson_for_progress(lesson_id=lesson_id)
+        if lesson is None:
+            return ErrorResponse(message="جلسه یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+        try:
+            payload = services.build_lesson_media_access(lesson=lesson, user=request.user, media_kind=media_kind)
+        except LessonMediaAccessError as exc:
+            return ErrorResponse(message=str(exc), status_code=status.HTTP_403_FORBIDDEN)
+        except LessonMediaUnavailableError as exc:
+            return ErrorResponse(message=str(exc), status_code=status.HTTP_404_NOT_FOUND)
+        log_action_async(user_id=request.user.pk, action=audit_actions.LMS_LESSON_MEDIA_ACCESSED, resource_type="lms_lesson", resource_id=str(lesson.pk), extra_data={"course_id": lesson.course_id, "media_kind": media_kind}, **extract_audit_metadata(request))
+        return SuccessResponse(data=payload, message="دسترسی رسانه جلسه صادر شد.")
 
 
 class LMSLessonQuestionListCreateView(APIView):

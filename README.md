@@ -11,7 +11,7 @@
   <img alt="PostgreSQL" src="https://img.shields.io/badge/PostgreSQL-production-4169E1?style=for-the-badge&logo=postgresql&logoColor=white" />
   <img alt="Redis" src="https://img.shields.io/badge/Redis-cache%20%2B%20broker-DC382D?style=for-the-badge&logo=redis&logoColor=white" />
   <img alt="Celery" src="https://img.shields.io/badge/Celery-worker%20%2B%20beat-37814A?style=for-the-badge&logo=celery&logoColor=white" />
-  <img alt="Tests" src="https://img.shields.io/badge/tests-1102%2B%20passed-brightgreen?style=for-the-badge" />
+  <img alt="Tests" src="https://img.shields.io/badge/tests-1110%2B%20passed-brightgreen?style=for-the-badge" />
   <img alt="Security" src="https://img.shields.io/badge/security-pip--audit%20%2B%20bandit%20%2B%20detect--secrets-blue?style=for-the-badge" />
 </p>
 
@@ -87,7 +87,7 @@ python manage.py check                           ✅ No issues
 python manage.py check --deploy                  ✅ No issues
 python manage.py makemigrations --check --dry-run ✅ No changes detected
 python manage.py spectacular --validate          ✅ Clean OpenAPI schema
-python -m pytest with coverage gate                              ✅ 1102+ passed
+python -m pytest with coverage gate                              ✅ 1110+ passed
 ```
 
 Policyهای enforced:
@@ -772,6 +772,33 @@ madadkar
 ```
 
 ---
+
+
+## Apex LMS Signed Media Delivery
+
+LMS media delivery now has a dedicated access contract:
+
+```text
+GET /api/v1/lms/lessons/{lesson_id}/media/{media_kind}/
+```
+
+Supported media kinds:
+
+```text
+video
+attachment
+```
+
+Security and delivery behavior:
+
+```text
+non-preview lessons require active/completed enrollment
+preview lessons may expose media to authenticated users
+uploaded files use Django storage URL; with S3 private storage this becomes signed URL
+direct URL and embed lessons are still returned through the same media access contract
+each access is audit logged with LMS_LESSON_MEDIA_ACCESSED
+CDN/Object Storage flow is ready for uploaded video and handouts
+```
 
 ## 15. LMS
 

@@ -24,6 +24,7 @@ urlpatterns = [
     path("me/enrollments/", views.LMSUserEnrollmentListView.as_view(), name="user-enrollment-list"),
     path("me/enrollments/<int:enrollment_id>/", views.LMSUserEnrollmentDetailView.as_view(), name="user-enrollment-detail"),
     path("lessons/<int:lesson_id>/progress/", views.LMSLessonProgressUpdateView.as_view(), name="lesson-progress-update"),
+    path("lessons/<int:lesson_id>/media/<str:media_kind>/", views.LMSLessonMediaAccessView.as_view(), name="lesson-media-access"),
     path("lessons/<int:lesson_id>/questions/", views.LMSLessonQuestionListCreateView.as_view(), name="lesson-question-list-create"),
     path("questions/<int:question_id>/answers/", views.LMSQuestionAnswerCreateView.as_view(), name="question-answer-create"),
     path("questions/<int:question_id>/answers/<int:answer_id>/accept/", views.LMSQuestionAcceptAnswerView.as_view(), name="question-answer-accept"),
