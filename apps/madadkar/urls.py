@@ -50,6 +50,11 @@ from .views import (
     MadadkarAdminIntelligenceOverviewView,
     MadadkarAdminPaymentListView,
     MadadkarAdminReceiptResendView,
+    MadadkarAdminReconciliationBatchDetailView,
+    MadadkarAdminReconciliationBatchListView,
+    MadadkarAdminReconciliationDiscrepancyExportView,
+    MadadkarAdminReconciliationImportView,
+    MadadkarAdminReconciliationItemListView,
     MadadkarAdminRefundActionView,
     MadadkarAdminRefundListCreateView,
     MadadkarAdminRiskSignalListView,
@@ -277,6 +282,35 @@ urlpatterns = [
         "admin/receipts/<int:receipt_id>/resend/",
         MadadkarAdminReceiptResendView.as_view(),
         name="admin-receipt-resend",
+    ),
+
+    # ====================================================
+    # Admin — Reconciliation
+    # ====================================================
+    path(
+        "admin/reconciliation/import/",
+        MadadkarAdminReconciliationImportView.as_view(),
+        name="admin-reconciliation-import",
+    ),
+    path(
+        "admin/reconciliation/batches/",
+        MadadkarAdminReconciliationBatchListView.as_view(),
+        name="admin-reconciliation-batch-list",
+    ),
+    path(
+        "admin/reconciliation/batches/<int:batch_id>/",
+        MadadkarAdminReconciliationBatchDetailView.as_view(),
+        name="admin-reconciliation-batch-detail",
+    ),
+    path(
+        "admin/reconciliation/batches/<int:batch_id>/items/",
+        MadadkarAdminReconciliationItemListView.as_view(),
+        name="admin-reconciliation-item-list",
+    ),
+    path(
+        "admin/reconciliation/batches/<int:batch_id>/export/",
+        MadadkarAdminReconciliationDiscrepancyExportView.as_view(),
+        name="admin-reconciliation-discrepancy-export",
     ),
 
     # ====================================================

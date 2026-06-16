@@ -38,6 +38,8 @@ from apps.madadkar.models import (
     MadadkarRiskSignal,
     Participation,
     Payment,
+    PaymentReconciliationBatch,
+    PaymentReconciliationItem,
     PaymentRefund,
     Sponsor,
 )
@@ -1025,3 +1027,74 @@ class DonationReceiptResendSerializer(serializers.Serializer):
         required=False,
         default="email",
     )
+
+
+# ===========================================================================
+# Reconciliation serializers — admin settlement operations
+# ===========================================================================
+
+class PaymentReconciliationBatchSerializer(serializers.ModelSerializer):
+    """Read serializer for provider settlement reconciliation batches."""
+
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+
+    class Meta:
+        model = PaymentReconciliationBatch
+        fields = (
+            "id",
+            "provider_name",
+            "source_name",
+            "status",
+            "status_display",
+            "total_rows",
+            "matched_count",
+            "mismatch_count",
+            "missing_internal_count",
+            "duplicate_provider_ref_count",
+            "summary",
+            "completed_at",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = fields
+
+
+class PaymentReconciliationItemSerializer(serializers.ModelSerializer):
+    """Read serializer for one provider/internal reconciliation comparison row."""
+
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+
+    class Meta:
+        model = PaymentReconciliationItem
+        fields = (
+            "id",
+            "batch",
+            "payment",
+            "authority",
+            "provider_ref_id",
+            "provider_amount",
+            "provider_status",
+            "internal_amount",
+            "internal_status",
+            "status",
+            "status_display",
+            "reason",
+            "raw_payload",
+            "created_at",
+        )
+        read_only_fields = fields
+
+
+class PaymentReconciliationImportSerializer(serializers.Serializer):
+    """Input serializer for uploading a provider settlement report."""
+
+    provider_name = serializers.CharField(max_length=50)
+    source_name = serializers.CharField(required=False, allow_blank=True, default="")
+    file = serializers.FileField()
+
+    def validate_file(self, uploaded_file):
+        """Validate settlement file extension before parser-level validation."""
+        name = uploaded_file.name.lower()
+        if not name.endswith((".csv", ".xlsx")):
+            raise serializers.ValidationError("فایل تطبیق باید CSV یا XLSX باشد.")
+        return uploaded_file

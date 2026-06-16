@@ -5401,6 +5401,168 @@ paths:
               schema:
                 $ref: '#/components/schemas/MadadkarGenericErrorResponse'
           description: ''
+  /api/v1/madadkar/admin/reconciliation/batches/:
+    get:
+      operationId: madadkar_admin_reconciliation_batches_list
+      description: List reconciliation batches for finance/admin review.
+      summary: لیست batchهای تطبیق پرداخت — ادمین
+      tags:
+      - مددکار — مدیریت (تحلیل و گزارش)
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MadadkarAdminReconciliationBatchListResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MadadkarGenericErrorResponse'
+          description: ''
+  /api/v1/madadkar/admin/reconciliation/batches/{batch_id}/:
+    get:
+      operationId: madadkar_admin_reconciliation_batch_retrieve
+      description: Retrieve one reconciliation batch summary.
+      summary: جزئیات batch تطبیق پرداخت — ادمین
+      parameters:
+      - in: path
+        name: batch_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - مددکار — مدیریت (تحلیل و گزارش)
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MadadkarAdminReconciliationBatchDetailResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MadadkarGenericErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MadadkarGenericErrorResponse'
+          description: ''
+  /api/v1/madadkar/admin/reconciliation/batches/{batch_id}/export/:
+    get:
+      operationId: madadkar_admin_reconciliation_discrepancies_export
+      description: Export non-matched reconciliation rows as finance-friendly CSV.
+      summary: خروجی CSV اختلافات تطبیق — ادمین
+      parameters:
+      - in: path
+        name: batch_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - مددکار — مدیریت (تحلیل و گزارش)
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: string
+                format: binary
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MadadkarGenericErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MadadkarGenericErrorResponse'
+          description: ''
+  /api/v1/madadkar/admin/reconciliation/batches/{batch_id}/items/:
+    get:
+      operationId: madadkar_admin_reconciliation_items_list
+      description: List reconciliation items for one batch with optional status filter.
+      summary: لیست ردیف‌های batch تطبیق پرداخت — ادمین
+      parameters:
+      - in: path
+        name: batch_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - مددکار — مدیریت (تحلیل و گزارش)
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MadadkarAdminReconciliationItemListResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MadadkarGenericErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MadadkarGenericErrorResponse'
+          description: ''
+  /api/v1/madadkar/admin/reconciliation/import/:
+    post:
+      operationId: madadkar_admin_reconciliation_import
+      description: Import provider settlement CSV/XLSX and create reconciliation batch.
+      summary: Import گزارش تطبیق پرداخت — ادمین
+      tags:
+      - مددکار — مدیریت (تحلیل و گزارش)
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PaymentReconciliationImport'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PaymentReconciliationImport'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MadadkarAdminReconciliationBatchDetailResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MadadkarGenericErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MadadkarGenericErrorResponse'
+          description: ''
   /api/v1/madadkar/admin/refunds/:
     get:
       operationId: madadkar_admin_refunds_list
@@ -16861,6 +17023,94 @@ components:
       required:
       - count
       - results
+    MadadkarAdminReconciliationBatchDetailResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          default: true
+        status_code:
+          type: integer
+          default: 200
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/PaymentReconciliationBatch'
+      required:
+      - data
+      - message
+    MadadkarAdminReconciliationBatchListResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/MadadkarAdminReconciliationBatchListResponseData'
+        success:
+          type: boolean
+          default: true
+        status_code:
+          type: integer
+          default: 200
+        message:
+          type: string
+      required:
+      - data
+      - message
+    MadadkarAdminReconciliationBatchListResponseData:
+      type: object
+      properties:
+        count:
+          type: integer
+        next:
+          type: string
+          format: uri
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/PaymentReconciliationBatch'
+      required:
+      - count
+      - results
+    MadadkarAdminReconciliationItemListResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/MadadkarAdminReconciliationItemListResponseData'
+        success:
+          type: boolean
+          default: true
+        status_code:
+          type: integer
+          default: 200
+        message:
+          type: string
+      required:
+      - data
+      - message
+    MadadkarAdminReconciliationItemListResponseData:
+      type: object
+      properties:
+        count:
+          type: integer
+        next:
+          type: string
+          format: uri
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/PaymentReconciliationItem'
+      required:
+      - count
+      - results
     MadadkarAdminRefundDetailResponse:
       type: object
       properties:
@@ -18854,6 +19104,181 @@ components:
           maxLength: 100
         address:
           type: string
+    PaymentReconciliationBatch:
+      type: object
+      description: Read serializer for provider settlement reconciliation batches.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        provider_name:
+          type: string
+          readOnly: true
+          title: نام درگاه
+        source_name:
+          type: string
+          readOnly: true
+          title: نام فایل/گزارش
+        status:
+          allOf:
+          - $ref: '#/components/schemas/PaymentReconciliationBatchStatusEnum'
+          readOnly: true
+        status_display:
+          type: string
+          readOnly: true
+        total_rows:
+          type: integer
+          readOnly: true
+        matched_count:
+          type: integer
+          readOnly: true
+        mismatch_count:
+          type: integer
+          readOnly: true
+        missing_internal_count:
+          type: integer
+          readOnly: true
+        duplicate_provider_ref_count:
+          type: integer
+          readOnly: true
+        summary:
+          readOnly: true
+        completed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: تاریخ ایجاد
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: تاریخ بروزرسانی
+      required:
+      - completed_at
+      - created_at
+      - duplicate_provider_ref_count
+      - id
+      - matched_count
+      - mismatch_count
+      - missing_internal_count
+      - provider_name
+      - source_name
+      - status
+      - status_display
+      - summary
+      - total_rows
+      - updated_at
+    PaymentReconciliationBatchStatusEnum:
+      enum:
+      - draft
+      - completed
+      - failed
+      type: string
+      description: |-
+        * `draft` - پیش‌نویس
+        * `completed` - تکمیل‌شده
+        * `failed` - ناموفق
+    PaymentReconciliationImport:
+      type: object
+      description: Input serializer for uploading a provider settlement report.
+      properties:
+        provider_name:
+          type: string
+          maxLength: 50
+        source_name:
+          type: string
+          default: ''
+        file:
+          type: string
+          format: uri
+      required:
+      - file
+      - provider_name
+    PaymentReconciliationItem:
+      type: object
+      description: Read serializer for one provider/internal reconciliation comparison
+        row.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        batch:
+          type: integer
+          readOnly: true
+        payment:
+          type: integer
+          readOnly: true
+          nullable: true
+        authority:
+          type: string
+          readOnly: true
+        provider_ref_id:
+          type: string
+          readOnly: true
+        provider_amount:
+          type: integer
+          readOnly: true
+        provider_status:
+          type: string
+          readOnly: true
+        internal_amount:
+          type: integer
+          readOnly: true
+          nullable: true
+        internal_status:
+          type: string
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/PaymentReconciliationItemStatusEnum'
+          readOnly: true
+        status_display:
+          type: string
+          readOnly: true
+        reason:
+          type: string
+          readOnly: true
+        raw_payload:
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: تاریخ ایجاد
+      required:
+      - authority
+      - batch
+      - created_at
+      - id
+      - internal_amount
+      - internal_status
+      - payment
+      - provider_amount
+      - provider_ref_id
+      - provider_status
+      - raw_payload
+      - reason
+      - status
+      - status_display
+    PaymentReconciliationItemStatusEnum:
+      enum:
+      - matched
+      - missing_internal
+      - amount_mismatch
+      - status_mismatch
+      - duplicate_provider_ref
+      type: string
+      description: |-
+        * `matched` - تطبیق موفق
+        * `missing_internal` - در سیستم داخلی پیدا نشد
+        * `amount_mismatch` - عدم تطابق مبلغ
+        * `status_mismatch` - عدم تطابق وضعیت
+        * `duplicate_provider_ref` - شناسه تکراری در گزارش درگاه
     PaymentRefund:
       type: object
       description: Read serializer for refund workflow rows.

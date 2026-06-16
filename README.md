@@ -760,6 +760,8 @@ This enables future Zarinpal settlement reconciliation without rewriting payment
 - verifiable donation receipts با receipt_number و SHA-256 receipt_hash
 - public-safe receipt verification endpoint
 - audited receipt access/resend workflow
+- settlement CSV/XLSX import و reconciliation API
+- discrepancy CSV export برای finance review
 - admin risk-signal review workflow
 - command center open risk-signal counter
 - audit logging برای همه عملیات حساس مالی
@@ -819,6 +821,11 @@ GET /api/v1/madadkar/me/receipts/
 GET /api/v1/madadkar/me/receipts/{id}/
 POST /api/v1/madadkar/receipts/verify/
 POST /api/v1/madadkar/admin/receipts/{id}/resend/
+POST /api/v1/madadkar/admin/reconciliation/import/
+GET /api/v1/madadkar/admin/reconciliation/batches/
+GET /api/v1/madadkar/admin/reconciliation/batches/{id}/
+GET /api/v1/madadkar/admin/reconciliation/batches/{id}/items/
+GET /api/v1/madadkar/admin/reconciliation/batches/{id}/export/
 ```
 
 ### Celery tasks

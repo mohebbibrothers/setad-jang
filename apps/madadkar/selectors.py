@@ -33,6 +33,8 @@ from apps.madadkar.models import (
     MadadkarRiskSignal,
     Participation,
     Payment,
+    PaymentReconciliationBatch,
+    PaymentReconciliationItem,
     PaymentRefund,
     Sponsor,
 )
@@ -781,3 +783,22 @@ def get_receipt_by_number(*, receipt_number: str) -> DonationReceipt | None:
 def get_admin_receipt_by_id(*, receipt_id: int) -> DonationReceipt | None:
     """Return one receipt for audited admin actions."""
     return DonationReceipt.objects.select_related("payment", "campaign", "user").filter(pk=receipt_id).first()
+
+
+# ---------------------------------------------------------------------------
+# Reconciliation selectors — admin scope
+# ---------------------------------------------------------------------------
+
+def get_admin_reconciliation_batches_queryset() -> QuerySet[PaymentReconciliationBatch]:
+    """Return provider settlement reconciliation batches for admin review."""
+    return PaymentReconciliationBatch.objects.order_by("-created_at")
+
+
+def get_admin_reconciliation_batch_by_id(*, batch_id: int) -> PaymentReconciliationBatch | None:
+    """Return one reconciliation batch for admin detail/export actions."""
+    return get_admin_reconciliation_batches_queryset().filter(pk=batch_id).first()
+
+
+def get_admin_reconciliation_items_queryset(*, batch: PaymentReconciliationBatch) -> QuerySet[PaymentReconciliationItem]:
+    """Return reconciliation items for one batch with payment eager loading."""
+    return batch.items.select_related("payment").order_by("created_at", "id")
