@@ -18,6 +18,9 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
+
 from django.conf import settings
 from django.db import models
 from django.utils.text import slugify
@@ -817,6 +820,91 @@ class CampaignFinancialAdjustment(BaseModel):
         if self.adjustment_type == FinancialAdjustmentType.CREDIT:
             return self.amount
         return -self.amount
+
+
+# ---------------------------------------------------------------------------
+# Donation Receipts
+# ---------------------------------------------------------------------------
+
+class DonationReceipt(BaseModel):
+    """Verifiable donation receipt issued for a successful Madadkar payment."""
+
+    payment = models.OneToOneField(
+        Payment,
+        on_delete=models.PROTECT,
+        related_name="donation_receipt",
+        verbose_name="پرداخت",
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="madadkar_donation_receipts",
+        verbose_name="کاربر",
+    )
+    campaign = models.ForeignKey(
+        Campaign,
+        on_delete=models.PROTECT,
+        related_name="donation_receipts",
+        verbose_name="حرکت",
+    )
+    receipt_number = models.CharField(max_length=40, unique=True, db_index=True)
+    receipt_hash = models.CharField(max_length=64, unique=True, db_index=True)
+    hash_version = models.PositiveSmallIntegerField(default=1)
+    amount = models.PositiveBigIntegerField(verbose_name="مبلغ رسید")
+    issued_at = models.DateTimeField(verbose_name="زمان صدور")
+    payment_snapshot = models.JSONField(default=dict, blank=True)
+    campaign_snapshot = models.JSONField(default=dict, blank=True)
+    donor_snapshot = models.JSONField(default=dict, blank=True)
+    resend_count = models.PositiveIntegerField(default=0)
+    last_resent_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = "رسید مشارکت مددکار"
+        verbose_name_plural = "رسیدهای مشارکت مددکار"
+        ordering = ["-issued_at", "-created_at"]
+        indexes = [
+            models.Index(fields=["user", "-issued_at"], name="madadkar_receipt_user_time_idx"),
+            models.Index(fields=["campaign", "-issued_at"], name="madadkar_receipt_campaign_time_idx"),
+        ]
+        constraints = [
+            models.CheckConstraint(condition=models.Q(amount__gte=1), name="madadkar_receipt_amount_min"),
+        ]
+
+    def __str__(self) -> str:
+        return f"Receipt {self.receipt_number} payment={self.payment_id}"
+
+    def build_hash_payload(self) -> dict:
+        """Build deterministic payload used for public receipt verification."""
+        return {
+            "hash_version": self.hash_version,
+            "receipt_number": self.receipt_number,
+            "payment_id": self.payment_id,
+            "user_id": self.user_id,
+            "campaign_id": self.campaign_id,
+            "amount": self.amount,
+            "issued_at": self.issued_at.isoformat() if self.issued_at else None,
+            "payment_snapshot": self.payment_snapshot,
+            "campaign_snapshot": self.campaign_snapshot,
+            "donor_snapshot": self.donor_snapshot,
+        }
+
+    def compute_receipt_hash(self) -> str:
+        """Compute deterministic SHA-256 hash for receipt verification."""
+        encoded = json.dumps(self.build_hash_payload(), ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        return hashlib.sha256(encoded).hexdigest()
+
+    def save(self, *args, **kwargs) -> None:
+        """Fill receipt hash on insert and keep receipt evidence stable afterwards."""
+        if self.pk and not self._state.adding:
+            allowed_update_fields = set(kwargs.get("update_fields") or [])
+            mutable_fields = {"resend_count", "last_resent_at", "updated_at"}
+            if allowed_update_fields and allowed_update_fields.issubset(mutable_fields):
+                super().save(*args, **kwargs)
+                return
+            raise PermissionError("ویرایش رسید مشارکت مجاز نیست.")
+        if not self.receipt_hash:
+            self.receipt_hash = self.compute_receipt_hash()
+        super().save(*args, **kwargs)
 
 
 # ---------------------------------------------------------------------------

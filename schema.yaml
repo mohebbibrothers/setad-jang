@@ -5350,6 +5350,57 @@ paths:
               schema:
                 $ref: '#/components/schemas/MadadkarGenericErrorResponse'
           description: ''
+  /api/v1/madadkar/admin/receipts/{receipt_id}/resend/:
+    post:
+      operationId: madadkar_admin_receipt_resend
+      description: Record audited resend action for a donation receipt.
+      summary: ثبت ارسال مجدد رسید — ادمین
+      parameters:
+      - in: path
+        name: receipt_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - مددکار — مدیریت (تحلیل و گزارش)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DonationReceiptResend'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/DonationReceiptResend'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DonationReceiptResend'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MadadkarUserReceiptDetailResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MadadkarGenericErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MadadkarGenericErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MadadkarGenericErrorResponse'
+          description: ''
   /api/v1/madadkar/admin/refunds/:
     get:
       operationId: madadkar_admin_refunds_list
@@ -6016,6 +6067,62 @@ paths:
               schema:
                 $ref: '#/components/schemas/MadadkarGenericErrorResponse'
           description: ''
+  /api/v1/madadkar/me/receipts/:
+    get:
+      operationId: madadkar_user_receipts_list
+      description: List verifiable donation receipts owned by current user.
+      summary: لیست رسیدهای مشارکت من
+      tags:
+      - مددکار — کاربر
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MadadkarUserReceiptListResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MadadkarGenericErrorResponse'
+          description: ''
+  /api/v1/madadkar/me/receipts/{receipt_id}/:
+    get:
+      operationId: madadkar_user_receipt_retrieve
+      description: Retrieve one user-owned donation receipt and audit access.
+      summary: جزئیات رسید مشارکت من
+      parameters:
+      - in: path
+        name: receipt_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - مددکار — کاربر
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MadadkarUserReceiptDetailResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MadadkarGenericErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MadadkarGenericErrorResponse'
+          description: ''
   /api/v1/madadkar/payment/verify/:
     get:
       operationId: madadkar_payment_verify
@@ -6117,6 +6224,42 @@ paths:
                 $ref: '#/components/schemas/MadadkarGenericErrorResponse'
           description: ''
         '502':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MadadkarGenericErrorResponse'
+          description: ''
+  /api/v1/madadkar/receipts/verify/:
+    post:
+      operationId: madadkar_public_receipt_verify
+      description: Public verification for receipt number/hash pairs without exposing
+        donor PII.
+      summary: اعتبارسنجی عمومی رسید مشارکت
+      tags:
+      - مددکار — عمومی
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DonationReceiptPublicVerify'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/DonationReceiptPublicVerify'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DonationReceiptPublicVerify'
+        required: true
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MadadkarPublicReceiptVerifyResponse'
+          description: ''
+        '400':
           content:
             application/json:
               schema:
@@ -13244,6 +13387,14 @@ components:
       - status
       - subtitle
       - title
+    DeliveryChannelEnum:
+      enum:
+      - email
+      - in_app
+      type: string
+      description: |-
+        * `email` - email
+        * `in_app` - in_app
     DetailedChecks:
       type: object
       description: چک‌های detailed شامل readiness و diagnosticهای non-critical.
@@ -13344,6 +13495,135 @@ components:
           default: ''
       required:
       - reason
+    DonationReceipt:
+      type: object
+      description: Read serializer for user-owned verifiable donation receipts.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        receipt_number:
+          type: string
+          readOnly: true
+        receipt_hash:
+          type: string
+          readOnly: true
+        hash_version:
+          type: integer
+          readOnly: true
+        amount:
+          type: integer
+          readOnly: true
+          title: مبلغ رسید
+        issued_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: زمان صدور
+        campaign:
+          type: integer
+          readOnly: true
+          title: حرکت
+        campaign_title:
+          type: string
+          readOnly: true
+        campaign_slug:
+          type: string
+          readOnly: true
+        payment_snapshot:
+          readOnly: true
+        campaign_snapshot:
+          readOnly: true
+        donor_snapshot:
+          readOnly: true
+        resend_count:
+          type: integer
+          readOnly: true
+        last_resent_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: تاریخ ایجاد
+      required:
+      - amount
+      - campaign
+      - campaign_slug
+      - campaign_snapshot
+      - campaign_title
+      - created_at
+      - donor_snapshot
+      - hash_version
+      - id
+      - issued_at
+      - last_resent_at
+      - payment_snapshot
+      - receipt_hash
+      - receipt_number
+      - resend_count
+    DonationReceiptPublicVerify:
+      type: object
+      description: Input serializer for public receipt verification.
+      properties:
+        receipt_number:
+          type: string
+          maxLength: 40
+        receipt_hash:
+          type: string
+          maxLength: 64
+          minLength: 64
+      required:
+      - receipt_hash
+      - receipt_number
+    DonationReceiptResend:
+      type: object
+      description: Empty serializer for documenting receipt resend action.
+      properties:
+        delivery_channel:
+          allOf:
+          - $ref: '#/components/schemas/DeliveryChannelEnum'
+          default: email
+    DonationReceiptVerificationResult:
+      type: object
+      description: Public-safe receipt verification result.
+      properties:
+        is_valid:
+          type: boolean
+          readOnly: true
+        receipt_number:
+          type: string
+          readOnly: true
+        amount:
+          type: integer
+          readOnly: true
+          nullable: true
+        issued_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        campaign_title:
+          type: string
+          readOnly: true
+        sponsor_name:
+          type: string
+          readOnly: true
+        hash_version:
+          type: integer
+          readOnly: true
+          nullable: true
+      required:
+      - amount
+      - campaign_title
+      - hash_version
+      - is_valid
+      - issued_at
+      - receipt_number
+      - sponsor_name
     Enrollment:
       type: object
       description: User enrollment representation.
@@ -16930,6 +17210,22 @@ components:
       required:
       - count
       - results
+    MadadkarPublicReceiptVerifyResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          default: true
+        status_code:
+          type: integer
+          default: 200
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/DonationReceiptVerificationResult'
+      required:
+      - data
+      - message
     MadadkarPublicSponsorDetailResponse:
       type: object
       properties:
@@ -17232,6 +17528,58 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ParticipationUserList'
+      required:
+      - count
+      - results
+    MadadkarUserReceiptDetailResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          default: true
+        status_code:
+          type: integer
+          default: 200
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/DonationReceipt'
+      required:
+      - data
+      - message
+    MadadkarUserReceiptListResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/MadadkarUserReceiptListResponseData'
+        success:
+          type: boolean
+          default: true
+        status_code:
+          type: integer
+          default: 200
+        message:
+          type: string
+      required:
+      - data
+      - message
+    MadadkarUserReceiptListResponseData:
+      type: object
+      properties:
+        count:
+          type: integer
+        next:
+          type: string
+          format: uri
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/DonationReceipt'
       required:
       - count
       - results

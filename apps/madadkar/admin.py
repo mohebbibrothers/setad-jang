@@ -15,6 +15,7 @@ from apps.madadkar.models import (
     Campaign,
     CampaignFinancialAdjustment,
     CampaignImage,
+    DonationReceipt,
     MadadkarRiskSignal,
     Participation,
     Payment,
@@ -433,4 +434,43 @@ class MadadkarRiskSignalAdmin(admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None) -> bool:
         """Risk evidence must remain available for forensic review."""
+        return False
+
+
+@admin.register(DonationReceipt)
+class DonationReceiptAdmin(admin.ModelAdmin):
+    """Read-oriented admin for verifiable donation receipts."""
+
+    list_display = ("receipt_number", "user", "campaign", "amount", "issued_at", "resend_count")
+    list_filter = ("campaign", "issued_at")
+    search_fields = ("receipt_number", "receipt_hash", "payment__authority", "user__email")
+    readonly_fields = (
+        "payment",
+        "user",
+        "campaign",
+        "receipt_number",
+        "receipt_hash",
+        "hash_version",
+        "amount",
+        "issued_at",
+        "payment_snapshot",
+        "campaign_snapshot",
+        "donor_snapshot",
+        "resend_count",
+        "last_resent_at",
+        "created_at",
+        "updated_at",
+    )
+    ordering = ("-issued_at",)
+
+    def has_add_permission(self, request) -> bool:
+        """Receipts are issued by payment services, not manually in admin."""
+        return False
+
+    def has_change_permission(self, request, obj=None) -> bool:
+        """Receipt payload is immutable; resend is handled by audited API."""
+        return False
+
+    def has_delete_permission(self, request, obj=None) -> bool:
+        """Receipt evidence must remain available for verification."""
         return False

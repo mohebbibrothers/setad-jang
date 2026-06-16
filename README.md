@@ -757,6 +757,9 @@ This enables future Zarinpal settlement reconciliation without rewriting payment
 - fraud/risk scoring برای payment/refund/adjustment abuse
 - campaign intelligence dashboard با net/refund-adjusted metrics، funnel، velocity، donor concentration و health score
 - portfolio intelligence overview برای تشخیص ضعیف‌ترین و قوی‌ترین campaignها
+- verifiable donation receipts با receipt_number و SHA-256 receipt_hash
+- public-safe receipt verification endpoint
+- audited receipt access/resend workflow
 - admin risk-signal review workflow
 - command center open risk-signal counter
 - audit logging برای همه عملیات حساس مالی
@@ -812,6 +815,10 @@ GET /api/v1/madadkar/admin/risk-signals/
 POST /api/v1/madadkar/admin/risk-signals/{id}/review/
 GET /api/v1/madadkar/admin/campaigns/{id}/intelligence/
 GET /api/v1/madadkar/admin/intelligence/overview/
+GET /api/v1/madadkar/me/receipts/
+GET /api/v1/madadkar/me/receipts/{id}/
+POST /api/v1/madadkar/receipts/verify/
+POST /api/v1/madadkar/admin/receipts/{id}/resend/
 ```
 
 ### Celery tasks

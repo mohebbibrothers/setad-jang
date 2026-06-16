@@ -61,6 +61,7 @@ from apps.madadkar.models import (
     Campaign,
     CampaignFinancialAdjustment,
     CampaignImage,
+    DonationReceipt,
     MadadkarRiskSignal,
     Participation,
     Payment,
@@ -1094,6 +1095,7 @@ def verify_payment(*, authority: str) -> Payment:
         )
         from apps.notifications.domain import notify_madadkar_payment_success
 
+        issue_donation_receipt_for_payment(payment=locked_payment)
         evaluate_payment_risk(payment=locked_payment)
         notify_madadkar_payment_success(payment=locked_payment)
         return locked_payment
@@ -1417,6 +1419,78 @@ def apply_financial_adjustment(*, adjustment: CampaignFinancialAdjustment) -> Ca
     _sync_campaign_counters(campaign=campaign)
     evaluate_adjustment_risk(adjustment=locked_adjustment)
     return locked_adjustment
+
+
+# ===========================================================================
+# Donation receipt services
+# ===========================================================================
+
+def issue_donation_receipt_for_payment(*, payment: Payment) -> DonationReceipt:
+    """Issue an idempotent verifiable receipt for a successful payment."""
+    if payment.status != PaymentStatus.SUCCESS:
+        raise MadadkarServiceError("رسید فقط برای پرداخت موفق صادر می‌شود.")
+    existing = DonationReceipt.objects.filter(payment=payment).first()
+    if existing is not None:
+        return existing
+    campaign = payment.participation.campaign
+    user = payment.user
+    issued_at = payment.paid_at or payment.verified_at or timezone.now()
+    receipt = DonationReceipt(
+        payment=payment,
+        user=user,
+        campaign=campaign,
+        receipt_number=_build_receipt_number(payment=payment, issued_at=issued_at),
+        amount=payment.amount,
+        issued_at=issued_at,
+        payment_snapshot={
+            "payment_id": payment.pk,
+            "authority": payment.authority,
+            "ref_id": payment.ref_id,
+            "gateway_name": payment.gateway_name,
+            "paid_at": payment.paid_at.isoformat() if payment.paid_at else None,
+            "share_count": payment.participation.share_count,
+        },
+        campaign_snapshot={
+            "campaign_id": campaign.pk,
+            "title": campaign.title,
+            "slug": campaign.slug,
+            "sponsor_id": campaign.sponsor_id,
+            "sponsor_name": campaign.sponsor.name,
+        },
+        donor_snapshot={
+            "user_id": user.pk,
+            "email": getattr(user, "email", "") or "",
+            "full_name": user.get_full_name() if hasattr(user, "get_full_name") else "",
+        },
+    )
+    receipt.receipt_hash = receipt.compute_receipt_hash()
+    receipt.save()
+    return receipt
+
+
+def _build_receipt_number(*, payment: Payment, issued_at) -> str:
+    """Build a stable human-friendly receipt number from payment identity."""
+    date_part = issued_at.strftime("%Y%m%d")
+    return f"MDK-{date_part}-{payment.pk:010d}"
+
+
+def verify_donation_receipt(*, receipt_number: str, receipt_hash: str) -> tuple[bool, DonationReceipt | None]:
+    """Verify a public receipt number/hash pair without exposing private data."""
+    receipt = DonationReceipt.objects.select_related("campaign", "payment", "user").filter(receipt_number=receipt_number).first()
+    if receipt is None:
+        return False, None
+    expected = receipt.compute_receipt_hash()
+    return expected == receipt_hash and receipt.receipt_hash == receipt_hash, receipt
+
+
+@transaction.atomic
+def record_receipt_resend(*, receipt: DonationReceipt) -> DonationReceipt:
+    """Record an admin/user resend action without mutating forensic receipt payload."""
+    locked = DonationReceipt.objects.select_for_update().get(pk=receipt.pk)
+    locked.resend_count += 1
+    locked.last_resent_at = timezone.now()
+    locked.save(update_fields=["resend_count", "last_resent_at", "updated_at"])
+    return locked
 
 
 # ===========================================================================

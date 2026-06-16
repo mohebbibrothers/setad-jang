@@ -34,6 +34,7 @@ from apps.madadkar.models import (
     Campaign,
     CampaignFinancialAdjustment,
     CampaignImage,
+    DonationReceipt,
     MadadkarRiskSignal,
     Participation,
     Payment,
@@ -963,3 +964,64 @@ class MadadkarIntelligenceOverviewSerializer(serializers.Serializer):
     portfolio = serializers.JSONField(read_only=True)
     weakest_campaigns = serializers.JSONField(read_only=True)
     strongest_campaigns = serializers.JSONField(read_only=True)
+
+
+# ===========================================================================
+# Donation receipt serializers — user/public/admin
+# ===========================================================================
+
+class DonationReceiptSerializer(serializers.ModelSerializer):
+    """Read serializer for user-owned verifiable donation receipts."""
+
+    campaign_title = serializers.CharField(source="campaign.title", read_only=True)
+    campaign_slug = serializers.CharField(source="campaign.slug", read_only=True)
+
+    class Meta:
+        model = DonationReceipt
+        fields = (
+            "id",
+            "receipt_number",
+            "receipt_hash",
+            "hash_version",
+            "amount",
+            "issued_at",
+            "campaign",
+            "campaign_title",
+            "campaign_slug",
+            "payment_snapshot",
+            "campaign_snapshot",
+            "donor_snapshot",
+            "resend_count",
+            "last_resent_at",
+            "created_at",
+        )
+        read_only_fields = fields
+
+
+class DonationReceiptPublicVerifySerializer(serializers.Serializer):
+    """Input serializer for public receipt verification."""
+
+    receipt_number = serializers.CharField(max_length=40)
+    receipt_hash = serializers.CharField(min_length=64, max_length=64)
+
+
+class DonationReceiptVerificationResultSerializer(serializers.Serializer):
+    """Public-safe receipt verification result."""
+
+    is_valid = serializers.BooleanField(read_only=True)
+    receipt_number = serializers.CharField(read_only=True)
+    amount = serializers.IntegerField(read_only=True, allow_null=True)
+    issued_at = serializers.DateTimeField(read_only=True, allow_null=True)
+    campaign_title = serializers.CharField(read_only=True, allow_blank=True)
+    sponsor_name = serializers.CharField(read_only=True, allow_blank=True)
+    hash_version = serializers.IntegerField(read_only=True, allow_null=True)
+
+
+class DonationReceiptResendSerializer(serializers.Serializer):
+    """Empty serializer for documenting receipt resend action."""
+
+    delivery_channel = serializers.ChoiceField(
+        choices=(("email", "email"), ("in_app", "in_app")),
+        required=False,
+        default="email",
+    )

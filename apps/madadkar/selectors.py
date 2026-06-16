@@ -29,6 +29,7 @@ from apps.madadkar.models import (
     Campaign,
     CampaignFinancialAdjustment,
     CampaignImage,
+    DonationReceipt,
     MadadkarRiskSignal,
     Participation,
     Payment,
@@ -751,3 +752,32 @@ def _summarize_campaign_snapshots(snapshots: list[dict]) -> list[dict]:
         }
         for item in snapshots
     ]
+
+
+# ---------------------------------------------------------------------------
+# Donation receipt selectors — user/public/admin scope
+# ---------------------------------------------------------------------------
+
+def get_user_receipts_queryset(*, user_id: int) -> QuerySet[DonationReceipt]:
+    """Return donation receipts owned by one user with eager loaded context."""
+    return (
+        DonationReceipt.objects
+        .select_related("payment", "campaign", "user")
+        .filter(user_id=user_id)
+        .order_by("-issued_at", "-created_at")
+    )
+
+
+def get_user_receipt_by_id(*, user_id: int, receipt_id: int) -> DonationReceipt | None:
+    """Return one receipt only if it belongs to the requesting user."""
+    return get_user_receipts_queryset(user_id=user_id).filter(pk=receipt_id).first()
+
+
+def get_receipt_by_number(*, receipt_number: str) -> DonationReceipt | None:
+    """Return one receipt by public receipt number for verification."""
+    return DonationReceipt.objects.select_related("payment", "campaign", "user").filter(receipt_number=receipt_number).first()
+
+
+def get_admin_receipt_by_id(*, receipt_id: int) -> DonationReceipt | None:
+    """Return one receipt for audited admin actions."""
+    return DonationReceipt.objects.select_related("payment", "campaign", "user").filter(pk=receipt_id).first()

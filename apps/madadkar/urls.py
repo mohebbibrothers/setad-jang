@@ -49,6 +49,7 @@ from .views import (
     MadadkarAdminCampaignPublishView,
     MadadkarAdminIntelligenceOverviewView,
     MadadkarAdminPaymentListView,
+    MadadkarAdminReceiptResendView,
     MadadkarAdminRefundActionView,
     MadadkarAdminRefundListCreateView,
     MadadkarAdminRiskSignalListView,
@@ -58,11 +59,14 @@ from .views import (
     MadadkarPaymentVerifyView,
     MadadkarPublicCampaignDetailView,
     MadadkarPublicCampaignListView,
+    MadadkarPublicReceiptVerifyView,
     MadadkarPublicSponsorDetailView,
     MadadkarPublicSponsorListView,
     MadadkarUserMyParticipationDetailView,
     MadadkarUserMyParticipationsListView,
     MadadkarUserParticipateView,
+    MadadkarUserReceiptDetailView,
+    MadadkarUserReceiptListView,
 )
 
 app_name = "madadkar"
@@ -115,6 +119,11 @@ urlpatterns = [
         MadadkarPaymentVerifyView.as_view(),
         name="payment-verify",
     ),
+    path(
+        "receipts/verify/",
+        MadadkarPublicReceiptVerifyView.as_view(),
+        name="public-receipt-verify",
+    ),
 
     # ====================================================
     # User — My Participations
@@ -128,6 +137,16 @@ urlpatterns = [
         "me/participations/<int:participation_id>/",
         MadadkarUserMyParticipationDetailView.as_view(),
         name="user-my-participation-detail",
+    ),
+    path(
+        "me/receipts/",
+        MadadkarUserReceiptListView.as_view(),
+        name="user-receipt-list",
+    ),
+    path(
+        "me/receipts/<int:receipt_id>/",
+        MadadkarUserReceiptDetailView.as_view(),
+        name="user-receipt-detail",
     ),
 
     # ====================================================
@@ -253,6 +272,11 @@ urlpatterns = [
         "admin/risk-signals/<int:signal_id>/review/",
         MadadkarAdminRiskSignalReviewView.as_view(),
         name="admin-risk-signal-review",
+    ),
+    path(
+        "admin/receipts/<int:receipt_id>/resend/",
+        MadadkarAdminReceiptResendView.as_view(),
+        name="admin-receipt-resend",
     ),
 
     # ====================================================

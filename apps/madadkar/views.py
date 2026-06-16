@@ -87,6 +87,10 @@ from .serializers import (
     CampaignIntelligenceSerializer,
     CampaignPublicDetailSerializer,
     CampaignPublicListSerializer,
+    DonationReceiptPublicVerifySerializer,
+    DonationReceiptResendSerializer,
+    DonationReceiptSerializer,
+    DonationReceiptVerificationResultSerializer,
     FinancialAdjustmentCreateSerializer,
     FinancialAdjustmentRejectSerializer,
     FinancialAdjustmentSerializer,
@@ -266,6 +270,18 @@ ADMIN_CAMPAIGN_INTELLIGENCE_RESPONSE = build_success_response_serializer(
 ADMIN_INTELLIGENCE_OVERVIEW_RESPONSE = build_success_response_serializer(
     name="MadadkarAdminIntelligenceOverviewResponse",
     data_serializer=MadadkarIntelligenceOverviewSerializer,
+)
+USER_RECEIPT_LIST_RESPONSE = build_paginated_success_response_serializer(
+    name="MadadkarUserReceiptListResponse",
+    item_serializer=DonationReceiptSerializer,
+)
+USER_RECEIPT_DETAIL_RESPONSE = build_success_response_serializer(
+    name="MadadkarUserReceiptDetailResponse",
+    data_serializer=DonationReceiptSerializer,
+)
+PUBLIC_RECEIPT_VERIFY_RESPONSE = build_success_response_serializer(
+    name="MadadkarPublicReceiptVerifyResponse",
+    data_serializer=DonationReceiptVerificationResultSerializer,
 )
 
 
@@ -958,6 +974,142 @@ class MadadkarUserMyParticipationDetailView(APIView):
             data=ParticipationUserDetailSerializer(participation).data,
             message="جزئیات مشارکت با موفقیت دریافت شد.",
         )
+
+
+# ============================================================
+# User/Public/Admin — Donation Receipts
+# ============================================================
+
+class MadadkarUserReceiptListView(APIView):
+    """List verifiable donation receipts owned by current user."""
+
+    permission_classes = [IsAuthenticatedBasic]
+
+    @extend_schema(
+        operation_id="madadkar_user_receipts_list",
+        tags=[TAG_MADADKAR_USER],
+        summary="لیست رسیدهای مشارکت من",
+        responses={200: USER_RECEIPT_LIST_RESPONSE, 401: GENERIC_ERROR_RESPONSE},
+    )
+    def get(self, request: Request) -> Response:
+        queryset = selectors.get_user_receipts_queryset(user_id=request.user.pk)
+        paginator = StandardPagination()
+        page = paginator.paginate_queryset(queryset, request, view=self)
+        if page is not None:
+            serializer = DonationReceiptSerializer(page, many=True)
+            return paginator.get_paginated_response(serializer.data, message="لیست رسیدها با موفقیت دریافت شد.")
+        serializer = DonationReceiptSerializer(queryset, many=True)
+        return SuccessResponse(data=serializer.data, message="لیست رسیدها با موفقیت دریافت شد.")
+
+
+class MadadkarUserReceiptDetailView(APIView):
+    """Retrieve one user-owned donation receipt and audit access."""
+
+    permission_classes = [IsAuthenticatedBasic]
+
+    @extend_schema(
+        operation_id="madadkar_user_receipt_retrieve",
+        tags=[TAG_MADADKAR_USER],
+        summary="جزئیات رسید مشارکت من",
+        responses={200: USER_RECEIPT_DETAIL_RESPONSE, 401: GENERIC_ERROR_RESPONSE, 404: GENERIC_ERROR_RESPONSE},
+    )
+    def get(self, request: Request, receipt_id: int) -> Response:
+        receipt = selectors.get_user_receipt_by_id(user_id=request.user.pk, receipt_id=receipt_id)
+        if receipt is None:
+            return ErrorResponse(message="رسیدی با این شناسه یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+        metadata = extract_audit_metadata(request)
+        log_action_async(
+            user_id=request.user.pk,
+            action=audit_actions.MADADKAR_RECEIPT_ACCESSED,
+            resource_type="madadkar_receipt",
+            resource_id=str(receipt.pk),
+            extra_data={"receipt_number": receipt.receipt_number},
+            **metadata,
+        )
+        return SuccessResponse(data=DonationReceiptSerializer(receipt).data, message="جزئیات رسید با موفقیت دریافت شد.")
+
+
+class MadadkarPublicReceiptVerifyView(APIView):
+    """Public verification for receipt number/hash pairs without exposing donor PII."""
+
+    permission_classes = [AllowAny]
+
+    @extend_schema(
+        operation_id="madadkar_public_receipt_verify",
+        tags=[TAG_MADADKAR_PUBLIC],
+        summary="اعتبارسنجی عمومی رسید مشارکت",
+        request=DonationReceiptPublicVerifySerializer,
+        responses={200: PUBLIC_RECEIPT_VERIFY_RESPONSE, 400: GENERIC_ERROR_RESPONSE},
+    )
+    def post(self, request: Request) -> Response:
+        serializer = DonationReceiptPublicVerifySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        is_valid, receipt = services.verify_donation_receipt(**serializer.validated_data)
+        payload = _build_receipt_verification_payload(is_valid=is_valid, receipt=receipt)
+        metadata = extract_audit_metadata(request)
+        log_action_async(
+            user_id=None,
+            action=audit_actions.MADADKAR_RECEIPT_VERIFIED,
+            resource_type="madadkar_receipt",
+            resource_id=str(receipt.pk) if receipt else serializer.validated_data["receipt_number"],
+            extra_data={"is_valid": is_valid, "receipt_number": serializer.validated_data["receipt_number"]},
+            **metadata,
+        )
+        return SuccessResponse(data=payload, message="نتیجه اعتبارسنجی رسید با موفقیت دریافت شد.")
+
+
+class MadadkarAdminReceiptResendView(APIView):
+    """Record audited resend action for a donation receipt."""
+
+    permission_classes = [IsMadadkarAdminUser]
+
+    @extend_schema(
+        operation_id="madadkar_admin_receipt_resend",
+        tags=[TAG_MADADKAR_ADMIN_ANALYTICS],
+        summary="ثبت ارسال مجدد رسید — ادمین",
+        request=DonationReceiptResendSerializer,
+        responses={200: USER_RECEIPT_DETAIL_RESPONSE, 400: GENERIC_ERROR_RESPONSE, 403: GENERIC_ERROR_RESPONSE, 404: GENERIC_ERROR_RESPONSE},
+    )
+    def post(self, request: Request, receipt_id: int) -> Response:
+        receipt = selectors.get_admin_receipt_by_id(receipt_id=receipt_id)
+        if receipt is None:
+            return ErrorResponse(message="رسیدی با این شناسه یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+        serializer = DonationReceiptResendSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        receipt = services.record_receipt_resend(receipt=receipt)
+        metadata = extract_audit_metadata(request)
+        log_action_async(
+            user_id=request.user.pk,
+            action=audit_actions.MADADKAR_RECEIPT_RESENT,
+            resource_type="madadkar_receipt",
+            resource_id=str(receipt.pk),
+            extra_data={"receipt_number": receipt.receipt_number, "delivery_channel": serializer.validated_data["delivery_channel"]},
+            **metadata,
+        )
+        return SuccessResponse(data=DonationReceiptSerializer(receipt).data, message="ارسال مجدد رسید با موفقیت ثبت شد.")
+
+
+def _build_receipt_verification_payload(*, is_valid: bool, receipt) -> dict:
+    """Build public-safe receipt verification response payload."""
+    if receipt is None:
+        return {
+            "is_valid": False,
+            "receipt_number": "",
+            "amount": None,
+            "issued_at": None,
+            "campaign_title": "",
+            "sponsor_name": "",
+            "hash_version": None,
+        }
+    return {
+        "is_valid": is_valid,
+        "receipt_number": receipt.receipt_number,
+        "amount": receipt.amount if is_valid else None,
+        "issued_at": receipt.issued_at if is_valid else None,
+        "campaign_title": receipt.campaign_snapshot.get("title", "") if is_valid else "",
+        "sponsor_name": receipt.campaign_snapshot.get("sponsor_name", "") if is_valid else "",
+        "hash_version": receipt.hash_version if is_valid else None,
+    }
 
 
 # ============================================================
