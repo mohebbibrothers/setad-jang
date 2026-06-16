@@ -1,0 +1,152 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================================
+   Vazirmatn — variable font, self-hosted via CSS import
+   ============================================================ */
+@import url('https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css');
+
+:root {
+  --font-vazir: 'Vazirmatn', 'Tahoma', sans-serif;
+
+  /* Brand */
+  --brand-50:  #EAF6F4;
+  --brand-500: #1F8A7A;
+  --brand-600: #1A7568;
+  --brand-700: #155F55;
+  --brand-900: #0B3530;
+  --accent-500: #F09A1A;
+  --ink-900: #0F1420;
+
+  --radius: 1rem;
+}
+
+@layer base {
+  * { -webkit-tap-highlight-color: transparent; }
+
+  html {
+    scroll-behavior: smooth;
+    text-size-adjust: 100%;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-surface-muted text-ink-800 antialiased;
+    font-family: var(--font-vazir);
+    font-feature-settings: 'ss01', 'ss02', 'kern';
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Persian numerals + Latin numerals harmony */
+  .tabular-nums { font-variant-numeric: tabular-nums; }
+
+  /* Better focus rings (a11y) */
+  :where(a, button, input, textarea, select, [tabindex]):focus-visible {
+    @apply outline-none ring-2 ring-brand-500/70 ring-offset-2 ring-offset-white rounded-md;
+  }
+
+  /* Selection */
+  ::selection { background: rgba(31, 138, 122, 0.20); color: var(--brand-900); }
+
+  /* Scrollbar (subtle, brand-tinted) */
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, var(--brand-500), var(--brand-700));
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-thumb:hover { background: var(--brand-600); background-clip: padding-box; }
+
+  /* Headings */
+  h1, h2, h3, h4, h5, h6 {
+    @apply text-ink-900 font-bold tracking-tight;
+    line-height: 1.3;
+  }
+}
+
+@layer components {
+  .container-edge {
+    @apply container px-4 sm:px-6 lg:px-8;
+  }
+
+  /* Buttons */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl font-semibold
+           transition-all duration-200 select-none whitespace-nowrap
+           focus-visible:outline-none disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn-primary {
+    @apply btn bg-brand-500 text-white shadow-soft hover:bg-brand-600 hover:shadow-card
+           active:translate-y-px;
+  }
+  .btn-accent {
+    @apply btn bg-accent-500 text-ink-900 shadow-soft hover:bg-accent-400 hover:shadow-card
+           active:translate-y-px;
+  }
+  .btn-outline {
+    @apply btn border-2 border-brand-500 text-brand-600 bg-white hover:bg-brand-50;
+  }
+  .btn-ghost {
+    @apply btn text-ink-700 hover:bg-ink-100;
+  }
+  .btn-sm { @apply h-9 px-4 text-sm; }
+  .btn-md { @apply h-11 px-5 text-[15px]; }
+  .btn-lg { @apply h-13 px-7 text-base; }
+
+  /* Card */
+  .card {
+    @apply bg-white rounded-2xl shadow-soft border border-ink-100/70
+           transition-all duration-300 hover:shadow-card hover:-translate-y-0.5;
+  }
+
+  /* Glass header */
+  .glass {
+    @apply backdrop-blur-xl bg-white/75 border border-white/30;
+  }
+
+  /* Section title eyebrow */
+  .eyebrow {
+    @apply inline-flex items-center gap-2 text-sm font-semibold text-brand-600
+           bg-brand-50 px-3 py-1.5 rounded-full;
+  }
+
+  /* Shimmer skeleton */
+  .skeleton {
+    @apply rounded-lg bg-gradient-to-l from-ink-100 via-ink-200 to-ink-100
+           bg-[length:200%_100%] animate-shimmer;
+  }
+
+  /* Gradient text */
+  .text-gradient-brand {
+    background: linear-gradient(120deg, var(--brand-600) 0%, var(--brand-500) 60%, var(--accent-500) 110%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+  }
+}
+
+@layer utilities {
+  /* Hide scrollbar but keep scroll (for horizontal chip rows) */
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+  /* Aspect helper */
+  .aspect-card { aspect-ratio: 4 / 5; }
+  .aspect-hero { aspect-ratio: 16 / 9; }
+
+  /* Section padding */
+  .section-y { @apply py-16 md:py-20 lg:py-24; }
+
+  /* Reduce motion */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
