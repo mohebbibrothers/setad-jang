@@ -104,8 +104,13 @@ def _r4j_summary() -> dict[str, int]:
 
 def _madadkar_summary() -> dict[str, int]:
     """Return Madadkar campaign/payment counters."""
-    from apps.madadkar.choices import CampaignStatus, PaymentStatus
-    from apps.madadkar.models import Campaign, Payment, PaymentReconciliationBatch
+    from apps.madadkar.choices import CampaignStatus, MadadkarRiskStatus, PaymentStatus
+    from apps.madadkar.models import (
+        Campaign,
+        MadadkarRiskSignal,
+        Payment,
+        PaymentReconciliationBatch,
+    )
 
     return {
         "published_campaigns": Campaign.objects.filter(status=CampaignStatus.PUBLISHED).count(),
@@ -113,6 +118,7 @@ def _madadkar_summary() -> dict[str, int]:
         "pending_payments": Payment.objects.filter(status=PaymentStatus.PENDING).count(),
         "failed_payments": Payment.objects.filter(status=PaymentStatus.FAILED).count(),
         "successful_payments": Payment.objects.filter(status=PaymentStatus.SUCCESS).count(),
+        "open_risk_signals": MadadkarRiskSignal.objects.filter(status=MadadkarRiskStatus.OPEN).count(),
         "reconciliation_batches": PaymentReconciliationBatch.objects.count(),
         "reconciliation_mismatches": PaymentReconciliationBatch.objects.aggregate(total=Sum("mismatch_count"))["total"] or 0,
     }

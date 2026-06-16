@@ -27,6 +27,9 @@ from apps.madadkar.choices import (
     CampaignStatus,
     FinancialAdjustmentStatus,
     FinancialAdjustmentType,
+    MadadkarRiskSeverity,
+    MadadkarRiskSignalType,
+    MadadkarRiskStatus,
     ParticipationStatus,
     PaymentEventKind,
     PaymentStatus,
@@ -814,6 +817,90 @@ class CampaignFinancialAdjustment(BaseModel):
         if self.adjustment_type == FinancialAdjustmentType.CREDIT:
             return self.amount
         return -self.amount
+
+
+# ---------------------------------------------------------------------------
+# Risk Signals
+# ---------------------------------------------------------------------------
+
+class MadadkarRiskSignal(BaseModel):
+    """Financial risk/abuse signal generated from Madadkar behavior."""
+
+    signal_type = models.CharField(max_length=60, choices=MadadkarRiskSignalType.choices, db_index=True)
+    severity = models.CharField(
+        max_length=20,
+        choices=MadadkarRiskSeverity.choices,
+        default=MadadkarRiskSeverity.MEDIUM,
+        db_index=True,
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=MadadkarRiskStatus.choices,
+        default=MadadkarRiskStatus.OPEN,
+        db_index=True,
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="madadkar_risk_signals",
+    )
+    campaign = models.ForeignKey(
+        Campaign,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="risk_signals",
+    )
+    payment = models.ForeignKey(
+        Payment,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="risk_signals",
+    )
+    refund = models.ForeignKey(
+        PaymentRefund,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="risk_signals",
+    )
+    adjustment = models.ForeignKey(
+        CampaignFinancialAdjustment,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="risk_signals",
+    )
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    description = models.TextField(blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="madadkar_reviewed_risk_signals",
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    review_note = models.TextField(blank=True)
+
+    class Meta:
+        verbose_name = "سیگنال ریسک مددکار"
+        verbose_name_plural = "سیگنال‌های ریسک مددکار"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["signal_type", "status", "-created_at"], name="madadkar_risk_type_status_idx"),
+            models.Index(fields=["severity", "status", "-created_at"], name="madadkar_risk_sev_status_idx"),
+            models.Index(fields=["user", "status", "-created_at"], name="madadkar_risk_user_status_idx"),
+            models.Index(fields=["campaign", "status", "-created_at"], name="madadkar_risk_campaign_status_idx"),
+            models.Index(fields=["ip_address", "status", "-created_at"], name="madadkar_risk_ip_status_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.signal_type}:{self.severity}:{self.status}"
 
 
 # ---------------------------------------------------------------------------

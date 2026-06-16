@@ -89,6 +89,8 @@ from .serializers import (
     FinancialAdjustmentCreateSerializer,
     FinancialAdjustmentRejectSerializer,
     FinancialAdjustmentSerializer,
+    MadadkarRiskSignalReviewSerializer,
+    MadadkarRiskSignalSerializer,
     ParticipationInitiatedResponseSerializer,
     ParticipationInitiateSerializer,
     ParticipationUserDetailSerializer,
@@ -246,6 +248,14 @@ ADMIN_ADJUSTMENT_DETAIL_RESPONSE = build_success_response_serializer(
 ADMIN_FINANCIAL_CONTROL_RESPONSE = build_success_response_serializer(
     name="MadadkarAdminFinancialControlResponse",
     data_serializer=CampaignFinancialControlSummarySerializer,
+)
+ADMIN_RISK_SIGNALS_LIST_RESPONSE = build_paginated_success_response_serializer(
+    name="MadadkarAdminRiskSignalsListResponse",
+    item_serializer=MadadkarRiskSignalSerializer,
+)
+ADMIN_RISK_SIGNAL_DETAIL_RESPONSE = build_success_response_serializer(
+    name="MadadkarAdminRiskSignalDetailResponse",
+    data_serializer=MadadkarRiskSignalSerializer,
 )
 
 
@@ -2085,6 +2095,87 @@ class MadadkarAdminCampaignFinancialControlView(APIView):
             return ErrorResponse(message="حرکتی با این شناسه یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
         summary = selectors.get_campaign_financial_control_summary(campaign=campaign)
         return SuccessResponse(data=CampaignFinancialControlSummarySerializer(summary).data, message="گزارش کنترل مالی با موفقیت دریافت شد.")
+
+
+# ============================================================
+# Admin — Risk Signals
+# ============================================================
+
+class MadadkarAdminRiskSignalListView(APIView):
+    """List Madadkar financial risk signals for admin review."""
+
+    permission_classes = [IsMadadkarAdminUser]
+
+    @extend_schema(
+        operation_id="madadkar_admin_risk_signals_list",
+        tags=[TAG_MADADKAR_ADMIN_ANALYTICS],
+        summary="لیست سیگنال‌های ریسک مددکار — ادمین",
+        parameters=[
+            OpenApiParameter(name="status", type=OpenApiTypes.STR, location=OpenApiParameter.QUERY),
+            OpenApiParameter(name="severity", type=OpenApiTypes.STR, location=OpenApiParameter.QUERY),
+            OpenApiParameter(name="user", type=OpenApiTypes.INT, location=OpenApiParameter.QUERY),
+            OpenApiParameter(name="campaign", type=OpenApiTypes.INT, location=OpenApiParameter.QUERY),
+            OpenApiParameter(name="ip_address", type=OpenApiTypes.STR, location=OpenApiParameter.QUERY),
+        ],
+        responses={200: ADMIN_RISK_SIGNALS_LIST_RESPONSE, 403: GENERIC_ERROR_RESPONSE},
+    )
+    def get(self, request: Request) -> Response:
+        queryset = selectors.get_admin_risk_signals_queryset()
+        for field in ("status", "severity", "ip_address"):
+            value = request.query_params.get(field)
+            if value:
+                queryset = queryset.filter(**{field: value})
+        for field in ("user", "campaign"):
+            value = request.query_params.get(field)
+            if value:
+                with contextlib.suppress(TypeError, ValueError):
+                    queryset = queryset.filter(**{f"{field}_id": int(value)})
+        paginator = StandardPagination()
+        page = paginator.paginate_queryset(queryset, request, view=self)
+        if page is not None:
+            serializer = MadadkarRiskSignalSerializer(page, many=True)
+            return paginator.get_paginated_response(serializer.data, message="لیست سیگنال‌های ریسک با موفقیت دریافت شد.")
+        serializer = MadadkarRiskSignalSerializer(queryset, many=True)
+        return SuccessResponse(data=serializer.data, message="لیست سیگنال‌های ریسک با موفقیت دریافت شد.")
+
+
+class MadadkarAdminRiskSignalReviewView(APIView):
+    """Review, dismiss, or escalate Madadkar financial risk signals."""
+
+    permission_classes = [IsMadadkarAdminUser]
+
+    @extend_schema(
+        operation_id="madadkar_admin_risk_signal_review",
+        tags=[TAG_MADADKAR_ADMIN_ANALYTICS],
+        summary="بررسی سیگنال ریسک مددکار — ادمین",
+        request=MadadkarRiskSignalReviewSerializer,
+        responses={200: ADMIN_RISK_SIGNAL_DETAIL_RESPONSE, 400: GENERIC_ERROR_RESPONSE, 403: GENERIC_ERROR_RESPONSE, 404: GENERIC_ERROR_RESPONSE},
+    )
+    def post(self, request: Request, signal_id: int) -> Response:
+        signal = selectors.get_admin_risk_signal_by_id(signal_id=signal_id)
+        if signal is None:
+            return ErrorResponse(message="سیگنال ریسکی با این شناسه یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+        serializer = MadadkarRiskSignalReviewSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            reviewed = services.review_madadkar_risk_signal(
+                signal=signal,
+                reviewed_by=request.user,
+                status=serializer.validated_data["status"],
+                review_note=serializer.validated_data.get("review_note", ""),
+            )
+        except services.MadadkarServiceError as exc:
+            return ErrorResponse(message=str(exc))
+        metadata = extract_audit_metadata(request)
+        log_action_async(
+            user_id=request.user.pk,
+            action=audit_actions.MADADKAR_RISK_SIGNAL_REVIEWED,
+            resource_type="madadkar_risk_signal",
+            resource_id=str(reviewed.pk),
+            extra_data={"status": reviewed.status, "signal_type": reviewed.signal_type, "severity": reviewed.severity},
+            **metadata,
+        )
+        return SuccessResponse(data=MadadkarRiskSignalSerializer(reviewed).data, message="سیگنال ریسک با موفقیت بررسی شد.")
 
 
 # ============================================================

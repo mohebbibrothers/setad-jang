@@ -22,6 +22,7 @@ from apps.madadkar.models import (
     Campaign,
     CampaignFinancialAdjustment,
     CampaignImage,
+    MadadkarRiskSignal,
     Participation,
     Payment,
     PaymentRefund,
@@ -491,3 +492,21 @@ def get_campaign_financial_control_summary(*, campaign: Campaign) -> dict:
         "net_effective_amount": campaign.purchased_amount,
         "remaining_shares": campaign.remaining_shares,
     }
+
+
+# ---------------------------------------------------------------------------
+# Risk selectors — admin scope
+# ---------------------------------------------------------------------------
+
+def get_admin_risk_signals_queryset() -> QuerySet[MadadkarRiskSignal]:
+    """Return all Madadkar risk signals for admin review with eager loading."""
+    return (
+        MadadkarRiskSignal.objects
+        .select_related("user", "campaign", "payment", "refund", "adjustment", "reviewed_by")
+        .order_by("-created_at")
+    )
+
+
+def get_admin_risk_signal_by_id(*, signal_id: int) -> MadadkarRiskSignal | None:
+    """Return one Madadkar risk signal for admin review."""
+    return get_admin_risk_signals_queryset().filter(pk=signal_id).first()

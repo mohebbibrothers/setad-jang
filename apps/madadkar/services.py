@@ -46,6 +46,9 @@ from apps.madadkar.choices import (
     CampaignStatus,
     FinancialAdjustmentStatus,
     FinancialAdjustmentType,
+    MadadkarRiskSeverity,
+    MadadkarRiskSignalType,
+    MadadkarRiskStatus,
     ParticipationStatus,
     PaymentEventKind,
     PaymentStatus,
@@ -58,6 +61,7 @@ from apps.madadkar.models import (
     Campaign,
     CampaignFinancialAdjustment,
     CampaignImage,
+    MadadkarRiskSignal,
     Participation,
     Payment,
     PaymentEvent,
@@ -1090,6 +1094,7 @@ def verify_payment(*, authority: str) -> Payment:
         )
         from apps.notifications.domain import notify_madadkar_payment_success
 
+        evaluate_payment_risk(payment=locked_payment)
         notify_madadkar_payment_success(payment=locked_payment)
         return locked_payment
 
@@ -1246,6 +1251,7 @@ def request_payment_refund(
         new_status=locked_payment.status,
         metadata={"refund_id": refund.pk, "amount": amount, "reason": reason},
     )
+    evaluate_refund_risk(refund=refund)
     return refund
 
 
@@ -1409,7 +1415,191 @@ def apply_financial_adjustment(*, adjustment: CampaignFinancialAdjustment) -> Ca
             },
         )
     _sync_campaign_counters(campaign=campaign)
+    evaluate_adjustment_risk(adjustment=locked_adjustment)
     return locked_adjustment
+
+
+# ===========================================================================
+# Risk scoring services
+# ===========================================================================
+
+def create_madadkar_risk_signal(
+    *,
+    signal_type: str,
+    severity: str,
+    user: Any | None = None,
+    campaign: Campaign | None = None,
+    payment: Payment | None = None,
+    refund: PaymentRefund | None = None,
+    adjustment: CampaignFinancialAdjustment | None = None,
+    ip_address: str | None = None,
+    description: str = "",
+    metadata: dict[str, Any] | None = None,
+) -> MadadkarRiskSignal:
+    """Create an open Madadkar risk signal unless an equivalent open one exists."""
+    lookup = {
+        "signal_type": signal_type,
+        "status": MadadkarRiskStatus.OPEN,
+        "user": user if getattr(user, "pk", None) else None,
+        "campaign": campaign,
+        "payment": payment,
+        "refund": refund,
+        "adjustment": adjustment,
+    }
+    existing = MadadkarRiskSignal.objects.filter(**lookup).first()
+    if existing is not None:
+        return existing
+    return MadadkarRiskSignal.objects.create(
+        **lookup,
+        severity=severity,
+        ip_address=ip_address,
+        description=description,
+        metadata=metadata or {},
+    )
+
+
+def evaluate_payment_risk(*, payment: Payment, window_minutes: int = 60) -> list[MadadkarRiskSignal]:
+    """Evaluate payment-level fraud/abuse signals for a payment event."""
+    signals: list[MadadkarRiskSignal] = []
+    campaign = payment.participation.campaign
+    previous_success_count = Payment.objects.filter(
+        user_id=payment.user_id,
+        status=PaymentStatus.SUCCESS,
+        created_at__lt=payment.created_at,
+    ).count()
+    high_amount_threshold = int(getattr(settings, "MADADKAR_RISK_HIGH_AMOUNT_NEW_USER_THRESHOLD", 50_000_000))
+    if payment.amount >= high_amount_threshold and previous_success_count == 0:
+        signals.append(
+            create_madadkar_risk_signal(
+                signal_type=MadadkarRiskSignalType.HIGH_AMOUNT_NEW_USER,
+                severity=MadadkarRiskSeverity.HIGH,
+                user=payment.user,
+                campaign=campaign,
+                payment=payment,
+                ip_address=payment.ip_address,
+                description="کاربر بدون سابقه پرداخت موفق، مشارکت مبلغ بالا ثبت کرده است.",
+                metadata={"threshold": high_amount_threshold, "amount": payment.amount},
+            )
+        )
+    since = timezone.now() - timezone.timedelta(minutes=window_minutes)
+    failure_count = Payment.objects.filter(user_id=payment.user_id, status=PaymentStatus.FAILED, created_at__gte=since).count()
+    failure_threshold = int(getattr(settings, "MADADKAR_RISK_PAYMENT_FAILURE_SPIKE_THRESHOLD", 3))
+    if failure_count >= failure_threshold:
+        signals.append(
+            create_madadkar_risk_signal(
+                signal_type=MadadkarRiskSignalType.PAYMENT_FAILURE_SPIKE,
+                severity=MadadkarRiskSeverity.MEDIUM if failure_count < failure_threshold * 2 else MadadkarRiskSeverity.HIGH,
+                user=payment.user,
+                campaign=campaign,
+                payment=payment,
+                ip_address=payment.ip_address,
+                description="تعداد شکست پرداخت کاربر در بازه کوتاه غیرعادی است.",
+                metadata={"window_minutes": window_minutes, "failure_count": failure_count},
+            )
+        )
+    ip_user_threshold = int(getattr(settings, "MADADKAR_RISK_IP_DISTINCT_USERS_THRESHOLD", 3))
+    if payment.ip_address:
+        distinct_users = Payment.objects.filter(
+            ip_address=payment.ip_address,
+            created_at__gte=since,
+        ).values("user_id").distinct().count()
+        if distinct_users >= ip_user_threshold:
+            signals.append(
+                create_madadkar_risk_signal(
+                    signal_type=MadadkarRiskSignalType.SUSPICIOUS_IP_VELOCITY,
+                    severity=MadadkarRiskSeverity.HIGH,
+                    user=payment.user,
+                    campaign=campaign,
+                    payment=payment,
+                    ip_address=payment.ip_address,
+                    description="از یک IP در بازه کوتاه برای چند کاربر پرداخت ثبت شده است.",
+                    metadata={"window_minutes": window_minutes, "distinct_users": distinct_users},
+                )
+            )
+    return signals
+
+
+def evaluate_refund_risk(*, refund: PaymentRefund, window_hours: int = 24) -> list[MadadkarRiskSignal]:
+    """Evaluate refund velocity and campaign refund spike signals."""
+    signals: list[MadadkarRiskSignal] = []
+    payment = refund.payment
+    campaign = payment.participation.campaign
+    since = timezone.now() - timezone.timedelta(hours=window_hours)
+    refund_threshold = int(getattr(settings, "MADADKAR_RISK_REFUND_VELOCITY_THRESHOLD", 3))
+    user_refunds = PaymentRefund.objects.filter(payment__user_id=payment.user_id, created_at__gte=since).count()
+    if user_refunds >= refund_threshold:
+        signals.append(
+            create_madadkar_risk_signal(
+                signal_type=MadadkarRiskSignalType.REFUND_VELOCITY,
+                severity=MadadkarRiskSeverity.HIGH,
+                user=payment.user,
+                campaign=campaign,
+                payment=payment,
+                refund=refund,
+                ip_address=payment.ip_address,
+                description="تعداد درخواست‌های بازپرداخت کاربر در بازه کوتاه غیرعادی است.",
+                metadata={"window_hours": window_hours, "user_refund_count": user_refunds},
+            )
+        )
+    campaign_refunds = PaymentRefund.objects.filter(payment__participation__campaign=campaign, created_at__gte=since).count()
+    campaign_threshold = int(getattr(settings, "MADADKAR_RISK_CAMPAIGN_REFUND_SPIKE_THRESHOLD", 5))
+    if campaign_refunds >= campaign_threshold:
+        signals.append(
+            create_madadkar_risk_signal(
+                signal_type=MadadkarRiskSignalType.CAMPAIGN_REFUND_SPIKE,
+                severity=MadadkarRiskSeverity.CRITICAL if campaign_refunds >= campaign_threshold * 2 else MadadkarRiskSeverity.HIGH,
+                user=payment.user,
+                campaign=campaign,
+                payment=payment,
+                refund=refund,
+                ip_address=payment.ip_address,
+                description="در یک حرکت تعداد درخواست بازپرداخت غیرعادی ثبت شده است.",
+                metadata={"window_hours": window_hours, "campaign_refund_count": campaign_refunds},
+            )
+        )
+    return signals
+
+
+def evaluate_adjustment_risk(*, adjustment: CampaignFinancialAdjustment) -> list[MadadkarRiskSignal]:
+    """Evaluate unusually large manual financial adjustments."""
+    campaign = adjustment.campaign
+    ratio_threshold = float(getattr(settings, "MADADKAR_RISK_ADJUSTMENT_RATIO_THRESHOLD", 0.25))
+    base_amount = max(campaign.purchased_amount, 1)
+    ratio = adjustment.amount / base_amount
+    if ratio < ratio_threshold:
+        return []
+    return [
+        create_madadkar_risk_signal(
+            signal_type=MadadkarRiskSignalType.ADJUSTMENT_ANOMALY,
+            severity=MadadkarRiskSeverity.HIGH if ratio < 0.5 else MadadkarRiskSeverity.CRITICAL,
+            user=adjustment.requested_by,
+            campaign=campaign,
+            payment=adjustment.payment,
+            adjustment=adjustment,
+            description="مبلغ اصلاح مالی نسبت به مبلغ مؤثر حرکت غیرعادی است.",
+            metadata={"ratio": round(ratio, 4), "amount": adjustment.amount, "base_amount": base_amount},
+        )
+    ]
+
+
+@transaction.atomic
+def review_madadkar_risk_signal(
+    *,
+    signal: MadadkarRiskSignal,
+    reviewed_by: Any,
+    status: str,
+    review_note: str = "",
+) -> MadadkarRiskSignal:
+    """Review, dismiss, or escalate an open Madadkar risk signal."""
+    if status not in {MadadkarRiskStatus.REVIEWED, MadadkarRiskStatus.DISMISSED, MadadkarRiskStatus.ESCALATED}:
+        raise MadadkarServiceError("وضعیت بررسی ریسک نامعتبر است.")
+    locked_signal = MadadkarRiskSignal.objects.select_for_update().get(pk=signal.pk)
+    locked_signal.status = status
+    locked_signal.reviewed_by = reviewed_by
+    locked_signal.reviewed_at = timezone.now()
+    locked_signal.review_note = review_note
+    locked_signal.save(update_fields=["status", "reviewed_by", "reviewed_at", "review_note", "updated_at"])
+    return locked_signal
 
 
 # ===========================================================================

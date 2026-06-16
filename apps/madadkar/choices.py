@@ -103,3 +103,32 @@ class FinancialAdjustmentStatus(models.TextChoices):
     APPROVED = "approved", "تأییدشده"
     REJECTED = "rejected", "ردشده"
     APPLIED = "applied", "اعمال‌شده"
+
+
+class MadadkarRiskSignalType(models.TextChoices):
+    """Financial abuse/risk signals detected in Madadkar workflows."""
+
+    HIGH_AMOUNT_NEW_USER = "high_amount_new_user", "مشارکت مبلغ بالا توسط کاربر جدید"
+    PAYMENT_FAILURE_SPIKE = "payment_failure_spike", "افزایش شکست پرداخت"
+    SUSPICIOUS_IP_VELOCITY = "suspicious_ip_velocity", "سرعت غیرعادی پرداخت از IP"
+    REFUND_VELOCITY = "refund_velocity", "افزایش درخواست بازپرداخت"
+    CAMPAIGN_REFUND_SPIKE = "campaign_refund_spike", "افزایش بازپرداخت در حرکت"
+    ADJUSTMENT_ANOMALY = "adjustment_anomaly", "اصلاح مالی غیرعادی"
+
+
+class MadadkarRiskSeverity(models.TextChoices):
+    """Severity for Madadkar risk signals."""
+
+    LOW = "low", "کم"
+    MEDIUM = "medium", "متوسط"
+    HIGH = "high", "زیاد"
+    CRITICAL = "critical", "بحرانی"
+
+
+class MadadkarRiskStatus(models.TextChoices):
+    """Review status for Madadkar risk signals."""
+
+    OPEN = "open", "باز"
+    REVIEWED = "reviewed", "بررسی‌شده"
+    DISMISSED = "dismissed", "ردشده"
+    ESCALATED = "escalated", "ارجاع‌شده"

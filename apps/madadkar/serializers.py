@@ -26,12 +26,15 @@ from rest_framework import serializers
 from apps.madadkar.choices import (
     CampaignStatus,
     FinancialAdjustmentType,
+    MadadkarRiskSeverity,
+    MadadkarRiskStatus,
     RefundReason,
 )
 from apps.madadkar.models import (
     Campaign,
     CampaignFinancialAdjustment,
     CampaignImage,
+    MadadkarRiskSignal,
     Participation,
     Payment,
     PaymentRefund,
@@ -852,3 +855,70 @@ class CampaignFinancialControlSummarySerializer(serializers.Serializer):
     applied_adjustment_count = serializers.IntegerField(read_only=True)
     net_effective_amount = serializers.IntegerField(read_only=True)
     remaining_shares = serializers.IntegerField(read_only=True)
+
+
+# ===========================================================================
+# Risk signal serializers — admin financial safety
+# ===========================================================================
+
+class MadadkarRiskSignalSerializer(serializers.ModelSerializer):
+    """Read serializer for Madadkar financial risk signals."""
+
+    user = AdminUserSummarySerializer(read_only=True)
+    campaign_title = serializers.CharField(source="campaign.title", read_only=True, allow_null=True)
+    payment_authority = serializers.CharField(source="payment.authority", read_only=True, allow_null=True)
+    signal_type_display = serializers.CharField(source="get_signal_type_display", read_only=True)
+    severity_display = serializers.CharField(source="get_severity_display", read_only=True)
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+    reviewed_by = AdminUserSummarySerializer(read_only=True)
+
+    class Meta:
+        model = MadadkarRiskSignal
+        fields = (
+            "id",
+            "signal_type",
+            "signal_type_display",
+            "severity",
+            "severity_display",
+            "status",
+            "status_display",
+            "user",
+            "campaign",
+            "campaign_title",
+            "payment",
+            "payment_authority",
+            "refund",
+            "adjustment",
+            "ip_address",
+            "description",
+            "metadata",
+            "reviewed_by",
+            "reviewed_at",
+            "review_note",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = fields
+
+
+class MadadkarRiskSignalReviewSerializer(serializers.Serializer):
+    """Input serializer for reviewing/dismissing/escalating risk signals."""
+
+    status = serializers.ChoiceField(
+        choices=(
+            (MadadkarRiskStatus.REVIEWED, MadadkarRiskStatus.REVIEWED.label),
+            (MadadkarRiskStatus.DISMISSED, MadadkarRiskStatus.DISMISSED.label),
+            (MadadkarRiskStatus.ESCALATED, MadadkarRiskStatus.ESCALATED.label),
+        ),
+    )
+    review_note = serializers.CharField(required=False, allow_blank=True, default="")
+
+
+class MadadkarRiskSignalFilterSerializer(serializers.Serializer):
+    """OpenAPI helper serializer for risk filters."""
+
+    status = serializers.ChoiceField(choices=MadadkarRiskStatus.choices, required=False)
+    severity = serializers.ChoiceField(choices=MadadkarRiskSeverity.choices, required=False)
+    user = serializers.IntegerField(required=False, min_value=1)
+    campaign = serializers.IntegerField(required=False, min_value=1)
+    ip_address = serializers.IPAddressField(required=False)

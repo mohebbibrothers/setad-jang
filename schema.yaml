@@ -5395,6 +5395,101 @@ paths:
               schema:
                 $ref: '#/components/schemas/MadadkarGenericErrorResponse'
           description: ''
+  /api/v1/madadkar/admin/risk-signals/:
+    get:
+      operationId: madadkar_admin_risk_signals_list
+      description: List Madadkar financial risk signals for admin review.
+      summary: لیست سیگنال‌های ریسک مددکار — ادمین
+      parameters:
+      - in: query
+        name: campaign
+        schema:
+          type: integer
+      - in: query
+        name: ip_address
+        schema:
+          type: string
+      - in: query
+        name: severity
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+      - in: query
+        name: user
+        schema:
+          type: integer
+      tags:
+      - مددکار — مدیریت (تحلیل و گزارش)
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MadadkarAdminRiskSignalsListResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MadadkarGenericErrorResponse'
+          description: ''
+  /api/v1/madadkar/admin/risk-signals/{signal_id}/review/:
+    post:
+      operationId: madadkar_admin_risk_signal_review
+      description: Review, dismiss, or escalate Madadkar financial risk signals.
+      summary: بررسی سیگنال ریسک مددکار — ادمین
+      parameters:
+      - in: path
+        name: signal_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - مددکار — مدیریت (تحلیل و گزارش)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MadadkarRiskSignalReview'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/MadadkarRiskSignalReview'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MadadkarRiskSignalReview'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MadadkarAdminRiskSignalDetailResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MadadkarGenericErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MadadkarGenericErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MadadkarGenericErrorResponse'
+          description: ''
   /api/v1/madadkar/admin/sponsors/:
     get:
       operationId: madadkar_admin_sponsors_list
@@ -16362,6 +16457,58 @@ components:
       required:
       - count
       - results
+    MadadkarAdminRiskSignalDetailResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          default: true
+        status_code:
+          type: integer
+          default: 200
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/MadadkarRiskSignal'
+      required:
+      - data
+      - message
+    MadadkarAdminRiskSignalsListResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/MadadkarAdminRiskSignalsListResponseData'
+        success:
+          type: boolean
+          default: true
+        status_code:
+          type: integer
+          default: 200
+        message:
+          type: string
+      required:
+      - data
+      - message
+    MadadkarAdminRiskSignalsListResponseData:
+      type: object
+      properties:
+        count:
+          type: integer
+        next:
+          type: string
+          format: uri
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/MadadkarRiskSignal'
+      required:
+      - count
+      - results
     MadadkarAdminSponsorDetailResponse:
       type: object
       properties:
@@ -16666,6 +16813,177 @@ components:
         * `rejected` - ردشده
         * `completed` - تکمیل‌شده
         * `failed` - ناموفق
+    MadadkarRiskSeverityEnum:
+      enum:
+      - low
+      - medium
+      - high
+      - critical
+      type: string
+      description: |-
+        * `low` - کم
+        * `medium` - متوسط
+        * `high` - زیاد
+        * `critical` - بحرانی
+    MadadkarRiskSignal:
+      type: object
+      description: Read serializer for Madadkar financial risk signals.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        signal_type:
+          allOf:
+          - $ref: '#/components/schemas/MadadkarRiskSignalTypeEnum'
+          readOnly: true
+        signal_type_display:
+          type: string
+          readOnly: true
+        severity:
+          allOf:
+          - $ref: '#/components/schemas/MadadkarRiskSeverityEnum'
+          readOnly: true
+        severity_display:
+          type: string
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/MadadkarRiskStatusEnum'
+          readOnly: true
+        status_display:
+          type: string
+          readOnly: true
+        user:
+          allOf:
+          - $ref: '#/components/schemas/AdminUserSummary'
+          readOnly: true
+        campaign:
+          type: integer
+          readOnly: true
+          nullable: true
+        campaign_title:
+          type: string
+          readOnly: true
+          nullable: true
+        payment:
+          type: integer
+          readOnly: true
+          nullable: true
+        payment_authority:
+          type: string
+          readOnly: true
+          nullable: true
+        refund:
+          type: integer
+          readOnly: true
+          nullable: true
+        adjustment:
+          type: integer
+          readOnly: true
+          nullable: true
+        ip_address:
+          type: string
+          readOnly: true
+          nullable: true
+        description:
+          type: string
+          readOnly: true
+        metadata:
+          readOnly: true
+        reviewed_by:
+          allOf:
+          - $ref: '#/components/schemas/AdminUserSummary'
+          readOnly: true
+        reviewed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        review_note:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: تاریخ ایجاد
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: تاریخ بروزرسانی
+      required:
+      - adjustment
+      - campaign
+      - campaign_title
+      - created_at
+      - description
+      - id
+      - ip_address
+      - metadata
+      - payment
+      - payment_authority
+      - refund
+      - review_note
+      - reviewed_at
+      - reviewed_by
+      - severity
+      - severity_display
+      - signal_type
+      - signal_type_display
+      - status
+      - status_display
+      - updated_at
+      - user
+    MadadkarRiskSignalReview:
+      type: object
+      description: Input serializer for reviewing/dismissing/escalating risk signals.
+      properties:
+        status:
+          $ref: '#/components/schemas/MadadkarRiskSignalReviewStatusEnum'
+        review_note:
+          type: string
+          default: ''
+      required:
+      - status
+    MadadkarRiskSignalReviewStatusEnum:
+      enum:
+      - reviewed
+      - dismissed
+      - escalated
+      type: string
+      description: |-
+        * `reviewed` - بررسی‌شده
+        * `dismissed` - ردشده
+        * `escalated` - ارجاع‌شده
+    MadadkarRiskSignalTypeEnum:
+      enum:
+      - high_amount_new_user
+      - payment_failure_spike
+      - suspicious_ip_velocity
+      - refund_velocity
+      - campaign_refund_spike
+      - adjustment_anomaly
+      type: string
+      description: |-
+        * `high_amount_new_user` - مشارکت مبلغ بالا توسط کاربر جدید
+        * `payment_failure_spike` - افزایش شکست پرداخت
+        * `suspicious_ip_velocity` - سرعت غیرعادی پرداخت از IP
+        * `refund_velocity` - افزایش درخواست بازپرداخت
+        * `campaign_refund_spike` - افزایش بازپرداخت در حرکت
+        * `adjustment_anomaly` - اصلاح مالی غیرعادی
+    MadadkarRiskStatusEnum:
+      enum:
+      - open
+      - reviewed
+      - dismissed
+      - escalated
+      type: string
+      description: |-
+        * `open` - باز
+        * `reviewed` - بررسی‌شده
+        * `dismissed` - ردشده
+        * `escalated` - ارجاع‌شده
     MadadkarUserParticipationDetailResponse:
       type: object
       properties:

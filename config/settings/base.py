@@ -175,6 +175,13 @@ AUDIT_LOG_LEGAL_HOLD_ENABLED = config("AUDIT_LOG_LEGAL_HOLD_ENABLED", default=Tr
 AUDIT_LOG_RETENTION_DELETE_ENABLED = config("AUDIT_LOG_RETENTION_DELETE_ENABLED", default=False, cast=bool)
 AUDIT_LOG_EXPORT_MAX_RECORDS = config("AUDIT_LOG_EXPORT_MAX_RECORDS", default=100000, cast=int)
 
+MADADKAR_RISK_HIGH_AMOUNT_NEW_USER_THRESHOLD = config("MADADKAR_RISK_HIGH_AMOUNT_NEW_USER_THRESHOLD", default=50_000_000, cast=int)
+MADADKAR_RISK_PAYMENT_FAILURE_SPIKE_THRESHOLD = config("MADADKAR_RISK_PAYMENT_FAILURE_SPIKE_THRESHOLD", default=3, cast=int)
+MADADKAR_RISK_IP_DISTINCT_USERS_THRESHOLD = config("MADADKAR_RISK_IP_DISTINCT_USERS_THRESHOLD", default=3, cast=int)
+MADADKAR_RISK_REFUND_VELOCITY_THRESHOLD = config("MADADKAR_RISK_REFUND_VELOCITY_THRESHOLD", default=3, cast=int)
+MADADKAR_RISK_CAMPAIGN_REFUND_SPIKE_THRESHOLD = config("MADADKAR_RISK_CAMPAIGN_REFUND_SPIKE_THRESHOLD", default=5, cast=int)
+MADADKAR_RISK_ADJUSTMENT_RATIO_THRESHOLD = config("MADADKAR_RISK_ADJUSTMENT_RATIO_THRESHOLD", default=0.25, cast=float)
+
 AWS_ACCESS_KEY_ID = config("AWS_ACCESS_KEY_ID", default="")
 AWS_SECRET_ACCESS_KEY = config("AWS_SECRET_ACCESS_KEY", default="")
 AWS_STORAGE_BUCKET_NAME = config("AWS_STORAGE_BUCKET_NAME", default="")
@@ -542,6 +549,9 @@ SPECTACULAR_SETTINGS = {
         "MadadkarRefundStatusEnum": "apps.madadkar.choices.RefundStatus",
         "MadadkarFinancialAdjustmentTypeEnum": "apps.madadkar.choices.FinancialAdjustmentType",
         "MadadkarFinancialAdjustmentStatusEnum": "apps.madadkar.choices.FinancialAdjustmentStatus",
+        "MadadkarRiskSignalTypeEnum": "apps.madadkar.choices.MadadkarRiskSignalType",
+        "MadadkarRiskSeverityEnum": "apps.madadkar.choices.MadadkarRiskSeverity",
+        "MadadkarRiskStatusEnum": "apps.madadkar.choices.MadadkarRiskStatus",
         "LMSCourseLevelEnum": "apps.lms.choices.CourseLevel",
         "LMSCourseStatusEnum": "apps.lms.choices.CourseStatus",
         "LMSEnrollmentStatusEnum": "apps.lms.choices.EnrollmentStatus",

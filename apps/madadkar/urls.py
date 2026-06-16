@@ -49,6 +49,8 @@ from .views import (
     MadadkarAdminPaymentListView,
     MadadkarAdminRefundActionView,
     MadadkarAdminRefundListCreateView,
+    MadadkarAdminRiskSignalListView,
+    MadadkarAdminRiskSignalReviewView,
     MadadkarAdminSponsorDetailView,
     MadadkarAdminSponsorListCreateView,
     MadadkarPaymentVerifyView,
@@ -229,6 +231,16 @@ urlpatterns = [
         "admin/adjustments/<int:adjustment_id>/<str:action>/",
         MadadkarAdminAdjustmentActionView.as_view(),
         name="admin-adjustment-action",
+    ),
+    path(
+        "admin/risk-signals/",
+        MadadkarAdminRiskSignalListView.as_view(),
+        name="admin-risk-signal-list",
+    ),
+    path(
+        "admin/risk-signals/<int:signal_id>/review/",
+        MadadkarAdminRiskSignalReviewView.as_view(),
+        name="admin-risk-signal-review",
     ),
 
     # ====================================================
