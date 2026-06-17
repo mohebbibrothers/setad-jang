@@ -335,7 +335,11 @@ export function JusticeSection({ criminals }: { criminals: CriminalCard[] }) {
           description="بانک اطلاعاتی جنایتکاران و مجرمان بین‌المللی؛ مشارکت مردمی در مسیر تحقق عدالت."
         />
 
-        <div className="bg-ink-50/60 rounded-[2rem] md:rounded-[2.5rem]
+        {/* Off-white panel — corners follow the Apple HIG concentric-corners
+            rule: outer_radius ≈ inner_card_radius (28px) + panel_padding.
+            So panel goes 32 → 48 → 56px as the inner padding grows.        */}
+        <div className="bg-ink-50/60
+                        rounded-[32px] md:rounded-[48px] lg:rounded-[56px]
                         p-4 md:p-8 lg:p-10 border border-ink-100">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-5">
             <AnimatePresence mode="wait" initial={false}>
