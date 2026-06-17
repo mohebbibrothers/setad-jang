@@ -5,10 +5,10 @@ import { Instagram, Twitter, Linkedin, Send } from 'lucide-react';
 /**
  * Footer block that owns the newsletter pill.
  * Mirrors the designer's mockup exactly:
- *  - Light grey rounded card with a small top cutout
- *  - Teal-coloured newsletter pill straddling the cutout
- *  - 4 link columns
- *  - Bottom strip with transparent logo + copyright + social
+ *  - Independent white rounded card hosts the green newsletter pill
+ *  - That white card sits centred above the bowed cutout of the ink-50 card
+ *  - 4 link columns inside the ink-50 card
+ *  - Bottom strip with logo + copyright + social — INSIDE the same card
  */
 
 const COLS = [
@@ -48,15 +48,28 @@ const COLS = [
 
 export function Footer() {
   return (
-    <footer className="bg-white pt-16 md:pt-20">
-      {/* One unified ink-50 card. The cutout effect is rendered by the
-          NewsletterPill below — a white rounded "halo" that floats above
-          the card top edge and wraps the green pill (matches Asset 3). */}
-      <div className="relative max-w-[1280px] mx-auto px-4 md:px-8 pt-16 md:pt-20 pb-6 md:pb-8
-                      bg-ink-50 rounded-t-[2rem] md:rounded-t-[2.5rem]">
-        {/* Newsletter pill — straddles the bowed cutout */}
+    <footer className="relative bg-white pt-[6.5rem] md:pt-[7.5rem]">
+      {/* Independent white rounded pill that wraps the green newsletter
+          and sits centred over the bowed cutout of the ink-50 card.
+          Matches designer Asset 3 exactly. */}
+      <div className="absolute left-1/2 top-10 md:top-11 -translate-x-1/2 z-10
+                      w-[min(620px,90vw)] md:w-[min(680px,80vw)]
+                      bg-white rounded-full p-2 md:p-2.5
+                      shadow-[0_8px_24px_-8px_rgba(11,53,48,0.10)]">
         <NewsletterPill />
+      </div>
 
+      {/* Light ink-50 card with the bowed top cutout from Asset 3 */}
+      <div
+        className="relative max-w-[1280px] mx-auto px-4 md:px-8 pt-[5.5rem] md:pt-[6rem] pb-6 md:pb-8
+                   bg-ink-50 rounded-t-[2rem] md:rounded-t-[2.5rem]"
+        style={{
+          backgroundImage: 'url(/brand/footer-newsletter-card.png)',
+          backgroundSize: '100% 110px',
+          backgroundRepeat: 'no-repeat',
+          backgroundPosition: 'center top',
+        }}
+      >
         {/* Footer columns */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-8 md:gap-10 text-right">
           {COLS.map((c) => (
@@ -99,50 +112,42 @@ export function Footer() {
           </div>
         </div>
       </div>
-
     </footer>
   );
 }
 
-/* Newsletter pill — sits inside a white rounded "halo" that nests
-   into the top cutout of the footer card (matches designer Asset 3). */
+/* Newsletter pill — green inner form. White card halo is provided
+   by the parent <Footer/>. */
 function NewsletterPill() {
   return (
-    <div
-      className="relative z-[5] max-w-[720px] mx-auto -mt-[72px] md:-mt-[80px] mb-12 md:mb-16
-                 bg-white rounded-[32px] md:rounded-[40px]
-                 p-[14px] md:p-[16px] px-[18px] md:px-[22px]
-                 shadow-[0_-2px_0_rgba(0,0,0,0.02)]"
+    <form
+      className="bg-brand-500 rounded-full flex items-center p-1.5 md:p-[7px] gap-2"
+      aria-label="فرم خبرنامه"
     >
-      <form
-        className="bg-brand-500 rounded-full shadow-card flex items-center p-2 gap-2"
-        aria-label="فرم خبرنامه"
+      <label htmlFor="footer-newsletter"
+             className="px-4 md:px-6 text-white font-bold text-sm md:text-[15.5px] whitespace-nowrap">
+        عضویت در خبرنامه
+      </label>
+      <div className="flex-1 bg-white rounded-full h-[40px] md:h-[42px] flex items-center px-4">
+        <input
+          id="footer-newsletter"
+          type="email"
+          required
+          placeholder="آدرس ایمیل…"
+          aria-label="آدرس ایمیل"
+          dir="rtl"
+          className="flex-1 h-full bg-transparent outline-none text-[13.5px]
+                     text-ink-900 placeholder:text-ink-400 text-right"
+        />
+      </div>
+      <button
+        type="submit"
+        className="inline-flex items-center gap-1.5 h-[40px] md:h-[42px] px-5 md:px-6 rounded-full
+                   bg-gold-500 hover:bg-gold-600 text-ink-900 text-[13.5px] font-bold transition-colors shrink-0"
       >
-        <label htmlFor="footer-newsletter"
-               className="px-4 md:px-6 text-white font-bold text-sm md:text-[15.5px] whitespace-nowrap">
-          عضویت در خبرنامه
-        </label>
-        <div className="flex-1 bg-white rounded-full h-[42px] flex items-center px-4">
-          <input
-            id="footer-newsletter"
-            type="email"
-            required
-            placeholder="آدرس ایمیل…"
-            aria-label="آدرس ایمیل"
-            dir="rtl"
-            className="flex-1 h-full bg-transparent outline-none text-[13.5px]
-                       text-ink-900 placeholder:text-ink-400 text-right"
-          />
-        </div>
-        <button
-          type="submit"
-          className="inline-flex items-center gap-1.5 h-[42px] px-5 md:px-6 rounded-full
-                     bg-gold-500 hover:bg-gold-600 text-ink-900 text-[13.5px] font-bold transition-colors shrink-0"
-        >
-          <Send className="w-4 h-4" strokeWidth={2.2} />
-          ارسال
-        </button>
-      </form>
-    </div>
+        <Send className="w-4 h-4" strokeWidth={2.2} />
+        ارسال
+      </button>
+    </form>
   );
 }
