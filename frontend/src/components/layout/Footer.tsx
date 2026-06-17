@@ -49,12 +49,13 @@ const COLS = [
 export function Footer() {
   return (
     <footer className="bg-white pt-16 md:pt-20">
-      {/* Light card with built-in top cutout (designer Asset 3 PNG) */}
+      {/* One unified card: cutout PNG on top + ink-50 fill below, with
+          newsletter pill + columns + bottom strip ALL inside it. */}
       <div
-        className="relative max-w-[1280px] mx-auto px-4 md:px-8 pt-16 md:pt-20 pb-10 md:pb-12"
+        className="relative max-w-[1280px] mx-auto px-4 md:px-8 pt-16 md:pt-20 pb-6 md:pb-8 bg-ink-50 rounded-t-[2rem] md:rounded-t-[2.5rem]"
         style={{
           backgroundImage: 'url(/brand/footer-newsletter-card.png)',
-          backgroundSize: '100% 100%',
+          backgroundSize: '100% 80px',
           backgroundRepeat: 'no-repeat',
           backgroundPosition: 'center top',
         }}
@@ -79,11 +80,9 @@ export function Footer() {
             </nav>
           ))}
         </div>
-      </div>
 
-      {/* Bottom strip */}
-      <div className="bg-ink-50 border-t border-ink-100">
-        <div className="max-w-[1280px] mx-auto px-4 md:px-8 py-7 md:py-8
+        {/* Bottom strip — INSIDE the same card, separated by a subtle hairline */}
+        <div className="mt-10 md:mt-12 pt-6 md:pt-8 border-t border-black/[0.06]
                         flex flex-col md:flex-row items-center justify-between gap-5">
           <Link href="/" aria-label="بعثت مردم">
             <Image src="/brand/logo-mark.png" alt="بعثت مردم"
@@ -106,6 +105,7 @@ export function Footer() {
           </div>
         </div>
       </div>
+
     </footer>
   );
 }
