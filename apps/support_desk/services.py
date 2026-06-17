@@ -7,8 +7,9 @@ from datetime import datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
+from django.contrib.auth import get_user_model
 from django.db import transaction
-from django.db.models import Count
+from django.db.models import Count, Q
 from django.utils import timezone
 
 from apps.support_desk.choices import (
@@ -69,6 +70,31 @@ class SupportTriageSuggestion:
     similar_ticket_ids: list[int]
     reason_codes: list[str]
     score: int
+
+
+@dataclass(frozen=True)
+class SupportAssignmentCandidate:
+    """One support admin candidate with workload score and rationale."""
+
+    user: Any
+    workload_score: int
+    open_tickets: int
+    urgent_or_critical_tickets: int
+    breached_sla_tickets: int
+    waiting_admin_tickets: int
+    department_open_tickets: int
+    reason_codes: list[str]
+
+
+@dataclass(frozen=True)
+class SupportAssignmentRecommendation:
+    """Assignment recommendation output for load-balanced support routing."""
+
+    ticket: SupportTicket
+    recommended_assignee: Any | None
+    candidates: list[SupportAssignmentCandidate]
+    reason_codes: list[str]
+    policy_version: str
 
 
 _OPEN_STATUSES = {
@@ -757,6 +783,92 @@ def add_attachment(
     )
     sync_ticket_counters(ticket=ticket)
     return attachment
+
+
+def _support_admin_candidates(*, department: SupportDepartment) -> list[Any]:
+    """Return active staff/admin users eligible for support assignment."""
+    user_model = get_user_model()
+    queryset = user_model.objects.filter(
+        is_active=True,
+    ).filter(Q(is_staff=True) | Q(is_superuser=True) | Q(role="admin"))
+    if department.default_assignee_id:
+        queryset = queryset | user_model.objects.filter(pk=department.default_assignee_id, is_active=True)
+    return list(queryset.distinct().order_by("id"))
+
+
+def _build_assignment_candidate(*, user: Any, ticket: SupportTicket, department: SupportDepartment) -> SupportAssignmentCandidate:
+    """Calculate workload score for one support admin candidate."""
+    assigned_open = SupportTicket.objects.open_queue().filter(assigned_to=user)
+    department_open = assigned_open.filter(department=department).count()
+    urgent_or_critical = assigned_open.filter(
+        Q(priority__in=[TicketPriority.URGENT, TicketPriority.HIGH])
+        | Q(severity__in=[TicketSeverity.CRITICAL, TicketSeverity.BLOCKER]),
+    ).count()
+    breached = assigned_open.filter(sla_breached_at__isnull=False).count()
+    waiting_admin = assigned_open.filter(status=TicketStatus.WAITING_FOR_ADMIN).count()
+    open_count = assigned_open.count()
+    score = open_count * 10 + urgent_or_critical * 8 + breached * 12 + waiting_admin * 5 + department_open * 2
+    reason_codes: list[str] = []
+    if department.default_assignee_id == user.pk:
+        score -= 4
+        reason_codes.append("department_default_assignee_bonus")
+    if ticket.sla_breached_at:
+        score += breached * 5
+        reason_codes.append("sla_breach_load_weight")
+    if open_count == 0:
+        reason_codes.append("no_open_tickets")
+    return SupportAssignmentCandidate(
+        user=user,
+        workload_score=max(score, 0),
+        open_tickets=open_count,
+        urgent_or_critical_tickets=urgent_or_critical,
+        breached_sla_tickets=breached,
+        waiting_admin_tickets=waiting_admin,
+        department_open_tickets=department_open,
+        reason_codes=reason_codes,
+    )
+
+
+def get_support_assignment_recommendation(
+    *,
+    ticket: SupportTicket,
+    department: SupportDepartment | None = None,
+    candidate_limit: int = 5,
+) -> SupportAssignmentRecommendation:
+    """Recommend the least-loaded support admin for a ticket using transparent scoring."""
+    target_department = department or ticket.department
+    candidates = [_build_assignment_candidate(user=user, ticket=ticket, department=target_department) for user in _support_admin_candidates(department=target_department)]
+    candidates = sorted(candidates, key=lambda item: (item.workload_score, item.open_tickets, item.user.pk))
+    reason_codes = ["least_loaded_score"]
+    if target_department.default_assignee_id:
+        reason_codes.append("department_default_assignee_considered")
+    if ticket.sla_breached_at:
+        reason_codes.append("ticket_sla_breached_priority")
+    if ticket.priority in {TicketPriority.HIGH, TicketPriority.URGENT} or ticket.severity in {TicketSeverity.CRITICAL, TicketSeverity.BLOCKER}:
+        reason_codes.append("high_priority_ticket_weighted")
+    return SupportAssignmentRecommendation(
+        ticket=ticket,
+        recommended_assignee=candidates[0].user if candidates else None,
+        candidates=candidates[: max(1, min(candidate_limit, 20))],
+        reason_codes=reason_codes,
+        policy_version="support-assignment-load-balancing/v1",
+    )
+
+
+@transaction.atomic
+def auto_assign_ticket(*, ticket: SupportTicket, admin: Any, department: SupportDepartment | None = None, reason: str = "") -> SupportTicket:
+    """Assign a ticket to the current least-loaded support admin."""
+    recommendation = get_support_assignment_recommendation(ticket=ticket, department=department)
+    if recommendation.recommended_assignee is None:
+        raise SupportDeskServiceError("هیچ کارشناس پشتیبانی فعالی برای ارجاع یافت نشد.")
+    selected_reason = reason or "ارجاع خودکار بر اساس کمترین بار کاری و وضعیت SLA"
+    return assign_ticket(
+        ticket=ticket,
+        admin=admin,
+        assignee=recommendation.recommended_assignee,
+        department=department,
+        reason=selected_reason,
+    )
 
 
 @transaction.atomic

@@ -1071,6 +1071,8 @@ When `business_hours_only=True`, first response and resolution deadlines are com
 - internal notes hidden from user
 - attachments
 - assignment history
+- load-balanced assignment recommendation
+- auto-assignment بر اساس workload score، SLA pressure و department affinity
 - status history
 - smart triage
 - duplicate candidates
@@ -1130,6 +1132,8 @@ GET            /api/v1/support/admin/tickets/{ticket_number}/
 POST           /api/v1/support/admin/tickets/{ticket_number}/reply/
 POST           /api/v1/support/admin/tickets/{ticket_number}/internal-note/
 POST           /api/v1/support/admin/tickets/{ticket_number}/assign/
+GET            /api/v1/support/admin/tickets/{ticket_number}/assignment-recommendation/
+POST           /api/v1/support/admin/tickets/{ticket_number}/auto-assign/
 POST           /api/v1/support/admin/tickets/{ticket_number}/status/
 POST           /api/v1/support/admin/tickets/{ticket_number}/escalate/
 POST           /api/v1/support/admin/tickets/{ticket_number}/close/

@@ -41,6 +41,7 @@ from apps.support_desk.serializers import (
     SupportAdminStatusSerializer,
     SupportAdminTicketDetailSerializer,
     SupportAdminTicketMessageSerializer,
+    SupportAssignmentRecommendationSerializer,
     SupportBusinessCalendarInputSerializer,
     SupportBusinessCalendarSerializer,
     SupportCannedResponseInputSerializer,
@@ -88,6 +89,7 @@ TICKET_DETAIL_RESPONSE = build_success_response_serializer(name="SupportTicketDe
 MESSAGE_LIST_RESPONSE = build_success_response_serializer(name="SupportTicketTimelineResponse", data_serializer=SupportTicketMessageSerializer, many=True)
 ATTACHMENT_RESPONSE = build_success_response_serializer(name="SupportTicketAttachmentResponse", data_serializer=SupportTicketAttachmentSerializer)
 TRIAGE_RESPONSE = build_success_response_serializer(name="SupportTriageSuggestionResponse", data_serializer=SupportTriageSuggestionSerializer)
+ASSIGNMENT_RECOMMENDATION_RESPONSE = build_success_response_serializer(name="SupportAssignmentRecommendationResponse", data_serializer=SupportAssignmentRecommendationSerializer)
 
 
 def _service_error_response(exc: Exception, *, status_code: int = status.HTTP_400_BAD_REQUEST) -> ErrorResponse:
@@ -762,6 +764,101 @@ class SupportAdminTicketAssignView(APIView):
         ticket = services.assign_ticket(ticket=ticket, admin=request.user, **serializer.validated_data)
         log_action_async(user_id=request.user.pk, action=audit_actions.SUPPORT_TICKET_ASSIGNED, resource_type="support_ticket", resource_id=ticket.ticket_number, **extract_audit_metadata(request))
         return SuccessResponse(data=SupportAdminTicketDetailSerializer(ticket).data, message="تیکت ارجاع شد.")
+
+
+class SupportAdminTicketAssignmentRecommendationView(APIView):
+    """Admin endpoint for load-balanced support assignment recommendation."""
+
+    permission_classes = [IsSupportAdminUser]
+    serializer_class = SupportAssignmentRecommendationSerializer
+
+    @extend_schema(
+        operation_id="support_admin_ticket_assignment_recommendation",
+        tags=[TAG_SUPPORT_USER],
+        responses={200: ASSIGNMENT_RECOMMENDATION_RESPONSE, 404: SUPPORT_ERROR_RESPONSE},
+    )
+    def get(self, request: Request, ticket_number: str) -> SuccessResponse | ErrorResponse:
+        """Return transparent least-loaded assignment recommendation."""
+        ticket = selectors.get_admin_ticket_by_number(ticket_number=ticket_number)
+        if ticket is None:
+            return ErrorResponse(message="تیکت یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+        recommendation = services.get_support_assignment_recommendation(ticket=ticket)
+        payload = _serialize_assignment_recommendation(recommendation)
+        log_action_async(
+            user_id=request.user.pk,
+            action=audit_actions.SUPPORT_ASSIGNMENT_RECOMMENDED,
+            resource_type="support_ticket",
+            resource_id=ticket.ticket_number,
+            extra_data={"recommended_assignee_id": payload["recommended_assignee_id"], "policy_version": payload["policy_version"]},
+            **extract_audit_metadata(request),
+        )
+        return SuccessResponse(data=payload, message="پیشنهاد ارجاع تیکت با موفقیت تولید شد.")
+
+
+class SupportAdminTicketAutoAssignView(APIView):
+    """Admin endpoint that applies load-balanced assignment recommendation."""
+
+    permission_classes = [IsSupportAdminUser]
+    serializer_class = SupportAdminTicketDetailSerializer
+
+    @extend_schema(
+        operation_id="support_admin_ticket_auto_assign",
+        tags=[TAG_SUPPORT_USER],
+        request=SupportAdminAssignSerializer,
+        responses={200: TICKET_DETAIL_RESPONSE, 400: SUPPORT_ERROR_RESPONSE, 404: SUPPORT_ERROR_RESPONSE},
+    )
+    def post(self, request: Request, ticket_number: str) -> SuccessResponse | ErrorResponse:
+        """Auto-assign ticket to the least-loaded support admin."""
+        ticket = selectors.get_admin_ticket_by_number(ticket_number=ticket_number)
+        if ticket is None:
+            return ErrorResponse(message="تیکت یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+        serializer = SupportAdminAssignSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            ticket = services.auto_assign_ticket(
+                ticket=ticket,
+                admin=request.user,
+                department=serializer.validated_data.get("department"),
+                reason=serializer.validated_data.get("reason", ""),
+            )
+        except services.SupportDeskServiceError as exc:
+            return _service_error_response(exc)
+        log_action_async(
+            user_id=request.user.pk,
+            action=audit_actions.SUPPORT_TICKET_ASSIGNED,
+            resource_type="support_ticket",
+            resource_id=ticket.ticket_number,
+            extra_data={"auto_assigned": True, "assigned_to_id": ticket.assigned_to_id},
+            **extract_audit_metadata(request),
+        )
+        return SuccessResponse(data=SupportAdminTicketDetailSerializer(ticket).data, message="تیکت به‌صورت خودکار ارجاع شد.")
+
+
+def _serialize_assignment_recommendation(recommendation: services.SupportAssignmentRecommendation) -> dict:
+    """Serialize assignment recommendation without leaking unnecessary user fields."""
+    assignee = recommendation.recommended_assignee
+    return {
+        "ticket_number": recommendation.ticket.ticket_number,
+        "recommended_assignee_id": assignee.pk if assignee else None,
+        "recommended_assignee_email": getattr(assignee, "email", "") or "" if assignee else "",
+        "policy_version": recommendation.policy_version,
+        "reason_codes": recommendation.reason_codes,
+        "candidates": [
+            {
+                "user_id": candidate.user.pk,
+                "user_email": getattr(candidate.user, "email", "") or "",
+                "user_display_name": getattr(candidate.user, "full_name", "") or getattr(candidate.user, "email", "") or f"user#{candidate.user.pk}",
+                "workload_score": candidate.workload_score,
+                "open_tickets": candidate.open_tickets,
+                "urgent_or_critical_tickets": candidate.urgent_or_critical_tickets,
+                "breached_sla_tickets": candidate.breached_sla_tickets,
+                "waiting_admin_tickets": candidate.waiting_admin_tickets,
+                "department_open_tickets": candidate.department_open_tickets,
+                "reason_codes": candidate.reason_codes,
+            }
+            for candidate in recommendation.candidates
+        ],
+    }
 
 
 class SupportAdminTicketStatusView(APIView):

@@ -10061,6 +10061,77 @@ paths:
               schema:
                 $ref: '#/components/schemas/SupportAdminTicketDetail'
           description: ''
+  /api/v1/support/admin/tickets/{ticket_number}/assignment-recommendation/:
+    get:
+      operationId: support_admin_ticket_assignment_recommendation
+      description: Return transparent least-loaded assignment recommendation.
+      parameters:
+      - in: path
+        name: ticket_number
+        schema:
+          type: string
+        required: true
+      tags:
+      - میز پشتیبانی — کاربر
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupportAssignmentRecommendationResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupportDeskErrorResponse'
+          description: ''
+  /api/v1/support/admin/tickets/{ticket_number}/auto-assign/:
+    post:
+      operationId: support_admin_ticket_auto_assign
+      description: Auto-assign ticket to the least-loaded support admin.
+      parameters:
+      - in: path
+        name: ticket_number
+        schema:
+          type: string
+        required: true
+      tags:
+      - میز پشتیبانی — کاربر
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SupportAdminAssign'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SupportAdminAssign'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SupportAdminAssign'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupportTicketDetailResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupportDeskErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupportDeskErrorResponse'
+          description: ''
   /api/v1/support/admin/tickets/{ticket_number}/close/:
     post:
       operationId: support_admin_tickets_close_create
@@ -23770,6 +23841,19 @@ components:
       required:
       - data
       - message
+    SupportAdminAssign:
+      type: object
+      description: Admin input serializer for assignment.
+      properties:
+        assignee_id:
+          type: integer
+          nullable: true
+        department_id:
+          type: integer
+          nullable: true
+        reason:
+          type: string
+          default: ''
     SupportAdminDepartmentListResponse:
       type: object
       properties:
@@ -24101,6 +24185,103 @@ components:
       - is_internal
       - message_type
       - metadata
+    SupportAssignmentCandidate:
+      type: object
+      description: One candidate in support load-balancing recommendation.
+      properties:
+        user_id:
+          type: integer
+          readOnly: true
+        user_email:
+          type: string
+          readOnly: true
+        user_display_name:
+          type: string
+          readOnly: true
+        workload_score:
+          type: integer
+          readOnly: true
+        open_tickets:
+          type: integer
+          readOnly: true
+        urgent_or_critical_tickets:
+          type: integer
+          readOnly: true
+        breached_sla_tickets:
+          type: integer
+          readOnly: true
+        waiting_admin_tickets:
+          type: integer
+          readOnly: true
+        department_open_tickets:
+          type: integer
+          readOnly: true
+        reason_codes:
+          type: array
+          items:
+            type: string
+          readOnly: true
+      required:
+      - breached_sla_tickets
+      - department_open_tickets
+      - open_tickets
+      - reason_codes
+      - urgent_or_critical_tickets
+      - user_display_name
+      - user_email
+      - user_id
+      - waiting_admin_tickets
+      - workload_score
+    SupportAssignmentRecommendation:
+      type: object
+      description: Load-balanced assignment recommendation payload.
+      properties:
+        ticket_number:
+          type: string
+          readOnly: true
+        recommended_assignee_id:
+          type: integer
+          readOnly: true
+          nullable: true
+        recommended_assignee_email:
+          type: string
+          readOnly: true
+        policy_version:
+          type: string
+          readOnly: true
+        reason_codes:
+          type: array
+          items:
+            type: string
+          readOnly: true
+        candidates:
+          type: array
+          items:
+            $ref: '#/components/schemas/SupportAssignmentCandidate'
+          readOnly: true
+      required:
+      - candidates
+      - policy_version
+      - reason_codes
+      - recommended_assignee_email
+      - recommended_assignee_id
+      - ticket_number
+    SupportAssignmentRecommendationResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          default: true
+        status_code:
+          type: integer
+          default: 200
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/SupportAssignmentRecommendation'
+      required:
+      - data
+      - message
     SupportAttachmentKindEnum:
       enum:
       - screenshot

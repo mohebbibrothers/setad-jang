@@ -515,3 +515,29 @@ class SupportAttachmentVisibilityGuardSerializer(serializers.Serializer):
     """Schema-only serializer documenting user upload visibility boundary."""
 
     visibility = serializers.ChoiceField(choices=AttachmentVisibility.choices, default=AttachmentVisibility.PUBLIC)
+
+
+class SupportAssignmentCandidateSerializer(serializers.Serializer):
+    """One candidate in support load-balancing recommendation."""
+
+    user_id = serializers.IntegerField(read_only=True)
+    user_email = serializers.CharField(read_only=True)
+    user_display_name = serializers.CharField(read_only=True)
+    workload_score = serializers.IntegerField(read_only=True)
+    open_tickets = serializers.IntegerField(read_only=True)
+    urgent_or_critical_tickets = serializers.IntegerField(read_only=True)
+    breached_sla_tickets = serializers.IntegerField(read_only=True)
+    waiting_admin_tickets = serializers.IntegerField(read_only=True)
+    department_open_tickets = serializers.IntegerField(read_only=True)
+    reason_codes = serializers.ListField(child=serializers.CharField(), read_only=True)
+
+
+class SupportAssignmentRecommendationSerializer(serializers.Serializer):
+    """Load-balanced assignment recommendation payload."""
+
+    ticket_number = serializers.CharField(read_only=True)
+    recommended_assignee_id = serializers.IntegerField(read_only=True, allow_null=True)
+    recommended_assignee_email = serializers.CharField(read_only=True, allow_blank=True)
+    policy_version = serializers.CharField(read_only=True)
+    reason_codes = serializers.ListField(child=serializers.CharField(), read_only=True)
+    candidates = SupportAssignmentCandidateSerializer(many=True, read_only=True)
