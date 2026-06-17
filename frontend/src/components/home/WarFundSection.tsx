@@ -66,7 +66,16 @@ export type CampaignCard = {
 /*  Atoms                                                                    */
 /* ───────────────────────────────────────────────────────────────────────── */
 
-/** A meta pill: label hugs the right (RTL-start), value is centered. */
+/** Meta pill — three anchored slots so the number always lands dead-centre.
+ *
+ *   [ label (right) ]   [ number (centre) ]   [ unit (left) ]
+ *
+ * Label is absolute-positioned on the RTL-start (right) edge, unit is
+ * absolute-positioned on the LTR-start (left) edge, and the numeric value
+ * is absolutely centred via translate(-50%, -50%). This guarantees the
+ * number visually sits in the middle of the pill regardless of how short
+ * or long the label/unit text is — matching the designer's mockup exactly.
+ */
 function MetaPill({
   label,
   value,
@@ -80,27 +89,37 @@ function MetaPill({
 }) {
   return (
     <div
-      className="relative h-[40px] rounded-[10px] border border-ink-200 bg-white
-                 flex items-center px-3.5"
+      className="relative h-[40px] rounded-[10px] border border-ink-200 bg-white"
     >
-      {/* Label — anchored to RTL start (right edge) */}
-      <span className="absolute right-3.5 top-1/2 -translate-y-1/2
-                       text-[12px] text-ink-500 font-medium z-10 bg-white">
+      {/* Label — RTL-start (right) */}
+      <span
+        className="absolute right-3.5 top-1/2 -translate-y-1/2
+                   text-[12px] text-ink-500 font-medium leading-none z-[2]
+                   bg-white px-1"
+      >
         {label}
       </span>
 
-      {/* Centered value (visually mid-pill) */}
+      {/* Value — perfectly centred inside the pill */}
       <span
-        className={`flex-1 text-center flex items-baseline justify-center gap-1.5
+        className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2
+                    font-extrabold text-[13.5px] text-ink-900 whitespace-nowrap
+                    max-w-[calc(100%-7rem)] overflow-hidden text-ellipsis
                     ${emphasis === 'num' ? 'tabular-nums' : ''}`}
       >
-        <span className="font-extrabold text-[13.5px] text-ink-900 truncate">
-          {typeof value === 'number' ? formatPersianNumber(value) : value}
-        </span>
-        {unit && (
-          <span className="text-[11px] text-ink-400 font-medium">{unit}</span>
-        )}
+        {typeof value === 'number' ? formatPersianNumber(value) : value}
       </span>
+
+      {/* Unit — LTR-start (left), only when provided */}
+      {unit && (
+        <span
+          className="absolute left-3.5 top-1/2 -translate-y-1/2
+                     text-[11px] text-ink-400 font-medium leading-none z-[2]
+                     bg-white px-1"
+        >
+          {unit}
+        </span>
+      )}
     </div>
   );
 }
