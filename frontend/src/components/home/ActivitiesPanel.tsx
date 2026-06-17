@@ -7,95 +7,99 @@ import { motion } from 'framer-motion';
 type Activity = {
   href: string;
   label: string;
-  icon: string;          // path under /brand/
+  icon: string;        // path under /brand/
   iconAlt: string;
 };
 
 /**
- * The 5 main activity icons, mapped to backend apps.
- * Order taken directly from the designer's mockup.
+ * Five fixed activities — order taken directly from the designer's mockup.
+ * Each maps to a real backend app under /api/v1/*.
  */
 const ACTIVITIES: Activity[] = [
-  { href: '/tabyin',        label: 'جهاد تبیین',     icon: '/brand/icon-tabyin.png',  iconAlt: 'جهاد تبیین' },
-  { href: '/kindness-wall', label: 'دیوار مهربانی',  icon: '/brand/icon-kindness.png',iconAlt: 'دیوار مهربانی' },
-  { href: '/lms',           label: 'قرارگاه آموزشی', icon: '/brand/icon-lms.png',     iconAlt: 'قرارگاه آموزشی' },
-  { href: '/r4j',           label: 'جایزه برای عدالت',icon: '/brand/icon-r4j.png',    iconAlt: 'جایزه برای عدالت' },
-  { href: '/madadkar',      label: 'پشتیبانی مالی جنگ', icon: '/brand/icon-warfund.png', iconAlt: 'پشتیبانی مالی جنگ' },
+  { href: '/tabyin',        label: 'جهاد تبیین',         icon: '/brand/icon-tabyin.png',   iconAlt: 'جهاد تبیین' },
+  { href: '/kindness-wall', label: 'دیوار مهربانی',      icon: '/brand/icon-kindness.png', iconAlt: 'دیوار مهربانی' },
+  { href: '/lms',           label: 'قرارگاه آموزشی',     icon: '/brand/icon-lms.png',      iconAlt: 'قرارگاه آموزشی' },
+  { href: '/r4j',           label: 'جایزه برای عدالت',   icon: '/brand/icon-r4j.png',      iconAlt: 'جایزه برای عدالت' },
+  { href: '/madadkar',      label: 'پشتیبانی مالی جنگ',  icon: '/brand/icon-warfund.png',  iconAlt: 'پشتیبانی مالی جنگ' },
 ];
 
 /**
- * Curved teal panel with 5 white pill cards.
- * Mirrors the designer's signature "اهم فعالیت‌ها" hero panel.
+ * Curved teal panel with 5 white pill cards, exactly matching the
+ * designer's mockup:
+ *   - The panel uses the original asset (Asset 1) as its background image,
+ *     so the wave-pattern and chevron notch render pixel-faithfully.
+ *   - The 5 cards overflow the bottom edge of the panel (the bottom half
+ *     of every card sits *outside* the teal area on the white page bg).
+ *   - 5 fixed cards always, never dynamic.
  */
 export function ActivitiesPanel() {
   return (
-    <section className="relative pt-10 md:pt-14 pb-16 md:pb-20" aria-labelledby="activities-title">
+    <section
+      className="relative -mt-4 md:-mt-8 z-[5] pt-8 pb-24 md:pt-12 md:pb-32"
+      aria-labelledby="activities-title"
+    >
       <div className="container-edge">
-        {/* Curved teal panel */}
-        <div className="relative rounded-[2rem] md:rounded-[2.5rem] bg-brand-500 text-white overflow-hidden">
-          {/* Top notch with double chevron — matches Asset 20 */}
+        <div className="relative">
+          {/* Decorative panel — graphic comes from designer asset for pixel fidelity */}
           <div
-            aria-hidden="true"
-            className="absolute top-0 left-1/2 -translate-x-1/2 w-24 h-6 bg-white rounded-b-full
-                       flex items-end justify-center pb-1"
-          >
-            <svg viewBox="0 0 20 14" className="w-5 h-3 text-brand-500" fill="none">
-              <path d="M2 2l8 6 8-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              <path d="M2 7l8 6 8-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity=".6"/>
-            </svg>
-          </div>
-
-          {/* Plus pattern background (subtle) */}
-          <div
-            aria-hidden="true"
-            className="absolute inset-0 opacity-[0.08] pointer-events-none"
+            className="relative rounded-[2rem] md:rounded-[2.5rem] overflow-hidden text-white
+                       min-h-[280px] md:min-h-[320px] flex items-start justify-center
+                       pt-14 md:pt-16 px-5 md:px-12"
             style={{
-              backgroundImage:
-                "radial-gradient(circle at 1px 1px, rgba(255,255,255,0.7) 1px, transparent 1px)",
-              backgroundSize: '24px 24px',
+              backgroundImage: 'url(/brand/activities-panel.png)',
+              backgroundSize: '100% 100%',
+              backgroundRepeat: 'no-repeat',
+              backgroundPosition: 'center top',
             }}
-          />
-
-          <div className="relative px-5 sm:px-8 md:px-12 pt-12 md:pt-14 pb-10 md:pb-14">
+          >
             <motion.h2
               id="activities-title"
-              initial={{ opacity: 0, y: 12 }}
+              initial={{ opacity: 0, y: 10 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.5 }}
-              className="text-center text-xl md:text-2xl font-extrabold mb-8 md:mb-10"
+              className="text-xl md:text-2xl font-extrabold text-center drop-shadow-sm"
             >
               اهم فعالیت‌ها
             </motion.h2>
+          </div>
 
-            {/* 5 white cards in a single row, scrollable on mobile */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 md:gap-4 lg:gap-6">
-              {ACTIVITIES.map((a, i) => (
-                <motion.div
-                  key={a.href}
-                  initial={{ opacity: 0, y: 20 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ duration: 0.4, delay: i * 0.06 }}
+          {/* 5 cards overflow the bottom of the panel */}
+          <div className="absolute inset-x-4 md:inset-x-12 -bottom-12 md:-bottom-16 z-10
+                          grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 md:gap-4 lg:gap-6">
+            {ACTIVITIES.map((a, i) => (
+              <motion.div
+                key={a.href}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.4, delay: i * 0.07 }}
+              >
+                <Link
+                  href={a.href}
+                  className="group flex flex-col items-center text-center
+                             rounded-2xl md:rounded-3xl bg-white text-ink-700
+                             p-4 md:p-5 lg:p-6
+                             shadow-[0_12px_28px_-10px_rgba(0,0,0,0.18)]
+                             hover:-translate-y-1.5 hover:shadow-[0_20px_40px_-10px_rgba(0,0,0,0.25)]
+                             transition-all duration-300 h-full border border-black/[0.03]"
                 >
-                  <Link
-                    href={a.href}
-                    className="group block rounded-2xl bg-white text-ink-800 p-4 md:p-5
-                               shadow-[0_8px_24px_-12px_rgba(0,0,0,0.25)]
-                               hover:-translate-y-1 hover:shadow-[0_16px_36px_-12px_rgba(0,0,0,0.3)]
-                               transition-all duration-300 h-full flex flex-col items-center text-center"
-                  >
-                    <div className="w-16 h-16 md:w-[72px] md:h-[72px] flex items-center justify-center
-                                    rounded-xl bg-white group-hover:scale-110 transition-transform">
-                      <Image src={a.icon} alt={a.iconAlt} width={72} height={72} className="w-full h-full object-contain" />
-                    </div>
-                    <p className="mt-3 md:mt-4 text-[13px] md:text-[14.5px] font-semibold text-ink-700 leading-tight">
-                      {a.label}
-                    </p>
-                  </Link>
-                </motion.div>
-              ))}
-            </div>
+                  <div className="w-14 h-14 md:w-[62px] md:h-[62px] flex items-center justify-center
+                                  transition-transform duration-300 group-hover:scale-110">
+                    <Image
+                      src={a.icon}
+                      alt={a.iconAlt}
+                      width={62}
+                      height={62}
+                      className="w-full h-full object-contain"
+                    />
+                  </div>
+                  <p className="mt-3 md:mt-4 text-[12.5px] md:text-[14px] font-semibold leading-tight">
+                    {a.label}
+                  </p>
+                </Link>
+              </motion.div>
+            ))}
           </div>
         </div>
       </div>

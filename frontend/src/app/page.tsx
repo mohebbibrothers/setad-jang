@@ -7,7 +7,6 @@ import { EducationSection } from '@/components/home/EducationSection';
 import { KindnessSection } from '@/components/home/KindnessSection';
 import { TabyinSection } from '@/components/home/TabyinSection';
 import { PublicReportSection } from '@/components/home/PublicReportSection';
-import { NewsletterBar } from '@/components/home/NewsletterBar';
 import {
   loadCampaigns,
   loadCriminals,
@@ -52,7 +51,6 @@ export default async function HomePage() {
       <KindnessSection listings={kindness} />
       <TabyinSection items={tabyin} />
       <PublicReportSection />
-      <NewsletterBar />
     </>
   );
 }
