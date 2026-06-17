@@ -34,17 +34,18 @@ const ACTIVITIES: Activity[] = [
 export function ActivitiesPanel() {
   return (
     <section
-      className="relative mt-10 md:mt-12 pb-24 md:pb-28"
+      className="relative mt-8 md:mt-10 pb-20 md:pb-24"
       aria-labelledby="activities-title"
     >
       <div className="container-edge">
         <div className="relative">
-          {/* Green wave panel */}
+          {/* Green wave panel — shorter than before so the cards
+              overlap the bottom edge by ~half (matches mockup). */}
           <div
             className="relative text-white px-4 sm:px-8 md:px-12
-                       pt-12 sm:pt-14 md:pt-16
-                       pb-16 sm:pb-20 md:pb-24
-                       min-h-[200px] md:min-h-[280px] lg:min-h-[320px]"
+                       pt-10 sm:pt-12 md:pt-[3.25rem] lg:pt-14
+                       pb-12 sm:pb-14 md:pb-16 lg:pb-[4.5rem]
+                       min-h-[160px] sm:min-h-[190px] md:min-h-[220px] lg:min-h-[240px]"
             style={{
               backgroundImage: 'url(/brand/activities-panel.png)',
               backgroundSize: '100% 100%',
@@ -79,13 +80,16 @@ export function ActivitiesPanel() {
             </motion.h2>
           </div>
 
-          {/* CARDS — pulled UP with negative margin so they overlap the
-              panel's bottom edge by ~50%. Fully responsive. */}
+          {/* CARDS — perfect-square pills with a thicker brand border.
+              Pulled up with negative margin so they overlap the panel's
+              bottom edge by ~50%. Fully responsive with tuned scaling
+              at extra breakpoints (380 / 560) for cleaner small-viewport
+              fits. */}
           <div
-            className="relative grid grid-cols-2 min-[480px]:grid-cols-3 md:grid-cols-5
-                       gap-3 md:gap-4 lg:gap-5
-                       -mt-10 md:-mt-14 lg:-mt-16
-                       px-2 md:px-4 lg:px-6"
+            className="relative grid grid-cols-2 min-[560px]:grid-cols-3 md:grid-cols-5
+                       gap-2.5 min-[380px]:gap-3 min-[560px]:gap-3.5 md:gap-4 lg:gap-[1.125rem] xl:gap-5
+                       -mt-9 min-[560px]:-mt-11 md:-mt-12 lg:-mt-[3.25rem]
+                       px-1 min-[380px]:px-2 md:px-4 lg:px-6"
           >
             {ACTIVITIES.map((a, i) => (
               <motion.div
@@ -98,33 +102,39 @@ export function ActivitiesPanel() {
                 <Link
                   href={a.href}
                   className="group flex flex-col items-center justify-between
-                             aspect-[1/1.05] w-full
+                             aspect-square w-full
                              bg-white text-ink-700
-                             border-[1.5px] border-brand-400 hover:border-brand-500
-                             rounded-2xl md:rounded-[1.5rem]
-                             p-3 sm:p-4 md:p-5 pb-2.5 md:pb-3.5
+                             border-[2.5px] min-[560px]:border-[3px] lg:border-[3.5px]
+                             border-brand-400 hover:border-brand-500
+                             rounded-[1.125rem] md:rounded-[1.25rem] lg:rounded-[1.5rem]
+                             p-3.5 min-[380px]:p-4 min-[560px]:p-4 md:p-[1.125rem] lg:p-5
+                             pb-2.5 md:pb-3.5
                              shadow-[0_14px_28px_-16px_rgba(0,0,0,0.30)]
                              hover:-translate-y-1 hover:shadow-[0_22px_42px_-16px_rgba(0,0,0,0.35)]
                              transition-all duration-300"
                 >
-                  <div className="flex-1 flex items-center justify-center w-full">
+                  <div className="flex-1 flex items-center justify-center w-full max-h-[65%]">
                     <div
-                      className="w-12 h-12 min-[480px]:w-[52px] min-[480px]:h-[52px]
-                                 md:w-[60px] md:h-[60px] lg:w-[66px] lg:h-[66px]
+                      className="w-[42px] h-[42px] min-[380px]:w-[46px] min-[380px]:h-[46px]
+                                 min-[560px]:w-[50px] min-[560px]:h-[50px]
+                                 md:w-[54px] md:h-[54px]
+                                 lg:w-[60px] lg:h-[60px]
+                                 xl:w-[64px] xl:h-[64px]
                                  group-hover:scale-110 transition-transform"
                     >
                       <Image
                         src={a.icon}
                         alt={a.iconAlt}
-                        width={66}
-                        height={66}
+                        width={64}
+                        height={64}
                         className="w-full h-full object-contain"
                       />
                     </div>
                   </div>
                   <p
-                    className="text-[11.5px] min-[480px]:text-[12.5px] md:text-[13.5px] lg:text-[14.5px]
-                               font-semibold text-ink-700 leading-tight text-center mt-1.5
+                    className="text-[10.5px] min-[380px]:text-[11.5px] min-[560px]:text-[12px]
+                               md:text-[12.5px] lg:text-[13.5px] xl:text-[14.5px]
+                               font-semibold text-ink-700 leading-[1.25] text-center mt-1.5
                                whitespace-nowrap md:whitespace-normal"
                   >
                     {a.label}
