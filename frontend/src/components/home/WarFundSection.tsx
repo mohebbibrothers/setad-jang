@@ -146,7 +146,7 @@ export function WarFundSection({ campaigns }: { campaigns: CampaignCard[] }) {
         />
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-          {campaigns.map((c, i) => (
+          {campaigns.slice(0, 6).map((c, i) => (
             <Card key={c.slug} c={c} delay={i * 0.06} />
           ))}
         </div>

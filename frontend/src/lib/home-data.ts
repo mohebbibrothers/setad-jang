@@ -57,16 +57,21 @@ export async function loadCampaigns(): Promise<CampaignCard[]> {
       coverUrl: c.cover_image_url,
     }));
   }
-  const seed: CampaignCard = {
-    slug: '', title: 'تهیه پشه‌بند ضد دوربین‌های دید در شب برای مدافعان جبهه',
-    sponsor: 'گروه جهادی انصارالزهرا', totalAmount: 10_000_000_000, sharePrice: 0,
-    sharesTotal: 1500, sharesRemaining: 496, progressPercent: 50,
-  };
+  // 6 campaigns → fills 3 rows of 2 cols on desktop (clearly more than 2 rows of samples)
+  const mk = (
+    slug: string, title: string, sponsor: string,
+    totalAmount: number, sharesTotal: number, sharesRemaining: number, progressPercent: number,
+  ): CampaignCard => ({
+    slug, title, sponsor, totalAmount, sharePrice: 0,
+    sharesTotal, sharesRemaining, progressPercent,
+  });
   return [
-    { ...seed, slug: 'pashe-band-jabhe' },
-    { ...seed, slug: 'darooye-emdadi', title: 'تأمین داروهای اضطراری بیمارستان صحرایی' },
-    { ...seed, slug: 'logistic-mavanea', title: 'پشتیبانی لجستیکی گروه‌های جهادی منطقه' },
-    { ...seed, slug: 'tajhizat-emdad', title: 'خرید تجهیزات امداد و نجات برای پایگاه پشتیبان' },
+    mk('pashe-band-jabhe',    'تهیه پشه‌بند ضد دوربین‌های دید در شب برای مدافعان جبهه',  'گروه جهادی انصارالزهرا',   10_000_000_000, 1500, 496, 67),
+    mk('darooye-emdadi',      'تأمین داروهای اضطراری بیمارستان صحرایی پشتیبان جبهه',     'مؤسسه شهید احمدی روشن',     6_500_000_000,   650, 220, 66),
+    mk('logistic-mavanea',    'پشتیبانی لجستیکی گروه‌های جهادی مستقر در منطقه عملیاتی',  'گروه جهادی شهید کاظمی',     4_200_000_000,   420,  84, 80),
+    mk('tajhizat-emdad',      'خرید تجهیزات امداد و نجات برای پایگاه پشتیبان مرزی',      'بسیج سازندگی استان',        8_900_000_000,   890, 312, 65),
+    mk('shabake-aab',         'احداث شبکه آب‌رسانی به روستاهای جنگ‌زده غرب کشور',          'گروه جهادی شهید بهشتی',     5_400_000_000,   540, 168, 69),
+    mk('paygah-edari',        'تجهیز پایگاه فرماندهی صحرایی و دفتر اداری منطقه عملیات',    'قرارگاه پشتیبانی مردمی',    7_700_000_000,   770, 405, 47),
   ];
 }
 
@@ -216,15 +221,21 @@ export async function loadKindnessListings(): Promise<KindListing[]> {
       viewCount: l.view_count,
     }));
   }
-  // Seed (fallback)
+  // Seed (fallback) — 12 listings: 6 need + 6 offer (each filter shows 2 full rows of 3)
   const now = Date.now();
   return [
-    { slug: 'k-1', title: 'نیازمند یخچال نو یا دست‌دوم سالم برای خانواده محترم پنج‌نفره',  type: 'need',  categoryTitle: 'لوازم خانگی',   city: 'تهران',   province: 'تهران',          ownerName: 'فاطمه ع.', publishedAt: new Date(now - 1000 * 60 * 30).toISOString(),         viewCount: 248 },
-    { slug: 'k-2', title: 'آماده اهدای کتاب‌های درسی مقاطع راهنمایی و دبیرستان',           type: 'offer', categoryTitle: 'لوازم آموزشی', city: 'مشهد',   province: 'خراسان رضوی',    ownerName: 'حسن م.',   publishedAt: new Date(now - 1000 * 60 * 60 * 2).toISOString(),     viewCount: 184 },
-    { slug: 'k-3', title: 'درخواست کمک هزینه درمان بیماری خاص فرزند خانواده کم‌بضاعت',    type: 'need',  categoryTitle: 'سلامت و درمان', city: 'اصفهان', province: 'اصفهان',         ownerName: 'محمد ر.',  publishedAt: new Date(now - 1000 * 60 * 60 * 6).toISOString(),     viewCount: 1245 },
-    { slug: 'k-4', title: 'اهدای پوشاک نو زمستانی برای کودکان ۳ تا ۸ سال مناطق محروم',      type: 'offer', categoryTitle: 'پوشاک',         city: 'شیراز',  province: 'فارس',           ownerName: 'گروه خادمان', publishedAt: new Date(now - 1000 * 60 * 60 * 12).toISOString(), viewCount: 92 },
-    { slug: 'k-5', title: 'استخدام کمک‌فروشنده پاره‌وقت برای مغازه لوازم خانگی',          type: 'need',  categoryTitle: 'فرصت شغلی',     city: 'تبریز',  province: 'آذربایجان شرقی', ownerName: 'بازرگانی شهاب', publishedAt: new Date(now - 1000 * 60 * 60 * 24).toISOString(), viewCount: 312 },
-    { slug: 'k-6', title: 'ارائه مشاوره حقوقی رایگان برای خانواده‌های نیازمند',           type: 'offer', categoryTitle: 'خدمات تخصصی',  city: 'قم',     province: 'قم',             ownerName: 'وکیل سلیمی', publishedAt: new Date(now - 1000 * 60 * 60 * 36).toISOString(), viewCount: 567 },
+    { slug: 'k-1',  title: 'نیازمند یخچال نو یا دست‌دوم سالم برای خانواده محترم پنج‌نفره',         type: 'need',  categoryTitle: 'لوازم خانگی',   city: 'تهران',   province: 'تهران',          ownerName: 'فاطمه ع.',       publishedAt: new Date(now - 1000 * 60 * 30).toISOString(),         viewCount: 248 },
+    { slug: 'k-2',  title: 'آماده اهدای کتاب‌های درسی مقاطع راهنمایی و دبیرستان',                  type: 'offer', categoryTitle: 'لوازم آموزشی', city: 'مشهد',   province: 'خراسان رضوی',    ownerName: 'حسن م.',         publishedAt: new Date(now - 1000 * 60 * 60 * 2).toISOString(),     viewCount: 184 },
+    { slug: 'k-3',  title: 'درخواست کمک هزینه درمان بیماری خاص فرزند خانواده کم‌بضاعت',           type: 'need',  categoryTitle: 'سلامت و درمان', city: 'اصفهان', province: 'اصفهان',         ownerName: 'محمد ر.',        publishedAt: new Date(now - 1000 * 60 * 60 * 6).toISOString(),     viewCount: 1245 },
+    { slug: 'k-4',  title: 'اهدای پوشاک نو زمستانی برای کودکان ۳ تا ۸ سال مناطق محروم',             type: 'offer', categoryTitle: 'پوشاک',         city: 'شیراز',  province: 'فارس',           ownerName: 'گروه خادمان',    publishedAt: new Date(now - 1000 * 60 * 60 * 12).toISOString(),    viewCount: 92 },
+    { slug: 'k-5',  title: 'استخدام کمک‌فروشنده پاره‌وقت برای مغازه لوازم خانگی',                 type: 'need',  categoryTitle: 'فرصت شغلی',     city: 'تبریز',  province: 'آذربایجان شرقی', ownerName: 'بازرگانی شهاب',  publishedAt: new Date(now - 1000 * 60 * 60 * 24).toISOString(),    viewCount: 312 },
+    { slug: 'k-6',  title: 'ارائه مشاوره حقوقی رایگان برای خانواده‌های نیازمند',                  type: 'offer', categoryTitle: 'خدمات تخصصی',  city: 'قم',     province: 'قم',             ownerName: 'وکیل سلیمی',     publishedAt: new Date(now - 1000 * 60 * 60 * 36).toISOString(),    viewCount: 567 },
+    { slug: 'k-7',  title: 'نیاز فوری به ویلچر و تجهیزات پزشکی برای جانباز عزیز',                 type: 'need',  categoryTitle: 'سلامت و درمان', city: 'کرج',    province: 'البرز',          ownerName: 'حمید س.',        publishedAt: new Date(now - 1000 * 60 * 60 * 48).toISOString(),    viewCount: 421 },
+    { slug: 'k-8',  title: 'اهدای میز و صندلی اداری نو برای دفاتر مؤسسات خیریه',                  type: 'offer', categoryTitle: 'تجهیزات اداری', city: 'تهران',  province: 'تهران',          ownerName: 'شرکت پارس‌تجهیز', publishedAt: new Date(now - 1000 * 60 * 60 * 60).toISOString(),    viewCount: 137 },
+    { slug: 'k-9',  title: 'نیازمند بسته‌های ارزاق ماه مبارک رمضان برای ۲۰ خانواده محروم',         type: 'need',  categoryTitle: 'مواد غذایی',    city: 'اهواز',  province: 'خوزستان',        ownerName: 'هیئت ابوالفضل',  publishedAt: new Date(now - 1000 * 60 * 60 * 72).toISOString(),    viewCount: 856 },
+    { slug: 'k-10', title: 'ارائه کلاس آموزش رایگان زبان انگلیسی برای دانش‌آموزان مقطع متوسطه',     type: 'offer', categoryTitle: 'آموزش',         city: 'رشت',    province: 'گیلان',          ownerName: 'استاد رحیمی',    publishedAt: new Date(now - 1000 * 60 * 60 * 84).toISOString(),    viewCount: 298 },
+    { slug: 'k-11', title: 'نیاز به کمک هزینه جهیزیه برای خانواده زوج جوان جانباز',               type: 'need',  categoryTitle: 'لوازم خانگی',   city: 'یزد',    province: 'یزد',            ownerName: 'مادر شهید رضایی', publishedAt: new Date(now - 1000 * 60 * 60 * 96).toISOString(),    viewCount: 712 },
+    { slug: 'k-12', title: 'پیشنهاد رایگان خدمات تعمیرات لوازم خانگی برای خانواده‌های کم‌بضاعت',    type: 'offer', categoryTitle: 'خدمات فنی',     city: 'کرمان',  province: 'کرمان',          ownerName: 'تعمیرگاه برادران', publishedAt: new Date(now - 1000 * 60 * 60 * 108).toISOString(),   viewCount: 184 },
   ];
 }
 
@@ -245,17 +256,16 @@ export async function loadTabyinItems(): Promise<TabyinItem[]> {
       coverUrl: t.cover_image_url, variant: t.cover_image_url ? 'cover' : 'quote',
     }));
   }
+  // Exactly 8 tiles → 2 rows of 4 on desktop, perfect designer rhythm
   const tones: Array<[string, string]> = [
     ['#3FA797', '#0A6E64'], ['#0D8074', '#053832'], ['#3FA797', '#155F55'],
     ['#5DB3A4', '#0A6E64'], ['#0D8074', '#0A6E64'], ['#3FA797', '#053832'],
-    ['#5DB3A4', '#0D8074'], ['#0A6E64', '#053832'], ['#3FA797', '#085C54'],
-    ['#5DB3A4', '#085C54'], ['#0D8074', '#085C54'], ['#3FA797', '#0A6E64'],
+    ['#5DB3A4', '#0D8074'], ['#0A6E64', '#053832'],
   ];
   const titles = [
     'دهه‌ی فجر انقلاب اسلامی', 'منبر انقلاب اسلامی', '«جلادها میان ما»',
     'حضرت معصومه (س)', 'مقاومت اسلامی', 'هنر مسلح مقاومت',
-    'کبوتر صلح', 'دفاع از وطن', 'ریشه در تاریخ',
-    'مقاومت', 'نسل سوم انقلاب', 'به یاد شهدا',
+    'کبوتر صلح', 'دفاع از وطن',
   ];
   return tones.map((t, i) => ({
     id: `seed-${i}`, slug: `seed-${i}`,
@@ -264,7 +274,7 @@ export async function loadTabyinItems(): Promise<TabyinItem[]> {
       ? 'او به خاطر نقاشی‌های واقع‌گرایانه‌اش از رویدادهای مذهبی شهرت دارد. خالق آثاری چون «عرش بر زمین افتاد»، «شیرین‌تر از عسل» و «آخرین سرباز لشکر» است.'
       : undefined,
     variant: i === 4 ? 'quote' : undefined,
-    tall: [0, 6].includes(i),
+    tall: false,
     toneFrom: t[0], toneTo: t[1],
   }));
 }
