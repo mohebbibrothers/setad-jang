@@ -37,31 +37,23 @@ const ACTIVITIES: Activity[] = [
 export function ActivitiesPanel() {
   return (
     <section
-      className="relative mt-[4.5rem] md:mt-[5.5rem] lg:mt-[6.5rem] pb-20 md:pb-24"
+      className="relative mt-12 md:mt-16 lg:mt-20 pb-20 md:pb-24"
       aria-labelledby="activities-title"
     >
-      {/* Hero photo "ground reflection" — a vertically flipped, blurred,
-          low-opacity copy of the defenders photo placed in the gap
-          between the search bar and the green panel. Reads like the
-          photo's reflection on a glossy floor (matches mockup). */}
+      {/* Soft ambient shadow ABOVE the green panel — a wide, low-opacity
+          band that fades from brand-tinted bottom (where it touches the
+          panel) to fully transparent at the top. Pure CSS gradient,
+          no images. Clean, soft, designer-faithful. */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute z-[2] left-1/2
-                   -top-[90px] h-[110px] w-[min(680px,90%)]
-                   md:-top-[120px] md:h-[150px] md:w-[min(680px,75%)]
-                   lg:-top-[150px] lg:h-[190px] lg:w-[min(680px,60%)]"
+        className="pointer-events-none absolute inset-x-0 z-[2]
+                   -top-[60px] h-[80px]
+                   md:-top-[80px] md:h-[110px]
+                   lg:-top-[100px] lg:h-[140px]"
         style={{
-          transform: 'translateX(-50%) scaleY(-1)',
-          backgroundImage: 'url(/brand/hero-defenders.png)',
-          backgroundSize: '100% auto',
-          backgroundPosition: 'center top',
-          backgroundRepeat: 'no-repeat',
-          opacity: 0.28,
-          filter: 'blur(12px) saturate(0.85)',
-          WebkitMaskImage:
-            'linear-gradient(to bottom, #000 0%, rgba(0,0,0,0.6) 40%, rgba(0,0,0,0.15) 75%, transparent 100%)',
-          maskImage:
-            'linear-gradient(to bottom, #000 0%, rgba(0,0,0,0.6) 40%, rgba(0,0,0,0.15) 75%, transparent 100%)',
+          background:
+            'radial-gradient(ellipse 80% 100% at 50% 100%, rgba(11,53,48,0.20) 0%, rgba(11,53,48,0.12) 30%, rgba(11,53,48,0.05) 60%, rgba(11,53,48,0) 100%)',
+          filter: 'blur(14px)',
         }}
       />
 
