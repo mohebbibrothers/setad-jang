@@ -14,23 +14,25 @@ type NavItem = { label: string; href: string; children?: { label: string; href: 
  * mapped to real backend apps under /api/v1/*.
  * "پروژه‌ها" has a dropdown that groups the multi-domain apps.
  */
+/* Header nav — exact order from designer mockup (RTL right→left visually):
+   خانه · کلاس درس · پروژه‌ها ▾ · مشاوره کسب‌وکار · ایده کسب‌وکار · اخبار منطقه */
 const NAV: NavItem[] = [
   { label: 'خانه', href: '/' },
-  { label: 'قرارگاه آموزشی', href: '/lms' },
+  { label: 'کلاس درس', href: '/lms' },
   {
     label: 'پروژه‌ها',
     href: '#',
     children: [
-      { label: 'مددکاری مالی', href: '/madadkar' },
+      { label: 'پشتیبانی مالی جنگ', href: '/madadkar' },
       { label: 'دیوار مهربانی', href: '/kindness-wall' },
       { label: 'جهاد تبیین', href: '/tabyin' },
       { label: 'جایزه عدالت', href: '/r4j' },
       { label: 'گزارش‌های مردمی', href: '/public-reports' },
     ],
   },
-  { label: 'دیوار مهربانی', href: '/kindness-wall' },
-  { label: 'جهاد تبیین', href: '/tabyin' },
-  { label: 'جایزه عدالت', href: '/r4j' },
+  { label: 'مشاوره کسب‌وکار', href: '/consulting' },
+  { label: 'ایده کسب‌وکار', href: '/business-ideas' },
+  { label: 'اخبار منطقه', href: '/regional-news' },
 ];
 
 export function Header() {
@@ -76,7 +78,7 @@ export function Header() {
                                  rounded-lg hover:text-brand-600 hover:bg-brand-50/60 transition-colors"
                     >
                       {item.label}
-                      <ChevronDown className="w-4 h-4" />
+                      <ChevronDown className="w-3 h-3 text-brand-600" strokeWidth={2.5} />
                     </button>
                     <div className="absolute top-full right-0 mt-1 min-w-[200px] py-2 rounded-xl bg-white
                                     shadow-card border border-ink-100 opacity-0 invisible
