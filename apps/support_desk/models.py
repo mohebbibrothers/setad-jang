@@ -24,6 +24,7 @@ from apps.support_desk.choices import (
     AttachmentKind,
     AttachmentVisibility,
     DuplicateReviewStatus,
+    KnowledgeArticleStatus,
     SLAEventType,
     TagSource,
     TicketChannel,
@@ -476,6 +477,61 @@ class SupportCannedResponse(BaseModel):
 
     def __str__(self) -> str:
         return self.title
+
+
+class SupportKnowledgeArticle(BaseModel):
+    """Admin-managed knowledge base article for support self-service and replies."""
+
+    department = models.ForeignKey(SupportDepartment, on_delete=models.PROTECT, null=True, blank=True, related_name="knowledge_articles")
+    category = models.ForeignKey(SupportCategory, on_delete=models.PROTECT, null=True, blank=True, related_name="knowledge_articles")
+    ticket_type = models.ForeignKey(SupportTicketType, on_delete=models.PROTECT, null=True, blank=True, related_name="knowledge_articles")
+    title = models.CharField(max_length=220, unique=True)
+    slug = models.SlugField(max_length=260, unique=True, allow_unicode=True, blank=True)
+    summary = models.TextField(blank=True)
+    body = models.TextField()
+    keywords = models.JSONField(default=list, blank=True)
+    status = models.CharField(max_length=20, choices=KnowledgeArticleStatus.choices, default=KnowledgeArticleStatus.DRAFT, db_index=True)
+    published_at = models.DateTimeField(null=True, blank=True)
+    archived_at = models.DateTimeField(null=True, blank=True)
+    usage_count = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        verbose_name = "مقاله پایگاه دانش پشتیبانی"
+        verbose_name_plural = "مقالات پایگاه دانش پشتیبانی"
+        ordering = ["title"]
+        indexes = [
+            models.Index(fields=["status", "is_active", "-published_at"]),
+            models.Index(fields=["department", "category", "status"]),
+            models.Index(fields=["ticket_type", "status"]),
+        ]
+
+    def __str__(self) -> str:
+        return self.title
+
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        """Generate stable slug for knowledge article."""
+        if not self.slug:
+            self.slug = _unique_slug(model=SupportKnowledgeArticle, value=self.title, max_length=260, exclude_pk=self.pk)
+        super().save(*args, **kwargs)
+
+
+class SupportKnowledgeArticleUse(BaseModel):
+    """Audit-friendly record of a knowledge article used in support context."""
+
+    article = models.ForeignKey(SupportKnowledgeArticle, on_delete=models.PROTECT, related_name="uses")
+    ticket = models.ForeignKey(SupportTicket, on_delete=models.CASCADE, null=True, blank=True, related_name="knowledge_article_uses")
+    used_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="support_knowledge_uses")
+    context = models.CharField(max_length=40, default="reply")
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        verbose_name = "استفاده از مقاله پایگاه دانش"
+        verbose_name_plural = "استفاده‌های مقاله پایگاه دانش"
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["article", "-created_at"]), models.Index(fields=["ticket", "-created_at"])]
+
+    def __str__(self) -> str:
+        return f"{self.article_id}:{self.context}"
 
 
 class SupportTicketAssignment(BaseModel):

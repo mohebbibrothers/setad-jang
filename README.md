@@ -1074,6 +1074,9 @@ When `business_hours_only=True`, first response and resolution deadlines are com
 - load-balanced assignment recommendation
 - auto-assignment بر اساس workload score، SLA pressure و department affinity
 - status history
+- knowledge base articles با public/help-center API و admin lifecycle
+- article recommendation برای ticket subject/description
+- audited article usage in support replies/context
 - smart triage
 - duplicate candidates
 - canned responses/macros
@@ -1100,6 +1103,9 @@ DRAFT → SUBMITTED → WAITING_FOR_ADMIN / WAITING_FOR_USER / IN_PROGRESS
 GET    /api/v1/support/departments/
 GET    /api/v1/support/categories/
 GET    /api/v1/support/ticket-types/
+GET    /api/v1/support/knowledge/articles/
+GET    /api/v1/support/knowledge/articles/{slug}/
+POST   /api/v1/support/knowledge/articles/recommend/
 POST   /api/v1/support/me/tickets/suggest/
 GET    /api/v1/support/me/tickets/
 POST   /api/v1/support/me/tickets/
@@ -1127,6 +1133,11 @@ PATCH          /api/v1/support/admin/sla-policies/{id}/
 GET/POST       /api/v1/support/admin/canned-responses/
 PATCH          /api/v1/support/admin/canned-responses/{id}/
 POST           /api/v1/support/admin/canned-responses/{id}/use/
+GET/POST       /api/v1/support/admin/knowledge/articles/
+GET/PATCH      /api/v1/support/admin/knowledge/articles/{id}/
+POST           /api/v1/support/admin/knowledge/articles/{id}/publish/
+POST           /api/v1/support/admin/knowledge/articles/{id}/archive/
+POST           /api/v1/support/admin/knowledge/articles/{id}/use/
 GET            /api/v1/support/admin/tickets/
 GET            /api/v1/support/admin/tickets/{ticket_number}/
 POST           /api/v1/support/admin/tickets/{ticket_number}/reply/

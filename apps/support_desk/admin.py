@@ -9,6 +9,8 @@ from apps.support_desk.models import (
     SupportDepartment,
     SupportDuplicateCandidate,
     SupportHoliday,
+    SupportKnowledgeArticle,
+    SupportKnowledgeArticleUse,
     SupportSLAEvent,
     SupportSLAPolicy,
     SupportTag,
@@ -235,3 +237,39 @@ class SupportDuplicateCandidateAdmin(admin.ModelAdmin):
     list_filter = ("status",)
     search_fields = ("ticket__ticket_number", "candidate_ticket__ticket_number", "reason")
     raw_id_fields = ("ticket", "candidate_ticket", "reviewed_by")
+
+
+@admin.register(SupportKnowledgeArticle)
+class SupportKnowledgeArticleAdmin(admin.ModelAdmin):
+    """Admin management for support knowledge base articles."""
+
+    list_display = ("title", "department", "category", "ticket_type", "status", "usage_count", "published_at", "is_active")
+    list_filter = ("status", "department", "category", "ticket_type", "is_active")
+    search_fields = ("title", "slug", "summary", "body")
+    readonly_fields = ("slug", "usage_count", "published_at", "archived_at", "created_at", "updated_at")
+    raw_id_fields = ("department", "category", "ticket_type")
+    ordering = ("title",)
+
+
+@admin.register(SupportKnowledgeArticleUse)
+class SupportKnowledgeArticleUseAdmin(admin.ModelAdmin):
+    """Read-only admin for support knowledge article usage events."""
+
+    list_display = ("article", "ticket", "used_by", "context", "created_at")
+    list_filter = ("context", "article")
+    search_fields = ("article__title", "ticket__ticket_number", "used_by__email")
+    readonly_fields = [field.name for field in SupportKnowledgeArticleUse._meta.fields]
+    raw_id_fields = ("article", "ticket", "used_by")
+    ordering = ("-created_at",)
+
+    def has_add_permission(self, request) -> bool:
+        """Article usage must be recorded by audited API/service workflows."""
+        return False
+
+    def has_change_permission(self, request, obj=None) -> bool:
+        """Article usage evidence is immutable in admin."""
+        return False
+
+    def has_delete_permission(self, request, obj=None) -> bool:
+        """Article usage evidence must remain available for support analytics."""
+        return False

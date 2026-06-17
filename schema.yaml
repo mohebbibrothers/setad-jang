@@ -9843,6 +9843,215 @@ paths:
               schema:
                 $ref: '#/components/schemas/SupportHoliday'
           description: ''
+  /api/v1/support/admin/knowledge/articles/:
+    get:
+      operationId: support_admin_knowledge_articles_list
+      description: Return all knowledge articles for admin management.
+      tags:
+      - میز پشتیبانی — دسته‌بندی
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupportKnowledgeArticleListResponse'
+          description: ''
+    post:
+      operationId: support_admin_knowledge_articles_create
+      description: Create a knowledge base article.
+      tags:
+      - میز پشتیبانی — دسته‌بندی
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SupportKnowledgeArticleInput'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SupportKnowledgeArticleInput'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SupportKnowledgeArticleInput'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupportKnowledgeArticleDetailResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupportDeskErrorResponse'
+          description: ''
+  /api/v1/support/admin/knowledge/articles/{article_id}/:
+    get:
+      operationId: support_admin_knowledge_article_retrieve
+      description: Return article detail for admin.
+      parameters:
+      - in: path
+        name: article_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - میز پشتیبانی — دسته‌بندی
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupportKnowledgeArticleDetailResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupportDeskErrorResponse'
+          description: ''
+    patch:
+      operationId: support_admin_knowledge_article_update
+      description: Update article content/metadata.
+      parameters:
+      - in: path
+        name: article_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - میز پشتیبانی — دسته‌بندی
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedSupportKnowledgeArticleInput'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedSupportKnowledgeArticleInput'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedSupportKnowledgeArticleInput'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupportKnowledgeArticleDetailResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupportDeskErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupportDeskErrorResponse'
+          description: ''
+  /api/v1/support/admin/knowledge/articles/{article_id}/archive/:
+    post:
+      operationId: support_admin_knowledge_article_archive
+      description: Archive one knowledge article.
+      parameters:
+      - in: path
+        name: article_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - میز پشتیبانی — دسته‌بندی
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupportKnowledgeArticleDetailResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupportDeskErrorResponse'
+          description: ''
+  /api/v1/support/admin/knowledge/articles/{article_id}/publish/:
+    post:
+      operationId: support_admin_knowledge_article_publish
+      description: Publish one knowledge article.
+      parameters:
+      - in: path
+        name: article_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - میز پشتیبانی — دسته‌بندی
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupportKnowledgeArticleDetailResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupportDeskErrorResponse'
+          description: ''
+  /api/v1/support/admin/knowledge/articles/{article_id}/use/:
+    post:
+      operationId: support_admin_knowledge_article_use
+      description: Record article usage for analytics and audit.
+      parameters:
+      - in: path
+        name: article_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - میز پشتیبانی — دسته‌بندی
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SupportKnowledgeArticleUseInput'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SupportKnowledgeArticleUseInput'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SupportKnowledgeArticleUseInput'
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupportKnowledgeArticleUseResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupportDeskErrorResponse'
+          description: ''
   /api/v1/support/admin/sla-policies/:
     get:
       operationId: support_admin_sla_policies_retrieve
@@ -10321,6 +10530,77 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SupportDepartmentListResponse'
+          description: ''
+  /api/v1/support/knowledge/articles/:
+    get:
+      operationId: support_knowledge_articles_list
+      description: Return published knowledge articles with simple search/taxonomy
+        filters.
+      tags:
+      - میز پشتیبانی — کاربر
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupportKnowledgeArticleListResponse'
+          description: ''
+  /api/v1/support/knowledge/articles/{slug}/:
+    get:
+      operationId: support_knowledge_article_retrieve
+      description: Return one published knowledge article by slug.
+      parameters:
+      - in: path
+        name: slug
+        schema:
+          type: string
+        required: true
+      tags:
+      - میز پشتیبانی — کاربر
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupportKnowledgeArticleDetailResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupportDeskErrorResponse'
+          description: ''
+  /api/v1/support/knowledge/articles/recommend/:
+    post:
+      operationId: support_knowledge_articles_recommend
+      description: Recommend published articles from subject/description/taxonomy
+        context.
+      tags:
+      - میز پشتیبانی — کاربر
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SupportKnowledgeRecommendation'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SupportKnowledgeRecommendation'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SupportKnowledgeRecommendation'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupportKnowledgeArticleListResponse'
           description: ''
   /api/v1/support/me/tickets/:
     get:
@@ -19789,6 +20069,38 @@ components:
           format: date-time
           readOnly: true
           title: تاریخ بروزرسانی
+    PatchedSupportKnowledgeArticleInput:
+      type: object
+      description: Admin input serializer for support knowledge base articles.
+      properties:
+        department_id:
+          type: integer
+          nullable: true
+        category_id:
+          type: integer
+          nullable: true
+        ticket_type_id:
+          type: integer
+          nullable: true
+        title:
+          type: string
+          maxLength: 220
+        summary:
+          type: string
+          default: ''
+        body:
+          type: string
+        keywords:
+          type: array
+          items:
+            type: string
+            maxLength: 60
+        status:
+          allOf:
+          - $ref: '#/components/schemas/LMSCourseStatusEnum'
+          default: draft
+        is_active:
+          type: boolean
     PatchedSupportSLAPolicy:
       type: object
       description: Admin SLA policy serializer.
@@ -24654,6 +24966,272 @@ components:
       - is_active
       - title
       - updated_at
+    SupportKnowledgeArticle:
+      type: object
+      description: Read serializer for support knowledge base articles.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        department:
+          allOf:
+          - $ref: '#/components/schemas/SupportDepartment'
+          readOnly: true
+        category:
+          allOf:
+          - $ref: '#/components/schemas/SupportCategory'
+          readOnly: true
+        ticket_type:
+          allOf:
+          - $ref: '#/components/schemas/SupportTicketType'
+          readOnly: true
+        title:
+          type: string
+          readOnly: true
+        slug:
+          type: string
+          readOnly: true
+          pattern: ^[-\w]+$
+        summary:
+          type: string
+          readOnly: true
+        body:
+          type: string
+          readOnly: true
+        keywords:
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/LMSCourseStatusEnum'
+          readOnly: true
+        status_display:
+          type: string
+          readOnly: true
+        published_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        archived_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        usage_count:
+          type: integer
+          readOnly: true
+        is_active:
+          type: boolean
+          readOnly: true
+          title: فعال
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: تاریخ ایجاد
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: تاریخ بروزرسانی
+      required:
+      - archived_at
+      - body
+      - category
+      - created_at
+      - department
+      - id
+      - is_active
+      - keywords
+      - published_at
+      - slug
+      - status
+      - status_display
+      - summary
+      - ticket_type
+      - title
+      - updated_at
+      - usage_count
+    SupportKnowledgeArticleDetailResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          default: true
+        status_code:
+          type: integer
+          default: 200
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/SupportKnowledgeArticle'
+      required:
+      - data
+      - message
+    SupportKnowledgeArticleInput:
+      type: object
+      description: Admin input serializer for support knowledge base articles.
+      properties:
+        department_id:
+          type: integer
+          nullable: true
+        category_id:
+          type: integer
+          nullable: true
+        ticket_type_id:
+          type: integer
+          nullable: true
+        title:
+          type: string
+          maxLength: 220
+        summary:
+          type: string
+          default: ''
+        body:
+          type: string
+        keywords:
+          type: array
+          items:
+            type: string
+            maxLength: 60
+        status:
+          allOf:
+          - $ref: '#/components/schemas/LMSCourseStatusEnum'
+          default: draft
+        is_active:
+          type: boolean
+      required:
+      - body
+      - title
+    SupportKnowledgeArticleListResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/SupportKnowledgeArticleListResponseData'
+        success:
+          type: boolean
+          default: true
+        status_code:
+          type: integer
+          default: 200
+        message:
+          type: string
+      required:
+      - data
+      - message
+    SupportKnowledgeArticleListResponseData:
+      type: object
+      properties:
+        count:
+          type: integer
+        next:
+          type: string
+          format: uri
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/SupportKnowledgeArticle'
+      required:
+      - count
+      - results
+    SupportKnowledgeArticleUse:
+      type: object
+      description: Read serializer for knowledge article usage events.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        article:
+          type: integer
+          readOnly: true
+        article_title:
+          type: string
+          readOnly: true
+        ticket:
+          type: integer
+          readOnly: true
+          nullable: true
+        ticket_number:
+          type: string
+          readOnly: true
+          nullable: true
+        used_by:
+          type: integer
+          readOnly: true
+          nullable: true
+        context:
+          type: string
+          readOnly: true
+        metadata:
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: تاریخ ایجاد
+      required:
+      - article
+      - article_title
+      - context
+      - created_at
+      - id
+      - metadata
+      - ticket
+      - ticket_number
+      - used_by
+    SupportKnowledgeArticleUseInput:
+      type: object
+      description: Input serializer for recording article usage in support context.
+      properties:
+        ticket_number:
+          type: string
+          default: ''
+        context:
+          type: string
+          default: reply
+          maxLength: 40
+    SupportKnowledgeArticleUseResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          default: true
+        status_code:
+          type: integer
+          default: 200
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/SupportKnowledgeArticleUse'
+      required:
+      - data
+      - message
+    SupportKnowledgeRecommendation:
+      type: object
+      description: Input serializer for knowledge article recommendation.
+      properties:
+        subject:
+          type: string
+          maxLength: 260
+        description:
+          type: string
+        department_id:
+          type: integer
+          nullable: true
+        category_id:
+          type: integer
+          nullable: true
+        ticket_type_id:
+          type: integer
+          nullable: true
+      required:
+      - description
+      - subject
     SupportSLAPolicy:
       type: object
       description: Admin SLA policy serializer.

@@ -102,3 +102,11 @@ class DuplicateReviewStatus(models.TextChoices):
     ACTIVE = "active", "فعال"
     DISMISSED = "dismissed", "نادیده‌گرفته‌شده"
     CONFIRMED = "confirmed", "تأیید تکراری بودن"
+
+
+class KnowledgeArticleStatus(models.TextChoices):
+    """Publication lifecycle for support knowledge base articles."""
+
+    DRAFT = "draft", "پیش‌نویس"
+    PUBLISHED = "published", "منتشرشده"
+    ARCHIVED = "archived", "آرشیوشده"

@@ -2,7 +2,12 @@
 
 from rest_framework import serializers
 
-from apps.support_desk.choices import AttachmentKind, AttachmentVisibility, TicketStatus
+from apps.support_desk.choices import (
+    AttachmentKind,
+    AttachmentVisibility,
+    KnowledgeArticleStatus,
+    TicketStatus,
+)
 from apps.support_desk.models import (
     SupportBusinessCalendar,
     SupportCannedResponse,
@@ -10,6 +15,8 @@ from apps.support_desk.models import (
     SupportDepartment,
     SupportDuplicateCandidate,
     SupportHoliday,
+    SupportKnowledgeArticle,
+    SupportKnowledgeArticleUse,
     SupportSLAPolicy,
     SupportTicket,
     SupportTicketAttachment,
@@ -541,3 +548,78 @@ class SupportAssignmentRecommendationSerializer(serializers.Serializer):
     policy_version = serializers.CharField(read_only=True)
     reason_codes = serializers.ListField(child=serializers.CharField(), read_only=True)
     candidates = SupportAssignmentCandidateSerializer(many=True, read_only=True)
+
+
+class SupportKnowledgeArticleSerializer(serializers.ModelSerializer):
+    """Read serializer for support knowledge base articles."""
+
+    department = SupportDepartmentSerializer(read_only=True)
+    category = SupportCategorySerializer(read_only=True)
+    ticket_type = SupportTicketTypeSerializer(read_only=True)
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+
+    class Meta:
+        model = SupportKnowledgeArticle
+        fields = (
+            "id",
+            "department",
+            "category",
+            "ticket_type",
+            "title",
+            "slug",
+            "summary",
+            "body",
+            "keywords",
+            "status",
+            "status_display",
+            "published_at",
+            "archived_at",
+            "usage_count",
+            "is_active",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = fields
+
+
+class SupportKnowledgeArticleInputSerializer(serializers.Serializer):
+    """Admin input serializer for support knowledge base articles."""
+
+    department_id = serializers.PrimaryKeyRelatedField(queryset=SupportDepartment.all_objects.all(), source="department", required=False, allow_null=True)
+    category_id = serializers.PrimaryKeyRelatedField(queryset=SupportCategory.all_objects.all(), source="category", required=False, allow_null=True)
+    ticket_type_id = serializers.PrimaryKeyRelatedField(queryset=SupportTicketType.all_objects.all(), source="ticket_type", required=False, allow_null=True)
+    title = serializers.CharField(max_length=220)
+    summary = serializers.CharField(required=False, allow_blank=True, default="")
+    body = serializers.CharField()
+    keywords = serializers.ListField(child=serializers.CharField(max_length=60), required=False, default=list)
+    status = serializers.ChoiceField(choices=KnowledgeArticleStatus.choices, required=False, default=KnowledgeArticleStatus.DRAFT)
+    is_active = serializers.BooleanField(required=False)
+
+
+class SupportKnowledgeArticleUseSerializer(serializers.ModelSerializer):
+    """Read serializer for knowledge article usage events."""
+
+    article_title = serializers.CharField(source="article.title", read_only=True)
+    ticket_number = serializers.CharField(source="ticket.ticket_number", read_only=True, allow_null=True)
+
+    class Meta:
+        model = SupportKnowledgeArticleUse
+        fields = ("id", "article", "article_title", "ticket", "ticket_number", "used_by", "context", "metadata", "created_at")
+        read_only_fields = fields
+
+
+class SupportKnowledgeArticleUseInputSerializer(serializers.Serializer):
+    """Input serializer for recording article usage in support context."""
+
+    ticket_number = serializers.CharField(required=False, allow_blank=True, default="")
+    context = serializers.CharField(required=False, allow_blank=True, default="reply", max_length=40)
+
+
+class SupportKnowledgeRecommendationSerializer(serializers.Serializer):
+    """Input serializer for knowledge article recommendation."""
+
+    subject = serializers.CharField(max_length=260)
+    description = serializers.CharField()
+    department_id = serializers.PrimaryKeyRelatedField(queryset=SupportDepartment.objects.all(), source="department", required=False, allow_null=True)
+    category_id = serializers.PrimaryKeyRelatedField(queryset=SupportCategory.objects.all(), source="category", required=False, allow_null=True)
+    ticket_type_id = serializers.PrimaryKeyRelatedField(queryset=SupportTicketType.objects.all(), source="ticket_type", required=False, allow_null=True)

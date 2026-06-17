@@ -14,6 +14,7 @@ from django.utils import timezone
 
 from apps.support_desk.choices import (
     DuplicateReviewStatus,
+    KnowledgeArticleStatus,
     SLAEventType,
     TicketMessageType,
     TicketPriority,
@@ -26,6 +27,8 @@ from apps.support_desk.models import (
     SupportDepartment,
     SupportDuplicateCandidate,
     SupportHoliday,
+    SupportKnowledgeArticle,
+    SupportKnowledgeArticleUse,
     SupportSLAEvent,
     SupportSLAPolicy,
     SupportTag,
@@ -477,6 +480,129 @@ def update_ticket_type(*, ticket_type: SupportTicketType, **fields: Any) -> Supp
         update_fields.append("updated_at")
         ticket_type.save(update_fields=list(set(update_fields)))
     return ticket_type
+
+
+@transaction.atomic
+def create_knowledge_article(
+    *,
+    title: str,
+    body: str,
+    summary: str = "",
+    department: SupportDepartment | None = None,
+    category: SupportCategory | None = None,
+    ticket_type: SupportTicketType | None = None,
+    keywords: list[str] | None = None,
+    status: str = KnowledgeArticleStatus.DRAFT,
+) -> SupportKnowledgeArticle:
+    """Create an admin-managed support knowledge base article."""
+    if category is not None and department is not None and category.department_id != department.pk:
+        raise SupportDeskServiceError("دسته مقاله باید متعلق به همان دپارتمان باشد.")
+    article = SupportKnowledgeArticle.objects.create(
+        title=title.strip(),
+        body=body.strip(),
+        summary=summary.strip(),
+        department=department,
+        category=category,
+        ticket_type=ticket_type,
+        keywords=[keyword.strip() for keyword in (keywords or []) if keyword.strip()],
+        status=status,
+        published_at=timezone.now() if status == KnowledgeArticleStatus.PUBLISHED else None,
+    )
+    return article
+
+
+@transaction.atomic
+def update_knowledge_article(*, article: SupportKnowledgeArticle, **fields: Any) -> SupportKnowledgeArticle:
+    """Update knowledge article metadata/content through service layer."""
+    allowed = {"title", "body", "summary", "department", "category", "ticket_type", "keywords", "is_active"}
+    next_department = fields.get("department", article.department)
+    next_category = fields.get("category", article.category)
+    if next_category is not None and next_department is not None and next_category.department_id != next_department.pk:
+        raise SupportDeskServiceError("دسته مقاله باید متعلق به همان دپارتمان باشد.")
+    update_fields: list[str] = []
+    for field, value in fields.items():
+        if field not in allowed:
+            continue
+        if isinstance(value, str):
+            value = value.strip()
+        if field == "keywords":
+            value = [keyword.strip() for keyword in (value or []) if str(keyword).strip()]
+        if getattr(article, field) != value:
+            setattr(article, field, value)
+            update_fields.append(field)
+    if update_fields:
+        update_fields.append("updated_at")
+        article.save(update_fields=list(set(update_fields)))
+    return article
+
+
+@transaction.atomic
+def publish_knowledge_article(*, article: SupportKnowledgeArticle) -> SupportKnowledgeArticle:
+    """Publish a knowledge article for public/help-center visibility."""
+    article.status = KnowledgeArticleStatus.PUBLISHED
+    article.published_at = article.published_at or timezone.now()
+    article.archived_at = None
+    article.save(update_fields=["status", "published_at", "archived_at", "updated_at"])
+    return article
+
+
+@transaction.atomic
+def archive_knowledge_article(*, article: SupportKnowledgeArticle) -> SupportKnowledgeArticle:
+    """Archive a knowledge article and remove it from public recommendations."""
+    article.status = KnowledgeArticleStatus.ARCHIVED
+    article.archived_at = timezone.now()
+    article.save(update_fields=["status", "archived_at", "updated_at"])
+    return article
+
+
+def recommend_knowledge_articles(
+    *,
+    text: str,
+    department: SupportDepartment | None = None,
+    category: SupportCategory | None = None,
+    ticket_type: SupportTicketType | None = None,
+    limit: int = 5,
+) -> list[SupportKnowledgeArticle]:
+    """Recommend published knowledge articles using taxonomy and keyword overlap."""
+    from apps.support_desk.selectors import get_published_knowledge_articles
+
+    tokens = set(_tokenize(text))
+    scored: list[tuple[int, SupportKnowledgeArticle]] = []
+    for article in get_published_knowledge_articles():
+        score = 0
+        article_tokens = set(_tokenize(f"{article.title} {article.summary} {' '.join(article.keywords or [])}"))
+        score += len(tokens & article_tokens) * 15
+        if department is not None and article.department_id == department.pk:
+            score += 20
+        if category is not None and article.category_id == category.pk:
+            score += 30
+        if ticket_type is not None and article.ticket_type_id == ticket_type.pk:
+            score += 20
+        if score > 0:
+            scored.append((score, article))
+    scored.sort(key=lambda item: (-item[0], item[1].title))
+    return [article for _score, article in scored[: max(1, min(limit, 20))]]
+
+
+@transaction.atomic
+def record_knowledge_article_use(
+    *,
+    article: SupportKnowledgeArticle,
+    user: Any,
+    ticket: SupportTicket | None = None,
+    context: str = "reply",
+    metadata: dict[str, Any] | None = None,
+) -> SupportKnowledgeArticleUse:
+    """Record knowledge article usage and increment usage counter."""
+    article.usage_count += 1
+    article.save(update_fields=["usage_count", "updated_at"])
+    return SupportKnowledgeArticleUse.objects.create(
+        article=article,
+        ticket=ticket,
+        used_by=user if getattr(user, "pk", None) else None,
+        context=context[:40],
+        metadata=metadata or {},
+    )
 
 
 @transaction.atomic

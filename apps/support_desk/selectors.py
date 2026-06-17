@@ -9,6 +9,8 @@ from apps.support_desk.models import (
     SupportDepartment,
     SupportDuplicateCandidate,
     SupportHoliday,
+    SupportKnowledgeArticle,
+    SupportKnowledgeArticleUse,
     SupportSLAPolicy,
     SupportTicket,
     SupportTicketAttachment,
@@ -230,3 +232,33 @@ def get_admin_duplicate_candidates() -> QuerySet[SupportDuplicateCandidate]:
 def get_admin_duplicate_candidate_by_id(*, duplicate_id: int) -> SupportDuplicateCandidate | None:
     """Return one duplicate candidate in admin scope."""
     return get_admin_duplicate_candidates().filter(pk=duplicate_id).first()
+
+
+def get_published_knowledge_articles() -> QuerySet[SupportKnowledgeArticle]:
+    """Return public/help-center visible support knowledge articles."""
+    return (
+        SupportKnowledgeArticle.objects
+        .select_related("department", "category", "ticket_type")
+        .filter(status="published", is_active=True)
+        .order_by("title")
+    )
+
+
+def get_public_knowledge_article_by_slug(*, slug: str) -> SupportKnowledgeArticle | None:
+    """Return one published knowledge article by slug."""
+    return get_published_knowledge_articles().filter(slug=slug).first()
+
+
+def get_admin_knowledge_articles() -> QuerySet[SupportKnowledgeArticle]:
+    """Return all knowledge articles for admin management."""
+    return SupportKnowledgeArticle.all_objects.select_related("department", "category", "ticket_type").order_by("title")
+
+
+def get_admin_knowledge_article_by_id(*, article_id: int) -> SupportKnowledgeArticle | None:
+    """Return one knowledge article for admin management."""
+    return get_admin_knowledge_articles().filter(pk=article_id).first()
+
+
+def get_admin_knowledge_article_uses() -> QuerySet[SupportKnowledgeArticleUse]:
+    """Return knowledge article usage events for admin analytics."""
+    return SupportKnowledgeArticleUse.objects.select_related("article", "ticket", "used_by").order_by("-created_at")
