@@ -114,14 +114,28 @@ export async function loadCriminals(): Promise<CriminalCard[]> {
 
 /* ─── LMS ────────────────────────────────────────────────────────────── */
 type ApiLmsCategory = { slug: string; title: string; courses_count?: number };
+/**
+ * Mirrors apps.lms.serializers.CourseSummarySerializer.Meta.fields exactly.
+ * (See apps/lms/serializers.py — CourseSummarySerializer).
+ */
 type ApiCourse = {
-  slug: string; title: string; subtitle?: string;
-  instructor_name?: string; level?: string;
-  cover_image?: string;
-  lessons_count?: number; estimated_duration_seconds?: number;
-  enrollments_count?: number; graduates_count?: number;
-  is_featured?: boolean; published_at?: string;
-  category?: { slug?: string; title?: string };
+  id?: number;
+  slug: string;
+  title: string;
+  subtitle?: string;
+  short_description?: string;
+  instructor_name?: string;
+  instructor_avatar?: string | null;
+  level?: 'beginner' | 'intermediate' | 'advanced' | 'professional' | string;
+  status?: string;
+  is_featured?: boolean;
+  cover_image?: string | null;
+  lessons_count?: number;
+  estimated_duration_seconds?: number;
+  enrollments_count?: number;
+  graduates_count?: number;
+  published_at?: string;
+  category?: { id?: number; slug?: string; title?: string };
 };
 
 export async function loadLmsCategories(): Promise<EduCategory[]> {
@@ -158,8 +172,9 @@ export async function loadCourses(): Promise<CourseCard[]> {
         title: c.title,
         subtitle: c.subtitle,
         instructor: c.instructor_name,
+        instructorAvatarUrl: c.instructor_avatar ?? undefined,
         level: c.level,
-        coverUrl: c.cover_image,
+        coverUrl: c.cover_image ?? undefined,
         lessonsCount: c.lessons_count,
         durationSeconds: c.estimated_duration_seconds,
         enrollmentsCount: c.enrollments_count,
@@ -172,26 +187,30 @@ export async function loadCourses(): Promise<CourseCard[]> {
       return card;
     });
   }
-  // Seed (fallback) — matches designer mockup
+  // Seed (fallback) — matches designer mockup; 8 courses across 4 categories
+  // so the "همه آموزش‌ها" tab fills a full row (4) with a 2nd pager-page (4 more).
   const make = (
     slug: string, title: string, instructor: string,
-    category: string, level: 'beginner' | 'intermediate' | 'advanced',
+    category: string, level: 'beginner' | 'intermediate' | 'advanced' | 'professional',
     lessons: number, hours: number,
-    tone: [string, string], isNew = true,
+    tone: [string, string],
+    extra: Partial<CourseCard> = {},
   ): CourseCard => ({
     slug, title, instructor, level, lessonsCount: lessons,
-    durationSeconds: hours * 3600, isNew, categorySlug: category,
+    durationSeconds: hours * 3600, isNew: true, categorySlug: category,
     toneFrom: tone[0], toneTo: tone[1],
+    enrollmentsCount: extra.enrollmentsCount ?? 50 + Math.floor(Math.random() * 950),
+    ...extra,
   });
   return [
-    make('kargardani-mostanad',  'دوره کارگردانی مستند',           'استاد وحید چیتی',          'media',     'advanced',     24, 18, ['#1a1a1a', '#444']),
-    make('filmnameh-mostanad',   'فیلم‌نامه‌نویسی مستند',           'مدرس سهیل کریمی',          'media',     'intermediate', 18, 12, ['#E55214', '#FF8C2E']),
-    make('filmnameh-cinema',     'فیلم‌نامه‌نویسی تیزر فرهنگی',     'سجاد سلیمان‌نژاد',         'media',     'intermediate', 14,  9, ['#1F1F1F', '#333']),
-    make('web-design',           'آموزش کامل طراحی سایت',           'رسول خسروبیگی، مرتضی نوری مجد', 'tech', 'advanced',    32, 24, ['#6B21A8', '#4338CA']),
-    make('amdad-1',              'امداد و نجات مقدماتی',             'دکتر علی محمدی',           'rescue',    'beginner',     12,  6, ['#0D8074', '#053832']),
-    make('media-lit',            'سواد رسانه‌ای و جنگ ادراکی',      'دکتر رضایی',              'tabyin',    'beginner',      9,  6, ['#155F55', '#0D8074']),
-    make('jihadi-mgmt',          'مدیریت گروه‌های جهادی',           'مهندس سلطانی',             'leadership','intermediate', 16, 10, ['#0A6E64', '#085C54']),
-    make('photo-khabari',        'عکاسی خبری و میدانی',              'استاد عظیمی',              'media',     'intermediate', 10,  7, ['#92580E', '#5F3A09']),
+    make('kargardani-mostanad',  'دوره کارگردانی مستند',           'استاد وحید چیتی',          'media',     'advanced',     24, 18, ['#1a1a1a', '#444'],        { isFeatured: true,  enrollmentsCount: 1240 }),
+    make('filmnameh-mostanad',   'فیلم‌نامه‌نویسی مستند',           'مدرس سهیل کریمی',          'media',     'intermediate', 18, 12, ['#E55214', '#FF8C2E'],     { isFeatured: false, enrollmentsCount: 860 }),
+    make('filmnameh-cinema',     'فیلم‌نامه‌نویسی تیزر فرهنگی',     'سجاد سلیمان‌نژاد',         'media',     'intermediate', 14,  9, ['#1F1F1F', '#333'],        { enrollmentsCount: 420 }),
+    make('web-design',           'آموزش کامل طراحی سایت',           'رسول خسروبیگی، مرتضی نوری مجد', 'tech', 'professional', 32, 24, ['#6B21A8', '#4338CA'],     { isFeatured: true,  enrollmentsCount: 2150 }),
+    make('amdad-1',              'امداد و نجات مقدماتی',             'دکتر علی محمدی',           'rescue',    'beginner',     12,  6, ['#0D8074', '#053832'],     { enrollmentsCount: 980 }),
+    make('media-lit',            'سواد رسانه‌ای و جنگ ادراکی',      'دکتر رضایی',              'tabyin',    'beginner',      9,  6, ['#155F55', '#0D8074'],     { enrollmentsCount: 1340 }),
+    make('jihadi-mgmt',          'مدیریت گروه‌های جهادی',           'مهندس سلطانی',             'leadership','intermediate', 16, 10, ['#0A6E64', '#085C54'],     { enrollmentsCount: 560 }),
+    make('photo-khabari',        'عکاسی خبری و میدانی',              'استاد عظیمی',              'media',     'intermediate', 10,  7, ['#92580E', '#5F3A09'],     { enrollmentsCount: 720 }),
   ];
 }
 
