@@ -8,7 +8,7 @@ import { SectionTitle } from './SectionTitle';
 
 /**
  * ───────────────────────────────────────────────────────────────────────────
- * Justice / R4J section — designer-faithful (v2).
+ * Justice / R4J section — designer-faithful (v3).
  *
  * Backend contract (apps/r4j):
  *   GET /api/v1/r4j/criminals/  → R4JPublicCriminalListSerializer
@@ -16,24 +16,19 @@ import { SectionTitle } from './SectionTitle';
  *   id, slug, first_name, last_name, country, province, city,
  *   primary_photo{url,…}, total_bounty_toman, bounties_count
  *
- * Layout (matches the designer's mockup exactly):
- *   - A single ROW of FOUR cards inside an off-white panel:
- *       [criminal] [criminal] [criminal] [GOLD TROPHY CTA]
- *   - More criminals are reachable via the bottom pager arrows
- *     (the same PNG glyphs that drive the WarFund carousel).
+ * Layout (matches the latest mockup exactly):
+ *   - A single ROW of FOUR criminal cards (the gold trophy CTA is gone).
+ *   - More criminals are reached via the bottom pager arrows (same PNG
+ *     glyphs that drive the WarFund carousel).
  *
  *   ┌──────────────────────────────────────────────────────────────┐
- *   │  ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────────────┐  │
- *   │  │  photo  │  │  photo  │  │  photo  │  │     🏆 trophy   │  │
- *   │  │  [pill] │  │  [pill] │  │  [pill] │  │   جایزه عدالت   │  │
- *   │  │  name   │  │  name   │  │  name   │  │ [مشاهده همه]    │  │
- *   │  └─────────┘  └─────────┘  └─────────┘  └─────────────────┘  │
+ *   │  ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────┐         │
+ *   │  │  photo  │  │  photo  │  │  photo  │  │  photo  │         │
+ *   │  │  [pill] │  │  [pill] │  │  [pill] │  │  [pill] │         │
+ *   │  │  name   │  │  name   │  │  name   │  │  name   │         │
+ *   │  └─────────┘  └─────────┘  └─────────┘  └─────────┘         │
  *   └──────────────────────────────────────────────────────────────┘
  *                      ◀── ──▶   ← designer pager arrows
- *
- *   - Orange pill carries a tiny GAVEL glyph (mockup) — not a scale.
- *   - Each criminal page card has the photo as a full bleed, a green
- *     name plate at the bottom, and the pill anchored above the plate.
  * ───────────────────────────────────────────────────────────────────────────
  */
 export type CriminalCard = {
@@ -54,7 +49,7 @@ function GavelIcon({ className = 'w-3.5 h-3.5' }: { className?: string }) {
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth={2.2}
+      strokeWidth={2.3}
       strokeLinecap="round"
       strokeLinejoin="round"
       className={className}
@@ -70,7 +65,7 @@ function GavelIcon({ className = 'w-3.5 h-3.5' }: { className?: string }) {
 }
 
 /* ───────────────────────────────────────────────────────────────────────── */
-/*  Atoms                                                                    */
+/*  Card                                                                     */
 /* ───────────────────────────────────────────────────────────────────────── */
 
 function CriminalCardView({ p, delay = 0 }: { p: CriminalCard; delay?: number }) {
@@ -80,13 +75,16 @@ function CriminalCardView({ p, delay = 0 }: { p: CriminalCard; delay?: number })
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -8 }}
       transition={{ duration: 0.4, delay }}
-      className="bg-white rounded-2xl overflow-hidden
+      className="group flex flex-col bg-white rounded-2xl overflow-hidden isolate
                  shadow-[0_2px_10px_-4px_rgba(15,20,32,.06)]
                  hover:shadow-[0_22px_44px_-22px_rgba(11,53,48,.22)]
-                 hover:-translate-y-0.5 transition-all duration-300 group
-                 flex flex-col"
+                 hover:-translate-y-0.5 transition-all duration-300"
     >
-      <Link href={`/r4j/${p.slug}`} className="flex flex-col">
+      <Link
+        href={`/r4j/${p.slug}`}
+        className="flex flex-col w-full"
+        aria-label={p.fullName}
+      >
         {/* Photo */}
         <div className="relative aspect-[3/4] bg-ink-200 overflow-hidden">
           {p.imageUrl ? (
@@ -106,73 +104,43 @@ function CriminalCardView({ p, delay = 0 }: { p: CriminalCard; delay?: number })
             </div>
           )}
 
-          {/* Orange action pill — anchored just above the green name plate */}
+          {/* Action pill — refined orange/red gradient with subtle bevel & shimmer */}
           <div className="absolute bottom-3 left-1/2 -translate-x-1/2 w-[88%]">
             <div
-              className="flex items-center justify-center gap-1.5 px-3 h-8 rounded-full
-                         bg-accent-500 text-white text-[12px] font-extrabold
-                         shadow-[0_4px_12px_-4px_rgba(229,82,20,.5)]
-                         hover:bg-accent-600 transition-colors"
+              className="relative flex items-center justify-center gap-1.5 h-9 px-3
+                         rounded-full text-white text-[12.5px] font-extrabold
+                         overflow-hidden
+                         shadow-[0_8px_20px_-6px_rgba(229,82,20,.55),inset_0_1px_0_rgba(255,255,255,.35),inset_0_-1px_0_rgba(0,0,0,.10)]
+                         ring-1 ring-black/5
+                         transition-transform duration-200 group-hover:scale-[1.02]"
+              style={{
+                backgroundImage:
+                  'linear-gradient(180deg, #FF7B2E 0%, #FF6B1A 50%, #E55214 100%)',
+              }}
             >
-              <GavelIcon className="w-3.5 h-3.5" />
-              <span>{p.pillLabel || 'مشارکت در مجازات'}</span>
+              {/* glossy top highlight */}
+              <span
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-x-0 top-0 h-1/2 rounded-t-full
+                           bg-gradient-to-b from-white/25 to-transparent"
+              />
+              <GavelIcon className="w-3.5 h-3.5 relative z-10 drop-shadow-[0_1px_0_rgba(0,0,0,.2)]" />
+              <span className="relative z-10 drop-shadow-[0_1px_0_rgba(0,0,0,.18)]">
+                {p.pillLabel || 'مشارکت در مجازات'}
+              </span>
             </div>
           </div>
         </div>
 
-        {/* Green name plate */}
+        {/* Green name plate — explicit bottom radii so corners can't bleed */}
         <div
           className="px-3 py-3 bg-brand-500 text-white text-center
-                     text-[14px] md:text-[14.5px] font-extrabold"
+                     text-[14px] md:text-[14.5px] font-extrabold leading-6
+                     rounded-b-2xl"
         >
           {p.fullName}
         </div>
       </Link>
-    </motion.article>
-  );
-}
-
-function TrophyCard() {
-  return (
-    <motion.article
-      initial={{ opacity: 0, y: 16 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true }}
-      transition={{ duration: 0.4, delay: 0.18 }}
-      className="bg-gold-500 rounded-2xl
-                 shadow-[0_2px_10px_-4px_rgba(15,20,32,.06)]
-                 relative overflow-hidden flex flex-col items-center
-                 justify-between p-5 text-ink-900"
-    >
-      <div
-        aria-hidden="true"
-        className="absolute inset-0 opacity-[0.12] pointer-events-none"
-        style={{
-          backgroundImage:
-            'radial-gradient(circle at 1px 1px, rgba(255,255,255,0.85) 1px, transparent 1px)',
-          backgroundSize: '20px 20px',
-        }}
-      />
-      <div className="relative flex-1 flex items-center justify-center w-full pt-2">
-        <Image
-          src="/brand/trophy-gold.png"
-          alt="جایزه عدالت"
-          width={180}
-          height={260}
-          className="w-[120px] md:w-[150px] h-auto drop-shadow-[0_10px_18px_rgba(0,0,0,0.28)]"
-        />
-      </div>
-      <div className="relative text-center w-full mt-3">
-        <h3 className="text-lg md:text-xl font-extrabold mb-3">جایزه عدالت</h3>
-        <Link
-          href="/r4j"
-          className="inline-flex items-center justify-center w-full h-11 rounded-full
-                     bg-white text-ink-900 text-[13.5px] font-extrabold
-                     hover:bg-ink-50 active:scale-[.98] transition-all"
-        >
-          مشاهده همه جوایز
-        </Link>
-      </div>
     </motion.article>
   );
 }
@@ -182,8 +150,8 @@ function TrophyCard() {
 /* ───────────────────────────────────────────────────────────────────────── */
 
 export function JusticeSection({ criminals }: { criminals: CriminalCard[] }) {
-  // 3 criminals + 1 trophy per page → exactly the row drawn by the designer
-  const PAGE_SIZE = 3;
+  // 4 criminals per page — matches the latest designer mockup
+  const PAGE_SIZE = 4;
   const totalPages = Math.max(1, Math.ceil(criminals.length / PAGE_SIZE));
   const [page, setPage] = useState(0);
   const visible = useMemo(
@@ -207,14 +175,13 @@ export function JusticeSection({ criminals }: { criminals: CriminalCard[] }) {
           className="bg-ink-50/60 rounded-[2rem] md:rounded-[2.5rem]
                      p-4 md:p-8 lg:p-10 border border-ink-100"
         >
-          {/* ONE row of 4 cards — three criminals + the gold trophy CTA */}
+          {/* ONE row of FOUR criminal cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-5">
             <AnimatePresence mode="wait" initial={false}>
               {visible.map((p, i) => (
-                <CriminalCardView key={`${page}-${p.slug}`} p={p} delay={i * 0.07} />
+                <CriminalCardView key={`${page}-${p.slug}`} p={p} delay={i * 0.06} />
               ))}
             </AnimatePresence>
-            <TrophyCard />
           </div>
         </div>
 
@@ -259,3 +226,4 @@ export function JusticeSection({ criminals }: { criminals: CriminalCard[] }) {
     </section>
   );
 }
+
