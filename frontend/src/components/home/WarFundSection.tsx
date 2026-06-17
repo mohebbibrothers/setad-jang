@@ -8,38 +8,56 @@ import { formatPersianNumber } from '@/lib/utils';
 
 /**
  * ───────────────────────────────────────────────────────────────────────────
- * War-fund (Madadkar) campaign card — designer-faithful (v2).
+ * War-fund (Madadkar) campaign card — designer-faithful (v3).
  *
  * Backend contract (apps/madadkar):
- *   GET /api/v1/madadkar/campaigns/   → CampaignPublicListSerializer
+ *   GET /api/v1/madadkar/campaigns/  → CampaignPublicListSerializer
  *
- * Fields used here (subset; full contract in serializers.py):
+ * Fields used (mirror of serializers.CampaignPublicListSerializer.Meta.fields):
  *   id, sponsor{id,name,slug,logo}, title, slug, cover_image,
- *   total_amount, total_shares, share_price,
- *   purchased_shares, purchased_amount, participant_count,
- *   remaining_shares, progress_percent, is_fully_funded,
- *   status, has_deadline, deadline, published_at, completed_at, closed_at
+ *   total_amount, total_shares, share_price, purchased_shares,
+ *   purchased_amount, participant_count, remaining_shares,
+ *   progress_percent, is_fully_funded, status, status_display,
+ *   has_deadline, deadline, published_at, completed_at, closed_at
+ *
+ * Layout (matches the designer's mockup exactly):
+ *
+ *   ┌──────────────────────────────────────────────────┐
+ *   │  ┌──────────┐   ┌──────────────────────────┐    │
+ *   │  │  cover   │   │       campaign title     │    │
+ *   │  │ 130×130  │   ├──────────────────────────┤    │
+ *   │  │          │   │   مبلغ کل ··· ۱۰،۰۰۰،۰۰۰،۰۰۰ ریال │
+ *   │  └──────────┘   ├──────────┬───────────────┤    │
+ *   │   ٪۵۰           │ باقی     │   تعداد       │    │
+ *   │  ▓▓▓▓░░░░       ├──────────┴───────────────┤    │
+ *   │                 │   مددکار ··· جهادی       │    │
+ *   │                 └──────────────────────────┘    │
+ *   │                                                  │
+ *   │  ┌─────────── مدد به حرکت  ✋ ─────────────┐   │
+ *   │  └──────────────────────────────────────────┘   │
+ *   └──────────────────────────────────────────────────┘
+ *
+ *   - Cover sits on the RTL-right (DOM first inside .wf-body).
+ *   - Percentage label and progress bar live UNDER the cover.
+ *   - All meta-pill values are HORIZONTALLY CENTERED.
+ *   - CTA icon (helping hand) is on the LTR-left = end-of-line in RTL.
  *
  * Display notes:
- *   - Backend stores monetary fields in TOMAN; we display in RIAL (×10)
- *     to match the designer's mockup ("۱۰،۰۰۰،۰۰۰،۰۰۰ ریال").
- *   - share_price = total_amount / total_shares (computed in model.save()).
- *   - remaining_shares & progress_percent are `@property` on Campaign.
+ *   - Backend stores monetary fields in TOMAN; the mockup shows RIAL.
+ *     We multiply totalAmount × 10 at render time to match the design.
  * ───────────────────────────────────────────────────────────────────────────
  */
 export type CampaignCard = {
   slug: string;
   title: string;
   sponsor: string;
-  /** Toman; UI multiplies by 10 to render Rial as designer specified */
+  /** Toman (storage unit); UI multiplies by 10 to render Rial. */
   totalAmount: number;
-  /** Toman per share */
   sharePrice: number;
   sharesTotal: number;
   sharesRemaining: number;
   progressPercent: number;
   coverUrl?: string;
-  /** Optional palette hint when no cover image is provided (graceful fallback) */
   toneFrom?: string;
   toneTo?: string;
 };
@@ -48,6 +66,7 @@ export type CampaignCard = {
 /*  Atoms                                                                    */
 /* ───────────────────────────────────────────────────────────────────────── */
 
+/** A meta pill: label hugs the right (RTL-start), value is centered. */
 function MetaPill({
   label,
   value,
@@ -57,31 +76,36 @@ function MetaPill({
   label: string;
   value: string | number;
   unit?: string;
-  /** "num" right-aligns a tabular number; "text" right-aligns a label */
   emphasis?: 'num' | 'text';
 }) {
   return (
     <div
-      className="flex items-center justify-between gap-2 h-[40px] px-3.5
-                 rounded-[10px] border border-ink-200 bg-white"
+      className="relative h-[40px] rounded-[10px] border border-ink-200 bg-white
+                 flex items-center px-3.5"
     >
-      <span className="text-[12px] text-ink-500 font-medium shrink-0">{label}</span>
-      <div className="flex items-baseline gap-1.5 min-w-0">
-        <span
-          className={`font-extrabold text-[13.5px] text-ink-900 truncate
-                      ${emphasis === 'num' ? 'tabular-nums' : ''}`}
-        >
+      {/* Label — anchored to RTL start (right edge) */}
+      <span className="absolute right-3.5 top-1/2 -translate-y-1/2
+                       text-[12px] text-ink-500 font-medium z-10 bg-white">
+        {label}
+      </span>
+
+      {/* Centered value (visually mid-pill) */}
+      <span
+        className={`flex-1 text-center flex items-baseline justify-center gap-1.5
+                    ${emphasis === 'num' ? 'tabular-nums' : ''}`}
+      >
+        <span className="font-extrabold text-[13.5px] text-ink-900 truncate">
           {typeof value === 'number' ? formatPersianNumber(value) : value}
         </span>
         {unit && (
-          <span className="text-[11px] text-ink-400 font-medium shrink-0">{unit}</span>
+          <span className="text-[11px] text-ink-400 font-medium">{unit}</span>
         )}
-      </div>
+      </span>
     </div>
   );
 }
 
-/** Hand-of-help icon — matches the small palm glyph on the CTA in the mockup */
+/** Helping-hand icon — matches the palm glyph on the mockup's CTA */
 function HandIcon({ className = 'w-[18px] h-[18px]' }: { className?: string }) {
   return (
     <svg
@@ -102,7 +126,7 @@ function HandIcon({ className = 'w-[18px] h-[18px]' }: { className?: string }) {
   );
 }
 
-/** Fallback cover: gradient + subtle dotted texture (no awkward big logo) */
+/** Fallback cover: tasteful gradient + dotted texture + a centered small icon */
 function CoverFallback({
   toneFrom = '#0D8074',
   toneTo = '#053832',
@@ -124,7 +148,7 @@ function CoverFallback({
           backgroundSize: '8px 8px',
         }}
       />
-      <HandIcon className="absolute inset-0 m-auto w-9 h-9 text-white/85" />
+      <HandIcon className="absolute inset-0 m-auto w-12 h-12 text-white/90" />
     </div>
   );
 }
@@ -134,8 +158,9 @@ function CoverFallback({
 /* ───────────────────────────────────────────────────────────────────────── */
 
 function Card({ c, delay = 0 }: { c: CampaignCard; delay?: number }) {
-  // UI shows Rial; storage is Toman → multiply by 10.
+  // UI displays Rial; backend stores Toman → ×10 at render time.
   const totalRial = c.totalAmount * 10;
+  const pct = Math.round(c.progressPercent);
 
   return (
     <motion.article
@@ -149,79 +174,80 @@ function Card({ c, delay = 0 }: { c: CampaignCard; delay?: number }) {
                  hover:-translate-y-0.5 transition-all duration-300 overflow-hidden"
     >
       <div className="p-4 md:p-5">
-        {/* ── Header: title (right) + cover thumbnail (left) ───────────── */}
-        <div className="flex items-start gap-3.5 mb-4">
-          <Link
-            href={`/madadkar/${c.slug}`}
-            className="flex-1 font-extrabold text-[14.5px] md:text-[15px] text-ink-900 leading-7
-                       line-clamp-2 hover:text-brand-600 transition-colors min-h-[3.5rem]"
-          >
-            {c.title}
-          </Link>
-          <div
-            className="relative shrink-0 w-[96px] h-[80px] rounded-[12px] overflow-hidden
-                       ring-1 ring-ink-100 bg-ink-50"
-          >
-            {c.coverUrl ? (
-              <Image
-                src={c.coverUrl}
-                alt={c.title}
-                fill
-                sizes="96px"
-                className="object-cover transition-transform duration-500 group-hover:scale-105"
+        {/* ── Body: 2-column layout (cover on RTL-right, content on left) ── */}
+        <div className="flex items-stretch gap-4">
+
+          {/* Right column: cover + percent + progress (DOM-first = RTL-right) */}
+          <div className="flex flex-col items-center shrink-0 w-[120px] md:w-[130px]">
+            <Link
+              href={`/madadkar/${c.slug}`}
+              className="relative w-full aspect-square rounded-[14px] overflow-hidden
+                         ring-1 ring-ink-100 bg-ink-50"
+            >
+              {c.coverUrl ? (
+                <Image
+                  src={c.coverUrl}
+                  alt={c.title}
+                  fill
+                  sizes="(min-width: 768px) 130px, 120px"
+                  className="object-cover transition-transform duration-500 group-hover:scale-105"
+                />
+              ) : (
+                <CoverFallback toneFrom={c.toneFrom} toneTo={c.toneTo} />
+              )}
+            </Link>
+
+            {/* Percent — directly under the cover */}
+            <div className="mt-2.5 text-[12px] font-extrabold text-ink-700 tabular-nums leading-none">
+              ٪{formatPersianNumber(pct)}
+            </div>
+
+            {/* Progress bar — full cover-column width */}
+            <div className="mt-1.5 w-full h-[6px] rounded-full bg-ink-100 overflow-hidden">
+              <motion.div
+                initial={{ width: 0 }}
+                whileInView={{ width: `${pct}%` }}
+                viewport={{ once: true }}
+                transition={{ duration: 1.1, ease: 'easeOut' }}
+                className="h-full rounded-full bg-gradient-to-l from-brand-400 to-brand-600"
               />
-            ) : (
-              <CoverFallback toneFrom={c.toneFrom} toneTo={c.toneTo} />
-            )}
+            </div>
+          </div>
+
+          {/* Left column: title + 3 meta pills */}
+          <div className="flex-1 min-w-0 flex flex-col">
+            <Link
+              href={`/madadkar/${c.slug}`}
+              className="font-extrabold text-[14.5px] md:text-[15px] text-ink-900 leading-7
+                         line-clamp-2 hover:text-brand-600 transition-colors mb-3"
+            >
+              {c.title}
+            </Link>
+
+            <div className="space-y-2">
+              <MetaPill label="مبلغ کل" value={totalRial} unit="ریال" />
+
+              <div className="grid grid-cols-2 gap-2">
+                <MetaPill label="باقی‌مانده" value={c.sharesRemaining} unit="سهم" />
+                <MetaPill label="تعداد سهم" value={c.sharesTotal} unit="سهم" />
+              </div>
+
+              <MetaPill label="مددکار" value={c.sponsor} emphasis="text" />
+            </div>
           </div>
         </div>
 
-        {/* ── Meta pills: 3 rows (matches mockup) ──────────────────────── */}
-        <div className="space-y-2 mb-3.5">
-          <MetaPill label="مبلغ کل" value={totalRial} unit="ریال" />
-
-          <div className="grid grid-cols-2 gap-2">
-            <MetaPill label="باقی‌مانده" value={c.sharesRemaining} unit="سهم" />
-            <MetaPill label="تعداد سهم" value={c.sharesTotal} unit="سهم" />
-          </div>
-
-          <MetaPill label="مددکار" value={c.sponsor} emphasis="text" />
-        </div>
-
-        {/* ── Progress bar: tiny pct on the LEFT, bar fills to the RIGHT ── */}
-        <div className="flex items-center gap-3 mb-4">
-          <span className="text-[11.5px] font-extrabold text-ink-700 tabular-nums shrink-0">
-            ٪{formatPersianNumber(Math.round(c.progressPercent))}
-          </span>
-          <div className="flex-1 h-[6px] rounded-full bg-ink-100 overflow-hidden">
-            <motion.div
-              initial={{ width: 0 }}
-              whileInView={{ width: `${c.progressPercent}%` }}
-              viewport={{ once: true }}
-              transition={{ duration: 1.1, ease: 'easeOut' }}
-              className="h-full rounded-full bg-gradient-to-l from-brand-400 to-brand-600"
-            />
-          </div>
-        </div>
-
-        {/* ── CTA: full-width primary brand button ─────────────────────── */}
+        {/* ── CTA: full-width, hand icon on the visual LEFT (end-of-line in RTL) ── */}
         <Link
           href={`/madadkar/${c.slug}/participate`}
-          className="relative inline-flex items-center justify-center gap-2 w-full h-[46px]
+          className="relative inline-flex items-center justify-center gap-2 w-full h-[46px] mt-4
                      rounded-[12px] bg-brand-500 hover:bg-brand-600 active:bg-brand-700
                      text-white text-[14.5px] font-extrabold
                      shadow-[0_6px_14px_-6px_rgba(13,128,116,.55)]
                      transition-colors overflow-hidden"
         >
-          <HandIcon />
           <span>مدد به حرکت</span>
-          {/* Subtle shimmer on hover */}
-          <span
-            aria-hidden="true"
-            className="absolute inset-0 -translate-x-full group-hover:translate-x-full
-                       transition-transform duration-[1100ms] ease-out
-                       bg-gradient-to-l from-transparent via-white/15 to-transparent"
-          />
+          <HandIcon />
         </Link>
       </div>
     </motion.article>
@@ -233,7 +259,6 @@ function Card({ c, delay = 0 }: { c: CampaignCard; delay?: number }) {
 /* ───────────────────────────────────────────────────────────────────────── */
 
 export function WarFundSection({ campaigns }: { campaigns: CampaignCard[] }) {
-  // 2 rows of 2 cards on desktop matches the mockup exactly
   const visible = campaigns.slice(0, 4);
 
   return (
@@ -250,38 +275,35 @@ export function WarFundSection({ campaigns }: { campaigns: CampaignCard[] }) {
           ))}
         </div>
 
-        {/* Pager (designer style — just the two pill-arrows, centred) */}
-        <div className="flex items-center justify-center gap-3 mt-8">
+        {/* Pager arrows — using the designer's PNG assets */}
+        <div className="flex items-center justify-center gap-4 mt-10">
           <button
+            type="button"
             aria-label="قبلی"
-            className="group/btn inline-flex items-center justify-center gap-1
-                       h-9 px-3.5 rounded-full bg-white border border-ink-200
-                       text-ink-500 hover:border-brand-300 hover:text-brand-600
-                       transition-colors"
+            className="relative w-12 h-12 rounded-full hover:scale-110 active:scale-95
+                       transition-transform duration-200"
           >
-            <span className="text-[11px] tracking-[2px] opacity-70">— —</span>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
+            <Image
+              src="/brand/pager-arrow-prev.png"
+              alt=""
+              fill
+              sizes="48px"
+              className="object-contain"
+            />
           </button>
-          <Link
-            href="/madadkar"
-            className="px-5 h-9 inline-flex items-center rounded-full bg-brand-50 text-brand-700
-                       text-[13px] font-bold hover:bg-brand-100 transition-colors"
-          >
-            مشاهده همه کمپین‌ها
-          </Link>
           <button
+            type="button"
             aria-label="بعدی"
-            className="group/btn inline-flex items-center justify-center gap-1
-                       h-9 px-3.5 rounded-full bg-white border border-ink-200
-                       text-ink-500 hover:border-brand-300 hover:text-brand-600
-                       transition-colors"
+            className="relative w-12 h-12 rounded-full hover:scale-110 active:scale-95
+                       transition-transform duration-200"
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M15 6l-6 6 6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            <span className="text-[11px] tracking-[2px] opacity-70">— —</span>
+            <Image
+              src="/brand/pager-arrow-next.png"
+              alt=""
+              fill
+              sizes="48px"
+              className="object-contain"
+            />
           </button>
         </div>
       </div>
