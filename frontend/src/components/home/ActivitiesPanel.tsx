@@ -40,6 +40,23 @@ export function ActivitiesPanel() {
       className="relative mt-10 md:mt-12 pb-20 md:pb-24"
       aria-labelledby="activities-title"
     >
+      {/* Soft "reflection" shadow band in the white gap above the panel
+          (between the search bar and the green wave). Reads like the
+          photo's ground reflection — wide elliptical blur, brand-tinted. */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute z-[2]
+                   left-[8%] right-[8%] -top-1.5
+                   md:left-[6%] md:right-[6%] md:-top-2.5
+                   lg:left-[5%] lg:right-[5%] lg:-top-3.5
+                   h-8 md:h-12 lg:h-[60px]
+                   rounded-[50%] blur-[14px]"
+        style={{
+          background:
+            'radial-gradient(ellipse at center, rgba(11,53,48,0.14) 0%, rgba(11,53,48,0.07) 35%, rgba(11,53,48,0.02) 65%, rgba(11,53,48,0) 100%)',
+        }}
+      />
+
       <div className="container-edge">
         <div className="relative">
           {/* Green wave panel (fluid sizing) */}
@@ -55,21 +72,6 @@ export function ActivitiesPanel() {
               minHeight: 'clamp(140px, 18vw, 200px)',
             }}
           >
-            {/* Soft top-edge fade so hero photo bleeds through gently.
-                Masked off in the center 12% so the chevron notch stays sharp. */}
-            <div
-              aria-hidden="true"
-              className="pointer-events-none absolute inset-x-0 top-0 h-[55px]"
-              style={{
-                background:
-                  'linear-gradient(to bottom, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0.15) 60%, rgba(255,255,255,0) 100%)',
-                WebkitMaskImage:
-                  'linear-gradient(to right, #000 0%, #000 44%, transparent 44%, transparent 56%, #000 56%, #000 100%)',
-                maskImage:
-                  'linear-gradient(to right, #000 0%, #000 44%, transparent 44%, transparent 56%, #000 56%, #000 100%)',
-              }}
-            />
-
             <motion.h2
               id="activities-title"
               initial={{ opacity: 0, y: 8 }}
