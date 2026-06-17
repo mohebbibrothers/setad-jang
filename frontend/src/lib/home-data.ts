@@ -30,13 +30,25 @@ function unwrap<T>(x: Paginated<T> | null): T[] {
 }
 
 /* ─── Madadkar (warfund) ─────────────────────────────────────────────── */
+/**
+ * Mirrors apps.madadkar.serializers.CampaignPublicListSerializer exactly.
+ * Monetary fields are stored in TOMAN; the UI multiplies by 10 to render
+ * Rial (as required by the designer's mockup).
+ */
+type ApiSponsor = { id?: number; name: string; slug?: string; logo?: string | null };
 type ApiCampaign = {
-  slug: string; title: string;
-  sponsor_name?: string;
-  total_amount_rial?: number;
-  share_price_rial?: number;
-  shares_total?: number; shares_remaining?: number;
-  progress_percent?: number; cover_image_url?: string;
+  id?: number;
+  slug: string;
+  title: string;
+  sponsor?: ApiSponsor;
+  cover_image?: string | null;
+  total_amount?: number;          // Toman
+  share_price?: number;           // Toman
+  total_shares?: number;
+  purchased_shares?: number;
+  remaining_shares?: number;
+  progress_percent?: number;
+  is_fully_funded?: boolean;
 };
 
 export async function loadCampaigns(): Promise<CampaignCard[]> {
@@ -48,30 +60,30 @@ export async function loadCampaigns(): Promise<CampaignCard[]> {
     return list.slice(0, 4).map((c) => ({
       slug: c.slug,
       title: c.title,
-      sponsor: c.sponsor_name || 'گروه جهادی',
-      totalAmount: c.total_amount_rial || 0,
-      sharePrice: c.share_price_rial || 0,
-      sharesTotal: c.shares_total || 0,
-      sharesRemaining: c.shares_remaining || 0,
+      sponsor: c.sponsor?.name || 'گروه جهادی',
+      totalAmount: c.total_amount ?? 0,
+      sharePrice: c.share_price ?? 0,
+      sharesTotal: c.total_shares ?? 0,
+      sharesRemaining: c.remaining_shares ?? 0,
       progressPercent: c.progress_percent ?? 0,
-      coverUrl: c.cover_image_url,
+      coverUrl: c.cover_image ?? undefined,
     }));
   }
-  // 6 campaigns → fills 3 rows of 2 cols on desktop (clearly more than 2 rows of samples)
+  // 4 campaigns → exactly 2 rows × 2 cols on desktop (matches designer mockup).
+  // Each gets a distinct tone so the gradient fallback covers feel curated.
   const mk = (
     slug: string, title: string, sponsor: string,
     totalAmount: number, sharesTotal: number, sharesRemaining: number, progressPercent: number,
+    toneFrom: string, toneTo: string,
   ): CampaignCard => ({
-    slug, title, sponsor, totalAmount, sharePrice: 0,
-    sharesTotal, sharesRemaining, progressPercent,
+    slug, title, sponsor, totalAmount, sharePrice: Math.floor(totalAmount / sharesTotal),
+    sharesTotal, sharesRemaining, progressPercent, toneFrom, toneTo,
   });
   return [
-    mk('pashe-band-jabhe',    'تهیه پشه‌بند ضد دوربین‌های دید در شب برای مدافعان جبهه',  'گروه جهادی انصارالزهرا',   10_000_000_000, 1500, 496, 67),
-    mk('darooye-emdadi',      'تأمین داروهای اضطراری بیمارستان صحرایی پشتیبان جبهه',     'مؤسسه شهید احمدی روشن',     6_500_000_000,   650, 220, 66),
-    mk('logistic-mavanea',    'پشتیبانی لجستیکی گروه‌های جهادی مستقر در منطقه عملیاتی',  'گروه جهادی شهید کاظمی',     4_200_000_000,   420,  84, 80),
-    mk('tajhizat-emdad',      'خرید تجهیزات امداد و نجات برای پایگاه پشتیبان مرزی',      'بسیج سازندگی استان',        8_900_000_000,   890, 312, 65),
-    mk('shabake-aab',         'احداث شبکه آب‌رسانی به روستاهای جنگ‌زده غرب کشور',          'گروه جهادی شهید بهشتی',     5_400_000_000,   540, 168, 69),
-    mk('paygah-edari',        'تجهیز پایگاه فرماندهی صحرایی و دفتر اداری منطقه عملیات',    'قرارگاه پشتیبانی مردمی',    7_700_000_000,   770, 405, 47),
+    mk('pashe-band-jabhe',    'تهیه پشه‌بند ضد دوربین‌های دید در شب برای مدافعان جبهه',  'گروه جهادی انصارالزهرا',   1_000_000_000, 1500, 750, 50, '#0D8074', '#053832'),
+    mk('darooye-emdadi',      'تأمین داروهای اضطراری بیمارستان صحرایی پشتیبان جبهه',     'مؤسسه شهید احمدی روشن',     1_000_000_000,  650, 215, 67, '#155F55', '#0A6E64'),
+    mk('logistic-mavanea',    'پشتیبانی لجستیکی گروه‌های جهادی مستقر در منطقه عملیاتی',  'گروه جهادی شهید کاظمی',     1_000_000_000,  420,  84, 80, '#2FA08D', '#0A6E64'),
+    mk('tajhizat-emdad',      'خرید تجهیزات امداد و نجات برای پایگاه پشتیبان مرزی',      'بسیج سازندگی استان',        1_000_000_000,  890, 484, 46, '#3FA797', '#155F55'),
   ];
 }
 
