@@ -49,17 +49,11 @@ const COLS = [
 export function Footer() {
   return (
     <footer className="bg-white pt-16 md:pt-20">
-      {/* One unified card: cutout PNG on top + ink-50 fill below, with
-          newsletter pill + columns + bottom strip ALL inside it. */}
-      <div
-        className="relative max-w-[1280px] mx-auto px-4 md:px-8 pt-16 md:pt-20 pb-6 md:pb-8 bg-ink-50 rounded-t-[2rem] md:rounded-t-[2.5rem]"
-        style={{
-          backgroundImage: 'url(/brand/footer-newsletter-card.png)',
-          backgroundSize: '100% 80px',
-          backgroundRepeat: 'no-repeat',
-          backgroundPosition: 'center top',
-        }}
-      >
+      {/* One unified ink-50 card. The cutout effect is rendered by the
+          NewsletterPill below — a white rounded "halo" that floats above
+          the card top edge and wraps the green pill (matches Asset 3). */}
+      <div className="relative max-w-[1280px] mx-auto px-4 md:px-8 pt-16 md:pt-20 pb-6 md:pb-8
+                      bg-ink-50 rounded-t-[2rem] md:rounded-t-[2.5rem]">
         {/* Newsletter pill — straddles the bowed cutout */}
         <NewsletterPill />
 
@@ -110,10 +104,16 @@ export function Footer() {
   );
 }
 
-/* Newsletter pill (client island for input state) */
+/* Newsletter pill — sits inside a white rounded "halo" that nests
+   into the top cutout of the footer card (matches designer Asset 3). */
 function NewsletterPill() {
   return (
-    <div className="relative z-[5] max-w-2xl mx-auto -mt-[32px] md:-mt-[38px] mb-12 md:mb-16 px-4">
+    <div
+      className="relative z-[5] max-w-[720px] mx-auto -mt-[72px] md:-mt-[80px] mb-12 md:mb-16
+                 bg-white rounded-[32px] md:rounded-[40px]
+                 p-[14px] md:p-[16px] px-[18px] md:px-[22px]
+                 shadow-[0_-2px_0_rgba(0,0,0,0.02)]"
+    >
       <form
         className="bg-brand-500 rounded-full shadow-card flex items-center p-2 gap-2"
         aria-label="فرم خبرنامه"
