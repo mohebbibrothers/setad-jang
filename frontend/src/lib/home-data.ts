@@ -187,30 +187,40 @@ export async function loadCourses(): Promise<CourseCard[]> {
       return card;
     });
   }
-  // Seed (fallback) — matches designer mockup; 8 courses across 4 categories
-  // so the "همه آموزش‌ها" tab fills a full row (4) with a 2nd pager-page (4 more).
+  // Seed (fallback) — 8 courses across 4 categories.
+  // Note: `isNew` and `isFeatured` are NOT hard-coded here — the
+  // EducationSection derives them at render time from real signals
+  // (published_at < 30 days → isNew; enrollments > average → isFeatured),
+  // exactly the same logic that will fire against live backend data.
+  const now = Date.now();
+  const daysAgo = (d: number) => new Date(now - d * 24 * 3600 * 1000).toISOString();
   const make = (
     slug: string, title: string, instructor: string,
     category: string, level: 'beginner' | 'intermediate' | 'advanced' | 'professional',
     lessons: number, hours: number,
     tone: [string, string],
-    extra: Partial<CourseCard> = {},
-  ): CourseCard => ({
-    slug, title, instructor, level, lessonsCount: lessons,
-    durationSeconds: hours * 3600, isNew: true, categorySlug: category,
-    toneFrom: tone[0], toneTo: tone[1],
-    enrollmentsCount: extra.enrollmentsCount ?? 50 + Math.floor(Math.random() * 950),
-    ...extra,
-  });
+    extra: Partial<CourseCard> & { publishedDaysAgo?: number } = {},
+  ): CourseCard => {
+    const days = extra.publishedDaysAgo ?? 60;
+    return {
+      slug, title, instructor, level, lessonsCount: lessons,
+      durationSeconds: hours * 3600, categorySlug: category,
+      toneFrom: tone[0], toneTo: tone[1],
+      enrollmentsCount: extra.enrollmentsCount ?? 200,
+      // isNew is computed in the section from publishedDaysAgo; we still set
+      // it here so the seed previews behave correctly when no API is around.
+      isNew: days <= 30,
+    };
+  };
   return [
-    make('kargardani-mostanad',  'دوره کارگردانی مستند',           'استاد وحید چیتی',          'media',     'advanced',     24, 18, ['#1a1a1a', '#444'],        { isFeatured: true,  enrollmentsCount: 1240 }),
-    make('filmnameh-mostanad',   'فیلم‌نامه‌نویسی مستند',           'مدرس سهیل کریمی',          'media',     'intermediate', 18, 12, ['#E55214', '#FF8C2E'],     { isFeatured: false, enrollmentsCount: 860 }),
-    make('filmnameh-cinema',     'فیلم‌نامه‌نویسی تیزر فرهنگی',     'سجاد سلیمان‌نژاد',         'media',     'intermediate', 14,  9, ['#1F1F1F', '#333'],        { enrollmentsCount: 420 }),
-    make('web-design',           'آموزش کامل طراحی سایت',           'رسول خسروبیگی، مرتضی نوری مجد', 'tech', 'professional', 32, 24, ['#6B21A8', '#4338CA'],     { isFeatured: true,  enrollmentsCount: 2150 }),
-    make('amdad-1',              'امداد و نجات مقدماتی',             'دکتر علی محمدی',           'rescue',    'beginner',     12,  6, ['#0D8074', '#053832'],     { enrollmentsCount: 980 }),
-    make('media-lit',            'سواد رسانه‌ای و جنگ ادراکی',      'دکتر رضایی',              'tabyin',    'beginner',      9,  6, ['#155F55', '#0D8074'],     { enrollmentsCount: 1340 }),
-    make('jihadi-mgmt',          'مدیریت گروه‌های جهادی',           'مهندس سلطانی',             'leadership','intermediate', 16, 10, ['#0A6E64', '#085C54'],     { enrollmentsCount: 560 }),
-    make('photo-khabari',        'عکاسی خبری و میدانی',              'استاد عظیمی',              'media',     'intermediate', 10,  7, ['#92580E', '#5F3A09'],     { enrollmentsCount: 720 }),
+    make('kargardani-mostanad', 'دوره کارگردانی مستند',          'استاد وحید چیتی',          'media',     'advanced',     24, 18, ['#1a1a1a', '#444'],    { enrollmentsCount: 1240, publishedDaysAgo: 12 }),
+    make('filmnameh-mostanad',  'فیلم‌نامه‌نویسی مستند',          'مدرس سهیل کریمی',          'media',     'intermediate', 18, 12, ['#E55214', '#FF8C2E'], { enrollmentsCount: 860,  publishedDaysAgo: 22 }),
+    make('filmnameh-cinema',    'فیلم‌نامه‌نویسی تیزر فرهنگی',    'سجاد سلیمان‌نژاد',         'media',     'intermediate', 14,  9, ['#1F1F1F', '#333'],    { enrollmentsCount: 420,  publishedDaysAgo: 55 }),
+    make('web-design',          'آموزش کامل طراحی سایت',          'رسول خسروبیگی، مرتضی نوری مجد', 'tech', 'professional', 32, 24, ['#6B21A8', '#4338CA'], { enrollmentsCount: 2150, publishedDaysAgo: 8 }),
+    make('amdad-1',             'امداد و نجات مقدماتی',            'دکتر علی محمدی',           'rescue',    'beginner',     12,  6, ['#0D8074', '#053832'], { enrollmentsCount: 980,  publishedDaysAgo: 40 }),
+    make('media-lit',           'سواد رسانه‌ای و جنگ ادراکی',     'دکتر رضایی',              'tabyin',    'beginner',      9,  6, ['#155F55', '#0D8074'], { enrollmentsCount: 1340, publishedDaysAgo: 18 }),
+    make('jihadi-mgmt',         'مدیریت گروه‌های جهادی',          'مهندس سلطانی',             'leadership','intermediate', 16, 10, ['#0A6E64', '#085C54'], { enrollmentsCount: 560,  publishedDaysAgo: 90 }),
+    make('photo-khabari',       'عکاسی خبری و میدانی',             'استاد عظیمی',              'media',     'intermediate', 10,  7, ['#92580E', '#5F3A09'], { enrollmentsCount: 720,  publishedDaysAgo: 70 }),
   ];
 }
 

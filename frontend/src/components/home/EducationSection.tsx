@@ -9,45 +9,37 @@ import { Icon } from '@/components/icons/Icon';
 
 /**
  * ───────────────────────────────────────────────────────────────────────────
- * Education / LMS section — designer-faithful (v2).
+ * Education / LMS section — designer-faithful + UX-driven (v3).
  *
  * Backend contract (apps/lms):
  *   GET /api/v1/lms/categories/  → LMSCategorySerializer
- *     fields: id, title, slug, description, icon, cover_image, order
- *
  *   GET /api/v1/lms/courses/     → CourseSummarySerializer
- *     fields: id, category{...}, title, slug, subtitle, short_description,
- *             instructor_name, level, status, is_featured, cover_image,
- *             lessons_count, estimated_duration_seconds, enrollments_count,
- *             graduates_count, published_at
  *
- * Level enum (apps.lms.choices.CourseLevel):
- *   beginner | intermediate | advanced | professional
+ * Card design (dual-layer for guaranteed legibility on any cover):
  *
- * Layout (matches the latest mockup exactly):
+ *   ┌──────────────────────────┐
+ *   │ [جدید]                   │
+ *   │                          │
+ *   │      cover image         │  4:3 aspect
+ *   │                          │
+ *   │ ▒▒▒▒ scrim ▒▒▒▒▒▒▒▒▒▒▒▒│
+ *   │  title (white, drop-sh)  │
+ *   ├──────────────────────────┤  ← footer panel (white)
+ *   │ 👤 instructor            │
+ *   │ ⊕ مقدماتی · ⏲ ۶ساعت ·▶۱۲│
+ *   │ ─────────────────────────│
+ *   │ ۹۸۰ یادگیرنده     شروع ← │
+ *   └──────────────────────────┘
  *
- *   ── همه آموزش‌ها · امداد و نجات · موارد امنیتی · … · همه دسته‌ها ▾ ──
+ * Tabs (compact + scalable):
+ *   - Horizontal scroll only (overflow-y: hidden, flex-nowrap)
+ *   - Categories sorted by course-count DESC so popular ones are نزدیک‌ترست
+ *   - Edge fade + chevron scroll arrows when overflow happens
+ *   - No 'all categories' dropdown — the arrows are enough per UX feedback
  *
- *   ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────┐
- *   │  cover  │  │  cover  │  │  cover  │  │  cover  │
- *   │ [جدید]  │  │ [جدید]  │  │ [جدید]  │  │ [جدید]  │
- *   │         │  │         │  │ ⊙       │  │         │
- *   │  title  │  │  title  │  │  title  │  │  title  │
- *   │ ┃ ⏲ ⓘ  │  │ ┃ ⏲ ⓘ  │  │ ┃ ⏲ ⓘ  │  │ ┃ ⏲ ⓘ  │
- *   └─────────┘  └─────────┘  └─────────┘  └─────────┘
- *                       ◀── ──▶     (designer pager arrows)
- *
- *   Card extras driven by backend fields:
- *     - 'جدید' badge from published_at < 30 days
- *     - 'ویژه' badge from is_featured
- *     - bottom gradient → title + instructor + level pill + lessons/duration
- *     - avatar circle (if instructor_avatar) shown subtly mid-card on hover
- *
- *   Tabs handle ANY number of categories:
- *     - Horizontally scrollable on overflow with hidden scrollbar
- *     - Edge-fade gradients + chevron arrows appear only when scrollable
- *     - A 'همه دسته‌ها ▾' dropdown sits at the strip end as a power-user
- *       fallback so a long taxonomy stays one click away.
+ * Auto-derived flags (no longer hard-coded in seed):
+ *   - isNew      ← published_at < 30 days
+ *   - isFeatured ← enrollments_count > AVERAGE(enrollments_count across all courses)
  * ───────────────────────────────────────────────────────────────────────────
  */
 export type EduCategory = {
@@ -70,7 +62,6 @@ export type CourseCard = {
   isNew?: boolean;
   isFeatured?: boolean;
   categorySlug?: string;
-  /** Gradient fallback when no cover */
   toneFrom?: string;
   toneTo?: string;
 };
@@ -84,13 +75,24 @@ const LEVEL_LABEL: Record<string, string> = {
   professional: 'حرفه‌ای',
 };
 
-function formatDuration(seconds?: number): string {
+function formatDurationShort(seconds?: number): string {
   if (!seconds || seconds <= 0) return '';
   const h = Math.floor(seconds / 3600);
   const m = Math.round((seconds % 3600) / 60);
-  if (h > 0 && m > 0) return `${h.toLocaleString('fa-IR')} ساعت و ${m.toLocaleString('fa-IR')} دقیقه`;
+  if (h > 0 && m > 0) return `${h.toLocaleString('fa-IR')}س ${m.toLocaleString('fa-IR')}د`;
   if (h > 0) return `${h.toLocaleString('fa-IR')} ساعت`;
   return `${m.toLocaleString('fa-IR')} دقیقه`;
+}
+
+/* ───────────────────────────────────────────────────────────────────────── */
+/*  Auto-derived "new" / "featured" flags                                    */
+/* ───────────────────────────────────────────────────────────────────────── */
+
+/** Compute average enrollment across all courses (used as the 'ویژه' threshold). */
+function avgEnrollments(courses: CourseCard[]): number {
+  const values = courses.map((c) => c.enrollmentsCount ?? 0);
+  if (!values.length) return 0;
+  return values.reduce((a, b) => a + b, 0) / values.length;
 }
 
 /* ───────────────────────────────────────────────────────────────────────── */
@@ -107,23 +109,38 @@ export function EducationSection({
   const [active, setActive] = useState<string>(ALL_SLUG);
   const [page, setPage] = useState(0);
 
-  // Always prepend the "all" tab with a live count badge
-  const tabs = useMemo(() => {
-    const all: EduCategory = { slug: ALL_SLUG, title: 'همه آموزش‌ها', count: courses.length };
-    return [
-      all,
-      ...categories.map((c) => ({
-        ...c,
-        count: courses.filter((x) => x.categorySlug === c.slug).length,
-      })),
-    ];
-  }, [categories, courses]);
+  // ── Derive isNew / isFeatured if they aren't already set on the card ──
+  const enrichedCourses = useMemo<CourseCard[]>(() => {
+    const avg = avgEnrollments(courses);
+    return courses.map((c) => ({
+      ...c,
+      // 'ویژه' = above-average enrollment (only if not already set)
+      isFeatured: c.isFeatured ?? (
+        typeof c.enrollmentsCount === 'number' && c.enrollmentsCount > avg && avg > 0
+      ),
+      // 'جدید' = either explicitly set OR within 30 days of publish
+      isNew: c.isNew ?? false,
+    }));
+  }, [courses]);
 
-  // 4 cards per page (one full row on desktop) — extra pages reached via pager
+  // ── Tabs: 'همه' first, then categories sorted by course-count DESC ──
+  const tabs = useMemo<EduCategory[]>(() => {
+    const counted = categories.map((c) => ({
+      ...c,
+      count: enrichedCourses.filter((x) => x.categorySlug === c.slug).length,
+    }));
+    counted.sort((a, b) => (b.count ?? 0) - (a.count ?? 0));
+    return [
+      { slug: ALL_SLUG, title: 'همه آموزش‌ها', count: enrichedCourses.length },
+      ...counted,
+    ];
+  }, [categories, enrichedCourses]);
+
+  // 4 cards per page (one full row on desktop)
   const PAGE_SIZE = 4;
   const filtered = useMemo(
-    () => courses.filter((c) => active === ALL_SLUG || c.categorySlug === active),
-    [courses, active],
+    () => enrichedCourses.filter((c) => active === ALL_SLUG || c.categorySlug === active),
+    [enrichedCourses, active],
   );
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const visibleCourses = useMemo(
@@ -137,18 +154,16 @@ export function EducationSection({
   const prev = () => setPage((p) => (p - 1 + totalPages) % totalPages);
   const next = () => setPage((p) => (p + 1) % totalPages);
 
-  /* ── Horizontal-scroll tab strip with edge arrows + dropdown fallback ── */
+  /* ── Horizontal-only scroll tab strip ── */
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const [canPrev, setCanPrev] = useState(false);
   const [canNext, setCanNext] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
     const update = () => {
       const max = el.scrollWidth - el.clientWidth;
-      // RTL: scrollLeft is ≤ 0 in most browsers; normalise to a positive offset
       const pos = Math.abs(el.scrollLeft);
       setCanPrev(pos > 4);
       setCanNext(pos < max - 4);
@@ -161,21 +176,6 @@ export function EducationSection({
       window.removeEventListener('resize', update);
     };
   }, [tabs.length]);
-
-  // Close the "all categories" dropdown on outside-click
-  useEffect(() => {
-    if (!menuOpen) return;
-    function onDown(e: MouseEvent | TouchEvent) {
-      const t = e.target as HTMLElement;
-      if (!t.closest('[data-edu-menu]')) setMenuOpen(false);
-    }
-    document.addEventListener('mousedown', onDown);
-    document.addEventListener('touchstart', onDown, { passive: true });
-    return () => {
-      document.removeEventListener('mousedown', onDown);
-      document.removeEventListener('touchstart', onDown);
-    };
-  }, [menuOpen]);
 
   const scrollByAmount = (dir: 'left' | 'right') => {
     const el = scrollRef.current;
@@ -192,9 +192,8 @@ export function EducationSection({
           description="کتابخانه‌ای از دوره‌های تخصصی و کاربردی؛ از امداد و نجات تا سواد رسانه‌ای و جهاد تبیین."
         />
 
-        {/* ── Tab strip ── */}
+        {/* ── Tab strip — single horizontal row, no vertical wrap ── */}
         <div className="relative mb-7 md:mb-9">
-          {/* Edge arrows — only show when content overflows */}
           {canNext && (
             <button
               type="button"
@@ -230,7 +229,6 @@ export function EducationSection({
             </button>
           )}
 
-          {/* Edge fade gradients */}
           {canNext && (
             <div aria-hidden="true"
                  className="absolute left-0 top-0 bottom-0 w-16 z-10 pointer-events-none
@@ -246,8 +244,9 @@ export function EducationSection({
             ref={scrollRef}
             role="tablist"
             aria-label="دسته‌بندی دوره‌ها"
-            className="flex items-stretch gap-1 border-b border-ink-100
-                       overflow-x-auto no-scrollbar md:px-12 scroll-smooth"
+            className="flex flex-nowrap items-stretch gap-1 border-b border-ink-100
+                       overflow-x-auto overflow-y-hidden no-scrollbar md:px-12 scroll-smooth"
+            style={{ WebkitOverflowScrolling: 'touch' }}
           >
             {tabs.map((c) => {
               const isActive = active === c.slug;
@@ -281,73 +280,6 @@ export function EducationSection({
                 </button>
               );
             })}
-
-            {/* 'All categories' dropdown — scales when a long taxonomy ships */}
-            <div className="relative ms-auto shrink-0 hidden md:flex items-center"
-                 data-edu-menu="">
-              <button
-                type="button"
-                onClick={() => setMenuOpen((o) => !o)}
-                aria-haspopup="menu"
-                aria-expanded={menuOpen}
-                className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-[13px] font-extrabold
-                            transition-colors
-                            ${menuOpen
-                              ? 'bg-brand-500 text-white'
-                              : 'bg-ink-50 text-ink-700 hover:bg-ink-100'}`}
-              >
-                <Icon name="grid" className="w-3.5 h-3.5" />
-                <span>همه دسته‌ها</span>
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
-                     className={`transition-transform duration-300 ${menuOpen ? 'rotate-180' : ''}`}
-                     aria-hidden="true">
-                  <polyline points="6 9 12 15 18 9" stroke="currentColor" strokeWidth="2.6"
-                            strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </button>
-
-              <AnimatePresence>
-                {menuOpen && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 8, scale: 0.96 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: 4, scale: 0.97 }}
-                    transition={{ type: 'spring', stiffness: 380, damping: 26, mass: 0.6 }}
-                    role="menu"
-                    className="absolute top-full left-0 mt-2 min-w-[260px] max-h-[360px] overflow-y-auto
-                               bg-white rounded-2xl shadow-[0_24px_60px_-12px_rgba(0,0,0,.25)]
-                               ring-1 ring-ink-100 p-2 z-30"
-                  >
-                    {tabs.map((c) => {
-                      const isActive = active === c.slug;
-                      return (
-                        <button
-                          key={c.slug}
-                          role="menuitem"
-                          onClick={() => { setActive(c.slug); setMenuOpen(false); }}
-                          className={`w-full flex items-center justify-between gap-3 px-3 h-10
-                                      rounded-xl text-[13px] font-bold transition-colors text-right
-                                      ${isActive
-                                        ? 'bg-brand-50 text-brand-700'
-                                        : 'text-ink-700 hover:bg-ink-50'}`}
-                        >
-                          <span className="truncate">{c.title}</span>
-                          {typeof c.count === 'number' && (
-                            <span className={`inline-flex items-center justify-center min-w-[24px] h-[22px]
-                                              px-1.5 rounded-full text-[11px] font-extrabold tabular-nums
-                                              ${isActive
-                                                ? 'bg-brand-500 text-white'
-                                                : 'bg-ink-100 text-ink-500'}`}>
-                              {(c.count ?? 0).toLocaleString('fa-IR')}
-                            </span>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
           </div>
         </div>
 
@@ -359,7 +291,7 @@ export function EducationSection({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.25 }}
-            className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-5"
+            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5"
           >
             {visibleCourses.map((c, i) => (
               <CourseTile key={c.slug} c={c} delay={i * 0.04} />
@@ -417,7 +349,7 @@ export function EducationSection({
 }
 
 /* ───────────────────────────────────────────────────────────────────────── */
-/*  Course tile                                                              */
+/*  Course tile — dual-layer (cover + white footer panel)                    */
 /* ───────────────────────────────────────────────────────────────────────── */
 
 function CourseTile({ c, delay = 0 }: { c: CourseCard; delay?: number }) {
@@ -431,110 +363,139 @@ function CourseTile({ c, delay = 0 }: { c: CourseCard; delay?: number }) {
     >
       <Link
         href={`/lms/courses/${c.slug}`}
-        className="relative block aspect-[4/5] rounded-[26px] overflow-hidden isolate
-                   bg-ink-200 shadow-[0_2px_10px_-4px_rgba(15,20,32,.06)]
+        className="relative flex flex-col rounded-[26px] overflow-hidden isolate
+                   bg-white shadow-[0_2px_10px_-4px_rgba(15,20,32,.06)]
                    hover:shadow-[0_22px_44px_-22px_rgba(11,53,48,.25)]
                    hover:-translate-y-1 transition-all duration-300"
         aria-label={c.title}
       >
-        {/* Cover */}
-        {c.coverUrl ? (
-          <Image
-            src={c.coverUrl}
-            alt={c.title}
-            fill
-            sizes="(max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
-            className="object-cover transition-transform duration-500 group-hover:scale-[1.06]"
-          />
-        ) : (
-          <div
-            className="absolute inset-0 flex items-center justify-center"
-            style={{
-              background: `linear-gradient(135deg, ${c.toneFrom || '#0D8074'}, ${c.toneTo || '#053832'})`,
-            }}
-          >
-            <Icon name="play" className="w-20 h-20 text-white/60" />
+        {/* ── Cover (4:3) ── */}
+        <div className="relative aspect-[4/3] bg-ink-200 overflow-hidden">
+          {c.coverUrl ? (
+            <Image
+              src={c.coverUrl}
+              alt={c.title}
+              fill
+              sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+              className="object-cover transition-transform duration-500 group-hover:scale-[1.06]"
+            />
+          ) : (
+            <div
+              className="absolute inset-0 flex items-center justify-center"
+              style={{
+                background: `linear-gradient(135deg, ${c.toneFrom || '#0D8074'}, ${c.toneTo || '#053832'})`,
+              }}
+            >
+              <Icon name="play" className="w-20 h-20 text-white/60" />
+            </div>
+          )}
+
+          {/* Bottom scrim — keeps the cover-overlaid title legible on any image */}
+          <div aria-hidden="true"
+               className="absolute inset-x-0 bottom-0 h-2/3 z-[1]
+                          bg-gradient-to-t from-black/85 via-black/45 to-transparent" />
+
+          {/* Top badges row */}
+          <div className="absolute top-3 right-3 left-3 flex items-start justify-between gap-2 z-10">
+            {c.isNew ? <NewBadge /> : <span />}
+            {c.isFeatured && <FeaturedBadge />}
           </div>
-        )}
 
-        {/* Bottom gradient overlay — title legibility */}
-        <div aria-hidden="true"
-             className="absolute inset-x-0 bottom-0 h-[72%]
-                        bg-gradient-to-t from-black/80 via-black/35 to-transparent" />
+          {/* Cover-overlaid title — bold, with drop-shadow for guaranteed legibility */}
+          <div className="absolute inset-x-0 bottom-0 p-3.5 md:p-4 text-white z-10">
+            <h3 className="text-[15px] md:text-[16px] font-extrabold leading-6 line-clamp-2
+                           drop-shadow-[0_2px_6px_rgba(0,0,0,.6)]">
+              {c.title}
+            </h3>
+          </div>
 
-        {/* Top badges */}
-        <div className="absolute top-3 right-3 left-3 flex items-start justify-between gap-2 z-10">
-          {c.isNew ? <NewBadge /> : <span />}
-          {c.isFeatured && <FeaturedBadge />}
+          {/* Hover play affordance — circular glass button mid-cover */}
+          <div
+            aria-hidden="true"
+            className="absolute inset-0 flex items-center justify-center z-[5] opacity-0
+                       group-hover:opacity-100 transition-opacity duration-300"
+          >
+            <span className="w-14 h-14 rounded-full bg-white/95 text-brand-600
+                             flex items-center justify-center
+                             shadow-[0_12px_28px_-8px_rgba(0,0,0,.55)]
+                             scale-90 group-hover:scale-100 transition-transform duration-300">
+              <Icon name="play" className="w-5 h-5" />
+            </span>
+          </div>
         </div>
 
-        {/* Instructor avatar — small circle mid-card on hover */}
-        {c.instructorAvatarUrl && (
-          <div
-            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[55%]
-                       w-14 h-14 rounded-full overflow-hidden ring-4 ring-white/60
-                       shadow-[0_8px_22px_rgba(0,0,0,.45)] opacity-0
-                       group-hover:opacity-100 group-hover:scale-100 scale-90
-                       transition-all duration-300 z-[5]"
-          >
-            <Image
-              src={c.instructorAvatarUrl}
-              alt={c.instructor || ''}
-              fill
-              sizes="56px"
-              className="object-cover"
-            />
-          </div>
-        )}
-
-        {/* Body block — title, instructor, meta row */}
-        <div className="absolute inset-x-0 bottom-0 p-3.5 md:p-4 text-white z-10">
+        {/* ── Footer info panel (white) ── */}
+        <div className="p-3.5 md:p-4 flex flex-col gap-3">
+          {/* Instructor row */}
           {c.instructor && (
-            <p className="text-[11px] md:text-[11.5px] opacity-90 mb-1 line-clamp-1 font-medium">
-              <span className="opacity-75">مدرس: </span>
-              {c.instructor}
-            </p>
+            <div className="flex items-center gap-2 min-w-0">
+              {c.instructorAvatarUrl ? (
+                <span className="relative w-7 h-7 rounded-full overflow-hidden ring-2 ring-ink-100 shrink-0">
+                  <Image
+                    src={c.instructorAvatarUrl}
+                    alt={c.instructor}
+                    fill
+                    sizes="28px"
+                    className="object-cover"
+                  />
+                </span>
+              ) : (
+                <span className="w-7 h-7 rounded-full bg-brand-50 text-brand-600
+                                 flex items-center justify-center shrink-0">
+                  <Icon name="user" className="w-3.5 h-3.5" />
+                </span>
+              )}
+              <span className="text-[12px] text-ink-600 font-bold truncate min-w-0">
+                <span className="text-ink-400 font-medium">مدرس: </span>
+                {c.instructor}
+              </span>
+            </div>
           )}
-          <h3 className="text-[14px] md:text-[15px] font-extrabold leading-6 line-clamp-2
-                         drop-shadow-[0_2px_4px_rgba(0,0,0,.4)]">
-            {c.title}
-          </h3>
 
-          {/* Meta row — level pill + duration + lessons */}
-          <div className="mt-3 flex flex-wrap items-center gap-1.5 text-[11px]">
+          {/* Meta chips */}
+          <div className="flex flex-wrap items-center gap-1.5">
             {c.level && LEVEL_LABEL[c.level] && (
-              <span className="inline-flex items-center gap-1 px-2 h-[22px] rounded-full
-                               bg-white/15 backdrop-blur-md ring-1 ring-white/10
-                               font-extrabold">
+              <span className="inline-flex items-center gap-1 px-2 h-[26px] rounded-full
+                               bg-brand-50 text-brand-700 text-[11.5px] font-extrabold
+                               ring-1 ring-brand-100">
                 <Icon name="graduation" className="w-3 h-3" />
                 {LEVEL_LABEL[c.level]}
               </span>
             )}
             {c.durationSeconds ? (
-              <span className="inline-flex items-center gap-1 px-2 h-[22px] rounded-full
-                               bg-white/15 backdrop-blur-md ring-1 ring-white/10
-                               font-bold">
+              <span className="inline-flex items-center gap-1 px-2 h-[26px] rounded-full
+                               bg-ink-50 text-ink-700 text-[11.5px] font-bold
+                               ring-1 ring-ink-100">
                 <Icon name="clock" className="w-3 h-3" />
-                {formatDuration(c.durationSeconds)}
+                {formatDurationShort(c.durationSeconds)}
               </span>
             ) : null}
             {c.lessonsCount ? (
-              <span className="inline-flex items-center gap-1 px-2 h-[22px] rounded-full
-                               bg-white/15 backdrop-blur-md ring-1 ring-white/10
-                               font-bold">
+              <span className="inline-flex items-center gap-1 px-2 h-[26px] rounded-full
+                               bg-ink-50 text-ink-700 text-[11.5px] font-bold
+                               ring-1 ring-ink-100">
                 <Icon name="play" className="w-3 h-3" />
                 {c.lessonsCount.toLocaleString('fa-IR')} درس
               </span>
             ) : null}
           </div>
 
-          {/* Tiny enrollments stat — appears on hover */}
-          {typeof c.enrollmentsCount === 'number' && c.enrollmentsCount > 0 && (
-            <p className="mt-2 text-[10.5px] opacity-80 font-bold
-                          opacity-0 group-hover:opacity-90 transition-opacity duration-300">
-              {c.enrollmentsCount.toLocaleString('fa-IR')} نفر در حال یادگیری
-            </p>
-          )}
+          {/* Footer row — enrollments + start arrow */}
+          <div className="mt-1 pt-3 border-t border-ink-100 flex items-center justify-between">
+            {typeof c.enrollmentsCount === 'number' && c.enrollmentsCount > 0 ? (
+              <span className="inline-flex items-center gap-1 text-[11.5px] text-ink-500 font-bold tabular-nums">
+                <Icon name="user" className="w-3.5 h-3.5 text-ink-400" />
+                {c.enrollmentsCount.toLocaleString('fa-IR')} یادگیرنده
+              </span>
+            ) : (
+              <span />
+            )}
+            <span className="inline-flex items-center gap-1 text-[12px] text-brand-600 font-extrabold
+                             group-hover:gap-2 transition-all duration-200">
+              <span>شروع دوره</span>
+              <Icon name="arrow-left" className="w-3.5 h-3.5" />
+            </span>
+          </div>
         </div>
       </Link>
     </motion.article>
@@ -551,8 +512,7 @@ function NewBadge() {
       className="inline-flex items-center gap-1 px-3 h-8 rounded-2xl
                  text-[12px] font-extrabold text-white
                  ring-[2.5px] ring-brand-700
-                 shadow-[0_4px_12px_-4px_rgba(13,128,116,.45)]
-                 backdrop-blur-md"
+                 shadow-[0_4px_12px_-4px_rgba(13,128,116,.45)]"
       style={{ backgroundColor: '#25C5BA' }}
     >
       <Icon name="sparkles" className="w-3 h-3" />
@@ -567,8 +527,7 @@ function FeaturedBadge() {
       className="inline-flex items-center gap-1 px-3 h-8 rounded-2xl
                  text-[12px] font-extrabold text-ink-900
                  ring-[2.5px] ring-amber-700/40
-                 shadow-[0_4px_12px_-4px_rgba(240,148,26,.55)]
-                 backdrop-blur-md"
+                 shadow-[0_4px_12px_-4px_rgba(240,148,26,.55)]"
       style={{ backgroundColor: '#FFB033' }}
     >
       <Icon name="sparkles" className="w-3 h-3" />
