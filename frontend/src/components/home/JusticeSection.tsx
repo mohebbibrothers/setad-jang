@@ -30,7 +30,7 @@ export function JusticeSection({ criminals }: { criminals: CriminalCard[] }) {
         <div className="bg-ink-50/60 rounded-[2rem] md:rounded-[2.5rem] p-4 md:p-8 lg:p-10
                         border border-ink-100">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-5">
-            {criminals.slice(0, 3).map((p, i) => (
+            {criminals.slice(0, 7).map((p, i) => (
               <motion.article
                 key={p.slug}
                 initial={{ opacity: 0, y: 20 }}

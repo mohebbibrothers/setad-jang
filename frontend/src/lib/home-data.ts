@@ -82,10 +82,15 @@ export async function loadCriminals(): Promise<CriminalCard[]> {
       slug: p.slug, fullName: p.full_name, imageUrl: p.image_url,
     }));
   }
+  // Seed: 7 criminals → fills 2 rows of 4 on desktop alongside the trophy CTA card
   return [
-    { slug: 'salman-rushdie', fullName: 'سلمان رشدی' },
-    { slug: 'reza-pahlavi',   fullName: 'رضا پهلوی' },
-    { slug: 'yair-lapid',     fullName: 'یائیر لاپید' },
+    { slug: 'salman-rushdie',  fullName: 'سلمان رشدی' },
+    { slug: 'reza-pahlavi',    fullName: 'رضا پهلوی' },
+    { slug: 'yair-lapid',      fullName: 'یائیر لاپید' },
+    { slug: 'netanyahu',       fullName: 'بنیامین نتانیاهو' },
+    { slug: 'trump',           fullName: 'دونالد ترامپ' },
+    { slug: 'pompeo',          fullName: 'مایک پمپئو' },
+    { slug: 'rajavi',          fullName: 'مسعود رجوی' },
   ];
 }
 
