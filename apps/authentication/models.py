@@ -8,6 +8,7 @@ from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
 from django.db import models
 from django.db.models import Q
 from django.utils import timezone
+from django.utils.crypto import salted_hmac
 
 from apps.core.models import BaseModel
 
@@ -155,6 +156,41 @@ PROFILE_R4J_REQUIRED_FIELDS: tuple[str, ...] = (
     "city",
     "address",
 )
+
+
+class AuthSession(BaseModel):
+    """Tracked user session/device entry for JWT refresh-token families."""
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="auth_sessions")
+    refresh_jti = models.CharField(max_length=120, unique=True, db_index=True)
+    device_label = models.CharField(max_length=160, blank=True)
+    user_agent = models.CharField(max_length=512, blank=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    request_id = models.CharField(max_length=80, blank=True)
+    is_revoked = models.BooleanField(default=False, db_index=True)
+    revoked_at = models.DateTimeField(null=True, blank=True)
+    revoked_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="revoked_auth_sessions")
+    last_seen_at = models.DateTimeField(default=timezone.now, db_index=True)
+    expires_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    fingerprint_hash = models.CharField(max_length=64, db_index=True, blank=True)
+
+    class Meta:
+        verbose_name = "نشست احراز هویت"
+        verbose_name_plural = "نشست‌های احراز هویت"
+        ordering = ["-last_seen_at", "-created_at"]
+        indexes = [
+            models.Index(fields=["user", "is_revoked", "-last_seen_at"]),
+            models.Index(fields=["fingerprint_hash", "is_revoked"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"AuthSession user={self.user_id} revoked={self.is_revoked}"
+
+    @staticmethod
+    def build_fingerprint_hash(*, user_agent: str = "", ip_address: str | None = None) -> str:
+        """Build a stable non-PII fingerprint hash from request metadata."""
+        payload = f"{user_agent[:512]}|{ip_address or ''}"
+        return salted_hmac("auth-session-fingerprint", payload).hexdigest()
 
 
 class Profile(BaseModel):

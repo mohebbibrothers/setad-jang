@@ -8,6 +8,10 @@ from .views import (
     AdminChangeUserRoleAPIView,
     AdminUserDetailAPIView,
     AdminUserListAPIView,
+    AdminUserSessionsListAPIView,
+    AdminUserSessionsRevokeAPIView,
+    AuthSessionListAPIView,
+    AuthSessionRevokeAPIView,
     ChangePasswordAPIView,
     CustomTokenRefreshView,
     ForgotPasswordAPIView,
@@ -92,6 +96,8 @@ urlpatterns = [
     # Authenticated
     # ========================================================
     path("logout/", LogoutAPIView.as_view(), name="logout"),
+    path("sessions/", AuthSessionListAPIView.as_view(), name="session-list"),
+    path("sessions/<int:session_id>/revoke/", AuthSessionRevokeAPIView.as_view(), name="session-revoke"),
     path("me/", MeAPIView.as_view(), name="me"),
     path("profile/", ProfileAPIView.as_view(), name="profile"),
     # ========================================================
@@ -103,5 +109,15 @@ urlpatterns = [
         "admin/users/<int:user_id>/role/",
         AdminChangeUserRoleAPIView.as_view(),
         name="admin-user-role",
+    ),
+    path(
+        "admin/users/<int:user_id>/sessions/",
+        AdminUserSessionsListAPIView.as_view(),
+        name="admin-user-session-list",
+    ),
+    path(
+        "admin/users/<int:user_id>/sessions/revoke-all/",
+        AdminUserSessionsRevokeAPIView.as_view(),
+        name="admin-user-session-revoke-all",
     ),
 ]

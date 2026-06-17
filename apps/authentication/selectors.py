@@ -205,3 +205,24 @@ def get_latest_valid_otp(user: User, purpose: str) -> OTPCode | None:
 def get_profile_by_user(user: User) -> Profile | None:
     """get_profile_by_user helper for the authentication application."""
     return Profile.objects.select_related("user").filter(user=user).first()
+
+
+# ============================================================
+# Auth session selectors
+# ============================================================
+
+def get_user_auth_sessions(*, user_id: int):
+    """Return auth sessions owned by a user with newest activity first."""
+    from apps.authentication.models import AuthSession
+
+    return AuthSession.objects.filter(user_id=user_id).select_related("revoked_by").order_by("-last_seen_at", "-created_at")
+
+
+def get_user_auth_session_by_id(*, user_id: int, session_id: int):
+    """Return one user-owned auth session for IDOR-safe operations."""
+    return get_user_auth_sessions(user_id=user_id).filter(pk=session_id).first()
+
+
+def get_admin_auth_sessions_for_user(*, user_id: int):
+    """Return auth sessions for a user in admin scope."""
+    return get_user_auth_sessions(user_id=user_id)

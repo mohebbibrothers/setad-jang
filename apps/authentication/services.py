@@ -11,12 +11,14 @@ from django.contrib.auth import authenticate
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.http import HttpRequest
+from django.utils import timezone
 from rest_framework_simplejwt.exceptions import TokenError
+from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from .choices import OTPPurpose, UserRole
 from .logging_utils import mask_identifier
-from .models import OTPCode, PrimaryIdentifierKind, Profile, User
+from .models import AuthSession, OTPCode, PrimaryIdentifierKind, Profile, User
 from .normalizers import normalize_email, normalize_phone
 from .otp import (
     OTPCooldownActive,
@@ -315,16 +317,53 @@ def _issue_tokens(*, user: User) -> dict[str, str]:
     }
 
 
+def _create_auth_session(*, user: User, refresh_token: str, request: HttpRequest) -> AuthSession:
+    """Create tracked auth session for an issued refresh token."""
+    refresh = RefreshToken(refresh_token)
+    ip = _get_client_ip(request=request)
+    user_agent = request.META.get("HTTP_USER_AGENT", "")[:512]
+    expires_at = None
+    if refresh.get("exp"):
+        expires_at = timezone.datetime.fromtimestamp(refresh["exp"], tz=timezone.get_current_timezone())
+    return AuthSession.objects.create(
+        user=user,
+        refresh_jti=str(refresh["jti"]),
+        device_label=_build_device_label(user_agent=user_agent),
+        user_agent=user_agent,
+        ip_address=ip,
+        request_id=request.headers.get("X-Request-ID", "")[:80],
+        expires_at=expires_at,
+        fingerprint_hash=AuthSession.build_fingerprint_hash(user_agent=user_agent, ip_address=ip),
+    )
+
+
+def _build_device_label(*, user_agent: str) -> str:
+    """Build a concise device label from user agent without external parsing."""
+    normalized = user_agent or "Unknown device"
+    if "Mobile" in normalized or "Android" in normalized or "iPhone" in normalized:
+        return "Mobile browser"
+    if "Firefox" in normalized:
+        return "Firefox browser"
+    if "Chrome" in normalized:
+        return "Chrome browser"
+    if "Safari" in normalized:
+        return "Safari browser"
+    return normalized[:80]
+
+
 def _build_login_result(*, user: User, request: HttpRequest) -> dict[str, Any]:
-    """Build standard login result dict including IP tracking."""
+    """Build standard login result dict including IP tracking and session registry."""
     ip = _get_client_ip(request=request)
     if ip:
         user.last_login_ip = ip
         user.save(update_fields=["last_login_ip"])
 
+    tokens = _issue_tokens(user=user)
+    session = _create_auth_session(user=user, refresh_token=tokens["refresh"], request=request)
     return {
         "user": user,
-        "tokens": _issue_tokens(user=user),
+        "tokens": tokens,
+        "session": session,
     }
 
 
@@ -565,10 +604,11 @@ def change_password(*, user: User, old_password: str, new_password: str) -> bool
 
 
 def logout_user(*, refresh_token: str) -> bool:
-    """Blacklist the provided refresh token."""
+    """Blacklist the provided refresh token and revoke tracked session if present."""
     try:
         token = RefreshToken(refresh_token)
         token.blacklist()
+        revoke_auth_session_by_jti(refresh_jti=str(token["jti"]), revoked_by=None)
         return True
     except TokenError:
         logger.warning("Invalid or blacklisted refresh token received during logout.")
@@ -576,6 +616,40 @@ def logout_user(*, refresh_token: str) -> bool:
     except Exception:
         logger.exception("Unexpected error happened during logout.")
         return False
+
+
+@transaction.atomic
+def revoke_auth_session(*, session: AuthSession, revoked_by: User | None = None) -> AuthSession:
+    """Revoke tracked auth session and blacklist matching outstanding token when possible."""
+    locked = AuthSession.objects.select_for_update().get(pk=session.pk)
+    if locked.is_revoked:
+        return locked
+    locked.is_revoked = True
+    locked.revoked_at = timezone.now()
+    locked.revoked_by = revoked_by
+    locked.save(update_fields=["is_revoked", "revoked_at", "revoked_by", "updated_at"])
+    outstanding = OutstandingToken.objects.filter(jti=locked.refresh_jti).first()
+    if outstanding is not None:
+        BlacklistedToken.objects.get_or_create(token=outstanding)
+    return locked
+
+
+def revoke_auth_session_by_jti(*, refresh_jti: str, revoked_by: User | None = None) -> AuthSession | None:
+    """Revoke tracked session by refresh token JTI if it exists."""
+    session = AuthSession.objects.filter(refresh_jti=refresh_jti).first()
+    if session is None:
+        return None
+    return revoke_auth_session(session=session, revoked_by=revoked_by)
+
+
+@transaction.atomic
+def revoke_all_user_sessions(*, user: User, revoked_by: User | None = None) -> int:
+    """Revoke all active sessions for one user and return affected count."""
+    count = 0
+    for session in AuthSession.objects.select_for_update().filter(user=user, is_revoked=False):
+        revoke_auth_session(session=session, revoked_by=revoked_by)
+        count += 1
+    return count
 
 
 # ============================================================

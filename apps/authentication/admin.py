@@ -5,7 +5,7 @@ Django admin configuration for users, profiles, and OTP records.
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 
-from .models import OTPCode, Profile, User
+from .models import AuthSession, OTPCode, Profile, User
 
 
 @admin.register(User)
@@ -124,3 +124,27 @@ class OTPCodeAdmin(admin.ModelAdmin):
         "created_at",
         "updated_at",
     )
+
+
+@admin.register(AuthSession)
+class AuthSessionAdmin(admin.ModelAdmin):
+    """Read-oriented admin for tracked auth sessions/devices."""
+
+    list_display = ("id", "user", "device_label", "ip_address", "is_revoked", "last_seen_at", "expires_at")
+    list_filter = ("is_revoked", "device_label")
+    search_fields = ("user__email", "user__phone_number", "refresh_jti", "ip_address", "user_agent")
+    readonly_fields = [field.name for field in AuthSession._meta.fields]
+    raw_id_fields = ("user", "revoked_by")
+    ordering = ("-last_seen_at", "-created_at")
+
+    def has_add_permission(self, request) -> bool:
+        """Sessions are created by login services."""
+        return False
+
+    def has_change_permission(self, request, obj=None) -> bool:
+        """Session revocation must use audited APIs/services."""
+        return False
+
+    def has_delete_permission(self, request, obj=None) -> bool:
+        """Session evidence should remain available for security review."""
+        return False

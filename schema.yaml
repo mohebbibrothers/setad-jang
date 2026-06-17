@@ -563,6 +563,74 @@ paths:
               schema:
                 $ref: '#/components/schemas/AuthenticationGenericErrorResponse'
           description: ''
+  /api/v1/auth/admin/users/{user_id}/sessions/:
+    get:
+      operationId: auth_admin_user_sessions_list
+      description: Admin list endpoint for a user's tracked sessions.
+      summary: لیست نشست‌های کاربر — ادمین
+      parameters:
+      - in: path
+        name: user_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - احراز هویت — مدیریت
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthSessionListResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthenticationGenericErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthenticationGenericErrorResponse'
+          description: ''
+  /api/v1/auth/admin/users/{user_id}/sessions/revoke-all/:
+    post:
+      operationId: auth_admin_user_sessions_revoke_all
+      description: Admin endpoint to revoke all active sessions for one user.
+      summary: لغو همه نشست‌های کاربر — ادمین
+      parameters:
+      - in: path
+        name: user_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - احراز هویت — مدیریت
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthenticationEmptySuccessResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthenticationGenericErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthenticationGenericErrorResponse'
+          description: ''
   /api/v1/auth/identifiers/add/request/:
     post:
       operationId: auth_identifier_add_request
@@ -1337,6 +1405,62 @@ paths:
                 $ref: '#/components/schemas/AuthenticationEmptySuccessResponse'
           description: ''
         '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthenticationGenericErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthenticationGenericErrorResponse'
+          description: ''
+  /api/v1/auth/sessions/:
+    get:
+      operationId: auth_sessions_list
+      description: List current user's tracked auth sessions/devices.
+      summary: لیست نشست‌ها و دستگاه‌های من
+      tags:
+      - احراز هویت — کاربر
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthSessionListResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthenticationGenericErrorResponse'
+          description: ''
+  /api/v1/auth/sessions/{session_id}/revoke/:
+    post:
+      operationId: auth_sessions_revoke
+      description: Revoke one current-user auth session with IDOR protection.
+      summary: لغو یکی از نشست‌های من
+      parameters:
+      - in: path
+        name: session_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - احراز هویت — کاربر
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthSessionDetailResponse'
+          description: ''
+        '401':
           content:
             application/json:
               schema:
@@ -12849,6 +12973,117 @@ components:
       description: |-
         * `male` - مرد
         * `female` - زن
+    AuthSession:
+      type: object
+      description: Read serializer for tracked user auth sessions/devices.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        device_label:
+          type: string
+          readOnly: true
+        ip_address:
+          type: string
+          readOnly: true
+          nullable: true
+        user_agent:
+          type: string
+          readOnly: true
+        request_id:
+          type: string
+          readOnly: true
+        is_revoked:
+          type: boolean
+          readOnly: true
+        revoked_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        revoked_by_email:
+          type: string
+          format: email
+          readOnly: true
+          nullable: true
+        last_seen_at:
+          type: string
+          format: date-time
+          readOnly: true
+        expires_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: تاریخ ایجاد
+      required:
+      - created_at
+      - device_label
+      - expires_at
+      - id
+      - ip_address
+      - is_revoked
+      - last_seen_at
+      - request_id
+      - revoked_at
+      - revoked_by_email
+      - user_agent
+    AuthSessionDetailResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          default: true
+        status_code:
+          type: integer
+          default: 200
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/AuthSession'
+      required:
+      - data
+      - message
+    AuthSessionListResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/AuthSessionListResponseData'
+        success:
+          type: boolean
+          default: true
+        status_code:
+          type: integer
+          default: 200
+        message:
+          type: string
+      required:
+      - data
+      - message
+    AuthSessionListResponseData:
+      type: object
+      properties:
+        count:
+          type: integer
+        next:
+          type: string
+          format: uri
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuthSession'
+      required:
+      - count
+      - results
     AuthenticationEmptySuccessResponse:
       type: object
       properties:

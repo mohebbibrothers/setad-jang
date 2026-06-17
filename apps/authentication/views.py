@@ -45,12 +45,15 @@ from .permissions import IsAdminUser
 from .selectors import (
     get_active_user_by_email,
     get_all_users_for_admin,
+    get_user_auth_session_by_id,
+    get_user_auth_sessions,
     get_user_by_email,
     get_user_by_id,
 )
 from .serializers import (
     AdminChangeRoleSerializer,
     AdminUserUpdateSerializer,
+    AuthSessionSerializer,
     ChangePasswordSerializer,
     ForgotPasswordSerializer,
     IdentifierAddRequestSerializer,
@@ -104,6 +107,8 @@ from .services import (
     register_user,
     request_password_reset,
     reset_password_with_otp,
+    revoke_all_user_sessions,
+    revoke_auth_session,
     signup_request,
     signup_verify,
     update_profile,
@@ -194,6 +199,14 @@ TOKEN_REFRESH_SUCCESS_RESPONSE = build_success_response_serializer(
 USER_ME_SUCCESS_RESPONSE = build_success_response_serializer(
     name="UserMeSuccessResponse",
     data_serializer=UserMeSerializer,
+)
+AUTH_SESSION_LIST_RESPONSE = build_paginated_success_response_serializer(
+    name="AuthSessionListResponse",
+    item_serializer=AuthSessionSerializer,
+)
+AUTH_SESSION_DETAIL_RESPONSE = build_success_response_serializer(
+    name="AuthSessionDetailResponse",
+    data_serializer=AuthSessionSerializer,
 )
 
 PROFILE_SUCCESS_RESPONSE = build_success_response_serializer(
@@ -531,6 +544,7 @@ class LoginPasswordAPIView(APIView):
             extra_data={
                 "identifier_kind": identifier_kind,
                 "method": "password",
+                "session_id": result["session"].pk,
             },
             **metadata,
         )
@@ -1470,6 +1484,75 @@ class LogoutAPIView(APIView):
         )
 
         return SuccessResponse(message="با موفقیت خارج شدید.")
+
+
+class AuthSessionListAPIView(APIView):
+    """List current user's tracked auth sessions/devices."""
+
+    permission_classes = [IsAuthenticated]
+    pagination_class = StandardPagination
+
+    @extend_schema(operation_id="auth_sessions_list", tags=[TAG_AUTH_USER], summary="لیست نشست‌ها و دستگاه‌های من", responses={200: AUTH_SESSION_LIST_RESPONSE, 401: GENERIC_ERROR_RESPONSE})
+    def get(self, request: Request) -> Response:
+        queryset = get_user_auth_sessions(user_id=request.user.pk)
+        paginator = self.pagination_class()
+        page = paginator.paginate_queryset(queryset, request, view=self)
+        if page is not None:
+            serializer = AuthSessionSerializer(page, many=True)
+            return paginator.get_paginated_response(serializer.data, message="لیست نشست‌ها با موفقیت دریافت شد.")
+        return SuccessResponse(data=AuthSessionSerializer(queryset, many=True).data, message="لیست نشست‌ها با موفقیت دریافت شد.")
+
+
+class AuthSessionRevokeAPIView(APIView):
+    """Revoke one current-user auth session with IDOR protection."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(operation_id="auth_sessions_revoke", tags=[TAG_AUTH_USER], summary="لغو یکی از نشست‌های من", request=None, responses={200: AUTH_SESSION_DETAIL_RESPONSE, 401: GENERIC_ERROR_RESPONSE, 404: GENERIC_ERROR_RESPONSE})
+    def post(self, request: Request, session_id: int) -> Response:
+        session = get_user_auth_session_by_id(user_id=request.user.pk, session_id=session_id)
+        if session is None:
+            return ErrorResponse(message="نشستی با این شناسه یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+        session = revoke_auth_session(session=session, revoked_by=request.user)
+        metadata = extract_audit_metadata(request)
+        log_action_async(user_id=request.user.pk, action=audit_actions.AUTH_SESSION_REVOKED, resource_type="auth_session", resource_id=str(session.pk), extra_data={"self_revoke": True}, **metadata)
+        return SuccessResponse(data=AuthSessionSerializer(session).data, message="نشست با موفقیت لغو شد.")
+
+
+class AdminUserSessionsListAPIView(APIView):
+    """Admin list endpoint for a user's tracked sessions."""
+
+    permission_classes = [IsAdminUser]
+    pagination_class = StandardPagination
+
+    @extend_schema(operation_id="auth_admin_user_sessions_list", tags=[TAG_AUTH_ADMIN], summary="لیست نشست‌های کاربر — ادمین", responses={200: AUTH_SESSION_LIST_RESPONSE, 403: GENERIC_ERROR_RESPONSE, 404: GENERIC_ERROR_RESPONSE})
+    def get(self, request: Request, user_id: int) -> Response:
+        user = get_user_by_id(user_id)
+        if user is None:
+            return ErrorResponse(message="کاربر یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+        queryset = get_user_auth_sessions(user_id=user.pk)
+        paginator = self.pagination_class()
+        page = paginator.paginate_queryset(queryset, request, view=self)
+        if page is not None:
+            serializer = AuthSessionSerializer(page, many=True)
+            return paginator.get_paginated_response(serializer.data, message="لیست نشست‌های کاربر دریافت شد.")
+        return SuccessResponse(data=AuthSessionSerializer(queryset, many=True).data, message="لیست نشست‌های کاربر دریافت شد.")
+
+
+class AdminUserSessionsRevokeAPIView(APIView):
+    """Admin endpoint to revoke all active sessions for one user."""
+
+    permission_classes = [IsAdminUser]
+
+    @extend_schema(operation_id="auth_admin_user_sessions_revoke_all", tags=[TAG_AUTH_ADMIN], summary="لغو همه نشست‌های کاربر — ادمین", request=None, responses={200: EMPTY_SUCCESS_RESPONSE, 403: GENERIC_ERROR_RESPONSE, 404: GENERIC_ERROR_RESPONSE})
+    def post(self, request: Request, user_id: int) -> Response:
+        user = get_user_by_id(user_id)
+        if user is None:
+            return ErrorResponse(message="کاربر یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+        revoked_count = revoke_all_user_sessions(user=user, revoked_by=request.user)
+        metadata = extract_audit_metadata(request)
+        log_action_async(user_id=request.user.pk, action=audit_actions.AUTH_USER_SESSIONS_REVOKED, resource_type="user", resource_id=str(user.pk), extra_data={"revoked_count": revoked_count}, **metadata)
+        return SuccessResponse(data={"revoked_count": revoked_count}, message="نشست‌های کاربر با موفقیت لغو شد.")
 
 
 # ============================================================

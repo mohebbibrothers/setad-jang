@@ -415,6 +415,8 @@ Health checks شامل database/cache/Celery-relevant dependencies است و sec
 - add secondary identifier
 - make primary identifier
 - JWT access/refresh
+- tracked device/session registry
+- user/admin session revoke workflows
 - logout/blacklist
 - profile completion
 - admin user management
@@ -446,11 +448,15 @@ POST /api/v1/auth/identifiers/add/verify/
 POST /api/v1/auth/identifiers/make-primary/
 POST /api/v1/auth/token/refresh/
 POST /api/v1/auth/logout/
+GET  /api/v1/auth/sessions/
+POST /api/v1/auth/sessions/{session_id}/revoke/
 GET  /api/v1/auth/me/
 GET/PATCH /api/v1/auth/profile/
 GET  /api/v1/auth/admin/users/
 GET  /api/v1/auth/admin/users/{id}/
 POST /api/v1/auth/admin/users/{id}/role/
+GET  /api/v1/auth/admin/users/{id}/sessions/
+POST /api/v1/auth/admin/users/{id}/sessions/revoke-all/
 ```
 
 ### Disposable email blocklist

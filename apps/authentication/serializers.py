@@ -11,7 +11,7 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 
 from .choices import Gender, UserRole
-from .models import PrimaryIdentifierKind, Profile, User
+from .models import AuthSession, PrimaryIdentifierKind, Profile, User
 from .normalizers import normalize_email, normalize_identifier, normalize_phone
 from .validators import validate_email_for_signup, validate_phone_format
 
@@ -615,3 +615,30 @@ class AdminUserUpdateSerializer(serializers.Serializer):
 class AdminChangeRoleSerializer(serializers.Serializer):
     """AdminChangeRoleSerializer implementation for the authentication application."""
     role = serializers.ChoiceField(choices=UserRole.choices)
+
+
+# ============================================================
+# Auth Session Serializers
+# ============================================================
+
+class AuthSessionSerializer(serializers.ModelSerializer):
+    """Read serializer for tracked user auth sessions/devices."""
+
+    revoked_by_email = serializers.EmailField(source="revoked_by.email", read_only=True, allow_null=True)
+
+    class Meta:
+        model = AuthSession
+        fields = (
+            "id",
+            "device_label",
+            "ip_address",
+            "user_agent",
+            "request_id",
+            "is_revoked",
+            "revoked_at",
+            "revoked_by_email",
+            "last_seen_at",
+            "expires_at",
+            "created_at",
+        )
+        read_only_fields = fields
