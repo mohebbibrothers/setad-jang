@@ -49,23 +49,14 @@ const COLS = [
 export function Footer() {
   return (
     <footer className="relative bg-white pt-[4.5rem] md:pt-[5.5rem]">
-      {/* Independent rounded pill wrapping the green newsletter.
-          Lifted so the green pill sits HIGHER (white area + top of dip),
-          which is more legible and matches the designer mockup proportions.
-          Soft radial halo blends the white pill into ink-50 with no edge. */}
+      {/* Independent CLEAN white pill — no halo above the white-page area.
+          A single soft downward shadow handles the transition into the
+          ink-50 surface below; the white top area stays pristine. */}
       <div
         className="absolute left-1/2 top-10 md:top-11 -translate-x-1/2 z-10
                    w-[min(620px,90vw)] md:w-[min(680px,80vw)]
-                   rounded-full p-[10px] md:p-[12px] px-[14px] md:px-[16px]
-                   before:content-[''] before:absolute before:inset-[-22px] before:-z-10
-                   before:rounded-full before:pointer-events-none before:blur-[8px]
-                   before:[background:radial-gradient(ellipse_70%_110%_at_center,rgba(255,255,255,0.70)_0%,rgba(255,255,255,0.35)_40%,rgba(255,255,255,0)_75%)]"
-        style={{
-          background:
-            'radial-gradient(ellipse 75% 130% at center, #ffffff 50%, rgba(255,255,255,0.95) 68%, rgba(245,248,250,0.78) 84%, rgba(245,248,250,0) 100%)',
-          boxShadow:
-            '0 1px 3px -1px rgba(11,53,48,0.05), 0 12px 28px -14px rgba(11,53,48,0.12)',
-        }}
+                   bg-white rounded-full p-2.5 md:p-3
+                   shadow-[0_16px_32px_-16px_rgba(11,53,48,0.18),0_4px_8px_-4px_rgba(11,53,48,0.06)]"
       >
         <NewsletterPill />
       </div>
