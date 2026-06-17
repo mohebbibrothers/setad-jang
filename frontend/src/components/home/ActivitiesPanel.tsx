@@ -34,18 +34,26 @@ const ACTIVITIES: Activity[] = [
 export function ActivitiesPanel() {
   return (
     <section
-      className="relative pt-0 pb-20 md:pb-24 mt-2 md:mt-4 z-10"
+      className="relative pt-0 pb-20 md:pb-24 mt-4 md:mt-6 z-10"
       aria-labelledby="activities-title"
     >
       <div className="container-edge">
+        {/* Wrapper that draws a soft shadow ABOVE the panel — matches mockup */}
         <div
-          className="relative text-white px-5 sm:px-8 md:px-12 pt-12 md:pt-14"
-          style={{
-            backgroundImage: 'url(/brand/activities-panel.png)',
-            backgroundSize: '100% 100%',
-            backgroundRepeat: 'no-repeat',
-          }}
+          className="relative isolate
+                     before:content-[''] before:absolute before:left-[5%] before:right-[5%]
+                     before:-top-5 md:before:-top-7 before:h-8 md:before:h-11
+                     before:-z-10 before:pointer-events-none before:rounded-full before:blur-[14px]
+                     before:[background:radial-gradient(ellipse_100%_100%_at_center_bottom,rgba(11,53,48,0.18)_0%,rgba(11,53,48,0.08)_45%,rgba(11,53,48,0)_100%)]"
         >
+          <div
+            className="relative text-white px-5 sm:px-8 md:px-12 pt-12 md:pt-14"
+            style={{
+              backgroundImage: 'url(/brand/activities-panel.png)',
+              backgroundSize: '100% 100%',
+              backgroundRepeat: 'no-repeat',
+            }}
+          >
           <motion.h2
             id="activities-title"
             initial={{ opacity: 0, y: 8 }}
@@ -68,18 +76,19 @@ export function ActivitiesPanel() {
               >
                 <Link
                   href={a.href}
-                  className="group block rounded-2xl bg-white text-ink-700 p-4 md:p-5
-                             shadow-[0_10px_28px_-14px_rgba(0,0,0,0.35)]
-                             hover:-translate-y-1.5 hover:shadow-[0_18px_40px_-14px_rgba(0,0,0,0.4)]
+                  className="group block rounded-[1.25rem] md:rounded-[1.5rem] bg-white text-ink-700
+                             p-6 md:p-7 pb-5 md:pb-6
+                             shadow-[0_12px_28px_-16px_rgba(0,0,0,0.28)]
+                             hover:-translate-y-1.5 hover:shadow-[0_18px_40px_-16px_rgba(0,0,0,0.35)]
                              transition-all duration-300 h-full flex flex-col items-center text-center"
                 >
-                  <div className="w-14 h-14 md:w-[60px] md:h-[60px] flex items-center justify-center
+                  <div className="w-[60px] h-[60px] md:w-[68px] md:h-[68px] flex items-center justify-center
                                   group-hover:scale-110 transition-transform">
                     <Image
                       src={a.icon}
                       alt={a.iconAlt}
-                      width={60}
-                      height={60}
+                      width={68}
+                      height={68}
                       className="w-full h-full object-contain"
                     />
                   </div>
@@ -89,6 +98,7 @@ export function ActivitiesPanel() {
                 </Link>
               </motion.div>
             ))}
+          </div>
           </div>
         </div>
       </div>
