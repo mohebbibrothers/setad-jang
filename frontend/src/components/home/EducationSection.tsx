@@ -492,7 +492,7 @@ function CourseTile({ c, delay = 0 }: { c: CourseCard; delay?: number }) {
             )}
             <span className="inline-flex items-center gap-1 text-[12px] text-brand-600 font-extrabold
                              group-hover:gap-2 transition-all duration-200">
-              <span>شروع دوره</span>
+              <span>مشاهده دوره</span>
               <Icon name="arrow-left" className="w-3.5 h-3.5" />
             </span>
           </div>
