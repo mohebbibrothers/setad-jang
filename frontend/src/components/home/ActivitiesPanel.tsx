@@ -39,13 +39,34 @@ export function ActivitiesPanel() {
     >
       <div className="container-edge">
         <div
-          className="relative text-white px-5 sm:px-8 md:px-12 pt-16 md:pt-20 pb-8 md:pb-12 min-h-[300px] md:min-h-[360px]"
-          style={{
-            backgroundImage: 'url(/brand/activities-panel.png)',
-            backgroundSize: '100% 100%',
-            backgroundRepeat: 'no-repeat',
-          }}
+          className="relative text-white px-5 sm:px-8 md:px-12 pt-16 md:pt-20 pb-8 md:pb-12
+                     min-h-[260px] md:min-h-[300px] rounded-b-[36px] md:rounded-b-[56px]
+                     overflow-hidden"
+          style={{ backgroundColor: '#006666' }}
         >
+          {/* Decorative wavy top (designer Asset 1) */}
+          <div
+            aria-hidden="true"
+            className="absolute inset-x-0 top-0 h-[80px] md:h-[96px] z-[1] pointer-events-none"
+            style={{
+              backgroundImage: 'url(/brand/activities-panel.png)',
+              backgroundSize: '100% 100%',
+              backgroundRepeat: 'no-repeat',
+              backgroundPosition: 'top center',
+            }}
+          />
+          {/* Subtle topographic pattern */}
+          <div
+            aria-hidden="true"
+            className="absolute inset-0 opacity-[0.07] pointer-events-none"
+            style={{
+              backgroundImage: [
+                'radial-gradient(circle at 20% 30%, rgba(255,255,255,.6) 0, transparent 40%)',
+                'radial-gradient(circle at 80% 70%, rgba(255,255,255,.5) 0, transparent 40%)',
+                'radial-gradient(circle at 50% 50%, rgba(255,255,255,.4) 0, transparent 50%)',
+              ].join(','),
+            }}
+          />
           <motion.h2
             id="activities-title"
             initial={{ opacity: 0, y: 8 }}

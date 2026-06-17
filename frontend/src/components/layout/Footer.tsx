@@ -51,13 +51,19 @@ export function Footer() {
     <footer className="bg-white pt-16 md:pt-20">
       {/* Light card that holds newsletter + link columns */}
       <div className="relative max-w-[1280px] mx-auto bg-ink-50 rounded-t-[2rem] md:rounded-t-[2.5rem]
-                      px-4 md:px-8 pt-16 md:pt-20 pb-10 md:pb-12">
-        {/* White semicircle cutout at the top center */}
+                      px-4 md:px-8 pt-20 md:pt-24 pb-10 md:pb-12">
+        {/* White wide cutout at the top center — matches designer Asset 3 */}
         <div
           aria-hidden="true"
-          className="absolute top-0 left-1/2 -translate-x-1/2 w-[340px] max-w-[80%] h-[38px] md:h-[42px] md:w-[420px]
-                     bg-white rounded-b-full z-[1]"
-        />
+          className="absolute top-0 left-1/2 -translate-x-1/2 w-[540px] max-w-[90%] h-[54px] md:h-[60px] md:w-[640px]
+                     bg-white rounded-b-[28px] md:rounded-b-[32px] z-[1]"
+        >
+          {/* Concave corners that smoothly join the card edges */}
+          <span aria-hidden="true" className="absolute top-0 -left-8 w-8 h-8 rounded-full bg-transparent
+                                              shadow-[0_-16px_0_0_#fff]" />
+          <span aria-hidden="true" className="absolute top-0 -right-8 w-8 h-8 rounded-full bg-transparent
+                                              shadow-[0_-16px_0_0_#fff]" />
+        </div>
 
         {/* Newsletter — straddles the cutout */}
         <NewsletterPill />
@@ -113,7 +119,7 @@ export function Footer() {
 /* Newsletter pill (client island for input state) */
 function NewsletterPill() {
   return (
-    <div className="relative z-[5] max-w-2xl mx-auto -mt-[72px] md:-mt-[80px] mb-12 md:mb-16 px-4">
+    <div className="relative z-[5] max-w-[500px] md:max-w-[580px] mx-auto -mt-[44px] md:-mt-[46px] mb-12 md:mb-16 px-4">
       <form
         className="bg-brand-500 rounded-full shadow-card flex items-center p-2 gap-2"
         aria-label="فرم خبرنامه"

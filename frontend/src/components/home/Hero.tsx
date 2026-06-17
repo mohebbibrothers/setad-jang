@@ -35,7 +35,7 @@ export function Hero() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.7, ease: 'easeOut' }}
-          className="relative mx-auto w-full max-w-[680px] pb-14"
+          className="relative mx-auto w-full max-w-[680px] pb-5"
         >
           <Image
             src="/brand/hero-defenders.png"
@@ -46,10 +46,11 @@ export function Hero() {
             sizes="(max-width: 768px) 90vw, 680px"
             className="relative z-10 w-full h-auto select-none"
           />
+          {/* White fade gradient below photo (designer mockup) */}
           <div
             aria-hidden="true"
-            className="absolute inset-x-[10%] bottom-7 h-20 z-0 pointer-events-none
-                       bg-[radial-gradient(ellipse_at_center_top,rgba(13,128,116,0.18),transparent_70%)]"
+            className="absolute inset-x-0 -bottom-3 h-36 z-20 pointer-events-none
+                       bg-gradient-to-b from-transparent via-white/50 to-white"
           />
         </motion.div>
 
@@ -60,7 +61,7 @@ export function Hero() {
           role="search"
           action="/search"
           method="get"
-          className="relative z-20 mx-auto -mt-9 md:-mt-11 max-w-3xl
+          className="relative z-30 mx-auto -mt-24 md:-mt-28 max-w-3xl
                      bg-white border-[1.5px] border-brand-300 rounded-full shadow-soft
                      flex items-center pl-1.5 pr-6 py-1.5
                      focus-within:border-brand-500 focus-within:shadow-card transition-all gap-2"
