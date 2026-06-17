@@ -12,7 +12,14 @@ from django.utils.crypto import salted_hmac
 
 from apps.core.models import BaseModel
 
-from .choices import Gender, OTPPurpose, UserRole
+from .choices import (
+    AuthRiskSeverity,
+    AuthRiskSignalType,
+    AuthRiskStatus,
+    Gender,
+    OTPPurpose,
+    UserRole,
+)
 from .managers import UserAllManager, UserManager
 
 # ============================================================
@@ -191,6 +198,35 @@ class AuthSession(BaseModel):
         """Build a stable non-PII fingerprint hash from request metadata."""
         payload = f"{user_agent[:512]}|{ip_address or ''}"
         return salted_hmac("auth-session-fingerprint", payload).hexdigest()
+
+
+class AuthRiskSignal(BaseModel):
+    """Authentication/session risk signal for admin security review."""
+
+    signal_type = models.CharField(max_length=40, choices=AuthRiskSignalType.choices, db_index=True)
+    severity = models.CharField(max_length=20, choices=AuthRiskSeverity.choices, default=AuthRiskSeverity.MEDIUM, db_index=True)
+    status = models.CharField(max_length=20, choices=AuthRiskStatus.choices, default=AuthRiskStatus.OPEN, db_index=True)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="auth_risk_signals")
+    session = models.ForeignKey(AuthSession, on_delete=models.SET_NULL, null=True, blank=True, related_name="risk_signals")
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    description = models.TextField(blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    reviewed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="reviewed_auth_risk_signals")
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    review_note = models.TextField(blank=True)
+
+    class Meta:
+        verbose_name = "سیگنال ریسک احراز هویت"
+        verbose_name_plural = "سیگنال‌های ریسک احراز هویت"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["signal_type", "status", "-created_at"]),
+            models.Index(fields=["user", "status", "-created_at"]),
+            models.Index(fields=["severity", "status", "-created_at"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.signal_type}:{self.severity}:{self.status}"
 
 
 class Profile(BaseModel):

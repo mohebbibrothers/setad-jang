@@ -324,6 +324,81 @@ paths:
               schema:
                 $ref: '#/components/schemas/AuditLogGenericErrorResponse'
           description: ''
+  /api/v1/auth/admin/risk-signals/:
+    get:
+      operationId: auth_admin_risk_signals_list
+      description: Admin list endpoint for authentication risk signals.
+      summary: لیست سیگنال‌های ریسک احراز هویت
+      tags:
+      - احراز هویت — مدیریت
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthRiskSignalListResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthenticationGenericErrorResponse'
+          description: ''
+  /api/v1/auth/admin/risk-signals/{signal_id}/review/:
+    post:
+      operationId: auth_admin_risk_signal_review
+      description: Admin endpoint to review/dismiss/escalate an authentication risk
+        signal.
+      summary: بررسی سیگنال ریسک احراز هویت
+      parameters:
+      - in: path
+        name: signal_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - احراز هویت — مدیریت
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthRiskSignalReview'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AuthRiskSignalReview'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AuthRiskSignalReview'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthRiskSignalDetailResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthenticationGenericErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthenticationGenericErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthenticationGenericErrorResponse'
+          description: ''
   /api/v1/auth/admin/users/:
     get:
       operationId: auth_admin_users_list
@@ -12973,6 +13048,166 @@ components:
       description: |-
         * `male` - مرد
         * `female` - زن
+    AuthRiskSignal:
+      type: object
+      description: Read serializer for authentication risk signals.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        signal_type:
+          allOf:
+          - $ref: '#/components/schemas/AuthRiskSignalTypeEnum'
+          readOnly: true
+        signal_type_display:
+          type: string
+          readOnly: true
+        severity:
+          allOf:
+          - $ref: '#/components/schemas/MadadkarRiskSeverityEnum'
+          readOnly: true
+        severity_display:
+          type: string
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/MadadkarRiskStatusEnum'
+          readOnly: true
+        status_display:
+          type: string
+          readOnly: true
+        user:
+          type: integer
+          readOnly: true
+        user_email:
+          type: string
+          format: email
+          readOnly: true
+          nullable: true
+        session:
+          type: integer
+          readOnly: true
+          nullable: true
+        ip_address:
+          type: string
+          readOnly: true
+          nullable: true
+        description:
+          type: string
+          readOnly: true
+        metadata:
+          readOnly: true
+        reviewed_by_email:
+          type: string
+          format: email
+          readOnly: true
+          nullable: true
+        reviewed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        review_note:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: تاریخ ایجاد
+      required:
+      - created_at
+      - description
+      - id
+      - ip_address
+      - metadata
+      - review_note
+      - reviewed_at
+      - reviewed_by_email
+      - session
+      - severity
+      - severity_display
+      - signal_type
+      - signal_type_display
+      - status
+      - status_display
+      - user
+      - user_email
+    AuthRiskSignalDetailResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          default: true
+        status_code:
+          type: integer
+          default: 200
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/AuthRiskSignal'
+      required:
+      - data
+      - message
+    AuthRiskSignalListResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/AuthRiskSignalListResponseData'
+        success:
+          type: boolean
+          default: true
+        status_code:
+          type: integer
+          default: 200
+        message:
+          type: string
+      required:
+      - data
+      - message
+    AuthRiskSignalListResponseData:
+      type: object
+      properties:
+        count:
+          type: integer
+        next:
+          type: string
+          format: uri
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuthRiskSignal'
+      required:
+      - count
+      - results
+    AuthRiskSignalReview:
+      type: object
+      description: Input serializer for reviewing authentication risk signals.
+      properties:
+        status:
+          $ref: '#/components/schemas/RiskReviewStatusEnum'
+        review_note:
+          type: string
+          default: ''
+      required:
+      - status
+    AuthRiskSignalTypeEnum:
+      enum:
+      - new_device
+      - new_ip
+      - failed_login_spike
+      - session_revoke_spike
+      type: string
+      description: |-
+        * `new_device` - دستگاه جدید
+        * `new_ip` - IP جدید
+        * `failed_login_spike` - افزایش تلاش ورود ناموفق
+        * `session_revoke_spike` - افزایش لغو نشست
     AuthSession:
       type: object
       description: Read serializer for tracked user auth sessions/devices.
@@ -19117,22 +19352,12 @@ components:
       description: Input serializer for reviewing/dismissing/escalating risk signals.
       properties:
         status:
-          $ref: '#/components/schemas/MadadkarRiskSignalReviewStatusEnum'
+          $ref: '#/components/schemas/RiskReviewStatusEnum'
         review_note:
           type: string
           default: ''
       required:
       - status
-    MadadkarRiskSignalReviewStatusEnum:
-      enum:
-      - reviewed
-      - dismissed
-      - escalated
-      type: string
-      description: |-
-        * `reviewed` - بررسی‌شده
-        * `dismissed` - ردشده
-        * `escalated` - ارجاع‌شده
     MadadkarRiskSignalTypeEnum:
       enum:
       - high_amount_new_user
@@ -24185,6 +24410,16 @@ components:
       - code
       - email
       - new_password
+    RiskReviewStatusEnum:
+      enum:
+      - reviewed
+      - dismissed
+      - escalated
+      type: string
+      description: |-
+        * `reviewed` - بررسی‌شده
+        * `dismissed` - ردشده
+        * `escalated` - ارجاع‌شده
     RoleEnum:
       enum:
       - user

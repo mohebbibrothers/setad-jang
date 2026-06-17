@@ -16,9 +16,9 @@ from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from .choices import OTPPurpose, UserRole
+from .choices import AuthRiskSeverity, AuthRiskSignalType, AuthRiskStatus, OTPPurpose, UserRole
 from .logging_utils import mask_identifier
-from .models import AuthSession, OTPCode, PrimaryIdentifierKind, Profile, User
+from .models import AuthRiskSignal, AuthSession, OTPCode, PrimaryIdentifierKind, Profile, User
 from .normalizers import normalize_email, normalize_phone
 from .otp import (
     OTPCooldownActive,
@@ -360,11 +360,124 @@ def _build_login_result(*, user: User, request: HttpRequest) -> dict[str, Any]:
 
     tokens = _issue_tokens(user=user)
     session = _create_auth_session(user=user, refresh_token=tokens["refresh"], request=request)
+    evaluate_auth_session_risk(session=session)
     return {
         "user": user,
         "tokens": tokens,
         "session": session,
     }
+
+
+def create_auth_risk_signal(
+    *,
+    signal_type: str,
+    severity: str,
+    user: User,
+    session: AuthSession | None = None,
+    ip_address: str | None = None,
+    description: str = "",
+    metadata: dict[str, Any] | None = None,
+) -> AuthRiskSignal:
+    """Create auth risk signal unless an equivalent open signal already exists."""
+    existing = AuthRiskSignal.objects.filter(
+        signal_type=signal_type,
+        status=AuthRiskStatus.OPEN,
+        user=user,
+        session=session,
+        ip_address=ip_address,
+    ).first()
+    if existing is not None:
+        return existing
+    return AuthRiskSignal.objects.create(
+        signal_type=signal_type,
+        severity=severity,
+        user=user,
+        session=session,
+        ip_address=ip_address,
+        description=description,
+        metadata=metadata or {},
+    )
+
+
+def evaluate_auth_session_risk(*, session: AuthSession) -> list[AuthRiskSignal]:
+    """Evaluate risk created by a newly issued auth session."""
+    signals: list[AuthRiskSignal] = []
+    previous_sessions = AuthSession.objects.filter(user=session.user).exclude(pk=session.pk)
+    if not previous_sessions.filter(fingerprint_hash=session.fingerprint_hash).exists():
+        signals.append(
+            create_auth_risk_signal(
+                signal_type=AuthRiskSignalType.NEW_DEVICE,
+                severity=AuthRiskSeverity.MEDIUM,
+                user=session.user,
+                session=session,
+                ip_address=session.ip_address,
+                description="ورود از دستگاه/اثر انگشت مرورگر جدید شناسایی شد.",
+                metadata={"device_label": session.device_label},
+            )
+        )
+    if session.ip_address and not previous_sessions.filter(ip_address=session.ip_address).exists():
+        signals.append(
+            create_auth_risk_signal(
+                signal_type=AuthRiskSignalType.NEW_IP,
+                severity=AuthRiskSeverity.LOW,
+                user=session.user,
+                session=session,
+                ip_address=session.ip_address,
+                description="ورود از IP جدید شناسایی شد.",
+                metadata={"device_label": session.device_label},
+            )
+        )
+    return signals
+
+
+def record_failed_login_risk(
+    *,
+    user: User | None,
+    ip_address: str | None,
+    window_minutes: int = 30,
+    threshold: int = 5,
+) -> AuthRiskSignal | None:
+    """Create failed-login spike risk signal after repeated failures for known users."""
+    if user is None:
+        return None
+    since = timezone.now() - timezone.timedelta(minutes=window_minutes)
+    recent_failures = AuthRiskSignal.objects.filter(
+        user=user,
+        signal_type=AuthRiskSignalType.FAILED_LOGIN_SPIKE,
+        created_at__gte=since,
+        status=AuthRiskStatus.OPEN,
+    ).count()
+    # The audit log stores every failure; this signal escalates after repeated view-level calls.
+    if recent_failures >= 1:
+        return None
+    from apps.audit_logs import actions as audit_actions
+    from apps.audit_logs.models import AuditLog
+
+    failure_count = AuditLog.objects.filter(user=user, action=audit_actions.LOGIN_FAILED, created_at__gte=since).count()
+    if failure_count < threshold:
+        return None
+    return create_auth_risk_signal(
+        signal_type=AuthRiskSignalType.FAILED_LOGIN_SPIKE,
+        severity=AuthRiskSeverity.HIGH,
+        user=user,
+        ip_address=ip_address,
+        description="تعداد تلاش‌های ورود ناموفق در بازه کوتاه غیرعادی است.",
+        metadata={"window_minutes": window_minutes, "failure_count": failure_count},
+    )
+
+
+@transaction.atomic
+def review_auth_risk_signal(*, signal: AuthRiskSignal, reviewed_by: User, status: str, review_note: str = "") -> AuthRiskSignal:
+    """Review/dismiss/escalate an authentication risk signal."""
+    if status not in {AuthRiskStatus.REVIEWED, AuthRiskStatus.DISMISSED, AuthRiskStatus.ESCALATED}:
+        raise AuthServiceError("وضعیت بررسی ریسک نامعتبر است.")
+    locked = AuthRiskSignal.objects.select_for_update().get(pk=signal.pk)
+    locked.status = status
+    locked.reviewed_by = reviewed_by
+    locked.reviewed_at = timezone.now()
+    locked.review_note = review_note.strip()
+    locked.save(update_fields=["status", "reviewed_by", "reviewed_at", "review_note", "updated_at"])
+    return locked
 
 
 def _map_otp_error_to_service_error(exc: Exception) -> OTPServiceError:

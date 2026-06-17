@@ -536,6 +536,12 @@ SPECTACULAR_SETTINGS = {
         "TabyinSyncModeEnum": "apps.tabyin.choices.SyncMode",
         "TabyinMediaTypeEnum": "apps.tabyin.choices.MediaType",
         "AuthGenderEnum": "apps.authentication.choices.Gender",
+        "AuthRiskSignalTypeEnum": "apps.authentication.choices.AuthRiskSignalType",
+        "RiskReviewStatusEnum": (
+            ("reviewed", "بررسی‌شده"),
+            ("dismissed", "ردشده"),
+            ("escalated", "ارجاع‌شده"),
+        ),
         "R4JGenderEnum": "apps.r4j.choices.Gender",
         "R4JSocialPlatformEnum": "apps.r4j.choices.SocialPlatform",
         "R4JCriminalAttachmentKindEnum": "apps.r4j.choices.CriminalAttachmentKind",

@@ -10,8 +10,8 @@ from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 
-from .choices import Gender, UserRole
-from .models import AuthSession, PrimaryIdentifierKind, Profile, User
+from .choices import AuthRiskStatus, Gender, UserRole
+from .models import AuthRiskSignal, AuthSession, PrimaryIdentifierKind, Profile, User
 from .normalizers import normalize_email, normalize_identifier, normalize_phone
 from .validators import validate_email_for_signup, validate_phone_format
 
@@ -642,3 +642,49 @@ class AuthSessionSerializer(serializers.ModelSerializer):
             "created_at",
         )
         read_only_fields = fields
+
+
+class AuthRiskSignalSerializer(serializers.ModelSerializer):
+    """Read serializer for authentication risk signals."""
+
+    user_email = serializers.EmailField(source="user.email", read_only=True, allow_null=True)
+    reviewed_by_email = serializers.EmailField(source="reviewed_by.email", read_only=True, allow_null=True)
+    signal_type_display = serializers.CharField(source="get_signal_type_display", read_only=True)
+    severity_display = serializers.CharField(source="get_severity_display", read_only=True)
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+
+    class Meta:
+        model = AuthRiskSignal
+        fields = (
+            "id",
+            "signal_type",
+            "signal_type_display",
+            "severity",
+            "severity_display",
+            "status",
+            "status_display",
+            "user",
+            "user_email",
+            "session",
+            "ip_address",
+            "description",
+            "metadata",
+            "reviewed_by_email",
+            "reviewed_at",
+            "review_note",
+            "created_at",
+        )
+        read_only_fields = fields
+
+
+class AuthRiskSignalReviewSerializer(serializers.Serializer):
+    """Input serializer for reviewing authentication risk signals."""
+
+    status = serializers.ChoiceField(
+        choices=(
+            (AuthRiskStatus.REVIEWED, AuthRiskStatus.REVIEWED.label),
+            (AuthRiskStatus.DISMISSED, AuthRiskStatus.DISMISSED.label),
+            (AuthRiskStatus.ESCALATED, AuthRiskStatus.ESCALATED.label),
+        ),
+    )
+    review_note = serializers.CharField(required=False, allow_blank=True, default="")

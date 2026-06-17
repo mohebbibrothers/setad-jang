@@ -34,6 +34,33 @@ class OTPPurpose(models.TextChoices):
     PASSWORD_RESET = "password_reset", "بازیابی رمز عبور"
 
 
+class AuthRiskSignalType(models.TextChoices):
+    """Risk signals detected from authentication/session behavior."""
+
+    NEW_DEVICE = "new_device", "دستگاه جدید"
+    NEW_IP = "new_ip", "IP جدید"
+    FAILED_LOGIN_SPIKE = "failed_login_spike", "افزایش تلاش ورود ناموفق"
+    SESSION_REVOKE_SPIKE = "session_revoke_spike", "افزایش لغو نشست"
+
+
+class AuthRiskSeverity(models.TextChoices):
+    """Severity for authentication risk signals."""
+
+    LOW = "low", "کم"
+    MEDIUM = "medium", "متوسط"
+    HIGH = "high", "زیاد"
+    CRITICAL = "critical", "بحرانی"
+
+
+class AuthRiskStatus(models.TextChoices):
+    """Review state for authentication risk signals."""
+
+    OPEN = "open", "باز"
+    REVIEWED = "reviewed", "بررسی‌شده"
+    DISMISSED = "dismissed", "ردشده"
+    ESCALATED = "escalated", "ارجاع‌شده"
+
+
 class Gender(models.TextChoices):
     """جنسیت برای پروفایل تکمیلی."""
 

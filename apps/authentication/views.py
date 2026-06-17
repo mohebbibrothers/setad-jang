@@ -44,6 +44,8 @@ from .otp import OTPCooldownActive, OTPDeliveryError
 from .permissions import IsAdminUser
 from .selectors import (
     get_active_user_by_email,
+    get_admin_auth_risk_signal_by_id,
+    get_admin_auth_risk_signals,
     get_all_users_for_admin,
     get_user_auth_session_by_id,
     get_user_auth_sessions,
@@ -53,6 +55,8 @@ from .selectors import (
 from .serializers import (
     AdminChangeRoleSerializer,
     AdminUserUpdateSerializer,
+    AuthRiskSignalReviewSerializer,
+    AuthRiskSignalSerializer,
     AuthSessionSerializer,
     ChangePasswordSerializer,
     ForgotPasswordSerializer,
@@ -107,6 +111,7 @@ from .services import (
     register_user,
     request_password_reset,
     reset_password_with_otp,
+    review_auth_risk_signal,
     revoke_all_user_sessions,
     revoke_auth_session,
     signup_request,
@@ -207,6 +212,14 @@ AUTH_SESSION_LIST_RESPONSE = build_paginated_success_response_serializer(
 AUTH_SESSION_DETAIL_RESPONSE = build_success_response_serializer(
     name="AuthSessionDetailResponse",
     data_serializer=AuthSessionSerializer,
+)
+AUTH_RISK_SIGNAL_LIST_RESPONSE = build_paginated_success_response_serializer(
+    name="AuthRiskSignalListResponse",
+    item_serializer=AuthRiskSignalSerializer,
+)
+AUTH_RISK_SIGNAL_DETAIL_RESPONSE = build_success_response_serializer(
+    name="AuthRiskSignalDetailResponse",
+    data_serializer=AuthRiskSignalSerializer,
 )
 
 PROFILE_SUCCESS_RESPONSE = build_success_response_serializer(
@@ -1484,6 +1497,55 @@ class LogoutAPIView(APIView):
         )
 
         return SuccessResponse(message="با موفقیت خارج شدید.")
+
+
+class AdminAuthRiskSignalListAPIView(APIView):
+    """Admin list endpoint for authentication risk signals."""
+
+    permission_classes = [IsAdminUser]
+    pagination_class = StandardPagination
+
+    @extend_schema(operation_id="auth_admin_risk_signals_list", tags=[TAG_AUTH_ADMIN], summary="لیست سیگنال‌های ریسک احراز هویت", responses={200: AUTH_RISK_SIGNAL_LIST_RESPONSE, 403: GENERIC_ERROR_RESPONSE})
+    def get(self, request: Request) -> Response:
+        queryset = get_admin_auth_risk_signals()
+        status_filter = request.query_params.get("status")
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+        severity_filter = request.query_params.get("severity")
+        if severity_filter:
+            queryset = queryset.filter(severity=severity_filter)
+        paginator = self.pagination_class()
+        page = paginator.paginate_queryset(queryset, request, view=self)
+        if page is not None:
+            serializer = AuthRiskSignalSerializer(page, many=True)
+            return paginator.get_paginated_response(serializer.data, message="لیست سیگنال‌های ریسک دریافت شد.")
+        return SuccessResponse(data=AuthRiskSignalSerializer(queryset, many=True).data, message="لیست سیگنال‌های ریسک دریافت شد.")
+
+
+class AdminAuthRiskSignalReviewAPIView(APIView):
+    """Admin endpoint to review/dismiss/escalate an authentication risk signal."""
+
+    permission_classes = [IsAdminUser]
+
+    @extend_schema(operation_id="auth_admin_risk_signal_review", tags=[TAG_AUTH_ADMIN], summary="بررسی سیگنال ریسک احراز هویت", request=AuthRiskSignalReviewSerializer, responses={200: AUTH_RISK_SIGNAL_DETAIL_RESPONSE, 400: GENERIC_ERROR_RESPONSE, 403: GENERIC_ERROR_RESPONSE, 404: GENERIC_ERROR_RESPONSE})
+    def post(self, request: Request, signal_id: int) -> Response:
+        signal = get_admin_auth_risk_signal_by_id(signal_id=signal_id)
+        if signal is None:
+            return ErrorResponse(message="سیگنال ریسکی با این شناسه یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+        serializer = AuthRiskSignalReviewSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            signal = review_auth_risk_signal(
+                signal=signal,
+                reviewed_by=request.user,
+                status=serializer.validated_data["status"],
+                review_note=serializer.validated_data.get("review_note", ""),
+            )
+        except Exception as exc:
+            return ErrorResponse(message=str(exc))
+        metadata = extract_audit_metadata(request)
+        log_action_async(user_id=request.user.pk, action=audit_actions.AUTH_RISK_SIGNAL_REVIEWED, resource_type="auth_risk_signal", resource_id=str(signal.pk), extra_data={"status": signal.status, "signal_type": signal.signal_type}, **metadata)
+        return SuccessResponse(data=AuthRiskSignalSerializer(signal).data, message="سیگنال ریسک بررسی شد.")
 
 
 class AuthSessionListAPIView(APIView):

@@ -5,6 +5,8 @@ URL routing for authentication public, user, and admin APIs.
 from django.urls import path
 
 from .views import (
+    AdminAuthRiskSignalListAPIView,
+    AdminAuthRiskSignalReviewAPIView,
     AdminChangeUserRoleAPIView,
     AdminUserDetailAPIView,
     AdminUserListAPIView,
@@ -103,6 +105,8 @@ urlpatterns = [
     # ========================================================
     # Admin
     # ========================================================
+    path("admin/risk-signals/", AdminAuthRiskSignalListAPIView.as_view(), name="admin-risk-signal-list"),
+    path("admin/risk-signals/<int:signal_id>/review/", AdminAuthRiskSignalReviewAPIView.as_view(), name="admin-risk-signal-review"),
     path("admin/users/", AdminUserListAPIView.as_view(), name="admin-user-list"),
     path("admin/users/<int:user_id>/", AdminUserDetailAPIView.as_view(), name="admin-user-detail"),
     path(
