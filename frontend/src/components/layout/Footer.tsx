@@ -48,36 +48,35 @@ const COLS = [
 
 export function Footer() {
   return (
-    <footer className="relative bg-white pt-12 md:pt-14">
-      {/* Independent rounded pill that wraps the green newsletter.
-          A soft radial halo around it fades from pure white in the
-          centre to transparent at the edges so the white blends into
-          the ink-50 cutout surface (no harsh white edge). */}
+    <footer className="relative bg-white pt-[4.5rem] md:pt-[5.5rem]">
+      {/* Independent rounded pill wrapping the green newsletter.
+          Lifted so the green pill sits HIGHER (white area + top of dip),
+          which is more legible and matches the designer mockup proportions.
+          Soft radial halo blends the white pill into ink-50 with no edge. */}
       <div
-        className="absolute left-1/2 top-20 md:top-[5.5rem] -translate-x-1/2 z-10
+        className="absolute left-1/2 top-10 md:top-11 -translate-x-1/2 z-10
                    w-[min(620px,90vw)] md:w-[min(680px,80vw)]
-                   rounded-full p-[18px] md:p-[22px] px-[22px] md:px-[28px]
-                   shadow-[0_6px_24px_-10px_rgba(11,53,48,0.10)]
-                   before:content-[''] before:absolute before:inset-[-14px]
-                   before:rounded-[inherit] before:-z-10 before:pointer-events-none
-                   before:blur-[6px]
-                   before:[background:radial-gradient(ellipse_95%_140%_at_50%_50%,rgba(255,255,255,0.85)_0%,rgba(255,255,255,0.35)_55%,rgba(255,255,255,0)_100%)]"
+                   rounded-full p-[10px] md:p-[12px] px-[14px] md:px-[16px]
+                   before:content-[''] before:absolute before:inset-[-22px] before:-z-10
+                   before:rounded-full before:pointer-events-none before:blur-[8px]
+                   before:[background:radial-gradient(ellipse_70%_110%_at_center,rgba(255,255,255,0.70)_0%,rgba(255,255,255,0.35)_40%,rgba(255,255,255,0)_75%)]"
         style={{
           background:
-            'radial-gradient(ellipse 110% 200% at 50% 50%, #ffffff 0%, #ffffff 38%, rgba(255,255,255,0.85) 55%, rgba(255,255,255,0.45) 75%, rgba(245,248,250,0) 100%) padding-box',
+            'radial-gradient(ellipse 75% 130% at center, #ffffff 50%, rgba(255,255,255,0.95) 68%, rgba(245,248,250,0.78) 84%, rgba(245,248,250,0) 100%)',
+          boxShadow:
+            '0 1px 3px -1px rgba(11,53,48,0.05), 0 12px 28px -14px rgba(11,53,48,0.12)',
         }}
       >
         <NewsletterPill />
       </div>
 
-      {/* Light ink-50 card with the bowed top cutout from Asset 3 (deeper
-          band so the dip clearly wraps the white newsletter pill above). */}
+      {/* Light ink-50 card with the bowed top cutout from Asset 3 */}
       <div
-        className="relative max-w-[1280px] mx-auto px-4 md:px-8 pt-32 md:pt-36 pb-6 md:pb-8
+        className="relative max-w-[1280px] mx-auto px-4 md:px-8 pt-24 md:pt-[6.5rem] pb-6 md:pb-8
                    bg-ink-50 rounded-t-[2rem] md:rounded-t-[2.5rem]"
         style={{
           backgroundImage: 'url(/brand/footer-newsletter-card.png)',
-          backgroundSize: '100% 140px',
+          backgroundSize: '100% 120px',
           backgroundRepeat: 'no-repeat',
           backgroundPosition: 'center top',
         }}
