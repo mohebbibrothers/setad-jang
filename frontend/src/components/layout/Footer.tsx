@@ -49,14 +49,24 @@ const COLS = [
 export function Footer() {
   return (
     <footer className="relative bg-white pt-12 md:pt-14">
-      {/* Independent white rounded pill that wraps the green newsletter
-          and sits inside the bowed cutout — visually placed ON the
-          ink-50 surface, with the dip wrapping around it on all sides.
-          Matches designer Asset 3 exactly. */}
-      <div className="absolute left-1/2 top-20 md:top-[5.5rem] -translate-x-1/2 z-10
-                      w-[min(620px,90vw)] md:w-[min(680px,80vw)]
-                      bg-white rounded-full p-2 md:p-2.5
-                      shadow-[0_4px_14px_-6px_rgba(11,53,48,0.10)]">
+      {/* Independent rounded pill that wraps the green newsletter.
+          A soft radial halo around it fades from pure white in the
+          centre to transparent at the edges so the white blends into
+          the ink-50 cutout surface (no harsh white edge). */}
+      <div
+        className="absolute left-1/2 top-20 md:top-[5.5rem] -translate-x-1/2 z-10
+                   w-[min(620px,90vw)] md:w-[min(680px,80vw)]
+                   rounded-full p-[18px] md:p-[22px] px-[22px] md:px-[28px]
+                   shadow-[0_6px_24px_-10px_rgba(11,53,48,0.10)]
+                   before:content-[''] before:absolute before:inset-[-14px]
+                   before:rounded-[inherit] before:-z-10 before:pointer-events-none
+                   before:blur-[6px]
+                   before:[background:radial-gradient(ellipse_95%_140%_at_50%_50%,rgba(255,255,255,0.85)_0%,rgba(255,255,255,0.35)_55%,rgba(255,255,255,0)_100%)]"
+        style={{
+          background:
+            'radial-gradient(ellipse 110% 200% at 50% 50%, #ffffff 0%, #ffffff 38%, rgba(255,255,255,0.85) 55%, rgba(255,255,255,0.45) 75%, rgba(245,248,250,0) 100%) padding-box',
+        }}
+      >
         <NewsletterPill />
       </div>
 
