@@ -34,46 +34,25 @@ const ACTIVITIES: Activity[] = [
 export function ActivitiesPanel() {
   return (
     <section
-      className="relative pt-0 pb-16 md:pb-20 -mt-12 md:-mt-16 z-10"
+      className="relative pt-0 pb-20 md:pb-24 mt-2 md:mt-4 z-10"
       aria-labelledby="activities-title"
     >
       <div className="container-edge">
         <div
-          className="relative text-white px-5 sm:px-8 md:px-12 pt-16 md:pt-20 pb-8 md:pb-12
-                     min-h-[260px] md:min-h-[300px] rounded-b-[36px] md:rounded-b-[56px]
-                     overflow-hidden"
-          style={{ backgroundColor: '#006666' }}
+          className="relative text-white px-5 sm:px-8 md:px-12 pt-12 md:pt-14"
+          style={{
+            backgroundImage: 'url(/brand/activities-panel.png)',
+            backgroundSize: '100% 100%',
+            backgroundRepeat: 'no-repeat',
+          }}
         >
-          {/* Decorative wavy top (designer Asset 1) */}
-          <div
-            aria-hidden="true"
-            className="absolute inset-x-0 top-0 h-[80px] md:h-[96px] z-[1] pointer-events-none"
-            style={{
-              backgroundImage: 'url(/brand/activities-panel.png)',
-              backgroundSize: '100% 100%',
-              backgroundRepeat: 'no-repeat',
-              backgroundPosition: 'top center',
-            }}
-          />
-          {/* Subtle topographic pattern */}
-          <div
-            aria-hidden="true"
-            className="absolute inset-0 opacity-[0.07] pointer-events-none"
-            style={{
-              backgroundImage: [
-                'radial-gradient(circle at 20% 30%, rgba(255,255,255,.6) 0, transparent 40%)',
-                'radial-gradient(circle at 80% 70%, rgba(255,255,255,.5) 0, transparent 40%)',
-                'radial-gradient(circle at 50% 50%, rgba(255,255,255,.4) 0, transparent 50%)',
-              ].join(','),
-            }}
-          />
           <motion.h2
             id="activities-title"
             initial={{ opacity: 0, y: 8 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.5 }}
-            className="text-center text-xl md:text-[26px] font-extrabold mb-7 md:mb-9 text-white"
+            className="text-center text-xl md:text-[26px] font-extrabold mb-7 md:mb-9 text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.2)]"
           >
             اهم فعالیت‌ها
           </motion.h2>

@@ -35,7 +35,7 @@ export function Hero() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.7, ease: 'easeOut' }}
-          className="relative mx-auto w-full max-w-[680px] pb-5"
+          className="relative mx-auto w-full max-w-[680px]"
         >
           <Image
             src="/brand/hero-defenders.png"
@@ -46,11 +46,11 @@ export function Hero() {
             sizes="(max-width: 768px) 90vw, 680px"
             className="relative z-10 w-full h-auto select-none"
           />
-          {/* White fade gradient below photo (designer mockup) */}
+          {/* White fade gradient at the bottom of the photo — matches mockup */}
           <div
             aria-hidden="true"
-            className="absolute inset-x-0 -bottom-3 h-36 z-20 pointer-events-none
-                       bg-gradient-to-b from-transparent via-white/50 to-white"
+            className="absolute inset-x-0 bottom-0 h-[42%] z-20 pointer-events-none
+                       bg-[linear-gradient(to_top,#ffffff_0%,rgba(255,255,255,0.92)_28%,rgba(255,255,255,0)_100%)]"
           />
         </motion.div>
 
@@ -61,10 +61,10 @@ export function Hero() {
           role="search"
           action="/search"
           method="get"
-          className="relative z-30 mx-auto -mt-24 md:-mt-28 max-w-3xl
-                     bg-white border-[1.5px] border-brand-300 rounded-full shadow-soft
+          className="relative z-30 mx-auto -mt-[120px] md:-mt-[140px] lg:-mt-[160px] max-w-3xl
+                     bg-white border-[1.5px] border-brand-300 rounded-full shadow-card
                      flex items-center pl-1.5 pr-6 py-1.5
-                     focus-within:border-brand-500 focus-within:shadow-card transition-all gap-2"
+                     focus-within:border-brand-500 transition-all gap-2"
         >
           <input
             type="search"

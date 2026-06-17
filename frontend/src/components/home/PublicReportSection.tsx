@@ -101,7 +101,8 @@ export function PublicReportSection({
             </div>
 
             <div className="md:col-span-2 relative">
-              <MessageSquareText className="w-4 h-4 text-brand-500 absolute right-4 top-[1.45rem] z-10 pointer-events-none" />
+              {/* Icon aligned to first text line baseline (top:1.25rem matches padding-top + half line-height) */}
+              <MessageSquareText className="w-4 h-4 text-brand-500 absolute right-4 top-[1.25rem] z-10 pointer-events-none" />
               <textarea
                 value={form.description}
                 onChange={(e) => update('description', e.target.value)}
@@ -109,9 +110,9 @@ export function PublicReportSection({
                 aria-label="شرح گزارش"
                 rows={5}
                 dir="rtl"
-                className="w-full pr-10 pl-4 py-[1.1rem] rounded-xl bg-white text-ink-800 text-[14px]
+                className="w-full pr-10 pl-4 pt-[1.15rem] pb-4 rounded-xl bg-white text-ink-800 text-[14px]
                            outline-none focus:ring-2 focus:ring-white/60 resize-y min-h-[140px]
-                           text-right leading-[1.9]"
+                           text-right leading-7"
               />
             </div>
           </div>
