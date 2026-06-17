@@ -15,45 +15,48 @@ const ACTIVITIES: Activity[] = [
 ];
 
 /**
- * Activities panel — designer-faithful (v14b).
+ * Activities panel — designer-faithful (v16).
  *
- *  - Green wave panel (Asset 1 PNG bg) with generous top + bottom padding
- *    so the title sits centred and there is room for cards to overlap
- *    the bottom edge.
- *  - SOFT TOP FADE inside the panel: white→transparent linear-gradient
- *    overlay that lets the hero photo above bleed gently through the
- *    upper edge. The fade is masked off in the center 12% so the
- *    chevron-down notch stays sharp.
- *  - White pill CARDS are siblings of the panel, pulled UP with negative
- *    top margin so their top half sits inside the panel and their bottom
- *    half overflows below it. Thin brand-400 border around each card
- *    (per the green hairline in the mockup).
- *  - Fully responsive: 2 / 3 / 5 columns; icon and label sizes step up
- *    across breakpoints.
+ * Highlights of this revision:
+ *  - PANEL is shorter and uses fluid clamp() padding so it never feels
+ *    too tall or too cramped at any viewport.
+ *  - TITLE "اهم فعالیت‌ها" is pushed lower so it doesn't kiss the top
+ *    wave edge of the asset.
+ *  - SOFT TOP FADE inside the panel lets the hero photo above bleed
+ *    gently through (masked off near the chevron notch).
+ *  - CARDS overflow the panel's bottom edge ~50%. Each card has a
+ *    BRAND-500 border (matches the panel teal exactly), perfect-square
+ *    aspect ratio, icon constrained to 55% of card width with a hard
+ *    max-width so it can NEVER spill out, and overflow-hidden so any
+ *    edge case is clipped cleanly.
+ *  - GRID uses minmax(0, 1fr) so columns truly share width equally and
+ *    children with intrinsic sizes can't blow out the row.
+ *  - LAYOUT scales smoothly with clamp() — fewer hard breakpoints means
+ *    no more "jumpy" behaviour at intermediate widths.
  */
 export function ActivitiesPanel() {
   return (
     <section
-      className="relative mt-8 md:mt-10 pb-20 md:pb-24"
+      className="relative mt-10 md:mt-12 pb-20 md:pb-24"
       aria-labelledby="activities-title"
     >
       <div className="container-edge">
         <div className="relative">
-          {/* Green wave panel — shorter than before so the cards
-              overlap the bottom edge by ~half (matches mockup). */}
+          {/* Green wave panel (fluid sizing) */}
           <div
-            className="relative text-white px-4 sm:px-8 md:px-12
-                       pt-10 sm:pt-12 md:pt-[3.25rem] lg:pt-14
-                       pb-12 sm:pb-14 md:pb-16 lg:pb-[4.5rem]
-                       min-h-[160px] sm:min-h-[190px] md:min-h-[220px] lg:min-h-[240px]"
+            className="relative text-white"
             style={{
               backgroundImage: 'url(/brand/activities-panel.png)',
               backgroundSize: '100% 100%',
               backgroundRepeat: 'no-repeat',
+              paddingTop: 'clamp(2rem, 5vw, 3rem)',
+              paddingBottom: 'clamp(2.5rem, 5.5vw, 3.5rem)',
+              paddingInline: 'clamp(1rem, 4vw, 3rem)',
+              minHeight: 'clamp(140px, 18vw, 200px)',
             }}
           >
-            {/* Soft top-edge fade — hero photo bleeds gently through.
-                Masked in the center 12% so the chevron notch stays sharp. */}
+            {/* Soft top-edge fade so hero photo bleeds through gently.
+                Masked off in the center 12% so the chevron notch stays sharp. */}
             <div
               aria-hidden="true"
               className="pointer-events-none absolute inset-x-0 top-0 h-[55px]"
@@ -73,23 +76,25 @@ export function ActivitiesPanel() {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.5 }}
-              className="relative text-center text-xl md:text-[26px] font-extrabold text-white
+              className="relative text-center font-extrabold text-white
                          drop-shadow-[0_2px_8px_rgba(0,0,0,0.20)]"
+              style={{
+                marginTop: 'clamp(0.75rem, 2vw, 1.5rem)',
+                fontSize: 'clamp(1.05rem, 2.4vw, 1.5rem)',
+              }}
             >
               اهم فعالیت‌ها
             </motion.h2>
           </div>
 
-          {/* CARDS — perfect-square pills with a thicker brand border.
-              Pulled up with negative margin so they overlap the panel's
-              bottom edge by ~50%. Fully responsive with tuned scaling
-              at extra breakpoints (380 / 560) for cleaner small-viewport
-              fits. */}
+          {/* CARDS — pulled up to overlap the panel bottom ~half. */}
           <div
-            className="relative grid grid-cols-2 min-[560px]:grid-cols-3 md:grid-cols-5
-                       gap-2.5 min-[380px]:gap-3 min-[560px]:gap-3.5 md:gap-4 lg:gap-[1.125rem] xl:gap-5
-                       -mt-9 min-[560px]:-mt-11 md:-mt-12 lg:-mt-[3.25rem]
-                       px-1 min-[380px]:px-2 md:px-4 lg:px-6"
+            className="relative grid grid-cols-2 min-[480px]:grid-cols-3 min-[760px]:grid-cols-5"
+            style={{
+              gap: 'clamp(0.5rem, 1.4vw, 1.125rem)',
+              marginTop: 'clamp(-2.5rem, -5vw, -1.75rem)',
+              paddingInline: 'clamp(0.25rem, 1.5vw, 1.5rem)',
+            }}
           >
             {ACTIVITIES.map((a, i) => (
               <motion.div
@@ -98,44 +103,51 @@ export function ActivitiesPanel() {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ duration: 0.4, delay: i * 0.06 }}
+                className="min-w-0"
               >
                 <Link
                   href={a.href}
                   className="group flex flex-col items-center justify-between
-                             aspect-square w-full
+                             aspect-square w-full min-w-0 max-w-full overflow-hidden
                              bg-white text-ink-700
-                             border-[2.5px] min-[560px]:border-[3px] lg:border-[3.5px]
-                             border-brand-400 hover:border-brand-500
-                             rounded-[1.125rem] md:rounded-[1.25rem] lg:rounded-[1.5rem]
-                             p-3.5 min-[380px]:p-4 min-[560px]:p-4 md:p-[1.125rem] lg:p-5
-                             pb-2.5 md:pb-3.5
+                             border-brand-500 hover:border-brand-600
                              shadow-[0_14px_28px_-16px_rgba(0,0,0,0.30)]
                              hover:-translate-y-1 hover:shadow-[0_22px_42px_-16px_rgba(0,0,0,0.35)]
                              transition-all duration-300"
+                  style={{
+                    borderWidth: 'clamp(2px, 0.35vw, 3px)',
+                    borderStyle: 'solid',
+                    borderRadius: 'clamp(0.875rem, 1.6vw, 1.5rem)',
+                    padding:
+                      'clamp(0.625rem, 1.6vw, 1.125rem) clamp(0.375rem, 1vw, 0.875rem) clamp(0.5rem, 1.2vw, 1rem)',
+                  }}
                 >
-                  <div className="flex-1 flex items-center justify-center w-full max-h-[65%]">
-                    <div
-                      className="w-[42px] h-[42px] min-[380px]:w-[46px] min-[380px]:h-[46px]
-                                 min-[560px]:w-[50px] min-[560px]:h-[50px]
-                                 md:w-[54px] md:h-[54px]
-                                 lg:w-[60px] lg:h-[60px]
-                                 xl:w-[64px] xl:h-[64px]
-                                 group-hover:scale-110 transition-transform"
-                    >
-                      <Image
-                        src={a.icon}
-                        alt={a.iconAlt}
-                        width={64}
-                        height={64}
-                        className="w-full h-full object-contain"
-                      />
-                    </div>
+                  <div
+                    className="flex-shrink-0 flex items-center justify-center group-hover:scale-110 transition-transform"
+                    style={{
+                      width: '55%',
+                      maxWidth: '64px',
+                      aspectRatio: '1 / 1',
+                      marginTop: 'auto',
+                    }}
+                  >
+                    <Image
+                      src={a.icon}
+                      alt={a.iconAlt}
+                      width={64}
+                      height={64}
+                      className="w-full h-full object-contain"
+                    />
                   </div>
                   <p
-                    className="text-[10.5px] min-[380px]:text-[11.5px] min-[560px]:text-[12px]
-                               md:text-[12.5px] lg:text-[13.5px] xl:text-[14.5px]
-                               font-semibold text-ink-700 leading-[1.25] text-center mt-1.5
-                               whitespace-nowrap md:whitespace-normal"
+                    className="font-semibold text-ink-700 text-center w-full
+                               truncate min-[760px]:whitespace-normal min-[760px]:overflow-visible"
+                    style={{
+                      marginTop: 'auto',
+                      fontSize: 'clamp(10px, 1.35vw, 14.5px)',
+                      lineHeight: '1.25',
+                      paddingTop: 'clamp(0.375rem, 1.2vw, 0.75rem)',
+                    }}
                   >
                     {a.label}
                   </p>
