@@ -348,31 +348,32 @@ export function JusticeSection({ criminals }: { criminals: CriminalCard[] }) {
               ))}
             </AnimatePresence>
           </div>
-        </div>
 
-        <div className="flex items-center justify-center gap-4 mt-8">
-          <button
-            type="button"
-            aria-label="قبلی"
-            onClick={prev}
-            disabled={totalPages <= 1}
-            className="relative w-12 h-12 rounded-full hover:scale-110 active:scale-95
-                       transition-transform duration-200 disabled:opacity-40
-                       disabled:cursor-not-allowed disabled:hover:scale-100"
-          >
-            <Image src="/brand/pager-arrow-prev.png" alt="" fill sizes="48px" className="object-contain" />
-          </button>
-          <button
-            type="button"
-            aria-label="بعدی"
-            onClick={next}
-            disabled={totalPages <= 1}
-            className="relative w-12 h-12 rounded-full hover:scale-110 active:scale-95
-                       transition-transform duration-200 disabled:opacity-40
-                       disabled:cursor-not-allowed disabled:hover:scale-100"
-          >
-            <Image src="/brand/pager-arrow-next.png" alt="" fill sizes="48px" className="object-contain" />
-          </button>
+          {/* Pager — lives INSIDE the off-white panel, centred below the cards */}
+          <div className="flex items-center justify-center gap-4 mt-6 md:mt-8">
+            <button
+              type="button"
+              aria-label="قبلی"
+              onClick={prev}
+              disabled={totalPages <= 1}
+              className="relative w-12 h-12 rounded-full hover:scale-110 active:scale-95
+                         transition-transform duration-200 disabled:opacity-40
+                         disabled:cursor-not-allowed disabled:hover:scale-100"
+            >
+              <Image src="/brand/pager-arrow-prev.png" alt="" fill sizes="48px" className="object-contain" />
+            </button>
+            <button
+              type="button"
+              aria-label="بعدی"
+              onClick={next}
+              disabled={totalPages <= 1}
+              className="relative w-12 h-12 rounded-full hover:scale-110 active:scale-95
+                         transition-transform duration-200 disabled:opacity-40
+                         disabled:cursor-not-allowed disabled:hover:scale-100"
+            >
+              <Image src="/brand/pager-arrow-next.png" alt="" fill sizes="48px" className="object-contain" />
+            </button>
+          </div>
         </div>
       </div>
     </section>
