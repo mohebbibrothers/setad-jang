@@ -101,15 +101,17 @@ export function PublicReportSection({
             </div>
 
             <div className="md:col-span-2 relative">
-              <MessageSquareText className="w-4 h-4 text-brand-500 absolute right-4 top-4 z-10" />
+              <MessageSquareText className="w-4 h-4 text-brand-500 absolute right-4 top-[1.15rem] z-10 pointer-events-none" />
               <textarea
                 value={form.description}
                 onChange={(e) => update('description', e.target.value)}
-                placeholder="شرح نیاز یا کمک…"
+                placeholder="شرح گزارش یا سرنخ شما…"
                 aria-label="شرح گزارش"
                 rows={5}
-                className="w-full pr-10 pl-4 py-3 rounded-xl bg-white text-ink-800 text-[14px]
-                           outline-none focus:ring-2 focus:ring-white/60 resize-y min-h-[140px]"
+                dir="rtl"
+                className="w-full pr-10 pl-4 py-4 rounded-xl bg-white text-ink-800 text-[14px]
+                           outline-none focus:ring-2 focus:ring-white/60 resize-y min-h-[140px]
+                           text-right leading-7"
               />
             </div>
           </div>
@@ -123,14 +125,25 @@ export function PublicReportSection({
               <input type="file" className="hidden" />
             </label>
 
-            <label className="inline-flex items-center gap-2 px-2 text-sm text-white/90 cursor-pointer">
+            <label className="inline-flex items-center gap-2.5 h-12 px-5 rounded-xl
+                              bg-white/95 hover:bg-white cursor-pointer transition-colors">
               <input
                 type="checkbox"
                 checked={robot}
                 onChange={(e) => setRobot(e.target.checked)}
-                className="w-4 h-4 rounded accent-white"
+                className="sr-only peer"
               />
-              من ربات نیستم
+              <span className="w-5.5 h-5.5 rounded-md border-2 border-ink-300 bg-white
+                               flex items-center justify-center transition-all
+                               peer-checked:bg-brand-500 peer-checked:border-brand-500"
+                    style={{ width: '22px', height: '22px' }}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"
+                     strokeLinecap="round" strokeLinejoin="round"
+                     className={`w-3.5 h-3.5 text-white transition-opacity ${robot ? 'opacity-100' : 'opacity-0'}`}>
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              </span>
+              <span className="text-ink-800 font-semibold text-sm">من ربات نیستم</span>
             </label>
 
             <button
@@ -164,7 +177,7 @@ function Field({
 }) {
   return (
     <div className="relative">
-      <span className="absolute right-4 top-1/2 -translate-y-1/2 text-brand-500 z-10">{icon}</span>
+      <span className="absolute right-4 top-1/2 -translate-y-1/2 text-brand-500 z-10 pointer-events-none">{icon}</span>
       <input
         type={type}
         inputMode={inputMode}
@@ -172,8 +185,9 @@ function Field({
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         aria-label={placeholder}
+        dir="rtl"
         className="w-full h-12 pr-10 pl-4 rounded-xl bg-white text-ink-800 text-[14px]
-                   outline-none focus:ring-2 focus:ring-white/60 placeholder:text-ink-400"
+                   outline-none focus:ring-2 focus:ring-white/60 placeholder:text-ink-400 text-right"
       />
     </div>
   );

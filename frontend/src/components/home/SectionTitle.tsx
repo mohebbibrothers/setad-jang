@@ -24,7 +24,7 @@ export function SectionTitle({ title, description, className }: Props) {
         whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: true }}
         transition={{ duration: 0.45 }}
-        className="inline-flex items-center justify-center gap-3"
+        className="inline-flex items-center justify-center gap-4 flex-row-reverse"
       >
         <h2 className="text-xl md:text-[26px] font-extrabold text-brand-600">{title}</h2>
         <Image
@@ -33,7 +33,7 @@ export function SectionTitle({ title, description, className }: Props) {
           width={79}
           height={80}
           aria-hidden="true"
-          className="w-12 h-12 md:w-14 md:h-14 object-contain opacity-90"
+          className="w-11 h-11 md:w-14 md:h-14 object-contain opacity-85"
         />
       </motion.div>
       {description && (
