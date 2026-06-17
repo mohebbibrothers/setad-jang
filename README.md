@@ -1076,6 +1076,8 @@ When `business_hours_only=True`, first response and resolution deadlines are com
 - status history
 - knowledge base articles با public/help-center API و admin lifecycle
 - article recommendation برای ticket subject/description
+- smart reply suggestions از ترکیب KB + canned responses + public ticket timeline
+- audited smart reply generation/use با exclusion یادداشت‌های داخلی
 - audited article usage in support replies/context
 - smart triage
 - duplicate candidates
@@ -1145,6 +1147,8 @@ POST           /api/v1/support/admin/tickets/{ticket_number}/internal-note/
 POST           /api/v1/support/admin/tickets/{ticket_number}/assign/
 GET            /api/v1/support/admin/tickets/{ticket_number}/assignment-recommendation/
 POST           /api/v1/support/admin/tickets/{ticket_number}/auto-assign/
+GET            /api/v1/support/admin/tickets/{ticket_number}/smart-replies/
+POST           /api/v1/support/admin/tickets/{ticket_number}/smart-replies/use/
 POST           /api/v1/support/admin/tickets/{ticket_number}/status/
 POST           /api/v1/support/admin/tickets/{ticket_number}/escalate/
 POST           /api/v1/support/admin/tickets/{ticket_number}/close/

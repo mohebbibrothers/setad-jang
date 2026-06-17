@@ -100,6 +100,28 @@ class SupportAssignmentRecommendation:
     policy_version: str
 
 
+@dataclass(frozen=True)
+class SupportSmartReplySuggestion:
+    """One smart reply draft with source, confidence and safety rationale."""
+
+    title: str
+    body: str
+    source_type: str
+    source_id: int | None
+    confidence: int
+    reason_codes: list[str]
+
+
+@dataclass(frozen=True)
+class SupportSmartReplyBundle:
+    """Smart reply suggestion bundle for one ticket."""
+
+    ticket: SupportTicket
+    suggestions: list[SupportSmartReplySuggestion]
+    policy_version: str
+    safety_notes: list[str]
+
+
 _OPEN_STATUSES = {
     TicketStatus.SUBMITTED,
     TicketStatus.OPEN,
@@ -480,6 +502,125 @@ def update_ticket_type(*, ticket_type: SupportTicketType, **fields: Any) -> Supp
         update_fields.append("updated_at")
         ticket_type.save(update_fields=list(set(update_fields)))
     return ticket_type
+
+
+def generate_smart_reply_suggestions(*, ticket: SupportTicket, limit: int = 5) -> SupportSmartReplyBundle:
+    """Generate safe admin reply drafts from public timeline, KB and canned responses."""
+    context_text = _build_public_ticket_context(ticket=ticket)
+    suggestions: list[SupportSmartReplySuggestion] = []
+    for article in recommend_knowledge_articles(
+        text=context_text,
+        department=ticket.department,
+        category=ticket.category,
+        ticket_type=ticket.ticket_type,
+        limit=limit,
+    ):
+        suggestions.append(_smart_reply_from_article(article=article, ticket=ticket))
+    suggestions.extend(_smart_replies_from_canned_responses(ticket=ticket, context_text=context_text, limit=limit))
+    suggestions.append(_fallback_smart_reply(ticket=ticket))
+    deduped = _dedupe_smart_replies(suggestions=suggestions)
+    deduped.sort(key=lambda item: (-item.confidence, item.source_type, item.title))
+    return SupportSmartReplyBundle(
+        ticket=ticket,
+        suggestions=deduped[: max(1, min(limit, 10))],
+        policy_version="support-smart-replies/v1",
+        safety_notes=[
+            "internal_notes_excluded",
+            "admin_must_review_before_send",
+            "no_external_ai_provider_used",
+        ],
+    )
+
+
+def _build_public_ticket_context(*, ticket: SupportTicket) -> str:
+    """Build smart-reply context from public ticket fields/messages only."""
+    public_messages = ticket.messages.filter(is_internal=False).order_by("created_at", "id")[:10]
+    message_text = " ".join(message.body for message in public_messages)
+    return f"{ticket.subject} {ticket.description_snapshot} {message_text}"
+
+
+def _smart_reply_from_article(*, article: SupportKnowledgeArticle, ticket: SupportTicket) -> SupportSmartReplySuggestion:
+    """Create a reply draft backed by one knowledge base article."""
+    body = (
+        f"سلام،\n\nبرای موضوع «{ticket.subject}» این راهنما می‌تواند کمک کند:\n"
+        f"{article.title}\n\n{article.summary or article.body[:300]}\n\n"
+        "اگر پس از بررسی راهنما همچنان مشکل باقی بود، همین‌جا جزئیات بیشتر را ارسال کنید."
+    )
+    confidence = 80
+    if article.category_id == ticket.category_id:
+        confidence += 10
+    if article.ticket_type_id == ticket.ticket_type_id:
+        confidence += 5
+    return SupportSmartReplySuggestion(
+        title=f"پیشنهاد بر اساس مقاله: {article.title}",
+        body=body,
+        source_type="knowledge_article",
+        source_id=article.pk,
+        confidence=min(confidence, 98),
+        reason_codes=["knowledge_article_match", "public_timeline_only"],
+    )
+
+
+def _smart_replies_from_canned_responses(*, ticket: SupportTicket, context_text: str, limit: int) -> list[SupportSmartReplySuggestion]:
+    """Create reply drafts from relevant canned responses."""
+    context_tokens = set(_tokenize(context_text))
+    suggestions: list[SupportSmartReplySuggestion] = []
+    from apps.support_desk.selectors import get_admin_canned_responses
+
+    for canned in get_admin_canned_responses().filter(is_active=True):
+        if canned.department_id and canned.department_id != ticket.department_id:
+            continue
+        if canned.category_id and canned.category_id != ticket.category_id:
+            continue
+        canned_tokens = set(_tokenize(f"{canned.title} {canned.body}"))
+        overlap = len(context_tokens & canned_tokens)
+        if overlap <= 0 and canned.department_id != ticket.department_id and canned.category_id != ticket.category_id:
+            continue
+        confidence = 55 + min(overlap * 5, 25)
+        if canned.category_id == ticket.category_id:
+            confidence += 10
+        suggestions.append(
+            SupportSmartReplySuggestion(
+                title=f"پیشنهاد پاسخ آماده: {canned.title}",
+                body=canned.body,
+                source_type="canned_response",
+                source_id=canned.pk,
+                confidence=min(confidence, 90),
+                reason_codes=["canned_response_match", "public_timeline_only"],
+            )
+        )
+        if len(suggestions) >= limit:
+            break
+    return suggestions
+
+
+def _fallback_smart_reply(*, ticket: SupportTicket) -> SupportSmartReplySuggestion:
+    """Create a safe generic reply when no strong KB/canned match exists."""
+    return SupportSmartReplySuggestion(
+        title="پاسخ اولیه امن برای درخواست جزئیات بیشتر",
+        body=(
+            "سلام،\n\nدرخواست شما دریافت شد و در حال بررسی است. "
+            "برای بررسی دقیق‌تر لطفاً هرگونه تصویر خطا، زمان وقوع مشکل و مراحل انجام‌شده را ارسال کنید.\n\n"
+            "با تشکر از همراهی شما."
+        ),
+        source_type="fallback",
+        source_id=None,
+        confidence=35,
+        reason_codes=["safe_fallback", "requires_admin_review"],
+    )
+
+
+def _dedupe_smart_replies(*, suggestions: list[SupportSmartReplySuggestion]) -> list[SupportSmartReplySuggestion]:
+    """Remove duplicate suggestion bodies while keeping first/highest confidence copy."""
+    seen: set[str] = set()
+    deduped: list[SupportSmartReplySuggestion] = []
+    for suggestion in suggestions:
+        normalized = " ".join(suggestion.body.strip().lower().split())
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        deduped.append(suggestion)
+    return deduped
 
 
 @transaction.atomic

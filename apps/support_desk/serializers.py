@@ -623,3 +623,38 @@ class SupportKnowledgeRecommendationSerializer(serializers.Serializer):
     department_id = serializers.PrimaryKeyRelatedField(queryset=SupportDepartment.objects.all(), source="department", required=False, allow_null=True)
     category_id = serializers.PrimaryKeyRelatedField(queryset=SupportCategory.objects.all(), source="category", required=False, allow_null=True)
     ticket_type_id = serializers.PrimaryKeyRelatedField(queryset=SupportTicketType.objects.all(), source="ticket_type", required=False, allow_null=True)
+
+
+class SupportSmartReplySuggestionSerializer(serializers.Serializer):
+    """One smart reply suggestion for admin review."""
+
+    title = serializers.CharField(read_only=True)
+    body = serializers.CharField(read_only=True)
+    source_type = serializers.CharField(read_only=True)
+    source_id = serializers.IntegerField(read_only=True, allow_null=True)
+    confidence = serializers.IntegerField(read_only=True)
+    reason_codes = serializers.ListField(child=serializers.CharField(), read_only=True)
+
+
+class SupportSmartReplyBundleSerializer(serializers.Serializer):
+    """Smart reply suggestion bundle response."""
+
+    ticket_number = serializers.CharField(read_only=True)
+    policy_version = serializers.CharField(read_only=True)
+    safety_notes = serializers.ListField(child=serializers.CharField(), read_only=True)
+    suggestions = SupportSmartReplySuggestionSerializer(many=True, read_only=True)
+
+
+class SupportSmartReplyUseSerializer(serializers.Serializer):
+    """Input serializer for sending a reviewed smart reply suggestion."""
+
+    body = serializers.CharField()
+    source_type = serializers.CharField(required=False, allow_blank=True, default="manual_reviewed")
+    source_id = serializers.IntegerField(required=False, allow_null=True)
+
+    def validate_body(self, value: str) -> str:
+        """Require meaningful reviewed smart reply body."""
+        value = value.strip()
+        if len(value) < 2:
+            raise serializers.ValidationError("متن پاسخ هوشمند بیش از حد کوتاه است.")
+        return value

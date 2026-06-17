@@ -10469,6 +10469,80 @@ paths:
               schema:
                 $ref: '#/components/schemas/SupportAdminTicketMessage'
           description: ''
+  /api/v1/support/admin/tickets/{ticket_number}/smart-replies/:
+    get:
+      operationId: support_admin_ticket_smart_replies
+      description: Generate smart reply suggestions from KB/canned responses/public
+        timeline.
+      parameters:
+      - in: path
+        name: ticket_number
+        schema:
+          type: string
+        required: true
+      tags:
+      - میز پشتیبانی — کاربر
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupportSmartReplyBundleResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupportDeskErrorResponse'
+          description: ''
+  /api/v1/support/admin/tickets/{ticket_number}/smart-replies/use/:
+    post:
+      operationId: support_admin_ticket_smart_reply_use
+      description: Send reviewed smart reply body as an admin reply and audit source
+        metadata.
+      parameters:
+      - in: path
+        name: ticket_number
+        schema:
+          type: string
+        required: true
+      tags:
+      - میز پشتیبانی — کاربر
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SupportSmartReplyUse'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SupportSmartReplyUse'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SupportSmartReplyUse'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupportSmartReplyUseResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupportDeskErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupportDeskErrorResponse'
+          description: ''
   /api/v1/support/admin/tickets/{ticket_number}/status/:
     post:
       operationId: support_admin_tickets_status_create
@@ -25336,6 +25410,109 @@ components:
       - pause_when_waiting_for_user
       - resolution_minutes
       - title
+    SupportSmartReplyBundle:
+      type: object
+      description: Smart reply suggestion bundle response.
+      properties:
+        ticket_number:
+          type: string
+          readOnly: true
+        policy_version:
+          type: string
+          readOnly: true
+        safety_notes:
+          type: array
+          items:
+            type: string
+          readOnly: true
+        suggestions:
+          type: array
+          items:
+            $ref: '#/components/schemas/SupportSmartReplySuggestion'
+          readOnly: true
+      required:
+      - policy_version
+      - safety_notes
+      - suggestions
+      - ticket_number
+    SupportSmartReplyBundleResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          default: true
+        status_code:
+          type: integer
+          default: 200
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/SupportSmartReplyBundle'
+      required:
+      - data
+      - message
+    SupportSmartReplySuggestion:
+      type: object
+      description: One smart reply suggestion for admin review.
+      properties:
+        title:
+          type: string
+          readOnly: true
+        body:
+          type: string
+          readOnly: true
+        source_type:
+          type: string
+          readOnly: true
+        source_id:
+          type: integer
+          readOnly: true
+          nullable: true
+        confidence:
+          type: integer
+          readOnly: true
+        reason_codes:
+          type: array
+          items:
+            type: string
+          readOnly: true
+      required:
+      - body
+      - confidence
+      - reason_codes
+      - source_id
+      - source_type
+      - title
+    SupportSmartReplyUse:
+      type: object
+      description: Input serializer for sending a reviewed smart reply suggestion.
+      properties:
+        body:
+          type: string
+        source_type:
+          type: string
+          default: manual_reviewed
+        source_id:
+          type: integer
+          nullable: true
+      required:
+      - body
+    SupportSmartReplyUseResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          default: true
+        status_code:
+          type: integer
+          default: 200
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/SupportAdminTicketMessage'
+      required:
+      - data
+      - message
     SupportTicketAttachment:
       type: object
       description: User-safe support attachment serializer.

@@ -62,6 +62,8 @@ from apps.support_desk.serializers import (
     SupportKnowledgeRecommendationSerializer,
     SupportSLAPolicyInputSerializer,
     SupportSLAPolicySerializer,
+    SupportSmartReplyBundleSerializer,
+    SupportSmartReplyUseSerializer,
     SupportTicketAttachmentCreateSerializer,
     SupportTicketAttachmentSerializer,
     SupportTicketCreateUpdateSerializer,
@@ -99,6 +101,7 @@ MESSAGE_LIST_RESPONSE = build_success_response_serializer(name="SupportTicketTim
 ATTACHMENT_RESPONSE = build_success_response_serializer(name="SupportTicketAttachmentResponse", data_serializer=SupportTicketAttachmentSerializer)
 TRIAGE_RESPONSE = build_success_response_serializer(name="SupportTriageSuggestionResponse", data_serializer=SupportTriageSuggestionSerializer)
 ASSIGNMENT_RECOMMENDATION_RESPONSE = build_success_response_serializer(name="SupportAssignmentRecommendationResponse", data_serializer=SupportAssignmentRecommendationSerializer)
+SMART_REPLY_BUNDLE_RESPONSE = build_success_response_serializer(name="SupportSmartReplyBundleResponse", data_serializer=SupportSmartReplyBundleSerializer)
 
 
 def _service_error_response(exc: Exception, *, status_code: int = status.HTTP_400_BAD_REQUEST) -> ErrorResponse:
@@ -1044,6 +1047,96 @@ def _serialize_assignment_recommendation(recommendation: services.SupportAssignm
                 "reason_codes": candidate.reason_codes,
             }
             for candidate in recommendation.candidates
+        ],
+    }
+
+
+class SupportAdminTicketSmartReplyView(APIView):
+    """Admin endpoint for safe smart reply suggestions."""
+
+    permission_classes = [IsSupportAdminUser]
+    serializer_class = SupportSmartReplyBundleSerializer
+
+    @extend_schema(
+        operation_id="support_admin_ticket_smart_replies",
+        tags=[TAG_SUPPORT_USER],
+        responses={200: SMART_REPLY_BUNDLE_RESPONSE, 404: SUPPORT_ERROR_RESPONSE},
+    )
+    def get(self, request: Request, ticket_number: str) -> SuccessResponse | ErrorResponse:
+        """Generate smart reply suggestions from KB/canned responses/public timeline."""
+        ticket = selectors.get_admin_ticket_by_number(ticket_number=ticket_number)
+        if ticket is None:
+            return ErrorResponse(message="تیکت یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+        bundle = services.generate_smart_reply_suggestions(ticket=ticket)
+        payload = _serialize_smart_reply_bundle(bundle)
+        log_action_async(
+            user_id=request.user.pk,
+            action=audit_actions.SUPPORT_SMART_REPLY_SUGGESTED,
+            resource_type="support_ticket",
+            resource_id=ticket.ticket_number,
+            extra_data={"suggestions_count": len(payload["suggestions"]), "policy_version": payload["policy_version"]},
+            **extract_audit_metadata(request),
+        )
+        return SuccessResponse(data=payload, message="پیشنهادهای پاسخ هوشمند با موفقیت تولید شد.")
+
+
+class SupportAdminTicketSmartReplyUseView(APIView):
+    """Admin endpoint to send a reviewed smart reply suggestion."""
+
+    permission_classes = [IsSupportAdminUser]
+    serializer_class = SupportAdminTicketMessageSerializer
+
+    @extend_schema(
+        operation_id="support_admin_ticket_smart_reply_use",
+        tags=[TAG_SUPPORT_USER],
+        request=SupportSmartReplyUseSerializer,
+        responses={201: build_success_response_serializer(name="SupportSmartReplyUseResponse", data_serializer=SupportAdminTicketMessageSerializer), 403: SUPPORT_ERROR_RESPONSE, 404: SUPPORT_ERROR_RESPONSE},
+    )
+    def post(self, request: Request, ticket_number: str) -> CreatedResponse | ErrorResponse:
+        """Send reviewed smart reply body as an admin reply and audit source metadata."""
+        ticket = selectors.get_admin_ticket_by_number(ticket_number=ticket_number)
+        if ticket is None:
+            return ErrorResponse(message="تیکت یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+        serializer = SupportSmartReplyUseSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            message = services.add_admin_reply(ticket=ticket, admin=request.user, body=serializer.validated_data["body"])
+        except (services.SupportPermissionError, services.SupportTicketStateError) as exc:
+            return _service_error_response(exc, status_code=status.HTTP_403_FORBIDDEN)
+        source_type = serializer.validated_data.get("source_type", "")
+        source_id = serializer.validated_data.get("source_id")
+        if source_type == "knowledge_article" and source_id:
+            article = selectors.get_admin_knowledge_article_by_id(article_id=source_id)
+            if article is not None:
+                services.record_knowledge_article_use(article=article, user=request.user, ticket=ticket, context="smart_reply")
+        log_action_async(
+            user_id=request.user.pk,
+            action=audit_actions.SUPPORT_SMART_REPLY_USED,
+            resource_type="support_ticket",
+            resource_id=ticket.ticket_number,
+            extra_data={"source_type": source_type, "source_id": source_id, "message_id": message.pk},
+            **extract_audit_metadata(request),
+        )
+        log_action_async(user_id=request.user.pk, action=audit_actions.SUPPORT_TICKET_REPLIED, resource_type="support_ticket", resource_id=ticket.ticket_number, **extract_audit_metadata(request))
+        return CreatedResponse(data=SupportAdminTicketMessageSerializer(message).data, message="پاسخ هوشمند بازبینی‌شده ارسال شد.")
+
+
+def _serialize_smart_reply_bundle(bundle: services.SupportSmartReplyBundle) -> dict:
+    """Serialize smart reply dataclass bundle for API response."""
+    return {
+        "ticket_number": bundle.ticket.ticket_number,
+        "policy_version": bundle.policy_version,
+        "safety_notes": bundle.safety_notes,
+        "suggestions": [
+            {
+                "title": suggestion.title,
+                "body": suggestion.body,
+                "source_type": suggestion.source_type,
+                "source_id": suggestion.source_id,
+                "confidence": suggestion.confidence,
+                "reason_codes": suggestion.reason_codes,
+            }
+            for suggestion in bundle.suggestions
         ],
     }
 
