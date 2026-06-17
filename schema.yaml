@@ -6333,6 +6333,36 @@ paths:
               schema:
                 $ref: '#/components/schemas/MadadkarGenericErrorResponse'
           description: ''
+  /api/v1/madadkar/campaigns/{slug}/transparency/:
+    get:
+      operationId: madadkar_public_campaign_transparency
+      description: 'نمای عمومی و بدون اطلاعات خصوصی از وضعیت مالی حرکت: مبالغ جمع‌آوری‌شده،
+        بازپرداخت‌ها، اصلاحات مالی، تخصیص‌های پرداخت‌شده و مانده قابل تخصیص.'
+      summary: شفافیت مالی عمومی حرکت
+      parameters:
+      - in: path
+        name: slug
+        schema:
+          type: string
+        required: true
+      tags:
+      - مددکار — عمومی
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MadadkarPublicCampaignTransparencyResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MadadkarGenericErrorResponse'
+          description: ''
   /api/v1/madadkar/me/participations/:
     get:
       operationId: madadkar_user_my_participations_list
@@ -13285,6 +13315,89 @@ components:
       - title
       - total_amount
       - total_shares
+    CampaignTransparency:
+      type: object
+      description: Public-safe transparency snapshot for a Madadkar campaign.
+      properties:
+        campaign_id:
+          type: integer
+          readOnly: true
+        campaign_title:
+          type: string
+          readOnly: true
+        campaign_slug:
+          type: string
+          readOnly: true
+        sponsor_name:
+          type: string
+          readOnly: true
+        generated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        target_amount:
+          type: integer
+          readOnly: true
+        gross_raised_amount:
+          type: integer
+          readOnly: true
+        completed_refund_amount:
+          type: integer
+          readOnly: true
+        applied_adjustment_delta:
+          type: integer
+          readOnly: true
+        net_raised_amount:
+          type: integer
+          readOnly: true
+        paid_disbursement_amount:
+          type: integer
+          readOnly: true
+        committed_disbursement_amount:
+          type: integer
+          readOnly: true
+        remaining_disbursable_amount:
+          type: integer
+          readOnly: true
+        receipt_count:
+          type: integer
+          readOnly: true
+        successful_payment_count:
+          type: integer
+          readOnly: true
+        completed_refund_count:
+          type: integer
+          readOnly: true
+        paid_disbursement_count:
+          type: integer
+          readOnly: true
+        net_progress_percent:
+          type: number
+          format: double
+          readOnly: true
+        public_note:
+          type: string
+          readOnly: true
+      required:
+      - applied_adjustment_delta
+      - campaign_id
+      - campaign_slug
+      - campaign_title
+      - committed_disbursement_amount
+      - completed_refund_amount
+      - completed_refund_count
+      - generated_at
+      - gross_raised_amount
+      - net_progress_percent
+      - net_raised_amount
+      - paid_disbursement_amount
+      - paid_disbursement_count
+      - public_note
+      - receipt_count
+      - remaining_disbursable_amount
+      - sponsor_name
+      - successful_payment_count
+      - target_amount
     Certificate:
       type: object
       description: User/admin certificate representation.
@@ -17914,6 +18027,22 @@ components:
       required:
       - count
       - results
+    MadadkarPublicCampaignTransparencyResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          default: true
+        status_code:
+          type: integer
+          default: 200
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/CampaignTransparency'
+      required:
+      - data
+      - message
     MadadkarPublicReceiptVerifyResponse:
       type: object
       properties:

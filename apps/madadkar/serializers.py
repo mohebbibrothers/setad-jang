@@ -1177,3 +1177,27 @@ class CampaignDisbursableSummarySerializer(serializers.Serializer):
     committed_disbursement_amount = serializers.IntegerField(read_only=True)
     paid_disbursement_amount = serializers.IntegerField(read_only=True)
     disbursable_amount = serializers.IntegerField(read_only=True)
+
+
+class CampaignTransparencySerializer(serializers.Serializer):
+    """Public-safe transparency snapshot for a Madadkar campaign."""
+
+    campaign_id = serializers.IntegerField(read_only=True)
+    campaign_title = serializers.CharField(read_only=True)
+    campaign_slug = serializers.CharField(read_only=True)
+    sponsor_name = serializers.CharField(read_only=True)
+    generated_at = serializers.DateTimeField(read_only=True)
+    target_amount = serializers.IntegerField(read_only=True)
+    gross_raised_amount = serializers.IntegerField(read_only=True)
+    completed_refund_amount = serializers.IntegerField(read_only=True)
+    applied_adjustment_delta = serializers.IntegerField(read_only=True)
+    net_raised_amount = serializers.IntegerField(read_only=True)
+    paid_disbursement_amount = serializers.IntegerField(read_only=True)
+    committed_disbursement_amount = serializers.IntegerField(read_only=True)
+    remaining_disbursable_amount = serializers.IntegerField(read_only=True)
+    receipt_count = serializers.IntegerField(read_only=True)
+    successful_payment_count = serializers.IntegerField(read_only=True)
+    completed_refund_count = serializers.IntegerField(read_only=True)
+    paid_disbursement_count = serializers.IntegerField(read_only=True)
+    net_progress_percent = serializers.FloatField(read_only=True)
+    public_note = serializers.CharField(read_only=True)

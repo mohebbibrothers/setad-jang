@@ -68,6 +68,7 @@ from .views import (
     MadadkarPaymentVerifyView,
     MadadkarPublicCampaignDetailView,
     MadadkarPublicCampaignListView,
+    MadadkarPublicCampaignTransparencyView,
     MadadkarPublicReceiptVerifyView,
     MadadkarPublicSponsorDetailView,
     MadadkarPublicSponsorListView,
@@ -113,6 +114,11 @@ urlpatterns = [
         "campaigns/",
         MadadkarPublicCampaignListView.as_view(),
         name="public-campaign-list",
+    ),
+    path(
+        "campaigns/<str:slug>/transparency/",
+        MadadkarPublicCampaignTransparencyView.as_view(),
+        name="public-campaign-transparency",
     ),
     path(
         "campaigns/<str:slug>/",

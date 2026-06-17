@@ -97,6 +97,7 @@ from .serializers import (
     CampaignIntelligenceSerializer,
     CampaignPublicDetailSerializer,
     CampaignPublicListSerializer,
+    CampaignTransparencySerializer,
     DonationReceiptPublicVerifySerializer,
     DonationReceiptResendSerializer,
     DonationReceiptSerializer,
@@ -194,6 +195,10 @@ PUBLIC_CAMPAIGN_LIST_RESPONSE = build_paginated_success_response_serializer(
 PUBLIC_CAMPAIGN_DETAIL_RESPONSE = build_success_response_serializer(
     name="MadadkarPublicCampaignDetailResponse",
     data_serializer=CampaignPublicDetailSerializer,
+)
+PUBLIC_CAMPAIGN_TRANSPARENCY_RESPONSE = build_success_response_serializer(
+    name="MadadkarPublicCampaignTransparencyResponse",
+    data_serializer=CampaignTransparencySerializer,
 )
 ADMIN_CAMPAIGN_LIST_RESPONSE = build_paginated_success_response_serializer(
     name="MadadkarAdminCampaignListResponse",
@@ -659,6 +664,39 @@ class MadadkarPublicCampaignDetailView(APIView):
         return SuccessResponse(
             data=serializer.data,
             message="جزئیات حرکت با موفقیت دریافت شد.",
+        )
+
+
+class MadadkarPublicCampaignTransparencyView(APIView):
+    """Public-safe financial transparency snapshot for one campaign."""
+
+    permission_classes = [AllowAny]
+    throttle_classes = [MadadkarBrowseAnonThrottle, MadadkarBrowseUserThrottle]
+
+    @extend_schema(
+        operation_id="madadkar_public_campaign_transparency",
+        tags=[TAG_MADADKAR_PUBLIC],
+        summary="شفافیت مالی عمومی حرکت",
+        description=(
+            "نمای عمومی و بدون اطلاعات خصوصی از وضعیت مالی حرکت: مبالغ جمع‌آوری‌شده، "
+            "بازپرداخت‌ها، اصلاحات مالی، تخصیص‌های پرداخت‌شده و مانده قابل تخصیص."
+        ),
+        responses={
+            200: PUBLIC_CAMPAIGN_TRANSPARENCY_RESPONSE,
+            404: GENERIC_ERROR_RESPONSE,
+        },
+    )
+    def get(self, request: Request, slug: str) -> Response:
+        campaign = selectors.get_public_campaign_by_slug(slug=slug)
+        if campaign is None:
+            return ErrorResponse(
+                message="حرکتی با این مشخصات یافت نشد.",
+                status_code=status.HTTP_404_NOT_FOUND,
+            )
+        transparency = selectors.get_public_campaign_transparency(campaign=campaign)
+        return SuccessResponse(
+            data=CampaignTransparencySerializer(transparency).data,
+            message="گزارش شفافیت مالی حرکت با موفقیت دریافت شد.",
         )
 
 

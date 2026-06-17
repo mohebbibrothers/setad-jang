@@ -839,3 +839,45 @@ def get_campaign_disbursable_summary(*, campaign: Campaign) -> dict:
         "paid_disbursement_amount": paid,
         "disbursable_amount": max(campaign.purchased_amount - committed, 0),
     }
+
+
+# ---------------------------------------------------------------------------
+# Public transparency selectors
+# ---------------------------------------------------------------------------
+
+def get_public_campaign_transparency(*, campaign: Campaign) -> dict:
+    """Build public-safe financial transparency snapshot for one visible campaign."""
+    payments = Payment.objects.filter(participation__campaign=campaign, status=PaymentStatus.SUCCESS)
+    refunds = PaymentRefund.objects.filter(payment__participation__campaign=campaign, status=RefundStatus.COMPLETED)
+    adjustments = CampaignFinancialAdjustment.objects.filter(campaign=campaign, status=FinancialAdjustmentStatus.APPLIED)
+    disbursements = CampaignDisbursement.objects.filter(campaign=campaign)
+    gross_amount = payments.aggregate(total=Sum("amount"))["total"] or 0
+    refund_amount = refunds.aggregate(total=Sum("amount"))["total"] or 0
+    adjustment_delta = sum(adjustment.signed_amount for adjustment in adjustments)
+    net_raised = max(gross_amount - refund_amount + adjustment_delta, 0)
+    paid_disbursements = disbursements.filter(status=DisbursementStatus.PAID).aggregate(total=Sum("amount"))["total"] or 0
+    committed_disbursements = disbursements.filter(
+        status__in=[DisbursementStatus.REQUESTED, DisbursementStatus.APPROVED, DisbursementStatus.PAID],
+    ).aggregate(total=Sum("amount"))["total"] or 0
+    receipt_count = DonationReceipt.objects.filter(campaign=campaign).count()
+    return {
+        "campaign_id": campaign.pk,
+        "campaign_title": campaign.title,
+        "campaign_slug": campaign.slug,
+        "sponsor_name": campaign.sponsor.name,
+        "generated_at": timezone.now().isoformat(),
+        "target_amount": campaign.total_amount,
+        "gross_raised_amount": gross_amount,
+        "completed_refund_amount": refund_amount,
+        "applied_adjustment_delta": adjustment_delta,
+        "net_raised_amount": net_raised,
+        "paid_disbursement_amount": paid_disbursements,
+        "committed_disbursement_amount": committed_disbursements,
+        "remaining_disbursable_amount": max(net_raised - committed_disbursements, 0),
+        "receipt_count": receipt_count,
+        "successful_payment_count": payments.count(),
+        "completed_refund_count": refunds.count(),
+        "paid_disbursement_count": disbursements.filter(status=DisbursementStatus.PAID).count(),
+        "net_progress_percent": round((net_raised / campaign.total_amount) * 100, 2) if campaign.total_amount else 0,
+        "public_note": "این گزارش عمومی، بدون نمایش اطلاعات خصوصی مشارکت‌کنندگان تولید شده است.",
+    }
