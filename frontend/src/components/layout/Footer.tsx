@@ -49,14 +49,19 @@ const COLS = [
 export function Footer() {
   return (
     <footer className="relative bg-white pt-[4.5rem] md:pt-[5.5rem]">
-      {/* Independent CLEAN white pill — no halo above the white-page area.
-          A single soft downward shadow handles the transition into the
-          ink-50 surface below; the white top area stays pristine. */}
+      {/* Independent CLEAN white pill.
+          NO box-shadow (box-shadow casts equally in all directions and
+          would dirty the white area above the pill). Instead, the visual
+          'sink' into the gray below is done by a single ::after pseudo-
+          element placed ONLY beneath the pill — invisible above. */}
       <div
         className="absolute left-1/2 top-10 md:top-11 -translate-x-1/2 z-10
                    w-[min(620px,90vw)] md:w-[min(680px,80vw)]
                    bg-white rounded-full p-2.5 md:p-3
-                   shadow-[0_16px_32px_-16px_rgba(11,53,48,0.18),0_4px_8px_-4px_rgba(11,53,48,0.06)]"
+                   after:content-[''] after:absolute after:left-[6%] after:right-[6%]
+                   after:-bottom-3 after:h-5 after:-z-10 after:rounded-full
+                   after:pointer-events-none after:blur-[10px]
+                   after:[background:radial-gradient(ellipse_100%_100%_at_center_top,rgba(11,53,48,0.12)_0%,rgba(11,53,48,0.05)_50%,rgba(11,53,48,0)_100%)]"
       >
         <NewsletterPill />
       </div>
