@@ -25,6 +25,26 @@ HTTP_SLOW_REQUESTS_TOTAL = Counter(
     ["method", "path"],
 )
 
+HTTP_DB_QUERY_COUNT = Histogram(
+    "setadjang_http_db_query_count",
+    "Database query count per HTTP request.",
+    ["method", "path"],
+    buckets=(0, 1, 2, 5, 10, 20, 50, 100, 200, 500),
+)
+
+HTTP_DB_QUERY_TIME_SECONDS = Histogram(
+    "setadjang_http_db_query_time_seconds",
+    "Total database query time per HTTP request in seconds.",
+    ["method", "path"],
+    buckets=(0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5),
+)
+
+HTTP_DB_SLOW_QUERIES_TOTAL = Counter(
+    "setadjang_http_db_slow_queries_total",
+    "Database queries exceeding slow-query threshold, grouped by HTTP request route.",
+    ["method", "path"],
+)
+
 CELERY_TASKS_TOTAL = Counter(
     "setadjang_celery_tasks_total",
     "Total Celery tasks observed by lifecycle signals.",

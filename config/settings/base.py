@@ -214,6 +214,10 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # ============================================================================
 
 DEFAULT_PERFORMANCE_BUDGET_MS = config("DEFAULT_PERFORMANCE_BUDGET_MS", default=1000, cast=int)
+DB_QUERY_TELEMETRY_ENABLED = config("DB_QUERY_TELEMETRY_ENABLED", default=True, cast=bool)
+DB_SLOW_QUERY_THRESHOLD_MS = config("DB_SLOW_QUERY_THRESHOLD_MS", default=100, cast=int)
+DB_QUERY_COUNT_WARNING_THRESHOLD = config("DB_QUERY_COUNT_WARNING_THRESHOLD", default=50, cast=int)
+DB_TOTAL_QUERY_TIME_WARNING_MS = config("DB_TOTAL_QUERY_TIME_WARNING_MS", default=500, cast=int)
 PERFORMANCE_CONTRACTS = {
     "/api/v1/health/*": 250,
     "/api/v1/metrics/": 500,

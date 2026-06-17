@@ -150,7 +150,13 @@ class PrometheusMetricsMiddleware:
         from apps.core import metrics
 
         started_at = metrics.monotonic_time()
-        response = self._get_response(request)
+        if getattr(settings, "DB_QUERY_TELEMETRY_ENABLED", True):
+            from apps.core.db_performance import collect_request_db_telemetry
+
+            response, db_snapshot = collect_request_db_telemetry(request=request, get_response=self._get_response)
+        else:
+            response = self._get_response(request)
+            db_snapshot = None
         normalized_path = metrics.normalize_path(request.path)
         duration = metrics.monotonic_time() - started_at
         duration_ms = duration * 1000
@@ -172,6 +178,17 @@ class PrometheusMetricsMiddleware:
             method=request.method,
             path=normalized_path,
         ).observe(duration)
+        if db_snapshot is not None:
+            from apps.core.db_performance import log_db_telemetry_warning, should_log_db_telemetry
+
+            for header_name, header_value in db_snapshot.as_headers().items():
+                response[header_name] = header_value
+            metrics.HTTP_DB_QUERY_COUNT.labels(method=request.method, path=normalized_path).observe(db_snapshot.query_count)
+            metrics.HTTP_DB_QUERY_TIME_SECONDS.labels(method=request.method, path=normalized_path).observe(db_snapshot.total_query_time_ms / 1000)
+            if db_snapshot.slow_query_count:
+                metrics.HTTP_DB_SLOW_QUERIES_TOTAL.labels(method=request.method, path=normalized_path).inc(db_snapshot.slow_query_count)
+            if should_log_db_telemetry(snapshot=db_snapshot):
+                log_db_telemetry_warning(path=normalized_path, method=request.method, snapshot=db_snapshot)
         if is_slow_request(duration_ms=duration_ms, contract=contract):
             metrics.HTTP_SLOW_REQUESTS_TOTAL.labels(method=request.method, path=normalized_path).inc()
             log_slow_request(contract=contract, duration_ms=duration_ms, status_code=response.status_code)
