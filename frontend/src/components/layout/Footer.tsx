@@ -48,24 +48,26 @@ const COLS = [
 
 export function Footer() {
   return (
-    <footer className="relative bg-white pt-[6.5rem] md:pt-[7.5rem]">
+    <footer className="relative bg-white pt-12 md:pt-14">
       {/* Independent white rounded pill that wraps the green newsletter
-          and sits centred over the bowed cutout of the ink-50 card.
+          and sits inside the bowed cutout — visually placed ON the
+          ink-50 surface, with the dip wrapping around it on all sides.
           Matches designer Asset 3 exactly. */}
-      <div className="absolute left-1/2 top-10 md:top-11 -translate-x-1/2 z-10
+      <div className="absolute left-1/2 top-20 md:top-[5.5rem] -translate-x-1/2 z-10
                       w-[min(620px,90vw)] md:w-[min(680px,80vw)]
                       bg-white rounded-full p-2 md:p-2.5
-                      shadow-[0_8px_24px_-8px_rgba(11,53,48,0.10)]">
+                      shadow-[0_4px_14px_-6px_rgba(11,53,48,0.10)]">
         <NewsletterPill />
       </div>
 
-      {/* Light ink-50 card with the bowed top cutout from Asset 3 */}
+      {/* Light ink-50 card with the bowed top cutout from Asset 3 (deeper
+          band so the dip clearly wraps the white newsletter pill above). */}
       <div
-        className="relative max-w-[1280px] mx-auto px-4 md:px-8 pt-[5.5rem] md:pt-[6rem] pb-6 md:pb-8
+        className="relative max-w-[1280px] mx-auto px-4 md:px-8 pt-32 md:pt-36 pb-6 md:pb-8
                    bg-ink-50 rounded-t-[2rem] md:rounded-t-[2.5rem]"
         style={{
           backgroundImage: 'url(/brand/footer-newsletter-card.png)',
-          backgroundSize: '100% 110px',
+          backgroundSize: '100% 140px',
           backgroundRepeat: 'no-repeat',
           backgroundPosition: 'center top',
         }}
