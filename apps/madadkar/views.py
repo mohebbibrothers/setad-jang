@@ -105,6 +105,7 @@ from .serializers import (
     FinancialAdjustmentCreateSerializer,
     FinancialAdjustmentRejectSerializer,
     FinancialAdjustmentSerializer,
+    MadadkarFinancialControlSnapshotSerializer,
     MadadkarIntelligenceOverviewSerializer,
     MadadkarRiskSignalReviewSerializer,
     MadadkarRiskSignalSerializer,
@@ -325,6 +326,14 @@ ADMIN_DISBURSEMENT_DETAIL_RESPONSE = build_success_response_serializer(
 ADMIN_DISBURSABLE_SUMMARY_RESPONSE = build_success_response_serializer(
     name="MadadkarAdminDisbursableSummaryResponse",
     data_serializer=CampaignDisbursableSummarySerializer,
+)
+ADMIN_FINANCIAL_CONTROL_SNAPSHOT_LIST_RESPONSE = build_paginated_success_response_serializer(
+    name="MadadkarAdminFinancialControlSnapshotListResponse",
+    item_serializer=MadadkarFinancialControlSnapshotSerializer,
+)
+ADMIN_FINANCIAL_CONTROL_SNAPSHOT_DETAIL_RESPONSE = build_success_response_serializer(
+    name="MadadkarAdminFinancialControlSnapshotDetailResponse",
+    data_serializer=MadadkarFinancialControlSnapshotSerializer,
 )
 
 
@@ -2828,6 +2837,80 @@ class MadadkarAdminReconciliationDiscrepancyExportView(APIView):
         response["Content-Disposition"] = f'attachment; filename="{filename}"'
         response["Content-Length"] = str(len(content))
         return response
+
+
+# ============================================================
+# Admin — Financial Ops Controls
+# ============================================================
+
+class MadadkarAdminFinancialControlSnapshotListView(APIView):
+    """List generated Madadkar financial control snapshots."""
+
+    permission_classes = [IsMadadkarAdminUser]
+
+    @extend_schema(
+        operation_id="madadkar_admin_financial_control_snapshots_list",
+        tags=[TAG_MADADKAR_ADMIN_ANALYTICS],
+        summary="لیست snapshotهای کنترل مالی مددکار — ادمین",
+        parameters=[OpenApiParameter(name="severity", type=OpenApiTypes.STR, location=OpenApiParameter.QUERY)],
+        responses={200: ADMIN_FINANCIAL_CONTROL_SNAPSHOT_LIST_RESPONSE, 403: GENERIC_ERROR_RESPONSE},
+    )
+    def get(self, request: Request) -> Response:
+        queryset = selectors.get_admin_financial_control_snapshots_queryset()
+        severity = request.query_params.get("severity")
+        if severity:
+            queryset = queryset.filter(severity=severity)
+        paginator = StandardPagination()
+        page = paginator.paginate_queryset(queryset, request, view=self)
+        if page is not None:
+            serializer = MadadkarFinancialControlSnapshotSerializer(page, many=True)
+            return paginator.get_paginated_response(serializer.data, message="لیست کنترل‌های مالی با موفقیت دریافت شد.")
+        serializer = MadadkarFinancialControlSnapshotSerializer(queryset, many=True)
+        return SuccessResponse(data=serializer.data, message="لیست کنترل‌های مالی با موفقیت دریافت شد.")
+
+
+class MadadkarAdminFinancialControlLatestView(APIView):
+    """Return latest generated financial control snapshot."""
+
+    permission_classes = [IsMadadkarAdminUser]
+
+    @extend_schema(
+        operation_id="madadkar_admin_financial_control_latest",
+        tags=[TAG_MADADKAR_ADMIN_ANALYTICS],
+        summary="آخرین snapshot کنترل مالی مددکار — ادمین",
+        responses={200: ADMIN_FINANCIAL_CONTROL_SNAPSHOT_DETAIL_RESPONSE, 403: GENERIC_ERROR_RESPONSE, 404: GENERIC_ERROR_RESPONSE},
+    )
+    def get(self, request: Request) -> Response:
+        snapshot = selectors.get_latest_financial_control_snapshot()
+        if snapshot is None:
+            return ErrorResponse(message="هنوز snapshot کنترل مالی تولید نشده است.", status_code=status.HTTP_404_NOT_FOUND)
+        return SuccessResponse(data=MadadkarFinancialControlSnapshotSerializer(snapshot).data, message="آخرین snapshot کنترل مالی با موفقیت دریافت شد.")
+
+
+class MadadkarAdminFinancialControlGenerateView(APIView):
+    """Generate financial control snapshot on demand for admins."""
+
+    permission_classes = [IsMadadkarAdminUser]
+
+    @extend_schema(
+        operation_id="madadkar_admin_financial_control_generate",
+        tags=[TAG_MADADKAR_ADMIN_ANALYTICS],
+        summary="تولید snapshot کنترل مالی مددکار — ادمین",
+        request=None,
+        responses={201: ADMIN_FINANCIAL_CONTROL_SNAPSHOT_DETAIL_RESPONSE, 403: GENERIC_ERROR_RESPONSE},
+    )
+    def post(self, request: Request) -> Response:
+        snapshot = services.generate_financial_control_snapshot()
+        metadata = extract_audit_metadata(request)
+        log_action(
+            user_id=request.user.pk,
+            action=audit_actions.MADADKAR_FINANCIAL_CONTROL_GENERATED,
+            resource_type="madadkar_financial_control_snapshot",
+            resource_id=str(snapshot.pk),
+            extra_data={"severity": snapshot.severity, "summary": snapshot.summary},
+            **metadata,
+        )
+        return CreatedResponse(data=MadadkarFinancialControlSnapshotSerializer(snapshot).data, message="Snapshot کنترل مالی با موفقیت تولید شد.")
 
 
 # ============================================================

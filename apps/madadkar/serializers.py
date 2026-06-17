@@ -26,6 +26,7 @@ from rest_framework import serializers
 from apps.madadkar.choices import (
     CampaignStatus,
     FinancialAdjustmentType,
+    FinancialControlSeverity,
     MadadkarRiskSeverity,
     MadadkarRiskStatus,
     RefundReason,
@@ -36,6 +37,7 @@ from apps.madadkar.models import (
     CampaignFinancialAdjustment,
     CampaignImage,
     DonationReceipt,
+    MadadkarFinancialControlSnapshot,
     MadadkarRiskSignal,
     Participation,
     Payment,
@@ -1201,3 +1203,35 @@ class CampaignTransparencySerializer(serializers.Serializer):
     paid_disbursement_count = serializers.IntegerField(read_only=True)
     net_progress_percent = serializers.FloatField(read_only=True)
     public_note = serializers.CharField(read_only=True)
+
+
+# ===========================================================================
+# Financial control serializers — admin ops automation
+# ===========================================================================
+
+class MadadkarFinancialControlSnapshotSerializer(serializers.ModelSerializer):
+    """Read serializer for automated finance-ops control snapshots."""
+
+    severity_display = serializers.CharField(source="get_severity_display", read_only=True)
+
+    class Meta:
+        model = MadadkarFinancialControlSnapshot
+        fields = (
+            "id",
+            "generated_for_date",
+            "severity",
+            "severity_display",
+            "summary",
+            "controls",
+            "flags",
+            "generated_by_task_id",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = fields
+
+
+class MadadkarFinancialControlSnapshotFilterSerializer(serializers.Serializer):
+    """OpenAPI helper for financial control snapshot filters."""
+
+    severity = serializers.ChoiceField(choices=FinancialControlSeverity.choices, required=False)

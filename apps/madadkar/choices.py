@@ -142,3 +142,12 @@ class DisbursementStatus(models.TextChoices):
     REJECTED = "rejected", "ردشده"
     PAID = "paid", "پرداخت‌شده"
     CANCELED = "canceled", "لغوشده"
+
+
+class FinancialControlSeverity(models.TextChoices):
+    """Severity for automated Madadkar financial control snapshots."""
+
+    HEALTHY = "healthy", "سالم"
+    WATCH = "watch", "نیازمند پایش"
+    WARNING = "warning", "هشدار"
+    CRITICAL = "critical", "بحرانی"

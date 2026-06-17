@@ -47,6 +47,7 @@ from apps.madadkar.choices import (
     DisbursementStatus,
     FinancialAdjustmentStatus,
     FinancialAdjustmentType,
+    FinancialControlSeverity,
     MadadkarRiskSeverity,
     MadadkarRiskSignalType,
     MadadkarRiskStatus,
@@ -64,6 +65,7 @@ from apps.madadkar.models import (
     CampaignFinancialAdjustment,
     CampaignImage,
     DonationReceipt,
+    MadadkarFinancialControlSnapshot,
     MadadkarRiskSignal,
     Participation,
     Payment,
@@ -1425,6 +1427,78 @@ def apply_financial_adjustment(*, adjustment: CampaignFinancialAdjustment) -> Ca
     _sync_campaign_counters(campaign=campaign)
     evaluate_adjustment_risk(adjustment=locked_adjustment)
     return locked_adjustment
+
+
+# ===========================================================================
+# Financial operations control services
+# ===========================================================================
+
+def generate_financial_control_snapshot(*, generated_by_task_id: str = "") -> MadadkarFinancialControlSnapshot:
+    """Generate a daily finance-ops control snapshot from current operational signals."""
+    today = timezone.localdate()
+    controls = _build_financial_control_payload()
+    flags = _build_financial_control_flags(controls=controls)
+    severity = _derive_financial_control_severity(flags=flags)
+    return MadadkarFinancialControlSnapshot.objects.create(
+        generated_for_date=today,
+        severity=severity,
+        summary={
+            "open_flags": len(flags),
+            "critical_flags": len([flag for flag in flags if flag["severity"] == FinancialControlSeverity.CRITICAL]),
+            "warning_flags": len([flag for flag in flags if flag["severity"] == FinancialControlSeverity.WARNING]),
+        },
+        controls=controls,
+        flags=flags,
+        generated_by_task_id=generated_by_task_id,
+    )
+
+
+def _build_financial_control_payload() -> dict[str, Any]:
+    """Build raw finance-ops controls from payments, refunds, risk, and disbursements."""
+    pending_timeout = settings.MADADKAR_PAYMENT_TIMEOUT_MINUTES
+    stale_cutoff = timezone.now() - timezone.timedelta(minutes=pending_timeout)
+    return {
+        "pending_payments": Payment.objects.filter(status=PaymentStatus.PENDING).count(),
+        "stale_pending_payments": Payment.objects.filter(status=PaymentStatus.PENDING, created_at__lt=stale_cutoff).count(),
+        "open_risk_signals": MadadkarRiskSignal.objects.filter(status=MadadkarRiskStatus.OPEN).count(),
+        "high_risk_signals": MadadkarRiskSignal.objects.filter(status=MadadkarRiskStatus.OPEN, severity__in=[MadadkarRiskSeverity.HIGH, MadadkarRiskSeverity.CRITICAL]).count(),
+        "pending_refunds": PaymentRefund.objects.filter(status=RefundStatus.PENDING_REVIEW).count(),
+        "approved_refunds": PaymentRefund.objects.filter(status=RefundStatus.APPROVED).count(),
+        "requested_disbursements": CampaignDisbursement.objects.filter(status=DisbursementStatus.REQUESTED).count(),
+        "approved_unpaid_disbursements": CampaignDisbursement.objects.filter(status=DisbursementStatus.APPROVED).count(),
+        "reconciliation_mismatches": PaymentReconciliationBatch.objects.aggregate(total=Sum("mismatch_count"))["total"] or 0,
+    }
+
+
+def _build_financial_control_flags(*, controls: dict[str, Any]) -> list[dict[str, Any]]:
+    """Turn raw controls into actionable finance-ops flags."""
+    flag_specs = [
+        ("stale_pending_payments", FinancialControlSeverity.WARNING, "پرداخت‌های pending منقضی‌شده نیازمند cleanup هستند."),
+        ("high_risk_signals", FinancialControlSeverity.CRITICAL, "سیگنال‌های ریسک high/critical باز وجود دارد."),
+        ("pending_refunds", FinancialControlSeverity.WATCH, "درخواست‌های refund در انتظار بررسی وجود دارد."),
+        ("approved_refunds", FinancialControlSeverity.WARNING, "refundهای تأییدشده هنوز تکمیل نشده‌اند."),
+        ("requested_disbursements", FinancialControlSeverity.WATCH, "درخواست‌های تخصیص مالی در انتظار تأیید وجود دارد."),
+        ("approved_unpaid_disbursements", FinancialControlSeverity.WARNING, "تخصیص‌های تأییدشده هنوز paid نشده‌اند."),
+        ("reconciliation_mismatches", FinancialControlSeverity.WARNING, "اختلافات reconciliation نیازمند بررسی مالی هستند."),
+    ]
+    flags = []
+    for key, severity, message in flag_specs:
+        count = int(controls.get(key) or 0)
+        if count > 0:
+            flags.append({"key": key, "severity": severity, "count": count, "message": message})
+    return flags
+
+
+def _derive_financial_control_severity(*, flags: list[dict[str, Any]]) -> str:
+    """Derive overall snapshot severity from actionable flags."""
+    severities = [flag["severity"] for flag in flags]
+    if FinancialControlSeverity.CRITICAL in severities:
+        return FinancialControlSeverity.CRITICAL
+    if FinancialControlSeverity.WARNING in severities:
+        return FinancialControlSeverity.WARNING
+    if FinancialControlSeverity.WATCH in severities:
+        return FinancialControlSeverity.WATCH
+    return FinancialControlSeverity.HEALTHY
 
 
 # ===========================================================================

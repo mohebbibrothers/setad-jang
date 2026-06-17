@@ -51,6 +51,9 @@ from .views import (
     MadadkarAdminDisbursementActionView,
     MadadkarAdminDisbursementDetailView,
     MadadkarAdminDisbursementListCreateView,
+    MadadkarAdminFinancialControlGenerateView,
+    MadadkarAdminFinancialControlLatestView,
+    MadadkarAdminFinancialControlSnapshotListView,
     MadadkarAdminIntelligenceOverviewView,
     MadadkarAdminPaymentListView,
     MadadkarAdminReceiptResendView,
@@ -316,6 +319,21 @@ urlpatterns = [
         "admin/disbursements/<int:disbursement_id>/<str:action>/",
         MadadkarAdminDisbursementActionView.as_view(),
         name="admin-disbursement-action",
+    ),
+    path(
+        "admin/financial-controls/",
+        MadadkarAdminFinancialControlSnapshotListView.as_view(),
+        name="admin-financial-control-list",
+    ),
+    path(
+        "admin/financial-controls/latest/",
+        MadadkarAdminFinancialControlLatestView.as_view(),
+        name="admin-financial-control-latest",
+    ),
+    path(
+        "admin/financial-controls/generate/",
+        MadadkarAdminFinancialControlGenerateView.as_view(),
+        name="admin-financial-control-generate",
     ),
     path(
         "admin/reconciliation/import/",

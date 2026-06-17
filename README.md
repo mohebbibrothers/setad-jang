@@ -765,6 +765,8 @@ This enables future Zarinpal settlement reconciliation without rewriting payment
 - campaign disbursement/allocation ledger برای خروج پول و تخصیص منابع
 - disbursable amount calculation با جلوگیری از over-allocation
 - public transparency layer برای نمایش امن gross/refund/adjustment/net/disbursed/remaining بدون PII
+- financial ops automation/control snapshots برای daily finance review
+- scheduled Celery control snapshot و management command برای runbook مالی
 - admin risk-signal review workflow
 - command center open risk-signal counter
 - audit logging برای همه عملیات حساس مالی
@@ -836,6 +838,9 @@ POST /api/v1/madadkar/admin/disbursements/{id}/reject/
 POST /api/v1/madadkar/admin/disbursements/{id}/mark-paid/
 GET /api/v1/madadkar/admin/campaigns/{id}/disbursable/
 GET /api/v1/madadkar/campaigns/{slug}/transparency/
+GET /api/v1/madadkar/admin/financial-controls/
+GET /api/v1/madadkar/admin/financial-controls/latest/
+POST /api/v1/madadkar/admin/financial-controls/generate/
 ```
 
 ### Celery tasks
@@ -843,6 +848,7 @@ GET /api/v1/madadkar/campaigns/{slug}/transparency/
 ```text
 apps.madadkar.tasks.expire_stale_participations_task
 apps.madadkar.tasks.close_expired_campaigns_task
+apps.madadkar.tasks.generate_financial_control_snapshot_task
 ```
 
 Queue:

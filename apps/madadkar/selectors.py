@@ -32,6 +32,7 @@ from apps.madadkar.models import (
     CampaignFinancialAdjustment,
     CampaignImage,
     DonationReceipt,
+    MadadkarFinancialControlSnapshot,
     MadadkarRiskSignal,
     Participation,
     Payment,
@@ -881,3 +882,17 @@ def get_public_campaign_transparency(*, campaign: Campaign) -> dict:
         "net_progress_percent": round((net_raised / campaign.total_amount) * 100, 2) if campaign.total_amount else 0,
         "public_note": "این گزارش عمومی، بدون نمایش اطلاعات خصوصی مشارکت‌کنندگان تولید شده است.",
     }
+
+
+# ---------------------------------------------------------------------------
+# Financial control selectors — admin scope
+# ---------------------------------------------------------------------------
+
+def get_admin_financial_control_snapshots_queryset() -> QuerySet[MadadkarFinancialControlSnapshot]:
+    """Return generated financial control snapshots for admin review."""
+    return MadadkarFinancialControlSnapshot.objects.order_by("-generated_for_date", "-created_at")
+
+
+def get_latest_financial_control_snapshot() -> MadadkarFinancialControlSnapshot | None:
+    """Return the newest generated financial control snapshot."""
+    return get_admin_financial_control_snapshots_queryset().first()

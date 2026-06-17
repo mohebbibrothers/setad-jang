@@ -31,6 +31,7 @@ from apps.madadkar.selectors import get_campaigns_due_for_closing
 from apps.madadkar.services import (
     close_campaign_due_to_deadline,
     expire_stale_participation,
+    generate_financial_control_snapshot,
     get_stale_participations,
 )
 
@@ -192,4 +193,33 @@ def close_expired_campaigns_task(self) -> dict[str, Any]:
         failed_count,
     )
 
+    return result
+
+
+# ===========================================================================
+# Financial control snapshot
+# ===========================================================================
+
+@shared_task(
+    name="apps.madadkar.tasks.generate_financial_control_snapshot_task",
+    bind=True,
+    max_retries=3,
+    default_retry_delay=300,
+)
+def generate_financial_control_snapshot_task(self) -> dict[str, Any]:
+    """Periodic task: generate daily Madadkar finance-ops control snapshot."""
+    logger.info("Madadkar financial control snapshot task started task_id=%s", self.request.id)
+    snapshot = generate_financial_control_snapshot(generated_by_task_id=self.request.id)
+    result = {
+        "snapshot_id": snapshot.pk,
+        "generated_for_date": snapshot.generated_for_date.isoformat(),
+        "severity": snapshot.severity,
+        "summary": snapshot.summary,
+    }
+    logger.info(
+        "Madadkar financial control snapshot task finished task_id=%s snapshot_id=%s severity=%s",
+        self.request.id,
+        snapshot.pk,
+        snapshot.severity,
+    )
     return result

@@ -31,6 +31,7 @@ from apps.madadkar.choices import (
     DisbursementStatus,
     FinancialAdjustmentStatus,
     FinancialAdjustmentType,
+    FinancialControlSeverity,
     MadadkarRiskSeverity,
     MadadkarRiskSignalType,
     MadadkarRiskStatus,
@@ -821,6 +822,38 @@ class CampaignFinancialAdjustment(BaseModel):
         if self.adjustment_type == FinancialAdjustmentType.CREDIT:
             return self.amount
         return -self.amount
+
+
+# ---------------------------------------------------------------------------
+# Financial Control Snapshots
+# ---------------------------------------------------------------------------
+
+class MadadkarFinancialControlSnapshot(BaseModel):
+    """Automated finance-ops control report for Madadkar operational safety."""
+
+    generated_for_date = models.DateField(db_index=True)
+    severity = models.CharField(
+        max_length=20,
+        choices=FinancialControlSeverity.choices,
+        default=FinancialControlSeverity.HEALTHY,
+        db_index=True,
+    )
+    summary = models.JSONField(default=dict, blank=True)
+    controls = models.JSONField(default=dict, blank=True)
+    flags = models.JSONField(default=list, blank=True)
+    generated_by_task_id = models.CharField(max_length=120, blank=True)
+
+    class Meta:
+        verbose_name = "Snapshot کنترل مالی مددکار"
+        verbose_name_plural = "Snapshotهای کنترل مالی مددکار"
+        ordering = ["-generated_for_date", "-created_at"]
+        indexes = [
+            models.Index(fields=["generated_for_date", "severity"], name="madadkar_ctrl_date_sev_idx"),
+            models.Index(fields=["severity", "-created_at"], name="madadkar_ctrl_sev_time_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"MadadkarFinancialControlSnapshot {self.generated_for_date}:{self.severity}"
 
 
 # ---------------------------------------------------------------------------
