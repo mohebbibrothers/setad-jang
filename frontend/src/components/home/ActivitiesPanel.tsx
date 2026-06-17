@@ -37,25 +37,31 @@ const ACTIVITIES: Activity[] = [
 export function ActivitiesPanel() {
   return (
     <section
-      className="relative mt-14 md:mt-[4.5rem] lg:mt-[5.5rem] pb-20 md:pb-24"
+      className="relative mt-[4.5rem] md:mt-[5.5rem] lg:mt-[6.5rem] pb-20 md:pb-24"
       aria-labelledby="activities-title"
     >
-      {/* Wave-shaped reflection above the panel — a vertically flipped,
-          blurred, low-opacity copy of the panel asset itself so the
-          shadow mirrors the panel's wave + chevron silhouette exactly. */}
+      {/* Hero photo "ground reflection" — a vertically flipped, blurred,
+          low-opacity copy of the defenders photo placed in the gap
+          between the search bar and the green panel. Reads like the
+          photo's reflection on a glossy floor (matches mockup). */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 z-[2]
-                   -top-[55px] h-[70px]
-                   md:-top-[80px] md:h-[100px]
-                   lg:-top-[100px] lg:h-[130px]"
+        className="pointer-events-none absolute z-[2] left-1/2
+                   -top-[90px] h-[110px] w-[min(680px,90%)]
+                   md:-top-[120px] md:h-[150px] md:w-[min(680px,75%)]
+                   lg:-top-[150px] lg:h-[190px] lg:w-[min(680px,60%)]"
         style={{
-          backgroundImage: 'url(/brand/activities-panel.png)',
-          backgroundSize: '100% 100%',
+          transform: 'translateX(-50%) scaleY(-1)',
+          backgroundImage: 'url(/brand/hero-defenders.png)',
+          backgroundSize: '100% auto',
+          backgroundPosition: 'center top',
           backgroundRepeat: 'no-repeat',
-          transform: 'scaleY(-1)',
-          opacity: 0.22,
-          filter: 'blur(14px)',
+          opacity: 0.28,
+          filter: 'blur(12px) saturate(0.85)',
+          WebkitMaskImage:
+            'linear-gradient(to bottom, #000 0%, rgba(0,0,0,0.6) 40%, rgba(0,0,0,0.15) 75%, transparent 100%)',
+          maskImage:
+            'linear-gradient(to bottom, #000 0%, rgba(0,0,0,0.6) 40%, rgba(0,0,0,0.15) 75%, transparent 100%)',
         }}
       />
 
