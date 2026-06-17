@@ -61,8 +61,9 @@ export function Hero() {
           role="search"
           action="/search"
           method="get"
-          className="relative z-30 mx-auto -mt-[120px] md:-mt-[140px] lg:-mt-[160px] max-w-3xl
-                     bg-white border-[1.5px] border-brand-300 rounded-full shadow-card
+          className="relative z-30 mx-auto -mt-[100px] md:-mt-[120px] lg:-mt-[140px] max-w-3xl
+                     bg-white border-[1.5px] border-brand-300 rounded-full
+                     shadow-[0_14px_30px_-10px_rgba(11,53,48,0.25),0_4px_10px_-4px_rgba(11,53,48,0.10)]
                      flex items-center pl-1.5 pr-6 py-1.5
                      focus-within:border-brand-500 transition-all gap-2"
         >
