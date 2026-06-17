@@ -7,14 +7,10 @@ import { motion } from 'framer-motion';
 type Activity = {
   href: string;
   label: string;
-  icon: string;          // path under /brand/
+  icon: string;
   iconAlt: string;
 };
 
-/**
- * Static list — these are the 5 main pillars rendered exactly per the
- * designer's mockup. Order, icons, and labels are fixed by design.
- */
 const ACTIVITIES: Activity[] = [
   { href: '/tabyin',        label: 'جهاد تبیین',         icon: '/brand/icon-tabyin.png',   iconAlt: 'جهاد تبیین' },
   { href: '/kindness-wall', label: 'دیوار مهربانی',      icon: '/brand/icon-kindness.png', iconAlt: 'دیوار مهربانی' },
@@ -24,81 +20,102 @@ const ACTIVITIES: Activity[] = [
 ];
 
 /**
- * Activities panel — uses the designer's official ribbon-shaped teal
- * banner (Asset 1) as the background, so the wavy edges and chevron-up
- * notch render exactly as the mockup intended.
+ * Activities panel — pixel-faithful to designer mockup.
  *
- * Overlapped slightly into the hero via negative margin for a single
- * continuous canvas (matches mockup).
+ * Top-edge shadow: a single blurred ::before ellipse — soft enough that
+ * the hero photo behind the panel stays faintly visible through it
+ * (no harsh dark band).
+ *
+ * Cards: 4:4.6 aspect (slightly taller than wide). Icon is bottom-anchored
+ * using mt-auto so it visually sits in the LOWER half of the card, with
+ * a thin brand-200 outline around the card matching the green hairline
+ * in the mockup. Fully responsive — 2/3/5 columns across breakpoints.
  */
 export function ActivitiesPanel() {
   return (
     <section
-      className="relative pt-0 pb-20 md:pb-24 mt-4 md:mt-6 z-10"
+      className="relative pt-8 md:pt-10 pb-16 md:pb-20"
       aria-labelledby="activities-title"
     >
       <div className="container-edge">
-        {/* Wrapper that draws a soft shadow ABOVE the panel — matches mockup */}
+        {/* Wrapper that draws a SOFT top-edge shadow ABOVE the panel */}
         <div
           className="relative isolate
-                     before:content-[''] before:absolute before:left-[5%] before:right-[5%]
-                     before:-top-5 md:before:-top-7 before:h-8 md:before:h-11
-                     before:-z-10 before:pointer-events-none before:rounded-full before:blur-[14px]
-                     before:[background:radial-gradient(ellipse_100%_100%_at_center_bottom,rgba(11,53,48,0.18)_0%,rgba(11,53,48,0.08)_45%,rgba(11,53,48,0)_100%)]"
+                     before:content-[''] before:absolute before:left-[3%] before:right-[3%]
+                     before:-top-[22px] before:h-9 before:-z-10 before:pointer-events-none
+                     before:rounded-full before:blur-[18px]
+                     before:[background:radial-gradient(ellipse_100%_100%_at_center_bottom,rgba(11,53,48,0.18)_0%,rgba(11,53,48,0.09)_35%,rgba(11,53,48,0.04)_60%,rgba(11,53,48,0)_100%)]"
         >
           <div
-            className="relative text-white px-5 sm:px-8 md:px-12 pt-12 md:pt-14"
+            className="relative text-white px-4 sm:px-6 md:px-10 lg:px-12
+                       pt-9 sm:pt-10 md:pt-12 lg:pt-[3.25rem]
+                       pb-8 sm:pb-9 md:pb-10 lg:pb-11"
             style={{
               backgroundImage: 'url(/brand/activities-panel.png)',
               backgroundSize: '100% 100%',
               backgroundRepeat: 'no-repeat',
             }}
           >
-          <motion.h2
-            id="activities-title"
-            initial={{ opacity: 0, y: 8 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.5 }}
-            className="text-center text-xl md:text-[26px] font-extrabold mb-7 md:mb-9 text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.2)]"
-          >
-            اهم فعالیت‌ها
-          </motion.h2>
+            <motion.h2
+              id="activities-title"
+              initial={{ opacity: 0, y: 8 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5 }}
+              className="text-center font-extrabold text-white
+                         text-[1.1rem] sm:text-[1.25rem] md:text-[1.45rem] lg:text-[1.6rem]
+                         drop-shadow-[0_2px_8px_rgba(0,0,0,0.18)]"
+            >
+              اهم فعالیت‌ها
+            </motion.h2>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 md:gap-4 lg:gap-5">
-            {ACTIVITIES.map((a, i) => (
-              <motion.div
-                key={a.href}
-                initial={{ opacity: 0, y: 16 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.4, delay: i * 0.06 }}
-              >
-                <Link
-                  href={a.href}
-                  className="group block rounded-[1.25rem] md:rounded-[1.5rem] bg-white text-ink-700
-                             p-6 md:p-7 pb-5 md:pb-6
-                             shadow-[0_12px_28px_-16px_rgba(0,0,0,0.28)]
-                             hover:-translate-y-1.5 hover:shadow-[0_18px_40px_-16px_rgba(0,0,0,0.35)]
-                             transition-all duration-300 h-full flex flex-col items-center text-center"
+            {/* 5 cards — responsive 2 / 3 / 5 columns */}
+            <div className="mt-6 sm:mt-7 md:mt-8
+                            grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5
+                            gap-2.5 sm:gap-3 md:gap-3.5 lg:gap-[1.125rem]">
+              {ACTIVITIES.map((a, i) => (
+                <motion.div
+                  key={a.href}
+                  initial={{ opacity: 0, y: 16 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ duration: 0.4, delay: i * 0.06 }}
                 >
-                  <div className="w-[60px] h-[60px] md:w-[68px] md:h-[68px] flex items-center justify-center
-                                  group-hover:scale-110 transition-transform">
-                    <Image
-                      src={a.icon}
-                      alt={a.iconAlt}
-                      width={68}
-                      height={68}
-                      className="w-full h-full object-contain"
-                    />
-                  </div>
-                  <p className="mt-3 md:mt-4 text-[13px] md:text-[14px] font-semibold text-ink-700 leading-tight">
-                    {a.label}
-                  </p>
-                </Link>
-              </motion.div>
-            ))}
-          </div>
+                  <Link
+                    href={a.href}
+                    className="group flex flex-col items-center bg-white text-ink-700
+                               border-[1.5px] border-brand-200 hover:border-brand-400
+                               rounded-2xl md:rounded-[1.25rem]
+                               px-2 sm:px-2.5 md:px-3
+                               pt-3.5 sm:pt-4 md:pt-[1.125rem]
+                               pb-3 sm:pb-3.5 md:pb-4
+                               shadow-[0_8px_22px_-12px_rgba(0,0,0,0.22)]
+                               hover:-translate-y-1 hover:shadow-[0_16px_32px_-14px_rgba(0,0,0,0.30)]
+                               transition-all duration-300"
+                    style={{ aspectRatio: '4 / 4.6' }}
+                  >
+                    {/* Icon — pushed to lower half via mt-auto */}
+                    <div
+                      className="mt-auto group-hover:scale-[1.08] transition-transform
+                                 w-[38px] h-[38px] sm:w-11 sm:h-11 md:w-[50px] md:h-[50px] lg:w-14 lg:h-14"
+                    >
+                      <Image
+                        src={a.icon}
+                        alt={a.iconAlt}
+                        width={56}
+                        height={56}
+                        className="w-full h-full object-contain"
+                      />
+                    </div>
+                    {/* Label — sits below icon, centred */}
+                    <p className="text-center mt-2.5 md:mt-3 leading-tight font-semibold text-ink-700
+                                  text-[11px] sm:text-[12px] md:text-[13px] lg:text-[14px]">
+                      {a.label}
+                    </p>
+                  </Link>
+                </motion.div>
+              ))}
+            </div>
           </div>
         </div>
       </div>
