@@ -37,23 +37,25 @@ const ACTIVITIES: Activity[] = [
 export function ActivitiesPanel() {
   return (
     <section
-      className="relative mt-10 md:mt-12 pb-20 md:pb-24"
+      className="relative mt-14 md:mt-[4.5rem] lg:mt-[5.5rem] pb-20 md:pb-24"
       aria-labelledby="activities-title"
     >
-      {/* Soft "reflection" shadow band in the white gap above the panel
-          (between the search bar and the green wave). Reads like the
-          photo's ground reflection — wide elliptical blur, brand-tinted. */}
+      {/* Wave-shaped reflection above the panel — a vertically flipped,
+          blurred, low-opacity copy of the panel asset itself so the
+          shadow mirrors the panel's wave + chevron silhouette exactly. */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute z-[2]
-                   left-[8%] right-[8%] -top-1.5
-                   md:left-[6%] md:right-[6%] md:-top-2.5
-                   lg:left-[5%] lg:right-[5%] lg:-top-3.5
-                   h-8 md:h-12 lg:h-[60px]
-                   rounded-[50%] blur-[14px]"
+        className="pointer-events-none absolute inset-x-0 z-[2]
+                   -top-[55px] h-[70px]
+                   md:-top-[80px] md:h-[100px]
+                   lg:-top-[100px] lg:h-[130px]"
         style={{
-          background:
-            'radial-gradient(ellipse at center, rgba(11,53,48,0.14) 0%, rgba(11,53,48,0.07) 35%, rgba(11,53,48,0.02) 65%, rgba(11,53,48,0) 100%)',
+          backgroundImage: 'url(/brand/activities-panel.png)',
+          backgroundSize: '100% 100%',
+          backgroundRepeat: 'no-repeat',
+          transform: 'scaleY(-1)',
+          opacity: 0.22,
+          filter: 'blur(14px)',
         }}
       />
 
