@@ -153,6 +153,16 @@ class PrometheusMetricsMiddleware:
         response = self._get_response(request)
         normalized_path = metrics.normalize_path(request.path)
         duration = metrics.monotonic_time() - started_at
+        duration_ms = duration * 1000
+        from apps.core.performance import (
+            is_slow_request,
+            log_slow_request,
+            resolve_performance_contract,
+        )
+
+        contract = resolve_performance_contract(method=request.method, path=request.path)
+        for header_name, header_value in contract.as_headers(duration_ms=duration_ms).items():
+            response[header_name] = header_value
         metrics.HTTP_REQUESTS_TOTAL.labels(
             method=request.method,
             path=normalized_path,
@@ -162,6 +172,9 @@ class PrometheusMetricsMiddleware:
             method=request.method,
             path=normalized_path,
         ).observe(duration)
+        if is_slow_request(duration_ms=duration_ms, contract=contract):
+            metrics.HTTP_SLOW_REQUESTS_TOTAL.labels(method=request.method, path=normalized_path).inc()
+            log_slow_request(contract=contract, duration_ms=duration_ms, status_code=response.status_code)
         return response
 
 

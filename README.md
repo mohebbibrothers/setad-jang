@@ -1558,6 +1558,9 @@ Sentry env-driven آماده است
 OpenTelemetry tracer provider آماده است
 Prometheus metrics endpoint آماده است
 HTTP request latency metrics آماده است
+HTTP performance contracts آماده است
+Slow request telemetry و Prometheus counter آماده است
+Response headers: X-Response-Time-ms و X-Performance-Budget-ms
 Celery task metrics آماده است
 Slow query monitoring در فاز hardening بعدی قابل تکمیل است
 ```

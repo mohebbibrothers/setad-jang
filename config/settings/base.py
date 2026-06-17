@@ -210,6 +210,20 @@ else:
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # ============================================================================
+# Performance Contracts
+# ============================================================================
+
+DEFAULT_PERFORMANCE_BUDGET_MS = config("DEFAULT_PERFORMANCE_BUDGET_MS", default=1000, cast=int)
+PERFORMANCE_CONTRACTS = {
+    "/api/v1/health/*": 250,
+    "/api/v1/metrics/": 500,
+    "/api/v1/admin/*": 2000,
+    "/api/v1/audit-logs/*": 2000,
+    "/api/v1/madadkar/admin/*": 2500,
+    "/api/v1/support/admin/*": 2500,
+}
+
+# ============================================================================
 # Django REST Framework
 # ============================================================================
 
