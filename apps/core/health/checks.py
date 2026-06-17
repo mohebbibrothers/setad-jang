@@ -28,6 +28,8 @@ from urllib.parse import urlparse
 import redis
 from django.conf import settings
 from django.core.cache import cache
+from django.core.files.base import ContentFile
+from django.core.files.storage import default_storage
 from django.db import connections
 
 logger = logging.getLogger("apps.core.health")
@@ -350,6 +352,84 @@ def check_tabyin_sync() -> dict[str, Any]:
         }
 
 
+# ─── Advanced Diagnostics ───────────────────────────────────
+
+
+def check_migration_state() -> dict[str, Any]:
+    """Check unapplied migration state without exposing database details."""
+    start = time.monotonic()
+    try:
+        from django.db import DEFAULT_DB_ALIAS
+        from django.db.migrations.executor import MigrationExecutor
+
+        connection = connections[DEFAULT_DB_ALIAS]
+        executor = MigrationExecutor(connection)
+        plan = executor.migration_plan(executor.loader.graph.leaf_nodes())
+        unapplied = len(plan)
+        return {
+            "status": STATUS_OK if unapplied == 0 else STATUS_DEGRADED,
+            "latency_ms": _latency_ms_since(start),
+            "unapplied_migrations": unapplied,
+            "detail": "Unapplied migrations detected." if unapplied else "Migration state is current.",
+        }
+    except Exception as exc:
+        logger.exception("Migration health check failed error_type=%s", type(exc).__name__)
+        return {"status": STATUS_ERROR, "latency_ms": _latency_ms_since(start), "detail": _safe_error_detail(exc)}
+
+
+def check_media_storage() -> dict[str, Any]:
+    """Check default media storage write/delete capability with a tiny probe file."""
+    start = time.monotonic()
+    probe_name = "health/.storage-probe.txt"
+    try:
+        saved_name = default_storage.save(probe_name, ContentFile(b"ok"))
+        exists = default_storage.exists(saved_name)
+        default_storage.delete(saved_name)
+        latency_ms = _latency_ms_since(start)
+        if not exists:
+            return {"status": STATUS_ERROR, "latency_ms": latency_ms, "backend": default_storage.__class__.__name__, "detail": "Storage probe was not readable."}
+        return {"status": _status_for_latency(latency_ms, degraded_after_ms=250.0), "latency_ms": latency_ms, "backend": default_storage.__class__.__name__}
+    except Exception as exc:
+        logger.exception("Media storage health check failed error_type=%s", type(exc).__name__)
+        return {"status": STATUS_ERROR, "latency_ms": _latency_ms_since(start), "backend": default_storage.__class__.__name__, "detail": _safe_error_detail(exc)}
+
+
+def check_audit_chain_quick() -> dict[str, Any]:
+    """Run a constant-time-ish latest-row audit hash diagnostic, not a full chain scan."""
+    start = time.monotonic()
+    try:
+        from apps.audit_logs.models import AuditLog
+
+        latest = AuditLog.all_objects.order_by("-created_at", "-id").first()
+        if latest is None:
+            return {"status": STATUS_OK, "latency_ms": _latency_ms_since(start), "checked": 0, "detail": "No audit rows yet."}
+        expected = latest.compute_event_hash(previous_hash=latest.previous_hash)
+        if latest.event_hash != expected:
+            return {"status": STATUS_ERROR, "latency_ms": _latency_ms_since(start), "checked": 1, "detail": "Latest audit hash mismatch."}
+        return {"status": STATUS_OK, "latency_ms": _latency_ms_since(start), "checked": 1, "head_hash_prefix": latest.event_hash[:12]}
+    except Exception as exc:
+        logger.exception("Audit quick health check failed error_type=%s", type(exc).__name__)
+        return {"status": STATUS_ERROR, "latency_ms": _latency_ms_since(start), "detail": _safe_error_detail(exc)}
+
+
+def check_performance_contracts() -> dict[str, Any]:
+    """Expose performance-contract configuration diagnostics for detailed health."""
+    try:
+        contracts = getattr(settings, "PERFORMANCE_CONTRACTS", {}) or {}
+        default_budget = int(getattr(settings, "DEFAULT_PERFORMANCE_BUDGET_MS", 1000))
+        invalid = [key for key, value in contracts.items() if not isinstance(value, int) or value <= 0]
+        return {
+            "status": STATUS_OK if not invalid and default_budget > 0 else STATUS_DEGRADED,
+            "contracts_count": len(contracts),
+            "default_budget_ms": default_budget,
+            "invalid_contracts_count": len(invalid),
+            "detail": "Performance contracts configured." if not invalid else "Invalid performance contract budgets detected.",
+        }
+    except Exception as exc:
+        logger.exception("Performance contract health check failed error_type=%s", type(exc).__name__)
+        return {"status": STATUS_ERROR, "detail": _safe_error_detail(exc)}
+
+
 # ─── Provider Readiness Diagnostics ─────────────────────────
 
 
@@ -403,6 +483,10 @@ def build_detailed_checks() -> dict[str, dict[str, Any]]:
     """Run readiness checks plus non-critical diagnostic checks."""
     return {
         **build_readiness_checks(),
+        "migration_state": check_migration_state(),
+        "media_storage": check_media_storage(),
+        "audit_chain_quick": check_audit_chain_quick(),
+        "performance_contracts": check_performance_contracts(),
         "tabyin_sync": check_tabyin_sync(),
         "provider_readiness": check_provider_readiness(),
     }

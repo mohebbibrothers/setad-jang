@@ -15024,12 +15024,23 @@ components:
           $ref: '#/components/schemas/ComponentCheck'
         celery_broker:
           $ref: '#/components/schemas/ComponentCheck'
+        migration_state:
+          $ref: '#/components/schemas/ComponentCheck'
+        media_storage:
+          $ref: '#/components/schemas/ComponentCheck'
+        audit_chain_quick:
+          $ref: '#/components/schemas/ComponentCheck'
+        performance_contracts: {}
         tabyin_sync:
           $ref: '#/components/schemas/TabyinSyncCheck'
       required:
+      - audit_chain_quick
       - cache
       - celery_broker
       - database
+      - media_storage
+      - migration_state
+      - performance_contracts
       - tabyin_sync
     DetailedHealth:
       type: object

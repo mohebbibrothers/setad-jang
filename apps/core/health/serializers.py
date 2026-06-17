@@ -72,6 +72,10 @@ class ReadinessChecksSerializer(serializers.Serializer):
 class DetailedChecksSerializer(ReadinessChecksSerializer):
     """چک‌های detailed شامل readiness و diagnosticهای non-critical."""
 
+    migration_state = ComponentCheckSerializer()
+    media_storage = ComponentCheckSerializer()
+    audit_chain_quick = ComponentCheckSerializer()
+    performance_contracts = serializers.JSONField()
     tabyin_sync = TabyinSyncCheckSerializer()
 
 
