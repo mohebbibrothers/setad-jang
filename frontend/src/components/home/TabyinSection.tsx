@@ -168,7 +168,7 @@ type FilterKey = (typeof FILTERS)[number]['key'];
 
 export function TabyinSection({ items }: { items: TabyinItem[] }) {
   const [filter, setFilter] = useState<FilterKey>('all');
-  const [loadMore, setLoadMore] = useState(0);
+  const [page, setPage]     = useState(0);
 
   const counts = useMemo(() => ({
     all:   items.length,
@@ -185,12 +185,25 @@ export function TabyinSection({ items }: { items: TabyinItem[] }) {
     [items, filter],
   );
 
-  // First fold: 12 tiles; clicking 'بارگذاری بیشتر' adds another 8
+  // Fixed page geometry — 12 tiles fit a deterministic 4×4 row grid:
+  //   4 tall tiles (row-span 2) + 8 short tiles = 4·2 + 8·1 = 16 row slots
+  //   Tall positions within each page: 0, 5, 8 (1-based: 1st, 6th, 9th)
+  //   ↑ this rhythm matches the designer screenshot's variable-height wall
+  //   and stays stable across pages so the eye is never surprised on flip.
+  const PAGE_SIZE = 12;
+  const TALL_INDEXES_IN_PAGE = new Set([0, 5, 8]);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+
   const visible = useMemo(
-    () => filtered.slice(0, 12 + loadMore * 8),
-    [filtered, loadMore],
+    () => filtered.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE),
+    [filtered, page],
   );
-  const hasMore = visible.length < filtered.length;
+
+  // Reset to first page when filter changes
+  useEffect(() => { setPage(0); }, [filter]);
+
+  const goPrev = () => setPage((p) => (p - 1 + totalPages) % totalPages);
+  const goNext = () => setPage((p) => (p + 1) % totalPages);
 
   return (
     <section className="section-y bg-white" id="tabyin">
@@ -202,8 +215,7 @@ export function TabyinSection({ items }: { items: TabyinItem[] }) {
 
         {/* Filter strip — media-type pills */}
         <div className="flex justify-center mb-6">
-          <div className="inline-flex p-1 bg-ink-50 rounded-full ring-1 ring-ink-100
-                          shadow-inner"
+          <div className="inline-flex p-1 bg-ink-50 rounded-full ring-1 ring-ink-100 shadow-inner"
                role="tablist" aria-label="نوع رسانه">
             {FILTERS.map((f) => {
               const isActive = filter === f.key;
@@ -214,7 +226,7 @@ export function TabyinSection({ items }: { items: TabyinItem[] }) {
                   type="button"
                   role="tab"
                   aria-selected={isActive}
-                  onClick={() => { setFilter(f.key); setLoadMore(0); }}
+                  onClick={() => setFilter(f.key)}
                   className={`inline-flex items-center justify-center gap-1.5 h-10 px-3.5 sm:px-4
                               rounded-full text-[12.5px] font-extrabold whitespace-nowrap
                               transition-all duration-200
@@ -235,20 +247,30 @@ export function TabyinSection({ items }: { items: TabyinItem[] }) {
           </div>
         </div>
 
-        {/* ── Masonry grid — true variable-height tiles ── */}
+        {/* ── Fixed-area masonry: 4 cols × 4 rows on desktop, dense packing ── */}
         <AnimatePresence mode="wait">
           <motion.div
-            key={filter}
+            key={`${filter}-${page}`}
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
-            transition={{ duration: 0.25 }}
+            transition={{ duration: 0.28 }}
             className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4
-                       auto-rows-[110px] sm:auto-rows-[130px] md:auto-rows-[150px]
+                       auto-rows-[120px] sm:auto-rows-[140px] md:auto-rows-[160px]
                        gap-3 md:gap-4"
+            style={{ gridAutoFlow: 'dense' }}
           >
             {visible.map((it, i) => (
-              <TabyinTile key={it.id} it={it} index={i} />
+              <TabyinTile
+                key={it.id}
+                it={it}
+                index={i}
+                /* Force the canonical tall pattern: positions 0, 5, 8 in
+                   every page become tall (row-span 2). Falls back to the
+                   item's own tall hint if it has one — useful when the
+                   backend pre-curates a layout. */
+                forceTall={TALL_INDEXES_IN_PAGE.has(i)}
+              />
             ))}
             {visible.length === 0 && (
               <div className="col-span-full text-center py-16">
@@ -259,34 +281,38 @@ export function TabyinSection({ items }: { items: TabyinItem[] }) {
           </motion.div>
         </AnimatePresence>
 
-        {/* Load more CTA */}
-        <div className="flex justify-center mt-8 md:mt-10">
-          {hasMore ? (
-            <button
-              type="button"
-              onClick={() => setLoadMore((n) => n + 1)}
-              className="inline-flex items-center gap-2 h-11 px-8 rounded-full
-                         bg-mint-500 hover:bg-mint-600 text-white font-extrabold text-[13.5px]
-                         shadow-[0_8px_24px_-8px_rgba(37,197,186,.5)] transition-all
-                         hover:scale-[1.02] active:scale-[.98]"
-            >
-              <span>بارگذاری بیشتر</span>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <polyline points="6 9 12 15 18 9" stroke="currentColor" strokeWidth="2.4"
-                          strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </button>
-          ) : (
-            <Link
-              href="/tabyin"
-              className="inline-flex items-center gap-2 h-11 px-8 rounded-full
-                         bg-mint-500 hover:bg-mint-600 text-white font-extrabold text-[13.5px]
-                         shadow-[0_8px_24px_-8px_rgba(37,197,186,.5)] transition-colors"
-            >
-              <span>مشاهده گالری کامل</span>
-              <Icon name="arrow-left" className="w-4 h-4" />
-            </Link>
-          )}
+        {/* Pager (brand PNG arrows — disabled when there's a single page) */}
+        <div className="flex items-center justify-center gap-4 mt-8">
+          <button
+            type="button" aria-label="قبلی" onClick={goPrev} disabled={totalPages <= 1}
+            className="relative w-12 h-12 rounded-full hover:scale-110 active:scale-95
+                       transition-transform duration-200 disabled:opacity-40
+                       disabled:cursor-not-allowed disabled:hover:scale-100"
+          >
+            <Image src="/brand/pager-arrow-prev.png" alt="" fill sizes="48px" className="object-contain" />
+          </button>
+          <button
+            type="button" aria-label="بعدی" onClick={goNext} disabled={totalPages <= 1}
+            className="relative w-12 h-12 rounded-full hover:scale-110 active:scale-95
+                       transition-transform duration-200 disabled:opacity-40
+                       disabled:cursor-not-allowed disabled:hover:scale-100"
+          >
+            <Image src="/brand/pager-arrow-next.png" alt="" fill sizes="48px" className="object-contain" />
+          </button>
+        </div>
+
+        {/* 'مشاهده همه محتوا' CTA — sits BELOW the pager, mint primary */}
+        <div className="flex justify-center mt-6">
+          <Link
+            href="/tabyin"
+            className="inline-flex items-center gap-2 h-12 px-8 rounded-full
+                       bg-mint-500 hover:bg-mint-600 text-white font-extrabold text-[14px]
+                       shadow-[0_8px_24px_-8px_rgba(37,197,186,.5)] transition-all
+                       hover:scale-[1.02] active:scale-[.98]"
+          >
+            <span>مشاهده همه محتوا</span>
+            <Icon name="arrow-left" className="w-4 h-4" />
+          </Link>
         </div>
       </div>
     </section>
@@ -297,19 +323,23 @@ export function TabyinSection({ items }: { items: TabyinItem[] }) {
 /*  Tile                                                                     */
 /* ───────────────────────────────────────────────────────────────────────── */
 
-function TabyinTile({ it, index }: { it: TabyinItem; index: number }) {
+function TabyinTile({
+  it, index, forceTall = false,
+}: {
+  it: TabyinItem; index: number; forceTall?: boolean;
+}) {
   const isQuote = it.variant === 'quote';
   const isVideo = it.mediaType === 'video';
   const isAudio = it.mediaType === 'audio';
   const isUser  = it.origin === 'user_submitted';
-  const tall    = !!it.tall;
+  const tall    = forceTall || !!it.tall;
 
   return (
     <motion.article
       initial={{ opacity: 0, scale: 0.96, y: 12 }}
-      whileInView={{ opacity: 1, scale: 1, y: 0 }}
-      viewport={{ once: true, margin: '-40px' }}
-      transition={{ duration: 0.4, delay: Math.min(index * 0.03, 0.4) }}
+      animate={{ opacity: 1, scale: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.97 }}
+      transition={{ duration: 0.4, delay: Math.min(index * 0.025, 0.35) }}
       className={`group relative rounded-2xl overflow-hidden isolate
                   shadow-[0_2px_10px_-4px_rgba(15,20,32,.06)]
                   hover:shadow-[0_22px_44px_-22px_rgba(11,53,48,.28)]

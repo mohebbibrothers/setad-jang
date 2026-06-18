@@ -354,23 +354,32 @@ export async function loadTabyinItems(): Promise<TabyinItem[]> {
       };
     });
   }
-  // ── Seed: 12 tiles with the asymmetric masonry rhythm from the mockup
-  //   tall positions   : 0, 6        (designer wall pattern)
-  //   quote variant    : 4           (one full-quote card in fold 1)
-  //   video tiles      : 1, 9        (with duration → renders play affordance)
-  //   user-submitted   : 7, 10       (gets the 'مردمی' chip)
+  // ── Seed: 24 tiles → exactly 2 pager pages of 12, each laid out on
+  //   the fixed 4×4 row grid (4 tall + 8 short) the section enforces.
+  //   - quote variant is dropped into one slot per page so every page
+  //     has a text card to break the visual rhythm.
+  //   - video tiles get a duration so the play affordance + media badge
+  //     light up; audio tiles get a duration too.
+  //   - 2 user-submitted tiles per page so the 'مردمی' chip is visible.
   const tones: Array<[string, string]> = [
+    // page 1
     ['#3FA797', '#0A6E64'], ['#0D8074', '#053832'], ['#3FA797', '#155F55'],
     ['#5DB3A4', '#0A6E64'], ['#0D8074', '#0A6E64'], ['#3FA797', '#053832'],
     ['#5DB3A4', '#0D8074'], ['#0A6E64', '#053832'], ['#3FA797', '#085C54'],
     ['#5DB3A4', '#085C54'], ['#0D8074', '#085C54'], ['#3FA797', '#0A6E64'],
+    // page 2
+    ['#2FA08D', '#053832'], ['#155F55', '#0A6E64'], ['#5DB3A4', '#053832'],
+    ['#3FA797', '#0A6E64'], ['#0A6E64', '#085C54'], ['#0D8074', '#155F55'],
+    ['#5DB3A4', '#155F55'], ['#3FA797', '#0D8074'], ['#0D8074', '#053832'],
+    ['#5DB3A4', '#0A6E64'], ['#3FA797', '#053832'], ['#0A6E64', '#0D8074'],
   ];
   const titles = [
+    // page 1
     'دهه‌ی فجر انقلاب اسلامی',
     'منبر انقلاب اسلامی',
     '«جلادها میان ما»',
     'حضرت معصومه (س)',
-    '',                       // quote tile — no title
+    '',                       // quote tile #1
     'هنر مسلح مقاومت',
     'کبوتر صلح',
     'دفاع از وطن',
@@ -378,24 +387,47 @@ export async function loadTabyinItems(): Promise<TabyinItem[]> {
     'نسل سوم انقلاب',
     'به یاد شهدا',
     'لاإله إلا الله',
+    // page 2
+    'راه ادامه دارد',
+    'پای سفره‌ی شهدا',
+    'پرچم همیشه برافراشته',
+    '',                       // quote tile #2
+    'صدای مقاومت',
+    'تصویر آرامش',
+    'مادران چشم‌انتظار',
+    'گلستان عاشقان',
+    'یاران ناشناخته',
+    'تا فردای پیروزی',
+    'پاسبانان غیرت',
+    'روایت یک قهرمان',
   ];
+  const quotes = [
+    'او به خاطر نقاشی‌های واقع‌گرایانه‌اش از رویدادهای مذهبی شهرت دارد. خالق آثاری چون «عرش بر زمین افتاد»، «شیرین‌تر از عسل» و «آخرین سرباز لشکر» است.',
+    'هنرِ مقاومت، روایتِ صادقِ مردمی است که در سکوتِ تاریخ، صدای حقیقت را با قلم و قلم‌مو نگه داشتند تا نسل‌های آینده بدانند که اینجا چه گذشت.',
+  ];
+  // index → quote payload mapping
+  const quoteAt: Record<number, string> = { 4: quotes[0], 15: quotes[1] };
+  const videoAt = new Set([1, 9, 13, 22]);
+  const audioAt = new Set([11, 19]);
+  const userAt  = new Set([7, 10, 18, 23]);
+
   return tones.map((t, i) => {
-    const isQuote = i === 4;
-    const isVideo = i === 1 || i === 9;
-    const isAudio = i === 11;
+    const isQuote = i in quoteAt;
+    const isVideo = videoAt.has(i);
+    const isAudio = audioAt.has(i);
     return {
       id: `seed-${i}`,
       slug: `seed-${i}`,
       title: titles[i] || undefined,
-      summary: isQuote
-        ? 'او به خاطر نقاشی‌های واقع‌گرایانه‌اش از رویدادهای مذهبی شهرت دارد. خالق آثاری چون «عرش بر زمین افتاد»، «شیرین‌تر از عسل» و «آخرین سرباز لشکر» است.'
-        : undefined,
+      summary: isQuote ? quoteAt[i] : undefined,
       variant: isQuote ? 'quote' : undefined,
-      tall: [0, 6, 8].includes(i),
+      // 'tall' is left off here — TabyinSection forces the canonical
+      // tall pattern (positions 0, 5, 8 of each page). This keeps the
+      // grid stable on every page flip.
       mediaType: isQuote ? 'image' : isVideo ? 'video' : isAudio ? 'audio' : 'image',
-      durationSeconds: isVideo ? 95 + i * 30 : isAudio ? 240 : undefined,
-      origin: [7, 10].includes(i) ? 'user_submitted' : 'external',
-      authorName: i === 7 ? 'کاربر امید' : i === 10 ? 'تیم بسیج هنرمندان' : undefined,
+      durationSeconds: isVideo ? 95 + (i % 6) * 30 : isAudio ? 240 + (i % 4) * 60 : undefined,
+      origin: userAt.has(i) ? 'user_submitted' : 'external',
+      authorName: userAt.has(i) ? 'کاربر مردمی' : undefined,
       toneFrom: t[0], toneTo: t[1],
     };
   });
