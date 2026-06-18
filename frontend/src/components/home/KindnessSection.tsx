@@ -69,7 +69,7 @@ export type KindListing = {
 };
 
 /* ───────────────────────────────────────────────────────────────────────── */
-/*  Crafted icons (metaphor-rich, not the generic helping-hand glyphs)       */
+/*  Crafted icons (metaphor-rich, hand-tuned)                                */
 /* ───────────────────────────────────────────────────────────────────────── */
 
 /** All listings — multi-card stack / wall glyph */
@@ -85,29 +85,38 @@ function AllIcon({ className = 'w-4 h-4' }: { className?: string }) {
   );
 }
 
-/** Offer help — two hands meeting around a heart (giving) */
+/** Offer help — an open palm cupping a heart (HAND-HOLDING-HEART)
+ *  Metaphor: I am giving my care / I'm offering love.                       */
 function GiveIcon({ className = 'w-4 h-4' }: { className?: string }) {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.9}
          strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
-      <path d="M11 13h2a2 2 0 1 0 0-4h-3l-3-3-7 7v3l4 4 8-8z" />
-      <path d="M14 9l4 4" />
-      <path d="M19 5a2 2 0 1 1 0 4" />
+      {/* Heart resting on palm */}
+      <path
+        d="M11.5 11.2c-1.2-1-2.6-1.3-3.6-.4-1 .9-1 2.4 0 3.4l3.6 3.5 3.6-3.5c1-1 1-2.5 0-3.4-1-.9-2.4-.6-3.6.4z"
+        fill="currentColor"
+        fillOpacity="0.14"
+      />
+      {/* Cupped hand below */}
+      <path d="M4 16.5V20a2 2 0 0 0 2 2h7a4 4 0 0 0 4-4v-2.5" />
+      <path d="M4 16.5 7 13.5" />
+      <path d="M17 15.5 20 13.5" />
+      {/* Heart outline */}
+      <path d="M11.5 11.2c-1.2-1-2.6-1.3-3.6-.4-1 .9-1 2.4 0 3.4l3.6 3.5 3.6-3.5c1-1 1-2.5 0-3.4-1-.9-2.4-.6-3.6.4z" />
     </svg>
   );
 }
 
-/** Need help — a life-buoy + pulse (call for support) */
+/** Need help — a heart with a heartbeat pulse running through it (HEART-PULSE)
+ *  Metaphor: my heart needs care / a signal calling for help.               */
 function NeedIcon({ className = 'w-4 h-4' }: { className?: string }) {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.1}
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}
          strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
-      <circle cx="12" cy="12" r="9.5" />
-      <circle cx="12" cy="12" r="4" />
-      <path d="m4.93 4.93 4.24 4.24" />
-      <path d="m14.83 14.83 4.24 4.24" />
-      <path d="m4.93 19.07 4.24-4.24" />
-      <path d="m14.83 9.17 4.24-4.24" />
+      {/* Heart outline */}
+      <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
+      {/* Heartbeat line inside */}
+      <path d="M3.22 12H9.5l.5-1 2 4.5 2-7 1.5 3.5h5.27" strokeWidth={1.7} />
     </svg>
   );
 }
@@ -346,8 +355,10 @@ export function KindnessSection({ listings }: { listings: KindListing[] }) {
     });
   }, [listings, filter, category]);
 
-  // 4 cards per page — matches every other carousel on the homepage
-  const PAGE_SIZE = 4;
+  // 3 cards per page — matches the designer's latest brief.
+  // The grid below uses flex + flex-wrap so that any orphan cards in the
+  // last row are HORIZONTALLY CENTERED instead of dangling to the right.
+  const PAGE_SIZE = 3;
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const visible = useMemo(
     () => filtered.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE),
@@ -519,34 +530,47 @@ export function KindnessSection({ listings }: { listings: KindListing[] }) {
           </div>
         )}
 
-        {/* ── Grid (4 per page) ── */}
+        {/* ── Grid (3 per page) — flex+wrap so an orphan card centres itself ── */}
         <AnimatePresence mode="wait">
-          <motion.div
-            key={`${filter}-${category}-${page}`}
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            transition={{ duration: 0.25 }}
-            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5"
-          >
-            {visible.map((l, i) => (
-              <ListingCard key={l.slug} l={l} delay={i * 0.04} />
-            ))}
-            {visible.length === 0 && (
-              <div className="col-span-full text-center py-16">
-                <Icon name="search" className="w-12 h-12 mx-auto text-ink-300 mb-3" />
-                <p className="text-ink-500 font-bold">آگهی‌ای در این فیلتر یافت نشد.</p>
-                <button
-                  type="button"
-                  onClick={() => { setFilterReset('all'); setCategoryReset('all'); }}
-                  className="mt-3 inline-flex items-center gap-1.5 text-[13px] text-brand-600 font-extrabold hover:gap-2 transition-all"
-                >
-                  پاک کردن فیلترها
-                  <Icon name="arrow-left" className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            )}
-          </motion.div>
+          {visible.length === 0 ? (
+            <motion.div
+              key="empty"
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.25 }}
+              className="text-center py-16"
+            >
+              <Icon name="search" className="w-12 h-12 mx-auto text-ink-300 mb-3" />
+              <p className="text-ink-500 font-bold">آگهی‌ای در این فیلتر یافت نشد.</p>
+              <button
+                type="button"
+                onClick={() => { setFilterReset('all'); setCategoryReset('all'); }}
+                className="mt-3 inline-flex items-center gap-1.5 text-[13px] text-brand-600 font-extrabold hover:gap-2 transition-all"
+              >
+                پاک کردن فیلترها
+                <Icon name="arrow-left" className="w-3.5 h-3.5" />
+              </button>
+            </motion.div>
+          ) : (
+            <motion.div
+              key={`${filter}-${category}-${page}`}
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.25 }}
+              /* Flex+wrap with justify-center: any orphan in the last row
+                 (1 of 3, 1 of 2, 2 of 3) auto-centres horizontally. The
+                 inner <ListingCard> sets its width via the responsive
+                 'kw-card-flex' class so columns stay aligned with a 3-col
+                 desktop, 2-col tablet, 1-col mobile rhythm.                 */
+              className="flex flex-wrap justify-center gap-4 md:gap-5"
+            >
+              {visible.map((l, i) => (
+                <ListingCard key={l.slug} l={l} delay={i * 0.04} />
+              ))}
+            </motion.div>
+          )}
         </AnimatePresence>
 
         {/* Pager (brand PNG arrows) */}
@@ -601,10 +625,20 @@ function ListingCard({ l, delay = 0 }: { l: KindListing; delay?: number }) {
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: '-40px' }}
       transition={{ duration: 0.4, delay }}
+      /* Width math matches the parent's gap (1rem mobile, 1.25rem md+):
+         - mobile (<640px) : 1 column → 100%
+         - tablet (640+)   : 2 columns → calc((100% - 1*1.25rem) / 2)
+         - desktop (1024+) : 3 columns → calc((100% - 2*1.25rem) / 3)
+         Combined with parent flex+wrap+justify-center, any orphan in the
+         last row auto-centres. min-w-0 keeps long content from blowing out. */
       className="group flex flex-col bg-white rounded-[26px] overflow-hidden isolate
                  shadow-[0_2px_10px_-4px_rgba(15,20,32,.06)]
                  hover:shadow-[0_22px_44px_-22px_rgba(11,53,48,.22)]
-                 hover:-translate-y-1 transition-all duration-300"
+                 hover:-translate-y-1 transition-all duration-300
+                 w-full
+                 sm:w-[calc((100%-1.25rem)/2)]
+                 lg:w-[calc((100%-2.5rem)/3)]
+                 min-w-0"
     >
       {/* Cover — fixed 16:10 box */}
       <Link
