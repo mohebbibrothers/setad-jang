@@ -85,24 +85,24 @@ function AllIcon({ className = 'w-4 h-4' }: { className?: string }) {
   );
 }
 
-/** Offer help — an open palm cupping a heart (HAND-HOLDING-HEART)
- *  Metaphor: I am giving my care / I'm offering love.                       */
+/** Offer help — a CUPPED HAND (U-bowl) holding a SOLID filled heart above it.
+ *  This is the canonical 'hand-holding-heart' silhouette used by FontAwesome,
+ *  Phosphor, Heroicons and most charity products — instantly readable as
+ *  'I'm giving something with my hands' even at 16×16.                       */
 function GiveIcon({ className = 'w-4 h-4' }: { className?: string }) {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.9}
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}
          strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
-      {/* Heart resting on palm */}
+      {/* Solid filled heart, centred above the cup */}
       <path
-        d="M11.5 11.2c-1.2-1-2.6-1.3-3.6-.4-1 .9-1 2.4 0 3.4l3.6 3.5 3.6-3.5c1-1 1-2.5 0-3.4-1-.9-2.4-.6-3.6.4z"
+        d="M12 11.7 7 6.7a2.5 2.5 0 1 1 3.5-3.5L12 4.7l1.5-1.5A2.5 2.5 0 1 1 17 6.7L12 11.7Z"
         fill="currentColor"
-        fillOpacity="0.14"
+        stroke="none"
       />
-      {/* Cupped hand below */}
-      <path d="M4 16.5V20a2 2 0 0 0 2 2h7a4 4 0 0 0 4-4v-2.5" />
-      <path d="M4 16.5 7 13.5" />
-      <path d="M17 15.5 20 13.5" />
-      {/* Heart outline */}
-      <path d="M11.5 11.2c-1.2-1-2.6-1.3-3.6-.4-1 .9-1 2.4 0 3.4l3.6 3.5 3.6-3.5c1-1 1-2.5 0-3.4-1-.9-2.4-.6-3.6.4z" />
+      {/* U-shaped cupped hand below the heart */}
+      <path d="M4 14v1.5C4 18.5 6.5 21 9.5 21h5c3 0 5.5-2.5 5.5-5.5V14" />
+      {/* Small thumb hint on the right edge — adds 'hand' literacy */}
+      <path d="M20 14.5l1-.5a1 1 0 0 0 0-1.8l-1-.5" />
     </svg>
   );
 }
