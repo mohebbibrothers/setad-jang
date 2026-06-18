@@ -14,13 +14,20 @@ from django.db import transaction
 from django.db.models import Count, Sum
 from django.utils import timezone
 
-from apps.lms.choices import BadgeLevel, CertificateStatus, CourseStatus, EnrollmentStatus
+from apps.lms.choices import (
+    BadgeLevel,
+    CertificateStatus,
+    CourseStatus,
+    EnrollmentStatus,
+    VideoProcessingStatus,
+)
 from apps.lms.models import (
     Certificate,
     Course,
     Enrollment,
     Lesson,
     LessonProgress,
+    LessonVideoProcessingJob,
     LMSCategory,
     LMSUserSkill,
 )
@@ -56,6 +63,10 @@ class LessonMediaAccessError(LMSServiceError):
 
 class LessonMediaUnavailableError(LMSServiceError):
     """Raised when requested lesson media does not exist."""
+
+
+class VideoProcessingJobError(LMSServiceError):
+    """Raised when a lesson video processing job cannot be executed."""
 
 
 LESSON_COMPLETION_THRESHOLD_PERCENT = Decimal("90.00")
@@ -293,6 +304,64 @@ def create_skill_for_certificate(*, certificate) -> LMSUserSkill:
 
         notify_lms_certificate_issued(certificate=certificate)
     return skill
+
+
+# ============================================================
+# Video processing jobs
+# ============================================================
+
+@transaction.atomic
+def request_lesson_video_processing(*, lesson: Lesson, requested_by: Any | None = None) -> LessonVideoProcessingJob:
+    """Queue an idempotent video processing job for an uploaded lesson video."""
+    if not lesson.video_file:
+        raise VideoProcessingJobError("برای این جلسه فایل ویدئویی آپلود نشده است.")
+    existing = lesson.video_processing_jobs.filter(status__in=[VideoProcessingStatus.QUEUED, VideoProcessingStatus.PROCESSING]).first()
+    if existing is not None:
+        return existing
+    return LessonVideoProcessingJob.objects.create(
+        lesson=lesson,
+        requested_by=requested_by if getattr(requested_by, "pk", None) else None,
+        provider="noop",
+        source_file_name=getattr(lesson.video_file, "name", "") or "",
+        metadata={"provider_mode": "noop", "reason": "processing infrastructure not configured"},
+    )
+
+
+@transaction.atomic
+def process_lesson_video_job(*, job: LessonVideoProcessingJob) -> LessonVideoProcessingJob:
+    """Process a lesson video job with a safe no-op/local provider contract."""
+    locked = LessonVideoProcessingJob.objects.select_for_update().select_related("lesson").get(pk=job.pk)
+    if locked.status == VideoProcessingStatus.COMPLETED:
+        return locked
+    if locked.status not in {VideoProcessingStatus.QUEUED, VideoProcessingStatus.FAILED}:
+        raise VideoProcessingJobError("Job در وضعیت قابل پردازش نیست.")
+    locked.status = VideoProcessingStatus.PROCESSING
+    locked.started_at = timezone.now()
+    locked.save(update_fields=["status", "started_at", "updated_at"])
+    lesson = locked.lesson
+    locked.output_video_url = lesson.video_file.url if lesson.video_file else ""
+    locked.thumbnail_url = ""
+    locked.duration_seconds = lesson.duration_seconds
+    locked.status = VideoProcessingStatus.COMPLETED
+    locked.completed_at = timezone.now()
+    locked.metadata = {
+        **locked.metadata,
+        "processed_by": "noop_local_provider",
+        "output_video_url_source": "lesson.video_file.url",
+    }
+    locked.error_message = ""
+    locked.save(update_fields=["output_video_url", "thumbnail_url", "duration_seconds", "status", "completed_at", "metadata", "error_message", "updated_at"])
+    return locked
+
+
+@transaction.atomic
+def fail_lesson_video_job(*, job: LessonVideoProcessingJob, error_message: str) -> LessonVideoProcessingJob:
+    """Mark a video processing job as failed with a safe error message."""
+    locked = LessonVideoProcessingJob.objects.select_for_update().get(pk=job.pk)
+    locked.status = VideoProcessingStatus.FAILED
+    locked.error_message = error_message[:500]
+    locked.save(update_fields=["status", "error_message", "updated_at"])
+    return locked
 
 
 # ============================================================

@@ -55,6 +55,7 @@ from apps.lms.serializers import (
     LessonQuestionCreateSerializer,
     LessonQuestionSerializer,
     LessonSummarySerializer,
+    LessonVideoProcessingJobSerializer,
     LMSCategoryCreateUpdateSerializer,
     LMSCategorySerializer,
     LMSUserSkillSerializer,
@@ -83,6 +84,8 @@ from apps.lms.services import (
     QuizAttemptSubmissionError,
     QuizNotAvailableError,
     QuizValidationError,
+    VideoProcessingJobError,
+    request_lesson_video_processing,
     revoke_certificate,
 )
 from apps.lms.throttles import LMSDiscussionThrottle, LMSEnrollThrottle, LMSProgressThrottle
@@ -121,6 +124,7 @@ SKILL_LIST_RESPONSE = build_success_response_serializer(name="LMSSkillListRespon
 COURSE_REPORT_RESPONSE = build_success_response_serializer(name="LMSCourseReportResponse", data_serializer=CourseReportSerializer)
 COURSE_ANALYTICS_RESPONSE = build_success_response_serializer(name="LMSCourseAnalyticsResponse", data_serializer=CourseAnalyticsSerializer)
 COURSE_LEADERBOARD_RESPONSE = build_success_response_serializer(name="LMSCourseLeaderboardResponse", data_serializer=CourseLeaderboardItemSerializer, many=True)
+VIDEO_PROCESSING_JOB_RESPONSE = build_success_response_serializer(name="LMSVideoProcessingJobResponse", data_serializer=LessonVideoProcessingJobSerializer)
 
 
 class LMSCategoryPublicListView(APIView):
@@ -1038,6 +1042,63 @@ class LMSAdminLessonDetailView(APIView):
             return ErrorResponse(message="جلسه یافت نشد.", status_code=404)
         services.delete_lesson(lesson=lesson)
         return DeletedResponse(message="جلسه غیرفعال شد.")
+
+
+class LMSAdminLessonVideoProcessingView(APIView):
+    """Admin endpoint to queue lesson video processing."""
+
+    permission_classes = [IsLMSAdminUser]
+    serializer_class = LessonVideoProcessingJobSerializer
+
+    @extend_schema(
+        operation_id="lms_admin_lessons_video_processing_create",
+        tags=[TAG_LMS_ADMIN],
+        request=None,
+        responses={201: VIDEO_PROCESSING_JOB_RESPONSE, 400: LMS_ERROR_RESPONSE, 404: LMS_ERROR_RESPONSE},
+    )
+    def post(self, request: Request, lesson_id: int) -> CreatedResponse | ErrorResponse:
+        """Queue video processing for an uploaded lesson video."""
+        lesson = selectors.get_admin_lesson_by_id(lesson_id=lesson_id)
+        if lesson is None:
+            return ErrorResponse(message="جلسه یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+        try:
+            job = request_lesson_video_processing(lesson=lesson, requested_by=request.user)
+        except VideoProcessingJobError as exc:
+            return ErrorResponse(message=str(exc))
+        from apps.lms.tasks import process_lesson_video_job_task
+
+        process_lesson_video_job_task.delay(job_id=job.pk)
+        log_action_async(
+            user_id=request.user.pk,
+            action=audit_actions.LMS_VIDEO_PROCESSING_REQUESTED,
+            resource_type="lms_lesson_video_processing_job",
+            resource_id=str(job.pk),
+            extra_data={"lesson_id": lesson.pk, "course_id": lesson.course_id, "status": job.status},
+            **extract_audit_metadata(request),
+        )
+        return CreatedResponse(data=LessonVideoProcessingJobSerializer(job).data, message="پردازش ویدئوی جلسه در صف قرار گرفت.")
+
+
+class LMSAdminLessonVideoProcessingStatusView(APIView):
+    """Admin endpoint to inspect latest lesson video processing job."""
+
+    permission_classes = [IsLMSAdminUser]
+    serializer_class = LessonVideoProcessingJobSerializer
+
+    @extend_schema(
+        operation_id="lms_admin_lessons_video_processing_status",
+        tags=[TAG_LMS_ADMIN],
+        responses={200: VIDEO_PROCESSING_JOB_RESPONSE, 404: LMS_ERROR_RESPONSE},
+    )
+    def get(self, request: Request, lesson_id: int) -> SuccessResponse | ErrorResponse:
+        """Return latest video processing job for a lesson."""
+        lesson = selectors.get_admin_lesson_by_id(lesson_id=lesson_id)
+        if lesson is None:
+            return ErrorResponse(message="جلسه یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+        job = lesson.video_processing_jobs.order_by("-created_at").first()
+        if job is None:
+            return ErrorResponse(message="برای این جلسه job پردازش ویدئو ثبت نشده است.", status_code=status.HTTP_404_NOT_FOUND)
+        return SuccessResponse(data=LessonVideoProcessingJobSerializer(job).data, message="وضعیت پردازش ویدئو دریافت شد.")
 
 
 class LMSAdminCourseReportView(APIView):

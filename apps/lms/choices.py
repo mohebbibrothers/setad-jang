@@ -93,3 +93,13 @@ class VideoProvider(models.TextChoices):
     EMBED = "embed", "Embed"
     UPLOADED_FILE = "uploaded_file", "فایل آپلودی"
     HYBRID = "hybrid", "ترکیبی"
+
+
+class VideoProcessingStatus(models.TextChoices):
+    """Lifecycle for lesson video processing jobs."""
+
+    QUEUED = "queued", "در صف"
+    PROCESSING = "processing", "در حال پردازش"
+    COMPLETED = "completed", "تکمیل‌شده"
+    FAILED = "failed", "ناموفق"
+    CANCELED = "canceled", "لغوشده"

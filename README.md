@@ -905,6 +905,8 @@ CDN/Object Storage flow is ready for uploaded video and handouts
 - category dynamic
 - course management
 - lessons با content/video metadata
+- video processing job lifecycle با no-op/local provider تا آماده‌شدن زیرساخت transcode
+- admin trigger/status برای پردازش ویدئو
 - enrollment رایگان با profile requirement
 - progress tracking
 - Q&A/discussion
@@ -955,7 +957,15 @@ GET  /api/v1/lms/certificates/verify/{slug}/
 GET/POST/PATCH/DELETE admin course/category/lesson/quiz/question endpoints
 GET  /api/v1/lms/admin/courses/{id}/analytics/
 GET  /api/v1/lms/admin/courses/{id}/leaderboard/
+POST /api/v1/lms/admin/lessons/{lesson_id}/video-processing/
+GET  /api/v1/lms/admin/lessons/{lesson_id}/video-processing/status/
 GET  /api/v1/lms/admin/courses/{id}/export/
+```
+
+### Celery tasks
+
+```text
+apps.lms.tasks.process_lesson_video_job_task
 ```
 
 ---

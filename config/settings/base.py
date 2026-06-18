@@ -586,6 +586,7 @@ SPECTACULAR_SETTINGS = {
         "LMSCertificateStatusEnum": "apps.lms.choices.CertificateStatus",
         "LMSBadgeLevelEnum": "apps.lms.choices.BadgeLevel",
         "LMSVideoProviderEnum": "apps.lms.choices.VideoProvider",
+        "LMSVideoProcessingStatusEnum": "apps.lms.choices.VideoProcessingStatus",
         "KindnessMatchStatusEnum": "apps.kindness_wall.choices.MatchStatus",
         "KindnessReportReasonEnum": "apps.kindness_wall.choices.ReportReason",
         "SupportTicketStatusEnum": "apps.support_desk.choices.TicketStatus",
@@ -850,6 +851,9 @@ CELERY_TASK_ROUTES = {
     },
     "apps.madadkar.tasks.generate_financial_control_snapshot_task": {
         "queue": "madadkar",
+    },
+    "apps.lms.tasks.process_lesson_video_job_task": {
+        "queue": "default",
     },
     "apps.support_desk.tasks.mark_support_sla_breaches_task": {
         "queue": "default",

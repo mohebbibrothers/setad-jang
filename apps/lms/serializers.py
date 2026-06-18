@@ -12,6 +12,7 @@ from apps.lms.models import (
     LessonDiscussionReport,
     LessonProgress,
     LessonQuestion,
+    LessonVideoProcessingJob,
     LMSCategory,
     LMSUserSkill,
     Quiz,
@@ -712,3 +713,33 @@ class CourseLeaderboardItemSerializer(serializers.Serializer):
     best_score_out_of_20 = serializers.FloatField(allow_null=True)
     badge_level = serializers.CharField(allow_blank=True)
     certificate_code = serializers.CharField(allow_blank=True)
+
+
+class LessonVideoProcessingJobSerializer(serializers.ModelSerializer):
+    """Read serializer for lesson video processing jobs."""
+
+    lesson_title = serializers.CharField(source="lesson.title", read_only=True)
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+
+    class Meta:
+        model = LessonVideoProcessingJob
+        fields = (
+            "id",
+            "lesson",
+            "lesson_title",
+            "requested_by",
+            "status",
+            "status_display",
+            "provider",
+            "source_file_name",
+            "output_video_url",
+            "thumbnail_url",
+            "duration_seconds",
+            "metadata",
+            "error_message",
+            "started_at",
+            "completed_at",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = fields

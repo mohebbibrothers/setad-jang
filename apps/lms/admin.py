@@ -16,6 +16,7 @@ from apps.lms.models import (
     LessonDiscussionReport,
     LessonProgress,
     LessonQuestion,
+    LessonVideoProcessingJob,
     LMSCategory,
     LMSUserSkill,
     Quiz,
@@ -303,4 +304,28 @@ class LMSUserSkillAdmin(admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None) -> bool:
         """Skill history should be preserved."""
+        return False
+
+
+@admin.register(LessonVideoProcessingJob)
+class LessonVideoProcessingJobAdmin(admin.ModelAdmin):
+    """Read-oriented admin for LMS video processing jobs."""
+
+    list_display = ("id", "lesson", "status", "provider", "requested_by", "created_at", "completed_at")
+    list_filter = ("status", "provider")
+    search_fields = ("lesson__title", "lesson__course__title", "source_file_name")
+    readonly_fields = [field.name for field in LessonVideoProcessingJob._meta.fields]
+    raw_id_fields = ("lesson", "requested_by")
+    ordering = ("-created_at",)
+
+    def has_add_permission(self, request) -> bool:
+        """Video processing jobs are created by audited API/service workflows."""
+        return False
+
+    def has_change_permission(self, request, obj=None) -> bool:
+        """Video processing job state is service/task controlled."""
+        return False
+
+    def has_delete_permission(self, request, obj=None) -> bool:
+        """Video processing evidence must remain available for audit."""
         return False

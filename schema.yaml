@@ -3730,6 +3730,66 @@ paths:
               schema:
                 $ref: '#/components/schemas/LMSErrorResponse'
           description: ''
+  /api/v1/lms/admin/lessons/{lesson_id}/video-processing/:
+    post:
+      operationId: lms_admin_lessons_video_processing_create
+      description: Queue video processing for an uploaded lesson video.
+      parameters:
+      - in: path
+        name: lesson_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - آموزش — مدیریت
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LMSVideoProcessingJobResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LMSErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LMSErrorResponse'
+          description: ''
+  /api/v1/lms/admin/lessons/{lesson_id}/video-processing/status/:
+    get:
+      operationId: lms_admin_lessons_video_processing_status
+      description: Return latest video processing job for a lesson.
+      parameters:
+      - in: path
+        name: lesson_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - آموزش — مدیریت
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LMSVideoProcessingJobResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LMSErrorResponse'
+          description: ''
   /api/v1/lms/admin/questions/{question_id}/moderate/:
     patch:
       operationId: lms_admin_questions_moderate
@@ -17787,6 +17847,36 @@ components:
       - issued_at
       - slug
       - title
+    LMSVideoProcessingJobResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          default: true
+        status_code:
+          type: integer
+          default: 200
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/LessonVideoProcessingJob'
+      required:
+      - data
+      - message
+    LMSVideoProcessingStatusEnum:
+      enum:
+      - queued
+      - processing
+      - completed
+      - failed
+      - canceled
+      type: string
+      description: |-
+        * `queued` - در صف
+        * `processing` - در حال پردازش
+        * `completed` - تکمیل‌شده
+        * `failed` - ناموفق
+        * `canceled` - لغوشده
     LMSVideoProviderEnum:
       enum:
       - direct_url
@@ -18127,6 +18217,90 @@ components:
       - title
       - video_provider
       - video_url
+    LessonVideoProcessingJob:
+      type: object
+      description: Read serializer for lesson video processing jobs.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        lesson:
+          type: integer
+          readOnly: true
+        lesson_title:
+          type: string
+          readOnly: true
+        requested_by:
+          type: integer
+          readOnly: true
+          nullable: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/LMSVideoProcessingStatusEnum'
+          readOnly: true
+        status_display:
+          type: string
+          readOnly: true
+        provider:
+          type: string
+          readOnly: true
+        source_file_name:
+          type: string
+          readOnly: true
+        output_video_url:
+          type: string
+          format: uri
+          readOnly: true
+        thumbnail_url:
+          type: string
+          format: uri
+          readOnly: true
+        duration_seconds:
+          type: integer
+          readOnly: true
+        metadata:
+          readOnly: true
+        error_message:
+          type: string
+          readOnly: true
+        started_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        completed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: تاریخ ایجاد
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: تاریخ بروزرسانی
+      required:
+      - completed_at
+      - created_at
+      - duration_seconds
+      - error_message
+      - id
+      - lesson
+      - lesson_title
+      - metadata
+      - output_video_url
+      - provider
+      - requested_by
+      - source_file_name
+      - started_at
+      - status
+      - status_display
+      - thumbnail_url
+      - updated_at
     ListingTypeEnum:
       enum:
       - need_help

@@ -34,6 +34,7 @@ from apps.lms.choices import (
     EnrollmentStatus,
     QuizAttemptStatus,
     QuizStatus,
+    VideoProcessingStatus,
     VideoProvider,
 )
 from apps.lms.managers import CourseManager, LessonManager, LMSCategoryManager
@@ -263,6 +264,35 @@ class Lesson(BaseModel):
 # ---------------------------------------------------------------------------
 # Enrollment / Progress
 # ---------------------------------------------------------------------------
+
+
+class LessonVideoProcessingJob(BaseModel):
+    """Asynchronous processing job for uploaded lesson videos."""
+
+    lesson = models.ForeignKey(Lesson, on_delete=models.CASCADE, related_name="video_processing_jobs")
+    requested_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="lms_video_jobs_requested")
+    status = models.CharField(max_length=20, choices=VideoProcessingStatus.choices, default=VideoProcessingStatus.QUEUED, db_index=True)
+    provider = models.CharField(max_length=50, default="noop")
+    source_file_name = models.CharField(max_length=500, blank=True)
+    output_video_url = models.URLField(max_length=1024, blank=True)
+    thumbnail_url = models.URLField(max_length=1024, blank=True)
+    duration_seconds = models.PositiveIntegerField(default=0)
+    metadata = models.JSONField(default=dict, blank=True)
+    error_message = models.TextField(blank=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = "Job پردازش ویدئوی LMS"
+        verbose_name_plural = "Jobهای پردازش ویدئوی LMS"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["lesson", "status", "-created_at"], name="lms_video_job_lesson_status_idx"),
+            models.Index(fields=["status", "-created_at"], name="lms_video_job_status_time_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"VideoJob lesson={self.lesson_id} status={self.status}"
 
 
 class Enrollment(BaseModel):
