@@ -587,6 +587,7 @@ SPECTACULAR_SETTINGS = {
         "LMSBadgeLevelEnum": "apps.lms.choices.BadgeLevel",
         "LMSVideoProviderEnum": "apps.lms.choices.VideoProvider",
         "LMSVideoProcessingStatusEnum": "apps.lms.choices.VideoProcessingStatus",
+        "LMSLearningStatementVerbEnum": "apps.lms.choices.LearningStatementVerb",
         "KindnessMatchStatusEnum": "apps.kindness_wall.choices.MatchStatus",
         "KindnessReportReasonEnum": "apps.kindness_wall.choices.ReportReason",
         "SupportTicketStatusEnum": "apps.support_desk.choices.TicketStatus",

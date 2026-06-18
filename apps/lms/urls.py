@@ -45,6 +45,7 @@ urlpatterns = [
     path("admin/courses/<int:course_id>/report/", views.LMSAdminCourseReportView.as_view(), name="admin-course-report"),
     path("admin/courses/<int:course_id>/analytics/", views.LMSAdminCourseAnalyticsView.as_view(), name="admin-course-analytics"),
     path("admin/recommendations/overview/", views.LMSAdminLearningRecommendationOverviewView.as_view(), name="admin-recommendations-overview"),
+    path("admin/activity-statements/", views.LMSAdminLearningActivityStatementListView.as_view(), name="admin-activity-statement-list"),
     path("admin/courses/<int:course_id>/leaderboard/", views.LMSAdminCourseLeaderboardView.as_view(), name="admin-course-leaderboard"),
     path("admin/courses/<int:course_id>/export/", views.LMSAdminCourseExportView.as_view(), name="admin-course-export"),
     path("admin/courses/<int:course_id>/quiz/", views.LMSAdminQuizDetailCreateView.as_view(), name="admin-quiz-detail-create"),

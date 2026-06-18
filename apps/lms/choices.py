@@ -103,3 +103,14 @@ class VideoProcessingStatus(models.TextChoices):
     COMPLETED = "completed", "تکمیل‌شده"
     FAILED = "failed", "ناموفق"
     CANCELED = "canceled", "لغوشده"
+
+
+class LearningStatementVerb(models.TextChoices):
+    """xAPI-like learning activity verbs captured by the LMS."""
+
+    INITIALIZED = "initialized", "شروع شد"
+    PROGRESSED = "progressed", "پیشرفت کرد"
+    COMPLETED = "completed", "تکمیل شد"
+    PASSED = "passed", "قبول شد"
+    FAILED = "failed", "مردود شد"
+    CERTIFICATE_ISSUED = "certificate_issued", "مدرک صادر شد"

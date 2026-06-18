@@ -32,6 +32,7 @@ from apps.lms.choices import (
     DiscussionReportStatus,
     DiscussionStatus,
     EnrollmentStatus,
+    LearningStatementVerb,
     QuizAttemptStatus,
     QuizStatus,
     VideoProcessingStatus,
@@ -264,6 +265,50 @@ class Lesson(BaseModel):
 # ---------------------------------------------------------------------------
 # Enrollment / Progress
 # ---------------------------------------------------------------------------
+
+
+class LearningActivityStatement(BaseModel):
+    """xAPI-like immutable learning activity statement for analytics/LRS readiness."""
+
+    statement_id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    idempotency_key = models.CharField(max_length=180, unique=True, null=True, blank=True)
+    actor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="lms_activity_statements")
+    course = models.ForeignKey(Course, on_delete=models.PROTECT, related_name="activity_statements")
+    lesson = models.ForeignKey(Lesson, on_delete=models.PROTECT, null=True, blank=True, related_name="activity_statements")
+    enrollment = models.ForeignKey("Enrollment", on_delete=models.PROTECT, null=True, blank=True, related_name="activity_statements")
+    quiz_attempt = models.ForeignKey("QuizAttempt", on_delete=models.PROTECT, null=True, blank=True, related_name="activity_statements")
+    certificate = models.ForeignKey("Certificate", on_delete=models.PROTECT, null=True, blank=True, related_name="activity_statements")
+    verb = models.CharField(max_length=40, choices=LearningStatementVerb.choices, db_index=True)
+    object_type = models.CharField(max_length=40)
+    object_id = models.CharField(max_length=80)
+    actor_snapshot = models.JSONField(default=dict, blank=True)
+    object_snapshot = models.JSONField(default=dict, blank=True)
+    result = models.JSONField(default=dict, blank=True)
+    context = models.JSONField(default=dict, blank=True)
+    occurred_at = models.DateTimeField(default=timezone.now, db_index=True)
+
+    class Meta:
+        verbose_name = "Learning activity statement"
+        verbose_name_plural = "Learning activity statements"
+        ordering = ["-occurred_at", "-created_at"]
+        indexes = [
+            models.Index(fields=["actor", "verb", "-occurred_at"], name="lms_stmt_actor_verb_time_idx"),
+            models.Index(fields=["course", "verb", "-occurred_at"], name="lms_stmt_course_verb_time_idx"),
+            models.Index(fields=["verb", "-occurred_at"], name="lms_stmt_verb_time_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.actor_id}:{self.verb}:{self.object_type}:{self.object_id}"
+
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        """Keep statements append-only except inherited timestamp internals on insert."""
+        if self.pk and not self._state.adding:
+            raise PermissionError("ویرایش statementهای یادگیری مجاز نیست.")
+        super().save(*args, **kwargs)
+
+    def delete(self, *args: Any, **kwargs: Any):
+        """Prevent deletion of learning statements for analytics integrity."""
+        raise PermissionError("حذف statementهای یادگیری مجاز نیست.")
 
 
 class LessonVideoProcessingJob(BaseModel):

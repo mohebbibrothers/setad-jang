@@ -2801,6 +2801,22 @@ paths:
               schema:
                 $ref: '#/components/schemas/KindnessMatch'
           description: ''
+  /api/v1/lms/admin/activity-statements/:
+    get:
+      operationId: lms_admin_learning_activity_statements_list
+      description: Return paginated learning activity statements for analytics/export
+        readiness.
+      tags:
+      - آموزش — مدیریت
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LMSLearningStatementListResponse'
+          description: ''
   /api/v1/lms/admin/answers/{answer_id}/moderate/:
     patch:
       operationId: lms_admin_answers_moderate
@@ -17596,6 +17612,58 @@ components:
       required:
       - data
       - message
+    LMSLearningStatementListResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/LMSLearningStatementListResponseData'
+        success:
+          type: boolean
+          default: true
+        status_code:
+          type: integer
+          default: 200
+        message:
+          type: string
+      required:
+      - data
+      - message
+    LMSLearningStatementListResponseData:
+      type: object
+      properties:
+        count:
+          type: integer
+        next:
+          type: string
+          format: uri
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/LearningActivityStatement'
+      required:
+      - count
+      - results
+    LMSLearningStatementVerbEnum:
+      enum:
+      - initialized
+      - progressed
+      - completed
+      - passed
+      - failed
+      - certificate_issued
+      type: string
+      description: |-
+        * `initialized` - شروع شد
+        * `progressed` - پیشرفت کرد
+        * `completed` - تکمیل شد
+        * `passed` - قبول شد
+        * `failed` - مردود شد
+        * `certificate_issued` - مدرک صادر شد
     LMSLessonAnswerResponse:
       type: object
       properties:
@@ -17953,6 +18021,108 @@ components:
         * `embed` - Embed
         * `uploaded_file` - فایل آپلودی
         * `hybrid` - ترکیبی
+    LearningActivityStatement:
+      type: object
+      description: Read serializer for xAPI-like learning activity statements.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        statement_id:
+          type: string
+          format: uuid
+          readOnly: true
+        idempotency_key:
+          type: string
+          readOnly: true
+          nullable: true
+        actor:
+          type: integer
+          readOnly: true
+        actor_email:
+          type: string
+          format: email
+          readOnly: true
+          nullable: true
+        course:
+          type: integer
+          readOnly: true
+        course_title:
+          type: string
+          readOnly: true
+        lesson:
+          type: integer
+          readOnly: true
+          nullable: true
+        lesson_title:
+          type: string
+          readOnly: true
+          nullable: true
+        enrollment:
+          type: integer
+          readOnly: true
+          nullable: true
+        quiz_attempt:
+          type: integer
+          readOnly: true
+          nullable: true
+        certificate:
+          type: integer
+          readOnly: true
+          nullable: true
+        verb:
+          allOf:
+          - $ref: '#/components/schemas/LMSLearningStatementVerbEnum'
+          readOnly: true
+        verb_display:
+          type: string
+          readOnly: true
+        object_type:
+          type: string
+          readOnly: true
+        object_id:
+          type: string
+          readOnly: true
+        actor_snapshot:
+          readOnly: true
+        object_snapshot:
+          readOnly: true
+        result:
+          readOnly: true
+        context:
+          readOnly: true
+        occurred_at:
+          type: string
+          format: date-time
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: تاریخ ایجاد
+      required:
+      - actor
+      - actor_email
+      - actor_snapshot
+      - certificate
+      - context
+      - course
+      - course_title
+      - created_at
+      - enrollment
+      - id
+      - idempotency_key
+      - lesson
+      - lesson_title
+      - object_id
+      - object_snapshot
+      - object_type
+      - occurred_at
+      - quiz_attempt
+      - result
+      - statement_id
+      - verb
+      - verb_display
     LearningRecommendationItem:
       type: object
       description: One learner course recommendation with explanation.
@@ -27246,7 +27416,7 @@ components:
           readOnly: true
         verb:
           allOf:
-          - $ref: '#/components/schemas/VerbEnum'
+          - $ref: '#/components/schemas/UserActivityVerbEnum'
           readOnly: true
         title:
           type: string
@@ -27288,6 +27458,34 @@ components:
       - summary
       - title
       - verb
+    UserActivityVerbEnum:
+      enum:
+      - created
+      - submitted
+      - updated
+      - approved
+      - rejected
+      - replied
+      - resolved
+      - paid
+      - issued
+      - revealed
+      - matched
+      - notified
+      type: string
+      description: |-
+        * `created` - ایجاد کرد
+        * `submitted` - ارسال کرد
+        * `updated` - بروزرسانی کرد
+        * `approved` - تأیید شد
+        * `rejected` - رد شد
+        * `replied` - پاسخ دریافت کرد
+        * `resolved` - حل شد
+        * `paid` - پرداخت کرد
+        * `issued` - صادر شد
+        * `revealed` - مشاهده شد
+        * `matched` - تطبیق یافت
+        * `notified` - اعلان دریافت کرد
     UserAdmin:
       type: object
       description: UserAdminSerializer implementation for the authentication application.
@@ -27677,34 +27875,6 @@ components:
       required:
       - message
       - status_code
-    VerbEnum:
-      enum:
-      - created
-      - submitted
-      - updated
-      - approved
-      - rejected
-      - replied
-      - resolved
-      - paid
-      - issued
-      - revealed
-      - matched
-      - notified
-      type: string
-      description: |-
-        * `created` - ایجاد کرد
-        * `submitted` - ارسال کرد
-        * `updated` - بروزرسانی کرد
-        * `approved` - تأیید شد
-        * `rejected` - رد شد
-        * `replied` - پاسخ دریافت کرد
-        * `resolved` - حل شد
-        * `paid` - پرداخت کرد
-        * `issued` - صادر شد
-        * `revealed` - مشاهده شد
-        * `matched` - تطبیق یافت
-        * `notified` - اعلان دریافت کرد
     VerifyEmail:
       type: object
       description: VerifyEmailSerializer implementation for the authentication application.

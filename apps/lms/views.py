@@ -46,6 +46,7 @@ from apps.lms.serializers import (
     DiscussionReportSerializer,
     EnrollmentDetailSerializer,
     EnrollmentSerializer,
+    LearningActivityStatementSerializer,
     LearningRecommendationItemSerializer,
     LearningRecommendationOverviewSerializer,
     LessonAnswerCreateSerializer,
@@ -129,6 +130,7 @@ COURSE_LEADERBOARD_RESPONSE = build_success_response_serializer(name="LMSCourseL
 VIDEO_PROCESSING_JOB_RESPONSE = build_success_response_serializer(name="LMSVideoProcessingJobResponse", data_serializer=LessonVideoProcessingJobSerializer)
 LEARNING_RECOMMENDATION_RESPONSE = build_success_response_serializer(name="LMSLearningRecommendationResponse", data_serializer=LearningRecommendationItemSerializer, many=True)
 LEARNING_RECOMMENDATION_OVERVIEW_RESPONSE = build_success_response_serializer(name="LMSLearningRecommendationOverviewResponse", data_serializer=LearningRecommendationOverviewSerializer)
+LEARNING_STATEMENT_LIST_RESPONSE = build_paginated_success_response_serializer(name="LMSLearningStatementListResponse", item_serializer=LearningActivityStatementSerializer)
 
 
 class LMSCategoryPublicListView(APIView):
@@ -1148,6 +1150,31 @@ class LMSAdminLessonVideoProcessingStatusView(APIView):
         if job is None:
             return ErrorResponse(message="برای این جلسه job پردازش ویدئو ثبت نشده است.", status_code=status.HTTP_404_NOT_FOUND)
         return SuccessResponse(data=LessonVideoProcessingJobSerializer(job).data, message="وضعیت پردازش ویدئو دریافت شد.")
+
+
+class LMSAdminLearningActivityStatementListView(APIView):
+    """Admin list endpoint for xAPI-like learning activity statements."""
+
+    permission_classes = [IsLMSAdminUser]
+
+    @extend_schema(
+        operation_id="lms_admin_learning_activity_statements_list",
+        tags=[TAG_LMS_ADMIN],
+        responses={200: LEARNING_STATEMENT_LIST_RESPONSE},
+    )
+    def get(self, request: Request) -> Response:
+        """Return paginated learning activity statements for analytics/export readiness."""
+        queryset = selectors.get_admin_learning_activity_statements()
+        verb = request.query_params.get("verb")
+        if verb:
+            queryset = queryset.filter(verb=verb)
+        course_id = request.query_params.get("course")
+        if course_id:
+            queryset = queryset.filter(course_id=course_id)
+        paginator = StandardPagination()
+        page = paginator.paginate_queryset(queryset, request, view=self)
+        serializer = LearningActivityStatementSerializer(page, many=True)
+        return paginator.get_paginated_response(serializer.data, message="Statementهای یادگیری با موفقیت دریافت شد.")
 
 
 class LMSAdminCourseReportView(APIView):

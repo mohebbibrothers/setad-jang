@@ -19,12 +19,14 @@ from apps.lms.choices import (
     CertificateStatus,
     CourseStatus,
     EnrollmentStatus,
+    LearningStatementVerb,
     VideoProcessingStatus,
 )
 from apps.lms.models import (
     Certificate,
     Course,
     Enrollment,
+    LearningActivityStatement,
     Lesson,
     LessonProgress,
     LessonVideoProcessingJob,
@@ -307,6 +309,57 @@ def create_skill_for_certificate(*, certificate) -> LMSUserSkill:
 
 
 # ============================================================
+# Learning activity statements (xAPI-like foundation)
+# ============================================================
+
+def record_learning_activity_statement(
+    *,
+    actor: Any,
+    course: Course,
+    verb: str,
+    object_type: str,
+    object_id: str | int,
+    lesson: Lesson | None = None,
+    enrollment: Enrollment | None = None,
+    quiz_attempt: Any | None = None,
+    certificate: Certificate | None = None,
+    result: dict[str, Any] | None = None,
+    context: dict[str, Any] | None = None,
+    idempotency_key: str | None = None,
+) -> LearningActivityStatement:
+    """Record an immutable xAPI-like statement with optional idempotency."""
+    if idempotency_key:
+        existing = LearningActivityStatement.objects.filter(idempotency_key=idempotency_key).first()
+        if existing is not None:
+            return existing
+    return LearningActivityStatement.objects.create(
+        idempotency_key=idempotency_key,
+        actor=actor,
+        course=course,
+        lesson=lesson,
+        enrollment=enrollment,
+        quiz_attempt=quiz_attempt,
+        certificate=certificate,
+        verb=verb,
+        object_type=object_type,
+        object_id=str(object_id),
+        actor_snapshot={
+            "user_id": getattr(actor, "pk", None),
+            "email": getattr(actor, "email", "") or "",
+            "full_name": getattr(actor, "full_name", "") or "",
+        },
+        object_snapshot={
+            "course_id": course.pk,
+            "course_title": course.title,
+            "lesson_id": lesson.pk if lesson else None,
+            "lesson_title": lesson.title if lesson else "",
+        },
+        result=result or {},
+        context=context or {},
+    )
+
+
+# ============================================================
 # Video processing jobs
 # ============================================================
 
@@ -536,7 +589,23 @@ def update_lesson_progress(
 
     locked_enrollment.last_accessed_lesson = locked_lesson
     locked_enrollment.save(update_fields=["last_accessed_lesson", "updated_at"])
-    _sync_enrollment_progress(enrollment=locked_enrollment)
+    synced_enrollment = _sync_enrollment_progress(enrollment=locked_enrollment)
+    record_learning_activity_statement(
+        actor=synced_enrollment.user,
+        course=synced_enrollment.course,
+        lesson=locked_lesson,
+        enrollment=synced_enrollment,
+        verb=LearningStatementVerb.COMPLETED if progress.is_completed else LearningStatementVerb.PROGRESSED,
+        object_type="lesson",
+        object_id=locked_lesson.pk,
+        result={
+            "watched_seconds": progress.watched_seconds,
+            "progress_percent": float(progress.progress_percent),
+            "is_completed": progress.is_completed,
+        },
+        context={"source": "lesson_progress_update"},
+        idempotency_key=f"lesson-progress:{progress.pk}:{progress.updated_at.isoformat()}",
+    )
     return progress
 
 
@@ -910,6 +979,18 @@ def start_quiz_attempt(*, quiz, user: Any):
         question_snapshot=question_snapshot,
         option_order_snapshot=option_order_snapshot,
     )
+    record_learning_activity_statement(
+        actor=user,
+        course=quiz.course,
+        enrollment=enrollment,
+        quiz_attempt=attempt,
+        verb=LearningStatementVerb.INITIALIZED,
+        object_type="quiz_attempt",
+        object_id=attempt.pk,
+        result={"attempt_number": attempt.attempt_number},
+        context={"quiz_id": quiz.pk, "source": "quiz_start"},
+        idempotency_key=f"quiz-start:{attempt.pk}",
+    )
     return attempt, True
 
 
@@ -989,6 +1070,22 @@ def submit_quiz_attempt(*, attempt, answers: list[dict[str, int]]):
             "updated_at",
         ]
     )
+    record_learning_activity_statement(
+        actor=locked_attempt.user,
+        course=locked_attempt.course,
+        enrollment=locked_attempt.enrollment,
+        quiz_attempt=locked_attempt,
+        verb=LearningStatementVerb.PASSED if is_passed else LearningStatementVerb.FAILED,
+        object_type="quiz_attempt",
+        object_id=locked_attempt.pk,
+        result={
+            "score_percent": float(score_percent),
+            "score_out_of_20": float(score_out_of_20),
+            "is_passed": is_passed,
+        },
+        context={"quiz_id": locked_attempt.quiz_id, "source": "quiz_submit"},
+        idempotency_key=f"quiz-submit:{locked_attempt.pk}",
+    )
     if is_passed:
         issue_certificate_for_attempt(attempt=locked_attempt)
     return locked_attempt
@@ -1055,6 +1152,19 @@ def issue_certificate_for_attempt(*, attempt) -> Certificate:
             save=True,
         )
 
+    record_learning_activity_statement(
+        actor=user,
+        course=attempt.course,
+        enrollment=attempt.enrollment,
+        quiz_attempt=attempt,
+        certificate=certificate,
+        verb=LearningStatementVerb.CERTIFICATE_ISSUED,
+        object_type="certificate",
+        object_id=certificate.pk,
+        result={"certificate_code": certificate.certificate_code, "score_out_of_20": float(certificate.score_out_of_20)},
+        context={"source": "certificate_issue"},
+        idempotency_key=f"certificate-issued:{certificate.pk}",
+    )
     create_skill_for_certificate(certificate=certificate)
     if attempt.enrollment.status != EnrollmentStatus.COMPLETED:
         attempt.enrollment.status = EnrollmentStatus.COMPLETED

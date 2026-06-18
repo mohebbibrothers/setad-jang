@@ -10,7 +10,14 @@ from __future__ import annotations
 from django.db.models import Count, Prefetch, QuerySet
 
 from apps.lms.choices import CourseLevel, EnrollmentStatus
-from apps.lms.models import Course, Enrollment, Lesson, LMSCategory, LMSUserSkill
+from apps.lms.models import (
+    Course,
+    Enrollment,
+    LearningActivityStatement,
+    Lesson,
+    LMSCategory,
+    LMSUserSkill,
+)
 
 
 def get_public_categories() -> QuerySet[LMSCategory]:
@@ -416,3 +423,16 @@ def _score_recommended_course(
         "score": score,
         "reason_codes": reason_codes,
     }
+
+
+# ---------------------------------------------------------------------------
+# Learning activity statements — admin scope
+# ---------------------------------------------------------------------------
+
+def get_admin_learning_activity_statements() -> QuerySet[LearningActivityStatement]:
+    """Return xAPI-like LMS learning statements for admin analytics/export."""
+    return (
+        LearningActivityStatement.objects
+        .select_related("actor", "course", "lesson", "enrollment", "quiz_attempt", "certificate")
+        .order_by("-occurred_at", "-created_at")
+    )

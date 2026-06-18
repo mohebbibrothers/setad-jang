@@ -7,6 +7,7 @@ from apps.lms.models import (
     Certificate,
     Course,
     Enrollment,
+    LearningActivityStatement,
     Lesson,
     LessonAnswer,
     LessonDiscussionReport,
@@ -760,3 +761,40 @@ class LearningRecommendationOverviewSerializer(serializers.Serializer):
     featured_courses = serializers.IntegerField(read_only=True)
     cold_start_courses = serializers.IntegerField(read_only=True)
     top_recommendable_courses = serializers.ListField(child=serializers.DictField(), read_only=True)
+
+
+class LearningActivityStatementSerializer(serializers.ModelSerializer):
+    """Read serializer for xAPI-like learning activity statements."""
+
+    actor_email = serializers.EmailField(source="actor.email", read_only=True, allow_null=True)
+    course_title = serializers.CharField(source="course.title", read_only=True)
+    lesson_title = serializers.CharField(source="lesson.title", read_only=True, allow_blank=True, allow_null=True)
+    verb_display = serializers.CharField(source="get_verb_display", read_only=True)
+
+    class Meta:
+        model = LearningActivityStatement
+        fields = (
+            "id",
+            "statement_id",
+            "idempotency_key",
+            "actor",
+            "actor_email",
+            "course",
+            "course_title",
+            "lesson",
+            "lesson_title",
+            "enrollment",
+            "quiz_attempt",
+            "certificate",
+            "verb",
+            "verb_display",
+            "object_type",
+            "object_id",
+            "actor_snapshot",
+            "object_snapshot",
+            "result",
+            "context",
+            "occurred_at",
+            "created_at",
+        )
+        read_only_fields = fields
