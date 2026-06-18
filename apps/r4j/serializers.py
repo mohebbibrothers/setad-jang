@@ -44,6 +44,7 @@ from .models import (
     R4JCriminalPhone,
     R4JCriminalPhoto,
     R4JCriminalSocial,
+    R4JEvidenceCustodyEvent,
     R4JReport,
     R4JReportAttachment,
     R4JReportFieldChange,
@@ -243,6 +244,8 @@ class R4JAdminAttachmentSerializer(serializers.ModelSerializer):
             "description",
             "is_public",
             "uploaded_by",
+            "file_sha256",
+            "file_size",
             "created_at",
         )
         read_only_fields = ("id", "uploaded_by", "created_at")
@@ -985,3 +988,34 @@ class R4JBountyCancelActionSerializer(serializers.Serializer):
         allow_blank=True,
         default="",
     )
+
+
+class R4JEvidenceCustodyEventSerializer(serializers.ModelSerializer):
+    """Read serializer for R4J evidence chain-of-custody events."""
+
+    actor_email = serializers.EmailField(source="actor.email", read_only=True, allow_null=True)
+    event_type_display = serializers.CharField(source="get_event_type_display", read_only=True)
+
+    class Meta:
+        model = R4JEvidenceCustodyEvent
+        fields = (
+            "id",
+            "criminal_attachment",
+            "report_attachment",
+            "event_type",
+            "event_type_display",
+            "actor",
+            "actor_email",
+            "file_sha256",
+            "note",
+            "metadata",
+            "created_at",
+        )
+        read_only_fields = fields
+
+
+class R4JEvidenceCustodyReviewSerializer(serializers.Serializer):
+    """Input serializer for appending custody review/transfer/reject events."""
+
+    event_type = serializers.ChoiceField(choices=("reviewed", "transferred", "rejected"))
+    note = serializers.CharField(required=False, allow_blank=True, default="")

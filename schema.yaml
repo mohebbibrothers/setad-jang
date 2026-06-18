@@ -8882,6 +8882,61 @@ paths:
               schema:
                 $ref: '#/components/schemas/R4JGenericErrorResponse'
           description: ''
+  /api/v1/r4j/admin/evidence-custody/:
+    get:
+      operationId: r4j_admin_evidence_custody_list
+      description: Admin list endpoint for evidence chain-of-custody events.
+      summary: لیست زنجیره نگهداری شواهد
+      tags:
+      - جایزه‌ای برای عدالت — مدیریت
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/R4JAdminCustodyEventListResponse'
+          description: ''
+  /api/v1/r4j/admin/evidence-custody/{event_id}/review/:
+    post:
+      operationId: r4j_admin_evidence_custody_review
+      description: Admin endpoint to append a custody review/transfer/reject event.
+      parameters:
+      - in: path
+        name: event_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - جایزه‌ای برای عدالت — مدیریت
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/R4JEvidenceCustodyReview'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/R4JEvidenceCustodyReview'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/R4JEvidenceCustodyReview'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/R4JAdminCustodyEventResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/R4JGenericErrorResponse'
+          description: ''
   /api/v1/r4j/admin/reports/:
     get:
       operationId: r4j_admin_reports_list
@@ -22386,6 +22441,16 @@ components:
           readOnly: true
           nullable: true
           title: آپلودکننده
+        file_sha256:
+          type: string
+          title: SHA-256
+          maxLength: 64
+        file_size:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          title: حجم فایل
         created_at:
           type: string
           format: date-time
@@ -22875,6 +22940,58 @@ components:
       required:
       - count
       - results
+    R4JAdminCustodyEventListResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/R4JAdminCustodyEventListResponseData'
+        success:
+          type: boolean
+          default: true
+        status_code:
+          type: integer
+          default: 200
+        message:
+          type: string
+      required:
+      - data
+      - message
+    R4JAdminCustodyEventListResponseData:
+      type: object
+      properties:
+        count:
+          type: integer
+        next:
+          type: string
+          format: uri
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/R4JEvidenceCustodyEvent'
+      required:
+      - count
+      - results
+    R4JAdminCustodyEventResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          default: true
+        status_code:
+          type: integer
+          default: 200
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/R4JEvidenceCustodyEvent'
+      required:
+      - data
+      - message
     R4JAdminFieldVisibility:
       type: object
       description: نمایش تنظیمات visibility فیلد برای admin.
@@ -23469,6 +23586,99 @@ components:
           nullable: true
       required:
       - message
+    R4JEvidenceCustodyEvent:
+      type: object
+      description: Read serializer for R4J evidence chain-of-custody events.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        criminal_attachment:
+          type: integer
+          readOnly: true
+          nullable: true
+        report_attachment:
+          type: integer
+          readOnly: true
+          nullable: true
+        event_type:
+          allOf:
+          - $ref: '#/components/schemas/R4JEvidenceCustodyEventTypeEnum'
+          readOnly: true
+        event_type_display:
+          type: string
+          readOnly: true
+        actor:
+          type: integer
+          readOnly: true
+          nullable: true
+        actor_email:
+          type: string
+          format: email
+          readOnly: true
+          nullable: true
+        file_sha256:
+          type: string
+          readOnly: true
+        note:
+          type: string
+          readOnly: true
+        metadata:
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: تاریخ ایجاد
+      required:
+      - actor
+      - actor_email
+      - created_at
+      - criminal_attachment
+      - event_type
+      - event_type_display
+      - file_sha256
+      - id
+      - metadata
+      - note
+      - report_attachment
+    R4JEvidenceCustodyEventTypeEnum:
+      enum:
+      - uploaded
+      - hashed
+      - reviewed
+      - transferred
+      - rejected
+      - deleted
+      type: string
+      description: |-
+        * `uploaded` - آپلود شد
+        * `hashed` - هش شد
+        * `reviewed` - بررسی شد
+        * `transferred` - منتقل شد
+        * `rejected` - رد شد
+        * `deleted` - حذف شد
+    R4JEvidenceCustodyReview:
+      type: object
+      description: Input serializer for appending custody review/transfer/reject events.
+      properties:
+        event_type:
+          $ref: '#/components/schemas/R4JEvidenceCustodyReviewEventTypeEnum'
+        note:
+          type: string
+          default: ''
+      required:
+      - event_type
+    R4JEvidenceCustodyReviewEventTypeEnum:
+      enum:
+      - reviewed
+      - transferred
+      - rejected
+      type: string
+      description: |-
+        * `reviewed` - reviewed
+        * `transferred` - transferred
+        * `rejected` - rejected
     R4JFieldDecision:
       type: object
       description: |-

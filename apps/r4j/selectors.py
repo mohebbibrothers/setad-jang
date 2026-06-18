@@ -38,6 +38,7 @@ from .models import (
     R4JCriminalPhone,
     R4JCriminalPhoto,
     R4JCriminalSocial,
+    R4JEvidenceCustodyEvent,
     R4JReport,
     R4JReportAttachment,
     R4JReportFieldChange,
@@ -526,3 +527,21 @@ def compute_visibility_map(
         fv.field_name: fv.is_public for fv in criminal.field_visibility.all()
     }
     return {**PUBLIC_DEFAULT_VISIBILITY, **overrides}
+
+
+# ============================================================
+# Evidence custody — admin scope
+# ============================================================
+
+def get_admin_evidence_custody_events() -> QuerySet[R4JEvidenceCustodyEvent]:
+    """Return all evidence custody events for admin forensic review."""
+    return R4JEvidenceCustodyEvent.objects.select_related(
+        "criminal_attachment",
+        "report_attachment",
+        "actor",
+    ).order_by("-created_at")
+
+
+def get_admin_evidence_custody_event_by_id(*, event_id: int) -> R4JEvidenceCustodyEvent | None:
+    """Return one custody event by id."""
+    return get_admin_evidence_custody_events().filter(pk=event_id).first()

@@ -34,6 +34,8 @@ from .views import (
     R4JAdminCriminalListCreateView,
     R4JAdminCriminalPublishView,
     R4JAdminCriminalUnpublishView,
+    R4JAdminEvidenceCustodyListView,
+    R4JAdminEvidenceCustodyReviewView,
     R4JAdminFieldVisibilityListUpsertView,
     R4JAdminPhoneDetailView,
     R4JAdminPhoneListCreateView,
@@ -124,6 +126,17 @@ urlpatterns = [
         "me/bounties/<int:bounty_id>/cancel/",
         R4JUserBountyCancelView.as_view(),
         name="user-bounty-cancel",
+    ),
+
+    path(
+        "admin/evidence-custody/",
+        R4JAdminEvidenceCustodyListView.as_view(),
+        name="admin-evidence-custody-list",
+    ),
+    path(
+        "admin/evidence-custody/<int:event_id>/review/",
+        R4JAdminEvidenceCustodyReviewView.as_view(),
+        name="admin-evidence-custody-review",
     ),
 
     # ====================================================

@@ -31,6 +31,7 @@ Services اپ R4J — business logic.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 from typing import Any
 
@@ -44,6 +45,7 @@ from .choices import (
     BOUNTY_ACTIVE_STATUSES,
     BountyStatus,
     CriminalAttachmentKind,
+    EvidenceCustodyEventType,
     Gender,
     ReportFieldChangeStatus,
     ReportStatus,
@@ -59,6 +61,7 @@ from .models import (
     R4JCriminalPhone,
     R4JCriminalPhoto,
     R4JCriminalSocial,
+    R4JEvidenceCustodyEvent,
     R4JReport,
     R4JReportAttachment,
     R4JReportFieldChange,
@@ -472,6 +475,53 @@ def remove_photo(*, photo: R4JCriminalPhoto) -> None:
 # ============================================================
 
 
+def _hash_file_field(file_field: Any) -> tuple[str, int]:
+    """Compute SHA-256 and byte size for a Django file field without leaking content."""
+    digest = hashlib.sha256()
+    size = 0
+    file_field.open("rb")
+    try:
+        for chunk in file_field.chunks():
+            size += len(chunk)
+            digest.update(chunk)
+    finally:
+        file_field.close()
+    return digest.hexdigest(), size
+
+
+def _create_custody_event(
+    *,
+    criminal_attachment: R4JCriminalAttachment | None = None,
+    report_attachment: R4JReportAttachment | None = None,
+    event_type: str,
+    actor: User | None = None,
+    note: str = "",
+    metadata: dict[str, Any] | None = None,
+) -> R4JEvidenceCustodyEvent:
+    """Create append-only custody event for one evidence attachment."""
+    target = criminal_attachment or report_attachment
+    return R4JEvidenceCustodyEvent.objects.create(
+        criminal_attachment=criminal_attachment,
+        report_attachment=report_attachment,
+        event_type=event_type,
+        actor=actor,
+        file_sha256=getattr(target, "file_sha256", "") if target else "",
+        note=note,
+        metadata=metadata or {},
+    )
+
+
+def _finalize_evidence_hash(*, attachment: Any, actor: User | None) -> None:
+    """Persist evidence hash/size and custody events for an attachment."""
+    file_hash, file_size = _hash_file_field(attachment.file)
+    attachment.file_sha256 = file_hash
+    attachment.file_size = file_size
+    attachment.save(update_fields=["file_sha256", "file_size", "updated_at"])
+    kwargs = {"criminal_attachment": attachment} if isinstance(attachment, R4JCriminalAttachment) else {"report_attachment": attachment}
+    _create_custody_event(**kwargs, event_type=EvidenceCustodyEventType.UPLOADED, actor=actor, metadata={"file_size": file_size})
+    _create_custody_event(**kwargs, event_type=EvidenceCustodyEventType.HASHED, actor=actor, metadata={"sha256": file_hash})
+
+
 @transaction.atomic
 def add_attachment(
     *,
@@ -493,6 +543,7 @@ def add_attachment(
         is_public=is_public,
         uploaded_by=uploaded_by,
     )
+    _finalize_evidence_hash(attachment=obj, actor=uploaded_by)
     logger.info(
         "R4J attachment added criminal=%s attachment_id=%s kind=%s",
         criminal.pk,
@@ -595,12 +646,13 @@ def submit_report(
 
     if attachments:
         for att in attachments:
-            R4JReportAttachment.objects.create(
+            report_attachment = R4JReportAttachment.objects.create(
                 report=report,
                 file=att["file"],
                 title=att.get("title", ""),
                 kind=att.get("kind", "document"),
             )
+            _finalize_evidence_hash(attachment=report_attachment, actor=submitted_by)
 
     logger.info(
         "R4J report submitted report_id=%s criminal=%s user=%s field_count=%s",
@@ -1233,3 +1285,29 @@ def reject_bounty_cancel(
     )
 
     return locked_bounty
+
+
+@transaction.atomic
+def record_evidence_custody_review(
+    *,
+    event: R4JEvidenceCustodyEvent,
+    actor: User,
+    event_type: str,
+    note: str = "",
+) -> R4JEvidenceCustodyEvent:
+    """Append a human custody review/transfer/reject event for same evidence target."""
+    if event_type not in {
+        EvidenceCustodyEventType.REVIEWED,
+        EvidenceCustodyEventType.TRANSFERRED,
+        EvidenceCustodyEventType.REJECTED,
+        EvidenceCustodyEventType.DELETED,
+    }:
+        raise R4JServiceError("نوع رویداد custody نامعتبر است.")
+    return _create_custody_event(
+        criminal_attachment=event.criminal_attachment,
+        report_attachment=event.report_attachment,
+        event_type=event_type,
+        actor=actor,
+        note=note,
+        metadata={"source_event_id": event.pk},
+    )

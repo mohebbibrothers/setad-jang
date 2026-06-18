@@ -58,6 +58,17 @@ class CriminalAttachmentKind(models.TextChoices):
     OTHER = "other", "سایر"
 
 
+class EvidenceCustodyEventType(models.TextChoices):
+    """Chain-of-custody event types for R4J evidence files."""
+
+    UPLOADED = "uploaded", "آپلود شد"
+    HASHED = "hashed", "هش شد"
+    REVIEWED = "reviewed", "بررسی شد"
+    TRANSFERRED = "transferred", "منتقل شد"
+    REJECTED = "rejected", "رد شد"
+    DELETED = "deleted", "حذف شد"
+
+
 # ============================================================
 # Report — Status (state machine)
 # ============================================================

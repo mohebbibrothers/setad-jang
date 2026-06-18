@@ -36,6 +36,7 @@ from apps.core.models import BaseModel
 from .choices import (
     BountyStatus,
     CriminalAttachmentKind,
+    EvidenceCustodyEventType,
     Gender,
     ReportFieldChangeStatus,
     ReportStatus,
@@ -434,6 +435,8 @@ class R4JCriminalAttachment(BaseModel):
         related_name="r4j_uploaded_attachments",
         verbose_name="آپلودکننده",
     )
+    file_sha256 = models.CharField(max_length=64, blank=True, db_index=True, verbose_name="SHA-256")
+    file_size = models.PositiveBigIntegerField(default=0, verbose_name="حجم فایل")
 
     class Meta:
         verbose_name = "سند مجرم"
@@ -637,6 +640,8 @@ class R4JReportAttachment(BaseModel):
         default=CriminalAttachmentKind.DOCUMENT,
         verbose_name="نوع",
     )
+    file_sha256 = models.CharField(max_length=64, blank=True, db_index=True, verbose_name="SHA-256")
+    file_size = models.PositiveBigIntegerField(default=0, verbose_name="حجم فایل")
 
     class Meta:
         verbose_name = "ضمیمه گزارش"
@@ -646,6 +651,63 @@ class R4JReportAttachment(BaseModel):
 
     def __str__(self) -> str:
         return f"report-attachment#{self.pk} report#{self.report_id}"
+
+
+# ============================================================
+# R4JEvidenceCustodyEvent
+# ============================================================
+
+
+class R4JEvidenceCustodyEvent(BaseModel):
+    """Append-only chain-of-custody event for R4J evidence attachments."""
+
+    criminal_attachment = models.ForeignKey(
+        R4JCriminalAttachment,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="custody_events",
+    )
+    report_attachment = models.ForeignKey(
+        R4JReportAttachment,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="custody_events",
+    )
+    event_type = models.CharField(max_length=30, choices=EvidenceCustodyEventType.choices, db_index=True)
+    actor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="r4j_evidence_custody_events")
+    file_sha256 = models.CharField(max_length=64, blank=True, db_index=True)
+    note = models.TextField(blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        verbose_name = "رویداد زنجیره نگهداری شواهد R4J"
+        verbose_name_plural = "رویدادهای زنجیره نگهداری شواهد R4J"
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["event_type", "-created_at"]), models.Index(fields=["file_sha256"])]
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(criminal_attachment__isnull=False, report_attachment__isnull=True)
+                    | models.Q(criminal_attachment__isnull=True, report_attachment__isnull=False)
+                ),
+                name="r4j_custody_one_evidence_target",
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"custody:{self.event_type}:{self.file_sha256[:12]}"
+
+    def save(self, *args: object, **kwargs: object) -> None:
+        """Keep custody events append-only."""
+        if self.pk and not self._state.adding:
+            raise PermissionError("ویرایش رویدادهای custody مجاز نیست.")
+        super().save(*args, **kwargs)
+
+    def delete(self, *args: object, **kwargs: object):
+        """Prevent deletion of custody events."""
+        raise PermissionError("حذف رویدادهای custody مجاز نیست.")
 
 
 # ============================================================

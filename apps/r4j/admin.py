@@ -19,6 +19,7 @@ from .models import (
     R4JCriminalPhone,
     R4JCriminalPhoto,
     R4JCriminalSocial,
+    R4JEvidenceCustodyEvent,
     R4JReport,
     R4JReportAttachment,
     R4JReportFieldChange,
@@ -139,3 +140,27 @@ class R4JBountyAdmin(admin.ModelAdmin):
         "user__email",
         "user__phone_number",
     )
+
+
+@admin.register(R4JEvidenceCustodyEvent)
+class R4JEvidenceCustodyEventAdmin(admin.ModelAdmin):
+    """Read-only admin for R4J evidence chain-of-custody events."""
+
+    list_display = ("id", "event_type", "file_sha256", "actor", "created_at")
+    list_filter = ("event_type",)
+    search_fields = ("file_sha256", "actor__email", "note")
+    readonly_fields = [field.name for field in R4JEvidenceCustodyEvent._meta.fields]
+    raw_id_fields = ("criminal_attachment", "report_attachment", "actor")
+    ordering = ("-created_at",)
+
+    def has_add_permission(self, request) -> bool:
+        """Custody events are generated through audited services."""
+        return False
+
+    def has_change_permission(self, request, obj=None) -> bool:
+        """Custody events are immutable."""
+        return False
+
+    def has_delete_permission(self, request, obj=None) -> bool:
+        """Custody events must remain available for forensic review."""
+        return False

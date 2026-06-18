@@ -563,6 +563,7 @@ SPECTACULAR_SETTINGS = {
         "R4JGenderEnum": "apps.r4j.choices.Gender",
         "R4JSocialPlatformEnum": "apps.r4j.choices.SocialPlatform",
         "R4JCriminalAttachmentKindEnum": "apps.r4j.choices.CriminalAttachmentKind",
+        "R4JEvidenceCustodyEventTypeEnum": "apps.r4j.choices.EvidenceCustodyEventType",
         "R4JReportStatusEnum": "apps.r4j.choices.ReportStatus",
         "R4JReportFieldChangeStatusEnum": "apps.r4j.choices.ReportFieldChangeStatus",
         "R4JBountyStatusEnum": "apps.r4j.choices.BountyStatus",

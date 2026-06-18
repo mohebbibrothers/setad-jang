@@ -687,6 +687,9 @@ AUDIT_LOG_EXPORT_MAX_RECORDS=100000
 - public criminal browse/detail
 - گزارش کاربر درباره مجرم
 - attachmentها
+- evidence SHA-256 hashing برای ضمیمه‌های criminal/report
+- chain-of-custody events برای uploaded/hashed/reviewed/transferred/rejected/deleted
+- admin evidence custody review endpoint
 - admin review گزارش
 - field-change workflow
 - bounty management
@@ -708,6 +711,8 @@ GET/POST /api/v1/r4j/admin/criminals/
 GET/PATCH/DELETE /api/v1/r4j/admin/criminals/{id}/
 GET /api/v1/r4j/admin/reports/
 POST /api/v1/r4j/admin/reports/{id}/review/
+GET /api/v1/r4j/admin/evidence-custody/
+POST /api/v1/r4j/admin/evidence-custody/{id}/review/
 GET/POST /api/v1/r4j/admin/bounties/
 PATCH/DELETE /api/v1/r4j/admin/bounties/{id}/
 ```

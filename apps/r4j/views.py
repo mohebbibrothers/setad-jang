@@ -79,6 +79,8 @@ from .serializers import (
     R4JBountySetSerializer,
     R4JCriminalCreateSerializer,
     R4JCriminalUpdateSerializer,
+    R4JEvidenceCustodyEventSerializer,
+    R4JEvidenceCustodyReviewSerializer,
     R4JFieldVisibilityUpsertSerializer,
     R4JPhoneCreateSerializer,
     R4JPhoneUpdateSerializer,
@@ -190,6 +192,14 @@ ADMIN_ATTACHMENT_LIST_RESPONSE = build_success_response_serializer(
     name="R4JAdminAttachmentListResponse",
     data_serializer=R4JAdminAttachmentSerializer,
     many=True,
+)
+ADMIN_CUSTODY_EVENT_RESPONSE = build_success_response_serializer(
+    name="R4JAdminCustodyEventResponse",
+    data_serializer=R4JEvidenceCustodyEventSerializer,
+)
+ADMIN_CUSTODY_EVENT_LIST_RESPONSE = build_paginated_success_response_serializer(
+    name="R4JAdminCustodyEventListResponse",
+    item_serializer=R4JEvidenceCustodyEventSerializer,
 )
 ADMIN_ALIAS_RESPONSE = build_success_response_serializer(
     name="R4JAdminAliasResponse",
@@ -2336,3 +2346,62 @@ class R4JAdminBountyCancelRejectView(APIView):
             data=R4JAdminBountyDetailSerializer(bounty_refreshed).data,
             message="درخواست لغو جایزه رد شد و جایزه دوباره فعال شد.",
         )
+
+
+class R4JAdminEvidenceCustodyListView(APIView):
+    """Admin list endpoint for evidence chain-of-custody events."""
+
+    permission_classes = [IsR4JAdminUser]
+
+    @extend_schema(
+        operation_id="r4j_admin_evidence_custody_list",
+        tags=[TAG_R4J_ADMIN],
+        summary="لیست زنجیره نگهداری شواهد",
+        responses={200: ADMIN_CUSTODY_EVENT_LIST_RESPONSE},
+    )
+    def get(self, request: Request) -> Response:
+        queryset = selectors.get_admin_evidence_custody_events()
+        event_type = request.query_params.get("event_type")
+        if event_type:
+            queryset = queryset.filter(event_type=event_type)
+        file_hash = request.query_params.get("file_sha256")
+        if file_hash:
+            queryset = queryset.filter(file_sha256=file_hash)
+        paginator = StandardPagination()
+        page = paginator.paginate_queryset(queryset, request, view=self)
+        serializer = R4JEvidenceCustodyEventSerializer(page, many=True)
+        return paginator.get_paginated_response(serializer.data, message="زنجیره نگهداری شواهد دریافت شد.")
+
+
+class R4JAdminEvidenceCustodyReviewView(APIView):
+    """Admin endpoint to append a custody review/transfer/reject event."""
+
+    permission_classes = [IsR4JAdminUser]
+
+    @extend_schema(
+        operation_id="r4j_admin_evidence_custody_review",
+        tags=[TAG_R4J_ADMIN],
+        request=R4JEvidenceCustodyReviewSerializer,
+        responses={201: ADMIN_CUSTODY_EVENT_RESPONSE, 404: GENERIC_ERROR_RESPONSE},
+    )
+    def post(self, request: Request, event_id: int) -> Response:
+        event = selectors.get_admin_evidence_custody_event_by_id(event_id=event_id)
+        if event is None:
+            return ErrorResponse(message="رویداد custody یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+        serializer = R4JEvidenceCustodyReviewSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        new_event = services.record_evidence_custody_review(
+            event=event,
+            actor=request.user,
+            event_type=serializer.validated_data["event_type"],
+            note=serializer.validated_data.get("note", ""),
+        )
+        log_action_async(
+            user_id=request.user.pk,
+            action=audit_actions.R4J_EVIDENCE_CUSTODY_REVIEWED,
+            resource_type="r4j_evidence_custody_event",
+            resource_id=str(new_event.pk),
+            extra_data={"event_type": new_event.event_type, "file_sha256": new_event.file_sha256},
+            **extract_audit_metadata(request),
+        )
+        return CreatedResponse(data=R4JEvidenceCustodyEventSerializer(new_event).data, message="رویداد custody ثبت شد.")
