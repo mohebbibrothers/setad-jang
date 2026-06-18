@@ -189,7 +189,7 @@ export function EducationSection({
       <div className="container-edge">
         <SectionTitle
           title="قرارگاه آموزشی"
-          description="کتابخانه‌ای از دوره‌های تخصصی و کاربردی؛ از امداد و نجات تا سواد رسانه‌ای و جهاد تبیین."
+          description="هر مهارتی که می‌آموزی، یک نیروی تازه برای میدان است. از امداد و نجات تا سواد رسانه‌ای و رهبری جهادی — دوره‌ها رایگان، تخصصی و کاربردی."
         />
 
         {/* ── Tab strip — single horizontal row, no vertical wrap ── */}
@@ -199,7 +199,7 @@ export function EducationSection({
               type="button"
               aria-label="حرکت به چپ"
               onClick={() => scrollByAmount('left')}
-              className="absolute left-0 top-1/2 -translate-y-1/2 z-20 hidden md:flex
+              className="absolute left-0 top-1/2 -translate-y-1/2 z-20 flex
                          w-9 h-9 items-center justify-center rounded-full
                          bg-white text-ink-600 hover:text-brand-600 hover:bg-brand-50
                          shadow-[0_4px_14px_-4px_rgba(15,20,32,.15)] ring-1 ring-ink-100
@@ -216,7 +216,7 @@ export function EducationSection({
               type="button"
               aria-label="حرکت به راست"
               onClick={() => scrollByAmount('right')}
-              className="absolute right-0 top-1/2 -translate-y-1/2 z-20 hidden md:flex
+              className="absolute right-0 top-1/2 -translate-y-1/2 z-20 flex
                          w-9 h-9 items-center justify-center rounded-full
                          bg-white text-ink-600 hover:text-brand-600 hover:bg-brand-50
                          shadow-[0_4px_14px_-4px_rgba(15,20,32,.15)] ring-1 ring-ink-100
@@ -231,13 +231,13 @@ export function EducationSection({
 
           {canNext && (
             <div aria-hidden="true"
-                 className="absolute left-0 top-0 bottom-0 w-16 z-10 pointer-events-none
-                            bg-gradient-to-l from-white to-transparent hidden md:block" />
+                 className="absolute left-0 top-0 bottom-0 w-12 md:w-16 z-10 pointer-events-none
+                            bg-gradient-to-l from-white to-transparent" />
           )}
           {canPrev && (
             <div aria-hidden="true"
-                 className="absolute right-0 top-0 bottom-0 w-16 z-10 pointer-events-none
-                            bg-gradient-to-r from-white to-transparent hidden md:block" />
+                 className="absolute right-0 top-0 bottom-0 w-12 md:w-16 z-10 pointer-events-none
+                            bg-gradient-to-r from-white to-transparent" />
           )}
 
           <div
@@ -245,7 +245,8 @@ export function EducationSection({
             role="tablist"
             aria-label="دسته‌بندی دوره‌ها"
             className="flex flex-nowrap items-stretch gap-1 border-b border-ink-100
-                       overflow-x-auto overflow-y-hidden no-scrollbar md:px-12 scroll-smooth"
+                       overflow-x-auto overflow-y-hidden no-scrollbar
+                       px-10 md:px-12 scroll-smooth"
             style={{ WebkitOverflowScrolling: 'touch' }}
           >
             {tabs.map((c) => {

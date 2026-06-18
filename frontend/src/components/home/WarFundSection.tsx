@@ -2,7 +2,8 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { motion } from 'framer-motion';
+import { useState, useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { SectionTitle } from './SectionTitle';
 import { formatPersianNumber } from '@/lib/utils';
 
@@ -278,52 +279,81 @@ function Card({ c, delay = 0 }: { c: CampaignCard; delay?: number }) {
 /* ───────────────────────────────────────────────────────────────────────── */
 
 export function WarFundSection({ campaigns }: { campaigns: CampaignCard[] }) {
-  const visible = campaigns.slice(0, 4);
+  // 4 cards per page (2×2 on desktop); extra pages reached via the pager.
+  const PAGE_SIZE = 4;
+  const totalPages = Math.max(1, Math.ceil(campaigns.length / PAGE_SIZE));
+  const [page, setPage] = useState(0);
+  const visible = useMemo(
+    () => campaigns.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE),
+    [campaigns, page],
+  );
+
+  const prev = () => setPage((p) => (p - 1 + totalPages) % totalPages);
+  const next = () => setPage((p) => (p + 1) % totalPages);
 
   return (
     <section className="section-y bg-white" id="warfund">
       <div className="container-edge">
         <SectionTitle
           title="پشتیبانی مالی جنگ"
-          description="مشارکت سهم‌محور، شفاف و قابل پیگیری در کمپین‌های پشتیبانی از مدافعان و جبهه مقاومت."
+          description="کنار هر دست خالی، صدها دست یاری‌رسان ایستاده. هر سهمی که می‌خری، یک قدم نزدیک‌تر به آرامش مدافعان و خانواده‌هاست."
         />
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-5">
-          {visible.map((c, i) => (
-            <Card key={c.slug} c={c} delay={i * 0.06} />
-          ))}
-        </div>
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={page}
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.25 }}
+            className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-5"
+          >
+            {visible.map((c, i) => (
+              <Card key={c.slug} c={c} delay={i * 0.06} />
+            ))}
+          </motion.div>
+        </AnimatePresence>
 
-        {/* Pager arrows — using the designer's PNG assets */}
-        <div className="flex items-center justify-center gap-4 mt-10">
+        {/* Pager — brand PNG arrows, real interactive paging */}
+        <div className="flex items-center justify-center gap-4 mt-8">
           <button
             type="button"
             aria-label="قبلی"
+            onClick={prev}
+            disabled={totalPages <= 1}
             className="relative w-12 h-12 rounded-full hover:scale-110 active:scale-95
-                       transition-transform duration-200"
+                       transition-transform duration-200 disabled:opacity-40
+                       disabled:cursor-not-allowed disabled:hover:scale-100"
           >
-            <Image
-              src="/brand/pager-arrow-prev.png"
-              alt=""
-              fill
-              sizes="48px"
-              className="object-contain"
-            />
+            <Image src="/brand/pager-arrow-prev.png" alt="" fill sizes="48px" className="object-contain" />
           </button>
           <button
             type="button"
             aria-label="بعدی"
+            onClick={next}
+            disabled={totalPages <= 1}
             className="relative w-12 h-12 rounded-full hover:scale-110 active:scale-95
-                       transition-transform duration-200"
+                       transition-transform duration-200 disabled:opacity-40
+                       disabled:cursor-not-allowed disabled:hover:scale-100"
           >
-            <Image
-              src="/brand/pager-arrow-next.png"
-              alt=""
-              fill
-              sizes="48px"
-              className="object-contain"
-            />
+            <Image src="/brand/pager-arrow-next.png" alt="" fill sizes="48px" className="object-contain" />
           </button>
+        </div>
+
+        <div className="flex justify-center mt-6">
+          <Link
+            href="/madadkar"
+            className="inline-flex items-center gap-2 h-12 px-7 rounded-full
+                       bg-white border-2 border-brand-500 text-brand-700 font-extrabold text-[14px]
+                       hover:bg-brand-50 transition-colors"
+          >
+            <span>مشاهده همه کمپین‌ها</span>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <line x1="19" y1="12" x2="5" y2="12" />
+              <polyline points="12 19 5 12 12 5" />
+            </svg>
+          </Link>
         </div>
       </div>
     </section>

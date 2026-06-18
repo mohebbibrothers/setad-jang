@@ -332,7 +332,7 @@ export function JusticeSection({ criminals }: { criminals: CriminalCard[] }) {
       <div className="container-edge">
         <SectionTitle
           title="جایزه‌ای برای عدالت"
-          description="بانک اطلاعاتی جنایتکاران و مجرمان بین‌المللی؛ مشارکت مردمی در مسیر تحقق عدالت."
+          description="عدالت با صدای مردم بلندتر است. هر اطلاعات شما یک سند، هر جایزه‌ی شما یک گام رو به‌جلو در پرونده‌ی متهمان جنایت‌های جنگی."
         />
 
         {/* Off-white panel — corners follow the Apple HIG concentric-corners

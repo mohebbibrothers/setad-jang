@@ -185,17 +185,16 @@ export function TabyinSection({ items }: { items: TabyinItem[] }) {
     [items, filter],
   );
 
-  // Fixed page geometry — 10 tiles tile a perfect grid at EVERY breakpoint:
-  //   tall × 2 (row-span 2) + short × 8 (row-span 1) = 4 + 8 = 12 row slots
-  //   - Desktop (4 cols): 4 × 3 rows = 12 ✓
-  //   - Tablet  (3 cols): 3 × 4 rows = 12 ✓
-  //   - Mobile  (2 cols): 2 × 6 rows = 12 ✓
-  //   `grid-auto-flow: dense` packs the cells so there are NO empty slots
-  //   at any viewport — the wall is always rectangle-perfect.
-  //   Reducing from 12 → 10 also makes the mobile fold much shorter and
-  //   easier to digest at narrow widths.
+  // 10 tiles per page tile a perfect rectangle at EVERY breakpoint when the
+  // tall pattern is exactly 2 tall + 8 short:
+  //     tall × 2 + short × 8 = 4 + 8 = 12 row slots
+  //     - Desktop (4 cols): 4 × 3 rows = 12 ✓
+  //     - Tablet  (3 cols): 3 × 4 rows = 12 ✓
+  //     - Mobile  (2 cols): 2 × 6 rows = 12 ✓
+  // `grid-auto-flow: dense` packs the cells gap-free. Tall positions live
+  // on the items themselves (see seed/loader) so every cover matches its
+  // slot's aspect-ratio — the cover never gets cropped weirdly.
   const PAGE_SIZE = 10;
-  const TALL_INDEXES_IN_PAGE = new Set([0, 5]);
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
 
   const visible = useMemo(
@@ -214,7 +213,7 @@ export function TabyinSection({ items }: { items: TabyinItem[] }) {
       <div className="container-edge">
         <SectionTitle
           title="جهاد تبیین"
-          description="لورم ایپسوم متن ساختگی با تولید سادگی نامفهوم از صنعت چاپ، و با استفاده از طراحان گرافیک است، چاپگرها و متون بلکه روزنامه و مجله در ستون و سطرآنچنان که لازم است، و برای شرایط فعلی تکنولوژی مورد نیاز، و کاربردهای متنوع با هدف بهبود ابزارهای کاربردی می باشد، کتابهای زیادی در شصت و سه درصد گذشته حال و آینده، شناخت فراوان جامعه و متخصصان را می طلبد."
+          description="در روزگارِ هیاهوی روایت‌ها، هر تصویر، هر ویدئو و هر سطر، یک تلاش برای رساندنِ صدای حقیقت است. اینجا دست‌به‌دست هم می‌دهیم تا روایتِ مردم گم نشود."
         />
 
         {/* Filter strip — media-type pills */}
@@ -269,11 +268,10 @@ export function TabyinSection({ items }: { items: TabyinItem[] }) {
                 key={it.id}
                 it={it}
                 index={i}
-                /* Force the canonical tall pattern: positions 0, 5, 8 in
-                   every page become tall (row-span 2). Falls back to the
-                   item's own tall hint if it has one — useful when the
-                   backend pre-curates a layout. */
-                forceTall={TALL_INDEXES_IN_PAGE.has(i)}
+                /* tall hint comes from the item itself (data-driven).
+                   The seed places tall:true on tiles with portrait-leaning
+                   covers, so the cover always matches its slot's aspect
+                   and never gets distorted by `object-cover` cropping. */
               />
             ))}
             {visible.length === 0 && (

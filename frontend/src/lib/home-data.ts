@@ -69,7 +69,7 @@ export async function loadCampaigns(): Promise<CampaignCard[]> {
       coverUrl: c.cover_image ?? undefined,
     }));
   }
-  // 4 campaigns → exactly 2 rows × 2 cols on desktop (matches designer mockup).
+  // 8 campaigns → exactly 2 pager pages of 4 (2×2 on desktop each).
   // Each gets a distinct tone so the gradient fallback covers feel curated.
   const mk = (
     slug: string, title: string, sponsor: string,
@@ -80,10 +80,16 @@ export async function loadCampaigns(): Promise<CampaignCard[]> {
     sharesTotal, sharesRemaining, progressPercent, toneFrom, toneTo,
   });
   return [
-    mk('pashe-band-jabhe',    'تهیه پشه‌بند ضد دوربین‌های دید در شب برای مدافعان جبهه',  'گروه جهادی انصارالزهرا',   1_000_000_000, 1500, 750, 50, '#0D8074', '#053832'),
-    mk('darooye-emdadi',      'تأمین داروهای اضطراری بیمارستان صحرایی پشتیبان جبهه',     'مؤسسه شهید احمدی روشن',     1_000_000_000,  650, 215, 67, '#155F55', '#0A6E64'),
-    mk('logistic-mavanea',    'پشتیبانی لجستیکی گروه‌های جهادی مستقر در منطقه عملیاتی',  'گروه جهادی شهید کاظمی',     1_000_000_000,  420,  84, 80, '#2FA08D', '#0A6E64'),
-    mk('tajhizat-emdad',      'خرید تجهیزات امداد و نجات برای پایگاه پشتیبان مرزی',      'بسیج سازندگی استان',        1_000_000_000,  890, 484, 46, '#3FA797', '#155F55'),
+    // ── page 1
+    mk('pashe-band-jabhe', 'تهیه پشه‌بند ضد دوربین‌های دید در شب برای مدافعان جبهه', 'گروه جهادی انصارالزهرا', 1_000_000_000, 1500, 750, 50, '#0D8074', '#053832'),
+    mk('darooye-emdadi',   'تأمین داروهای اضطراری بیمارستان صحرایی پشتیبان جبهه',    'مؤسسه شهید احمدی روشن',  1_000_000_000,  650, 215, 67, '#155F55', '#0A6E64'),
+    mk('logistic-mavanea', 'پشتیبانی لجستیکی گروه‌های جهادی مستقر در منطقه عملیاتی', 'گروه جهادی شهید کاظمی',  1_000_000_000,  420,  84, 80, '#2FA08D', '#0A6E64'),
+    mk('tajhizat-emdad',   'خرید تجهیزات امداد و نجات برای پایگاه پشتیبان مرزی',     'بسیج سازندگی استان',     1_000_000_000,  890, 484, 46, '#3FA797', '#155F55'),
+    // ── page 2
+    mk('shabake-aab',      'احداث شبکه آب‌رسانی به روستاهای جنگ‌زده غرب کشور',         'گروه جهادی شهید بهشتی',  1_000_000_000,  540, 168, 69, '#0A6E64', '#085C54'),
+    mk('paygah-edari',     'تجهیز پایگاه فرماندهی صحرایی و دفتر اداری منطقه عملیات',  'قرارگاه پشتیبانی مردمی', 1_000_000_000,  770, 405, 47, '#5DB3A4', '#0A6E64'),
+    mk('tabligh-rasaneh',  'تأمین تجهیزات رسانه‌ای برای روایت‌گری در خط مقدم',         'مؤسسه روایت فتح',       1_000_000_000,  300,  60, 80, '#3FA797', '#0D8074'),
+    mk('khanevadeh-shahid','کمک‌هزینه تحصیلی فرزندان شهدای دفاع از حرم',              'بنیاد شهید استان',      1_000_000_000, 1200, 540, 55, '#0D8074', '#155F55'),
   ];
 }
 
@@ -405,6 +411,9 @@ export async function loadTabyinItems(): Promise<TabyinItem[]> {
   const videoAt = new Set([1, 11]);
   const audioAt = new Set([9, 19]);
   const userAt  = new Set([7, 16]);
+  // Tall positions (data-driven — assigned to items whose covers are
+  // portrait-leaning, so the cover slot aspect always matches the art).
+  const tallAt  = new Set([0, 5, 10, 15]);
 
   return tones.map((t, i) => {
     const isQuote = i in quoteAt;
@@ -416,9 +425,7 @@ export async function loadTabyinItems(): Promise<TabyinItem[]> {
       title: titles[i] || undefined,
       summary: isQuote ? quoteAt[i] : undefined,
       variant: isQuote ? 'quote' : undefined,
-      // 'tall' is left off here — TabyinSection forces the canonical
-      // tall pattern (positions 0, 5, 8 of each page). This keeps the
-      // grid stable on every page flip.
+      tall: tallAt.has(i),
       mediaType: isQuote ? 'image' : isVideo ? 'video' : isAudio ? 'audio' : 'image',
       durationSeconds: isVideo ? 95 + (i % 6) * 30 : isAudio ? 240 + (i % 4) * 60 : undefined,
       origin: userAt.has(i) ? 'user_submitted' : 'external',

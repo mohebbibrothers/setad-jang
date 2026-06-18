@@ -408,7 +408,7 @@ export function KindnessSection({ listings }: { listings: KindListing[] }) {
       <div className="container-edge">
         <SectionTitle
           title="دیوار مهربانی"
-          description="پلی میان نیازها و دست‌های یاری‌رسان؛ هر آگهی یک پل امید بین خانواده‌هاست."
+          description="گاهی یک یخچال کهنه، تمام دنیای یک خانواده است و گاهی یک قول کوچک، چراغ یک شب. اینجا نیازها و دست‌های یاری به هم می‌رسند."
         />
 
         {/* Segmented type switcher */}
@@ -459,7 +459,7 @@ export function KindnessSection({ listings }: { listings: KindListing[] }) {
                 type="button"
                 aria-label="حرکت به چپ"
                 onClick={() => scrollCats('left')}
-                className="absolute left-0 top-1/2 -translate-y-1/2 z-20 hidden md:flex
+                className="absolute left-0 top-1/2 -translate-y-1/2 z-20 flex
                            w-9 h-9 items-center justify-center rounded-full
                            bg-white text-ink-600 hover:text-brand-600 hover:bg-brand-50
                            shadow-[0_4px_14px_-4px_rgba(15,20,32,.15)] ring-1 ring-ink-100
@@ -476,7 +476,7 @@ export function KindnessSection({ listings }: { listings: KindListing[] }) {
                 type="button"
                 aria-label="حرکت به راست"
                 onClick={() => scrollCats('right')}
-                className="absolute right-0 top-1/2 -translate-y-1/2 z-20 hidden md:flex
+                className="absolute right-0 top-1/2 -translate-y-1/2 z-20 flex
                            w-9 h-9 items-center justify-center rounded-full
                            bg-white text-ink-600 hover:text-brand-600 hover:bg-brand-50
                            shadow-[0_4px_14px_-4px_rgba(15,20,32,.15)] ring-1 ring-ink-100
@@ -491,19 +491,19 @@ export function KindnessSection({ listings }: { listings: KindListing[] }) {
 
             {catCanNext && (
               <div aria-hidden="true"
-                   className="absolute left-0 top-0 bottom-0 w-16 z-10 pointer-events-none
-                              bg-gradient-to-l from-white to-transparent hidden md:block" />
+                   className="absolute left-0 top-0 bottom-0 w-12 md:w-16 z-10 pointer-events-none
+                              bg-gradient-to-l from-white to-transparent" />
             )}
             {catCanPrev && (
               <div aria-hidden="true"
-                   className="absolute right-0 top-0 bottom-0 w-16 z-10 pointer-events-none
-                              bg-gradient-to-r from-white to-transparent hidden md:block" />
+                   className="absolute right-0 top-0 bottom-0 w-12 md:w-16 z-10 pointer-events-none
+                              bg-gradient-to-r from-white to-transparent" />
             )}
 
             <div
               ref={catScrollRef}
               className="flex flex-nowrap items-center gap-2 overflow-x-auto overflow-y-hidden
-                         no-scrollbar md:px-12 scroll-smooth"
+                         no-scrollbar px-10 md:px-12 scroll-smooth"
               style={{ WebkitOverflowScrolling: 'touch' }}
             >
               {categoryChips.map((c) => {
