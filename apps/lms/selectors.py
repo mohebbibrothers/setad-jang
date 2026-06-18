@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from django.db.models import Count, Prefetch, QuerySet
 
+from apps.lms.choices import CourseLevel, EnrollmentStatus
 from apps.lms.models import Course, Enrollment, Lesson, LMSCategory, LMSUserSkill
 
 
@@ -283,3 +284,135 @@ def get_course_leaderboard(*, course: Course) -> list[dict]:
             }
         )
     return rows
+
+
+# ---------------------------------------------------------------------------
+# Learning recommendations — user scope
+# ---------------------------------------------------------------------------
+
+_LEVEL_ORDER = {
+    CourseLevel.BEGINNER: 1,
+    CourseLevel.INTERMEDIATE: 2,
+    CourseLevel.ADVANCED: 3,
+    CourseLevel.PROFESSIONAL: 4,
+}
+
+
+def get_user_learning_recommendations(*, user_id: int, limit: int = 10) -> list[dict]:
+    """Return deterministic course recommendations for one learner.
+
+    Ranking signals:
+    - exclude already enrolled courses
+    - category affinity from existing enrollments and earned skills
+    - level progression toward the next difficulty
+    - skill-gap coverage for categories without a completed skill
+    - course popularity/featured boosts
+    """
+    safe_limit = max(1, min(limit, 50))
+    enrollments = list(
+        Enrollment.objects.filter(user_id=user_id)
+        .select_related("course", "course__category")
+        .order_by("-enrolled_at")
+    )
+    enrolled_course_ids = {enrollment.course_id for enrollment in enrollments}
+    category_affinity = _build_lms_category_affinity(enrollments=enrollments, user_id=user_id)
+    completed_category_ids = set(
+        LMSUserSkill.objects.filter(user_id=user_id).values_list("course__category_id", flat=True)
+    )
+    preferred_next_level = _preferred_next_course_level(enrollments=enrollments)
+    candidates = Course.objects.published().with_category().exclude(pk__in=enrolled_course_ids)
+    scored = [
+        _score_recommended_course(
+            course=course,
+            category_affinity=category_affinity,
+            completed_category_ids=completed_category_ids,
+            preferred_next_level=preferred_next_level,
+        )
+        for course in candidates
+    ]
+    scored = [item for item in scored if item["score"] > 0]
+    scored.sort(key=lambda item: (-item["score"], -item["course"].enrollments_count, item["course"].title))
+    return scored[:safe_limit]
+
+
+def get_admin_learning_recommendation_overview(*, limit: int = 10) -> dict:
+    """Return admin overview of recommendation-ready courses and cold-start gaps."""
+    safe_limit = max(1, min(limit, 50))
+    published = Course.objects.published().with_category().order_by("-enrollments_count", "title")
+    cold_start = published.filter(enrollments_count=0).count()
+    featured = published.filter(is_featured=True).count()
+    return {
+        "published_courses": published.count(),
+        "featured_courses": featured,
+        "cold_start_courses": cold_start,
+        "top_recommendable_courses": [
+            {
+                "course_id": course.pk,
+                "title": course.title,
+                "category_title": course.category.title,
+                "level": course.level,
+                "enrollments_count": course.enrollments_count,
+                "is_featured": course.is_featured,
+            }
+            for course in published[:safe_limit]
+        ],
+    }
+
+
+def _build_lms_category_affinity(*, enrollments: list[Enrollment], user_id: int) -> dict[int, int]:
+    """Build category affinity from enrollment progress and awarded skills."""
+    affinity: dict[int, int] = {}
+    for enrollment in enrollments:
+        category_id = enrollment.course.category_id
+        affinity[category_id] = affinity.get(category_id, 0) + 20
+        if enrollment.status == EnrollmentStatus.COMPLETED:
+            affinity[category_id] += 20
+        if enrollment.progress_percent >= 50:
+            affinity[category_id] += 10
+    for category_id in LMSUserSkill.objects.filter(user_id=user_id).values_list("course__category_id", flat=True):
+        affinity[category_id] = affinity.get(category_id, 0) + 25
+    return affinity
+
+
+def _preferred_next_course_level(*, enrollments: list[Enrollment]) -> str | None:
+    """Infer next recommended course level from learner history."""
+    if not enrollments:
+        return CourseLevel.BEGINNER
+    max_level_value = max(_LEVEL_ORDER.get(enrollment.course.level, 1) for enrollment in enrollments)
+    for level, order in _LEVEL_ORDER.items():
+        if order == min(max_level_value + 1, max(_LEVEL_ORDER.values())):
+            return level
+    return CourseLevel.PROFESSIONAL
+
+
+def _score_recommended_course(
+    *,
+    course: Course,
+    category_affinity: dict[int, int],
+    completed_category_ids: set[int],
+    preferred_next_level: str | None,
+) -> dict:
+    """Score one course recommendation and attach reason codes."""
+    score = 10
+    reason_codes = ["published_course"]
+    affinity_score = category_affinity.get(course.category_id, 0)
+    if affinity_score:
+        score += affinity_score
+        reason_codes.append("category_affinity")
+    if course.category_id not in completed_category_ids:
+        score += 15
+        reason_codes.append("skill_gap_category")
+    if preferred_next_level and course.level == preferred_next_level:
+        score += 18
+        reason_codes.append("level_progression")
+    if course.is_featured:
+        score += 8
+        reason_codes.append("featured_course")
+    if course.enrollments_count:
+        score += min(course.enrollments_count, 20)
+        reason_codes.append("popular_course")
+    return {
+        "course": course,
+        "score": score,
+        "reason_codes": reason_codes,
+    }

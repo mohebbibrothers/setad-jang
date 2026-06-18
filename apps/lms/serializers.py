@@ -743,3 +743,20 @@ class LessonVideoProcessingJobSerializer(serializers.ModelSerializer):
             "updated_at",
         )
         read_only_fields = fields
+
+
+class LearningRecommendationItemSerializer(serializers.Serializer):
+    """One learner course recommendation with explanation."""
+
+    course = CourseSummarySerializer(read_only=True)
+    score = serializers.IntegerField(read_only=True)
+    reason_codes = serializers.ListField(child=serializers.CharField(), read_only=True)
+
+
+class LearningRecommendationOverviewSerializer(serializers.Serializer):
+    """Admin overview of recommendation readiness."""
+
+    published_courses = serializers.IntegerField(read_only=True)
+    featured_courses = serializers.IntegerField(read_only=True)
+    cold_start_courses = serializers.IntegerField(read_only=True)
+    top_recommendable_courses = serializers.ListField(child=serializers.DictField(), read_only=True)

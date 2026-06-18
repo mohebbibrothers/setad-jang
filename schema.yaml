@@ -3873,6 +3873,21 @@ paths:
               schema:
                 $ref: '#/components/schemas/LMSErrorResponse'
           description: ''
+  /api/v1/lms/admin/recommendations/overview/:
+    get:
+      operationId: lms_admin_learning_recommendations_overview
+      description: Return aggregate recommendation overview for admins.
+      tags:
+      - آموزش — مدیریت
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LMSLearningRecommendationOverviewResponse'
+          description: ''
   /api/v1/lms/answers/{answer_id}/report/:
     post:
       operationId: lms_answers_report
@@ -4467,6 +4482,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/LMSErrorResponse'
+          description: ''
+  /api/v1/lms/me/recommendations/:
+    get:
+      operationId: lms_user_learning_recommendations
+      description: Return ranked course recommendations for the authenticated user.
+      tags:
+      - آموزش — کاربر
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LMSLearningRecommendationResponse'
           description: ''
   /api/v1/lms/me/skills/:
     get:
@@ -17532,6 +17562,40 @@ components:
       required:
       - message
       - status_code
+    LMSLearningRecommendationOverviewResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          default: true
+        status_code:
+          type: integer
+          default: 200
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/LearningRecommendationOverview'
+      required:
+      - data
+      - message
+    LMSLearningRecommendationResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          default: true
+        status_code:
+          type: integer
+          default: 200
+        message:
+          type: string
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/LearningRecommendationItem'
+      required:
+      - data
+      - message
     LMSLessonAnswerResponse:
       type: object
       properties:
@@ -17889,6 +17953,50 @@ components:
         * `embed` - Embed
         * `uploaded_file` - فایل آپلودی
         * `hybrid` - ترکیبی
+    LearningRecommendationItem:
+      type: object
+      description: One learner course recommendation with explanation.
+      properties:
+        course:
+          allOf:
+          - $ref: '#/components/schemas/CourseSummary'
+          readOnly: true
+        score:
+          type: integer
+          readOnly: true
+        reason_codes:
+          type: array
+          items:
+            type: string
+          readOnly: true
+      required:
+      - course
+      - reason_codes
+      - score
+    LearningRecommendationOverview:
+      type: object
+      description: Admin overview of recommendation readiness.
+      properties:
+        published_courses:
+          type: integer
+          readOnly: true
+        featured_courses:
+          type: integer
+          readOnly: true
+        cold_start_courses:
+          type: integer
+          readOnly: true
+        top_recommendable_courses:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+          readOnly: true
+      required:
+      - cold_start_courses
+      - featured_courses
+      - published_courses
+      - top_recommendable_courses
     LessonAnswer:
       type: object
       description: Output serializer for lesson answers.

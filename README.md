@@ -907,6 +907,7 @@ CDN/Object Storage flow is ready for uploaded video and handouts
 - lessons با content/video metadata
 - video processing job lifecycle با no-op/local provider تا آماده‌شدن زیرساخت transcode
 - admin trigger/status برای پردازش ویدئو
+- learning recommendations بر اساس category affinity، skill gap، level progression و popularity
 - enrollment رایگان با profile requirement
 - progress tracking
 - Q&A/discussion
@@ -952,10 +953,12 @@ POST /api/v1/lms/courses/{slug}/quiz/start/
 GET  /api/v1/lms/quiz/attempts/{id}/
 POST /api/v1/lms/quiz/attempts/{id}/submit/
 GET  /api/v1/lms/me/enrollments/
+GET  /api/v1/lms/me/recommendations/
 GET  /api/v1/lms/me/certificates/
 GET  /api/v1/lms/certificates/verify/{slug}/
 GET/POST/PATCH/DELETE admin course/category/lesson/quiz/question endpoints
 GET  /api/v1/lms/admin/courses/{id}/analytics/
+GET  /api/v1/lms/admin/recommendations/overview/
 GET  /api/v1/lms/admin/courses/{id}/leaderboard/
 POST /api/v1/lms/admin/lessons/{lesson_id}/video-processing/
 GET  /api/v1/lms/admin/lessons/{lesson_id}/video-processing/status/

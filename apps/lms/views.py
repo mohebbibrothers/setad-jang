@@ -46,6 +46,8 @@ from apps.lms.serializers import (
     DiscussionReportSerializer,
     EnrollmentDetailSerializer,
     EnrollmentSerializer,
+    LearningRecommendationItemSerializer,
+    LearningRecommendationOverviewSerializer,
     LessonAnswerCreateSerializer,
     LessonAnswerSerializer,
     LessonCreateUpdateSerializer,
@@ -125,6 +127,8 @@ COURSE_REPORT_RESPONSE = build_success_response_serializer(name="LMSCourseReport
 COURSE_ANALYTICS_RESPONSE = build_success_response_serializer(name="LMSCourseAnalyticsResponse", data_serializer=CourseAnalyticsSerializer)
 COURSE_LEADERBOARD_RESPONSE = build_success_response_serializer(name="LMSCourseLeaderboardResponse", data_serializer=CourseLeaderboardItemSerializer, many=True)
 VIDEO_PROCESSING_JOB_RESPONSE = build_success_response_serializer(name="LMSVideoProcessingJobResponse", data_serializer=LessonVideoProcessingJobSerializer)
+LEARNING_RECOMMENDATION_RESPONSE = build_success_response_serializer(name="LMSLearningRecommendationResponse", data_serializer=LearningRecommendationItemSerializer, many=True)
+LEARNING_RECOMMENDATION_OVERVIEW_RESPONSE = build_success_response_serializer(name="LMSLearningRecommendationOverviewResponse", data_serializer=LearningRecommendationOverviewSerializer)
 
 
 class LMSCategoryPublicListView(APIView):
@@ -327,6 +331,51 @@ class LMSLessonProgressUpdateView(APIView):
             data=LessonProgressSerializer(progress).data,
             message="پیشرفت جلسه با موفقیت ثبت شد.",
         )
+
+
+class LMSUserLearningRecommendationView(APIView):
+    """User endpoint for personalized LMS course recommendations."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        operation_id="lms_user_learning_recommendations",
+        tags=[TAG_LMS_USER],
+        responses={200: LEARNING_RECOMMENDATION_RESPONSE},
+    )
+    def get(self, request: Request) -> SuccessResponse:
+        """Return ranked course recommendations for the authenticated user."""
+        raw_limit = request.query_params.get("limit", "10")
+        try:
+            limit = int(raw_limit)
+        except (TypeError, ValueError):
+            limit = 10
+        recommendations = selectors.get_user_learning_recommendations(user_id=request.user.pk, limit=limit)
+        return SuccessResponse(
+            data=LearningRecommendationItemSerializer(recommendations, many=True).data,
+            message="پیشنهادهای یادگیری با موفقیت دریافت شد.",
+        )
+
+
+class LMSAdminLearningRecommendationOverviewView(APIView):
+    """Admin overview for recommendation readiness and cold-start courses."""
+
+    permission_classes = [IsLMSAdminUser]
+
+    @extend_schema(
+        operation_id="lms_admin_learning_recommendations_overview",
+        tags=[TAG_LMS_ADMIN],
+        responses={200: LEARNING_RECOMMENDATION_OVERVIEW_RESPONSE},
+    )
+    def get(self, request: Request) -> SuccessResponse:
+        """Return aggregate recommendation overview for admins."""
+        raw_limit = request.query_params.get("limit", "10")
+        try:
+            limit = int(raw_limit)
+        except (TypeError, ValueError):
+            limit = 10
+        overview = selectors.get_admin_learning_recommendation_overview(limit=limit)
+        return SuccessResponse(data=LearningRecommendationOverviewSerializer(overview).data)
 
 
 class LMSUserSkillListView(APIView):
