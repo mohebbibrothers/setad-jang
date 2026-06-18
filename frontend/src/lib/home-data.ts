@@ -225,24 +225,35 @@ export async function loadCourses(): Promise<CourseCard[]> {
 }
 
 /* ─── Kindness Wall ──────────────────────────────────────────────────── */
-type ApiKindnessCategory = { slug: string; title: string };
+/**
+ * Mirrors apps.kindness_wall.serializers.KindnessListingListSerializer.
+ * Note: backend listing_type is one of 'need_help' | 'offer_help' (see
+ * apps.kindness_wall.choices.ListingType). UI normalises to 'need' | 'offer'.
+ */
+type ApiKindnessCategory = {
+  slug: string; title: string;
+  icon?: string;
+  published_listings_count?: number;
+};
 type ApiListing = {
-  id?: string; slug: string;
-  listing_type: 'need' | 'offer';
+  id?: string | number;
+  slug: string;
+  listing_type: 'need_help' | 'offer_help' | 'need' | 'offer';
   title: string;
-  category?: { title?: string };
+  category?: { slug?: string; title?: string; icon?: string };
   province?: string; city?: string; district?: string;
   owner_full_name_snapshot?: string;
   owner_avatar_snapshot?: string;
-  cover_image?: string;
+  cover_image?: string | null;
   published_at?: string;
-  expires_at?: string;
+  expires_at?: string | null;
   view_count?: number;
+  bookmark_count?: number;
 };
 
 export async function loadKindnessListings(): Promise<KindListing[]> {
   const data = await safeApiFetch<Paginated<ApiListing>>(
-    '/kindness-wall/listings/?page_size=12&ordering=-published_at',
+    '/kindness-wall/listings/?page_size=18&ordering=-published_at',
     { revalidate: 180, tags: ['kindness'] },
   );
   const list = unwrap(data);
@@ -250,34 +261,38 @@ export async function loadKindnessListings(): Promise<KindListing[]> {
     return list.map((l) => ({
       slug: l.slug,
       title: l.title,
-      type: l.listing_type,
+      // Normalise backend's '*_help' enum into the compact UI variant
+      type: (l.listing_type === 'need_help' || l.listing_type === 'need') ? 'need' : 'offer',
       categoryTitle: l.category?.title,
+      categorySlug: l.category?.slug,
       province: l.province,
       city: l.city,
       district: l.district,
       ownerName: l.owner_full_name_snapshot,
       ownerAvatar: l.owner_avatar_snapshot,
-      coverImage: l.cover_image,
+      coverImage: l.cover_image ?? undefined,
       publishedAt: l.published_at,
-      expiresAt: l.expires_at,
+      expiresAt: l.expires_at ?? undefined,
       viewCount: l.view_count,
+      bookmarkCount: l.bookmark_count,
     }));
   }
-  // Seed (fallback) — 12 listings: 6 need + 6 offer (each filter shows 2 full rows of 3)
+  // Seed (fallback) — 12 listings: 6 need + 6 offer (each filter shows 2 rows of 3)
   const now = Date.now();
+  const days = (d: number) => new Date(now + d * 24 * 3600 * 1000).toISOString();
   return [
-    { slug: 'k-1',  title: 'نیازمند یخچال نو یا دست‌دوم سالم برای خانواده محترم پنج‌نفره',         type: 'need',  categoryTitle: 'لوازم خانگی',   city: 'تهران',   province: 'تهران',          ownerName: 'فاطمه ع.',       publishedAt: new Date(now - 1000 * 60 * 30).toISOString(),         viewCount: 248 },
-    { slug: 'k-2',  title: 'آماده اهدای کتاب‌های درسی مقاطع راهنمایی و دبیرستان',                  type: 'offer', categoryTitle: 'لوازم آموزشی', city: 'مشهد',   province: 'خراسان رضوی',    ownerName: 'حسن م.',         publishedAt: new Date(now - 1000 * 60 * 60 * 2).toISOString(),     viewCount: 184 },
-    { slug: 'k-3',  title: 'درخواست کمک هزینه درمان بیماری خاص فرزند خانواده کم‌بضاعت',           type: 'need',  categoryTitle: 'سلامت و درمان', city: 'اصفهان', province: 'اصفهان',         ownerName: 'محمد ر.',        publishedAt: new Date(now - 1000 * 60 * 60 * 6).toISOString(),     viewCount: 1245 },
-    { slug: 'k-4',  title: 'اهدای پوشاک نو زمستانی برای کودکان ۳ تا ۸ سال مناطق محروم',             type: 'offer', categoryTitle: 'پوشاک',         city: 'شیراز',  province: 'فارس',           ownerName: 'گروه خادمان',    publishedAt: new Date(now - 1000 * 60 * 60 * 12).toISOString(),    viewCount: 92 },
-    { slug: 'k-5',  title: 'استخدام کمک‌فروشنده پاره‌وقت برای مغازه لوازم خانگی',                 type: 'need',  categoryTitle: 'فرصت شغلی',     city: 'تبریز',  province: 'آذربایجان شرقی', ownerName: 'بازرگانی شهاب',  publishedAt: new Date(now - 1000 * 60 * 60 * 24).toISOString(),    viewCount: 312 },
-    { slug: 'k-6',  title: 'ارائه مشاوره حقوقی رایگان برای خانواده‌های نیازمند',                  type: 'offer', categoryTitle: 'خدمات تخصصی',  city: 'قم',     province: 'قم',             ownerName: 'وکیل سلیمی',     publishedAt: new Date(now - 1000 * 60 * 60 * 36).toISOString(),    viewCount: 567 },
-    { slug: 'k-7',  title: 'نیاز فوری به ویلچر و تجهیزات پزشکی برای جانباز عزیز',                 type: 'need',  categoryTitle: 'سلامت و درمان', city: 'کرج',    province: 'البرز',          ownerName: 'حمید س.',        publishedAt: new Date(now - 1000 * 60 * 60 * 48).toISOString(),    viewCount: 421 },
-    { slug: 'k-8',  title: 'اهدای میز و صندلی اداری نو برای دفاتر مؤسسات خیریه',                  type: 'offer', categoryTitle: 'تجهیزات اداری', city: 'تهران',  province: 'تهران',          ownerName: 'شرکت پارس‌تجهیز', publishedAt: new Date(now - 1000 * 60 * 60 * 60).toISOString(),    viewCount: 137 },
-    { slug: 'k-9',  title: 'نیازمند بسته‌های ارزاق ماه مبارک رمضان برای ۲۰ خانواده محروم',         type: 'need',  categoryTitle: 'مواد غذایی',    city: 'اهواز',  province: 'خوزستان',        ownerName: 'هیئت ابوالفضل',  publishedAt: new Date(now - 1000 * 60 * 60 * 72).toISOString(),    viewCount: 856 },
-    { slug: 'k-10', title: 'ارائه کلاس آموزش رایگان زبان انگلیسی برای دانش‌آموزان مقطع متوسطه',     type: 'offer', categoryTitle: 'آموزش',         city: 'رشت',    province: 'گیلان',          ownerName: 'استاد رحیمی',    publishedAt: new Date(now - 1000 * 60 * 60 * 84).toISOString(),    viewCount: 298 },
-    { slug: 'k-11', title: 'نیاز به کمک هزینه جهیزیه برای خانواده زوج جوان جانباز',               type: 'need',  categoryTitle: 'لوازم خانگی',   city: 'یزد',    province: 'یزد',            ownerName: 'مادر شهید رضایی', publishedAt: new Date(now - 1000 * 60 * 60 * 96).toISOString(),    viewCount: 712 },
-    { slug: 'k-12', title: 'پیشنهاد رایگان خدمات تعمیرات لوازم خانگی برای خانواده‌های کم‌بضاعت',    type: 'offer', categoryTitle: 'خدمات فنی',     city: 'کرمان',  province: 'کرمان',          ownerName: 'تعمیرگاه برادران', publishedAt: new Date(now - 1000 * 60 * 60 * 108).toISOString(),   viewCount: 184 },
+    { slug: 'k-1',  title: 'نیازمند یخچال نو یا دست‌دوم سالم برای خانواده محترم پنج‌نفره',         type: 'need',  categoryTitle: 'لوازم خانگی',   categorySlug: 'home',     city: 'تهران',   province: 'تهران',          ownerName: 'فاطمه ع.',         publishedAt: new Date(now - 1000 * 60 * 30).toISOString(),     expiresAt: days(5),  viewCount: 248,  bookmarkCount: 18, matchesCount: 3 },
+    { slug: 'k-2',  title: 'آماده اهدای کتاب‌های درسی مقاطع راهنمایی و دبیرستان',                  type: 'offer', categoryTitle: 'لوازم آموزشی', categorySlug: 'edu',      city: 'مشهد',   province: 'خراسان رضوی',    ownerName: 'حسن م.',           publishedAt: new Date(now - 1000 * 60 * 60 * 2).toISOString(),  expiresAt: days(20), viewCount: 184,  bookmarkCount: 9 },
+    { slug: 'k-3',  title: 'درخواست کمک هزینه درمان بیماری خاص فرزند خانواده کم‌بضاعت',           type: 'need',  categoryTitle: 'سلامت و درمان', categorySlug: 'health',   city: 'اصفهان', province: 'اصفهان',         ownerName: 'محمد ر.',          publishedAt: new Date(now - 1000 * 60 * 60 * 6).toISOString(),  expiresAt: days(2),  viewCount: 1245, bookmarkCount: 87, matchesCount: 5 },
+    { slug: 'k-4',  title: 'اهدای پوشاک نو زمستانی برای کودکان ۳ تا ۸ سال مناطق محروم',             type: 'offer', categoryTitle: 'پوشاک',         categorySlug: 'clothes',  city: 'شیراز',  province: 'فارس',           ownerName: 'گروه خادمان',      publishedAt: new Date(now - 1000 * 60 * 60 * 12).toISOString(), expiresAt: days(30), viewCount: 92,   bookmarkCount: 12 },
+    { slug: 'k-5',  title: 'استخدام کمک‌فروشنده پاره‌وقت برای مغازه لوازم خانگی',                 type: 'need',  categoryTitle: 'فرصت شغلی',     categorySlug: 'jobs',     city: 'تبریز',  province: 'آذربایجان شرقی', ownerName: 'بازرگانی شهاب',    publishedAt: new Date(now - 1000 * 60 * 60 * 24).toISOString(), expiresAt: days(14), viewCount: 312,  bookmarkCount: 23 },
+    { slug: 'k-6',  title: 'ارائه مشاوره حقوقی رایگان برای خانواده‌های نیازمند',                  type: 'offer', categoryTitle: 'خدمات تخصصی',  categorySlug: 'services', city: 'قم',     province: 'قم',             ownerName: 'وکیل سلیمی',       publishedAt: new Date(now - 1000 * 60 * 60 * 36).toISOString(), expiresAt: days(45), viewCount: 567,  bookmarkCount: 41, matchesCount: 2 },
+    { slug: 'k-7',  title: 'نیاز فوری به ویلچر و تجهیزات پزشکی برای جانباز عزیز',                 type: 'need',  categoryTitle: 'سلامت و درمان', categorySlug: 'health',   city: 'کرج',    province: 'البرز',          ownerName: 'حمید س.',          publishedAt: new Date(now - 1000 * 60 * 60 * 48).toISOString(), expiresAt: days(7),  viewCount: 421,  bookmarkCount: 28 },
+    { slug: 'k-8',  title: 'اهدای میز و صندلی اداری نو برای دفاتر مؤسسات خیریه',                  type: 'offer', categoryTitle: 'تجهیزات اداری', categorySlug: 'office',   city: 'تهران',  province: 'تهران',          ownerName: 'شرکت پارس‌تجهیز',   publishedAt: new Date(now - 1000 * 60 * 60 * 60).toISOString(), expiresAt: days(60), viewCount: 137,  bookmarkCount: 7 },
+    { slug: 'k-9',  title: 'نیازمند بسته‌های ارزاق ماه مبارک رمضان برای ۲۰ خانواده محروم',         type: 'need',  categoryTitle: 'مواد غذایی',    categorySlug: 'food',     city: 'اهواز',  province: 'خوزستان',        ownerName: 'هیئت ابوالفضل',    publishedAt: new Date(now - 1000 * 60 * 60 * 72).toISOString(), expiresAt: days(12), viewCount: 856,  bookmarkCount: 64, matchesCount: 8 },
+    { slug: 'k-10', title: 'ارائه کلاس آموزش رایگان زبان انگلیسی برای دانش‌آموزان مقطع متوسطه',     type: 'offer', categoryTitle: 'آموزش',         categorySlug: 'edu',      city: 'رشت',    province: 'گیلان',          ownerName: 'استاد رحیمی',      publishedAt: new Date(now - 1000 * 60 * 60 * 84).toISOString(), expiresAt: days(40), viewCount: 298,  bookmarkCount: 19 },
+    { slug: 'k-11', title: 'نیاز به کمک هزینه جهیزیه برای خانواده زوج جوان جانباز',               type: 'need',  categoryTitle: 'لوازم خانگی',   categorySlug: 'home',     city: 'یزد',    province: 'یزد',            ownerName: 'مادر شهید رضایی',  publishedAt: new Date(now - 1000 * 60 * 60 * 96).toISOString(), expiresAt: days(18), viewCount: 712,  bookmarkCount: 53, matchesCount: 1 },
+    { slug: 'k-12', title: 'پیشنهاد رایگان خدمات تعمیرات لوازم خانگی برای خانواده‌های کم‌بضاعت',    type: 'offer', categoryTitle: 'خدمات فنی',     categorySlug: 'services', city: 'کرمان',  province: 'کرمان',          ownerName: 'تعمیرگاه برادران', publishedAt: new Date(now - 1000 * 60 * 60 * 108).toISOString(), expiresAt: days(50), viewCount: 184,  bookmarkCount: 11 },
   ];
 }
 
