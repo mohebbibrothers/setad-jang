@@ -10804,6 +10804,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/SupportDepartmentListResponse'
           description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupportDeskErrorResponse'
+          description: ''
   /api/v1/support/knowledge/articles/:
     get:
       operationId: support_knowledge_articles_list

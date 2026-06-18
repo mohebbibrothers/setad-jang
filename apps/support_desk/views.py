@@ -122,7 +122,7 @@ class SupportDepartmentListView(APIView):
 
     permission_classes = [IsAuthenticated]
 
-    @extend_schema(operation_id="support_departments_list", tags=[TAG_SUPPORT_TAXONOMY], responses={200: DEPARTMENT_LIST_RESPONSE})
+    @extend_schema(operation_id="support_departments_list", tags=[TAG_SUPPORT_TAXONOMY], responses={200: DEPARTMENT_LIST_RESPONSE, 401: SUPPORT_ERROR_RESPONSE})
     def get(self, request: Request) -> SuccessResponse:
         """Return active support departments."""
         return SuccessResponse(data=SupportDepartmentSerializer(selectors.get_active_departments(), many=True).data)

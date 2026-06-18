@@ -1566,6 +1566,7 @@ DB query telemetry آماده است: X-DB-Query-Count، X-DB-Time-ms، slow DB 
 Request-scoped DB query count/time budgets آماده است
 Endpoint performance contract tests برای critical endpoints آماده است
 API envelope contract tests برای success/error/pagination آماده است
+OpenAPI contract hardening برای operationId، critical path coverage، component schemas و content-types آماده است
 N+1/query-count regression guards در CI آماده است
 Celery task metrics آماده است
 Slow query monitoring در فاز hardening بعدی قابل تکمیل است
