@@ -89,9 +89,14 @@ export function ActivitiesPanel() {
             </motion.h2>
           </div>
 
-          {/* CARDS — pulled up to overlap the panel bottom ~half. */}
+          {/* CARDS — pulled up to overlap the panel bottom ~half.
+              Switched from CSS Grid to flex+wrap+justify-center so any
+              orphan card in the last row auto-centres at narrow widths
+              (mobile 2-col: 5th card sits dead-centre; tablet 3-col:
+              4th and 5th flank the centre). Card width is computed to
+              match the parent gap so columns stay perfectly aligned.    */}
           <div
-            className="relative grid grid-cols-2 min-[480px]:grid-cols-3 min-[760px]:grid-cols-5"
+            className="relative flex flex-wrap justify-center"
             style={{
               gap: 'clamp(0.5rem, 1.4vw, 1.125rem)',
               marginTop: 'clamp(-2.5rem, -5vw, -1.75rem)',
@@ -105,7 +110,10 @@ export function ActivitiesPanel() {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ duration: 0.4, delay: i * 0.06 }}
-                className="min-w-0"
+                className="min-w-0
+                           w-[calc((100%-clamp(0.5rem,1.4vw,1.125rem))/2)]
+                           min-[480px]:w-[calc((100%-2*clamp(0.5rem,1.4vw,1.125rem))/3)]
+                           min-[760px]:w-[calc((100%-4*clamp(0.5rem,1.4vw,1.125rem))/5)]"
               >
                 <Link
                   href={a.href}

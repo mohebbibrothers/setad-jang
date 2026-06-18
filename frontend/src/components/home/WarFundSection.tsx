@@ -67,15 +67,19 @@ export type CampaignCard = {
 /*  Atoms                                                                    */
 /* ───────────────────────────────────────────────────────────────────────── */
 
-/** Meta pill — three anchored slots so the number always lands dead-centre.
+/** Meta pill — flex layout that GUARANTEES the label, value and unit
+ *  never collide at any width.
  *
- *   [ label (right) ]   [ number (centre) ]   [ unit (left) ]
+ *   ┌─────────────────────────────────────────────────────────┐
+ *   │  label   │            number (centre, truncate)         │  unit │
+ *   │ (shrink) │              flex-1 min-w-0                  │(shrink)│
+ *   └─────────────────────────────────────────────────────────┘
  *
- * Label is absolute-positioned on the RTL-start (right) edge, unit is
- * absolute-positioned on the LTR-start (left) edge, and the numeric value
- * is absolutely centred via translate(-50%, -50%). This guarantees the
- * number visually sits in the middle of the pill regardless of how short
- * or long the label/unit text is — matching the designer's mockup exactly.
+ *  Label and unit are flex-shrink:0, the number gets flex-1 + min-w-0 +
+ *  truncate so when the pill is narrow the NUMBER shortens with an
+ *  ellipsis — the label and the unit stay readable.
+ *  At idle widths the number still reads visually centred because the
+ *  label+unit have similar visual weight on each side.
  */
 function MetaPill({
   label,
@@ -90,23 +94,24 @@ function MetaPill({
 }) {
   return (
     <div
-      className="relative h-[40px] rounded-[10px] border border-ink-200 bg-white"
+      className="h-[40px] rounded-[10px] border border-ink-200 bg-white
+                 flex items-center gap-1.5 px-3"
     >
       {/* Label — RTL-start (right) */}
       <span
-        className="absolute right-3.5 top-1/2 -translate-y-1/2
-                   text-[12px] text-ink-500 font-medium leading-none z-[2]
-                   bg-white px-1"
+        className="text-[12px] text-ink-500 font-medium leading-none
+                   whitespace-nowrap shrink-0"
       >
         {label}
       </span>
 
-      {/* Value — perfectly centred inside the pill */}
+      {/* Value — fills the remaining space, truncates if too long */}
       <span
-        className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2
-                    font-extrabold text-[13.5px] text-ink-900 whitespace-nowrap
-                    max-w-[calc(100%-7rem)] overflow-hidden text-ellipsis
+        className={`flex-1 min-w-0 text-center
+                    font-extrabold text-[13.5px] text-ink-900
+                    whitespace-nowrap overflow-hidden text-ellipsis
                     ${emphasis === 'num' ? 'tabular-nums' : ''}`}
+        title={typeof value === 'string' ? value : undefined}
       >
         {typeof value === 'number' ? formatPersianNumber(value) : value}
       </span>
@@ -114,9 +119,8 @@ function MetaPill({
       {/* Unit — LTR-start (left), only when provided */}
       {unit && (
         <span
-          className="absolute left-3.5 top-1/2 -translate-y-1/2
-                     text-[11px] text-ink-400 font-medium leading-none z-[2]
-                     bg-white px-1"
+          className="text-[11px] text-ink-400 font-medium leading-none
+                     whitespace-nowrap shrink-0"
         >
           {unit}
         </span>
@@ -198,7 +202,7 @@ function Card({ c, delay = 0 }: { c: CampaignCard; delay?: number }) {
         <div className="flex items-stretch gap-4">
 
           {/* Right column: cover + percent + progress (DOM-first = RTL-right) */}
-          <div className="flex flex-col items-center shrink-0 w-[120px] md:w-[130px]">
+          <div className="flex flex-col items-center shrink-0 w-[96px] sm:w-[110px] md:w-[130px]">
             <Link
               href={`/madadkar/${c.slug}`}
               className="relative w-full aspect-square rounded-[14px] overflow-hidden
@@ -209,7 +213,7 @@ function Card({ c, delay = 0 }: { c: CampaignCard; delay?: number }) {
                   src={c.coverUrl}
                   alt={c.title}
                   fill
-                  sizes="(min-width: 768px) 130px, 120px"
+                  sizes="(min-width: 768px) 130px, (min-width: 640px) 110px, 96px"
                   className="object-cover transition-transform duration-500 group-hover:scale-105"
                 />
               ) : (
