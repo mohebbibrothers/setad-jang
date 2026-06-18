@@ -30,6 +30,20 @@ from .views import (
     R4JAdminBountyCancelRejectView,
     R4JAdminBountyDetailView,
     R4JAdminBountyListView,
+    R4JAdminCaseAssignView,
+    R4JAdminCaseCloseView,
+    R4JAdminCaseCreateFromReportView,
+    R4JAdminCaseDetailView,
+    R4JAdminCaseEscalateView,
+    R4JAdminCaseEvidenceRequestView,
+    R4JAdminCaseListView,
+    R4JAdminCaseOperationsOverviewView,
+    R4JAdminCasePriorityView,
+    R4JAdminCaseRejectView,
+    R4JAdminCaseReopenView,
+    R4JAdminCaseResolveView,
+    R4JAdminCaseTimelineView,
+    R4JAdminCaseTriageView,
     R4JAdminCriminalDetailView,
     R4JAdminCriminalListCreateView,
     R4JAdminCriminalPublishView,
@@ -126,6 +140,80 @@ urlpatterns = [
         "me/bounties/<int:bounty_id>/cancel/",
         R4JUserBountyCancelView.as_view(),
         name="user-bounty-cancel",
+    ),
+
+    # ====================================================
+    # Admin — Investigation Cases
+    # ====================================================
+    path(
+        "admin/cases/",
+        R4JAdminCaseListView.as_view(),
+        name="admin-case-list",
+    ),
+    path(
+        "admin/reports/<int:report_id>/create-case/",
+        R4JAdminCaseCreateFromReportView.as_view(),
+        name="admin-case-create-from-report",
+    ),
+    path(
+        "admin/cases/<str:case_number>/",
+        R4JAdminCaseDetailView.as_view(),
+        name="admin-case-detail",
+    ),
+    path(
+        "admin/cases/<str:case_number>/triage/",
+        R4JAdminCaseTriageView.as_view(),
+        name="admin-case-triage",
+    ),
+    path(
+        "admin/cases/<str:case_number>/assign/",
+        R4JAdminCaseAssignView.as_view(),
+        name="admin-case-assign",
+    ),
+    path(
+        "admin/cases/<str:case_number>/priority/",
+        R4JAdminCasePriorityView.as_view(),
+        name="admin-case-priority",
+    ),
+    path(
+        "admin/cases/<str:case_number>/request-evidence/",
+        R4JAdminCaseEvidenceRequestView.as_view(),
+        name="admin-case-request-evidence",
+    ),
+    path(
+        "admin/cases/<str:case_number>/escalate/",
+        R4JAdminCaseEscalateView.as_view(),
+        name="admin-case-escalate",
+    ),
+    path(
+        "admin/cases/<str:case_number>/resolve/",
+        R4JAdminCaseResolveView.as_view(),
+        name="admin-case-resolve",
+    ),
+    path(
+        "admin/cases/<str:case_number>/reject/",
+        R4JAdminCaseRejectView.as_view(),
+        name="admin-case-reject",
+    ),
+    path(
+        "admin/cases/<str:case_number>/close/",
+        R4JAdminCaseCloseView.as_view(),
+        name="admin-case-close",
+    ),
+    path(
+        "admin/cases/<str:case_number>/reopen/",
+        R4JAdminCaseReopenView.as_view(),
+        name="admin-case-reopen",
+    ),
+    path(
+        "admin/cases/<str:case_number>/timeline/",
+        R4JAdminCaseTimelineView.as_view(),
+        name="admin-case-timeline",
+    ),
+    path(
+        "admin/operations/overview/",
+        R4JAdminCaseOperationsOverviewView.as_view(),
+        name="admin-case-operations-overview",
     ),
 
     path(

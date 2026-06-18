@@ -70,6 +70,67 @@ class EvidenceCustodyEventType(models.TextChoices):
 
 
 # ============================================================
+# Investigation Case — Operational Workflow
+# ============================================================
+
+
+class InvestigationCaseStatus(models.TextChoices):
+    """Operational lifecycle for R4J investigation cases."""
+
+    NEW = "new", "جدید"
+    TRIAGED = "triaged", "تریاژ شده"
+    ASSIGNED = "assigned", "ارجاع شده"
+    INVESTIGATING = "investigating", "در حال بررسی"
+    WAITING_FOR_EVIDENCE = "waiting_for_evidence", "در انتظار مدرک"
+    ESCALATED = "escalated", "ارجاع فوری"
+    RESOLVED = "resolved", "حل شده"
+    REJECTED = "rejected", "رد شده"
+    CLOSED = "closed", "بسته شده"
+
+
+class InvestigationCasePriority(models.TextChoices):
+    """Operational priority for case queues and SLA calculations."""
+
+    LOW = "low", "کم"
+    MEDIUM = "medium", "متوسط"
+    HIGH = "high", "زیاد"
+    CRITICAL = "critical", "بحرانی"
+
+
+class InvestigationCaseSeverity(models.TextChoices):
+    """Impact severity of an R4J investigation case."""
+
+    LOW = "low", "کم"
+    MEDIUM = "medium", "متوسط"
+    HIGH = "high", "زیاد"
+    CRITICAL = "critical", "بحرانی"
+
+
+class InvestigationCaseEventType(models.TextChoices):
+    """Immutable timeline event types for R4J investigation cases."""
+
+    CREATED = "created", "ایجاد شد"
+    TRIAGED = "triaged", "تریاژ شد"
+    ASSIGNED = "assigned", "ارجاع شد"
+    PRIORITY_CHANGED = "priority_changed", "اولویت تغییر کرد"
+    EVIDENCE_REQUESTED = "evidence_requested", "مدرک بیشتر درخواست شد"
+    ESCALATED = "escalated", "ارجاع فوری شد"
+    RESOLVED = "resolved", "حل شد"
+    REJECTED = "rejected", "رد شد"
+    CLOSED = "closed", "بسته شد"
+    REOPENED = "reopened", "بازگشایی شد"
+
+
+INVESTIGATION_CASE_TERMINAL_STATUSES: frozenset[str] = frozenset(
+    [
+        InvestigationCaseStatus.RESOLVED,
+        InvestigationCaseStatus.REJECTED,
+        InvestigationCaseStatus.CLOSED,
+    ]
+)
+
+
+# ============================================================
 # Report — Status (state machine)
 # ============================================================
 

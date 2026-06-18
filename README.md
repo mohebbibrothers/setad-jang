@@ -690,6 +690,11 @@ AUDIT_LOG_EXPORT_MAX_RECORDS=100000
 - evidence SHA-256 hashing برای ضمیمه‌های criminal/report
 - chain-of-custody events برای uploaded/hashed/reviewed/transferred/rejected/deleted
 - admin evidence custody review endpoint
+- Investigation Case Management برای تبدیل گزارش‌ها به پرونده عملیاتی
+- case_number انسانی، status/priority/severity، SLA due dates و evidence completeness score
+- timeline immutable برای create/triage/assign/priority/evidence/escalate/resolve/reject/close/reopen
+- operations overview برای صف‌های unassigned/overdue و توزیع وضعیت/اولویت
+- audit کامل برای تمام mutationهای حساس پرونده
 - admin review گزارش
 - field-change workflow
 - bounty management
@@ -713,6 +718,20 @@ GET /api/v1/r4j/admin/reports/
 POST /api/v1/r4j/admin/reports/{id}/review/
 GET /api/v1/r4j/admin/evidence-custody/
 POST /api/v1/r4j/admin/evidence-custody/{id}/review/
+GET /api/v1/r4j/admin/cases/
+POST /api/v1/r4j/admin/reports/{id}/create-case/
+GET /api/v1/r4j/admin/cases/{case_number}/
+POST /api/v1/r4j/admin/cases/{case_number}/triage/
+POST /api/v1/r4j/admin/cases/{case_number}/assign/
+POST /api/v1/r4j/admin/cases/{case_number}/priority/
+POST /api/v1/r4j/admin/cases/{case_number}/request-evidence/
+POST /api/v1/r4j/admin/cases/{case_number}/escalate/
+POST /api/v1/r4j/admin/cases/{case_number}/resolve/
+POST /api/v1/r4j/admin/cases/{case_number}/reject/
+POST /api/v1/r4j/admin/cases/{case_number}/close/
+POST /api/v1/r4j/admin/cases/{case_number}/reopen/
+GET /api/v1/r4j/admin/cases/{case_number}/timeline/
+GET /api/v1/r4j/admin/operations/overview/
 GET/POST /api/v1/r4j/admin/bounties/
 PATCH/DELETE /api/v1/r4j/admin/bounties/{id}/
 ```

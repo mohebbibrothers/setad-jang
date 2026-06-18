@@ -21,6 +21,7 @@ Views اپ R4J — Reward for Justice.
 
 from __future__ import annotations
 
+from django.contrib.auth import get_user_model
 from drf_spectacular.utils import (
     OpenApiParameter,
     OpenApiTypes,
@@ -77,11 +78,21 @@ from .serializers import (
     R4JAttachmentCreateSerializer,
     R4JBountyCancelActionSerializer,
     R4JBountySetSerializer,
+    R4JCaseAssignSerializer,
+    R4JCaseCreateFromReportSerializer,
+    R4JCaseEventSerializer,
+    R4JCaseEvidenceRequestSerializer,
+    R4JCaseNoteRequiredSerializer,
+    R4JCaseOperationsOverviewSerializer,
+    R4JCasePrioritySerializer,
+    R4JCaseTriageSerializer,
     R4JCriminalCreateSerializer,
     R4JCriminalUpdateSerializer,
     R4JEvidenceCustodyEventSerializer,
     R4JEvidenceCustodyReviewSerializer,
     R4JFieldVisibilityUpsertSerializer,
+    R4JInvestigationCaseDetailSerializer,
+    R4JInvestigationCaseListSerializer,
     R4JPhoneCreateSerializer,
     R4JPhoneUpdateSerializer,
     R4JPhotoCreateSerializer,
@@ -104,6 +115,7 @@ from .services import (
     CriminalAlreadyUnpublished,
     InvalidBountyAmount,
     InvalidReportableField,
+    InvestigationCaseAlreadyExists,
     R4JServiceError,
     ReportNotCancelable,
     ReportNotInCancelRequested,
@@ -2405,3 +2417,288 @@ class R4JAdminEvidenceCustodyReviewView(APIView):
             **extract_audit_metadata(request),
         )
         return CreatedResponse(data=R4JEvidenceCustodyEventSerializer(new_event).data, message="رویداد custody ثبت شد.")
+
+# ============================================================
+# Admin — Investigation Case Management & Operational Workflow
+# ============================================================
+
+
+CASE_LIST_RESPONSE = build_paginated_success_response_serializer(
+    name="R4JCaseListResponse",
+    item_serializer=R4JInvestigationCaseListSerializer,
+)
+CASE_DETAIL_RESPONSE = build_success_response_serializer(
+    name="R4JCaseDetailResponse",
+    data_serializer=R4JInvestigationCaseDetailSerializer,
+)
+CASE_EVENT_LIST_RESPONSE = build_success_response_serializer(
+    name="R4JCaseEventListResponse",
+    data_serializer=R4JCaseEventSerializer,
+    many=True,
+)
+CASE_OVERVIEW_RESPONSE = build_success_response_serializer(
+    name="R4JCaseOperationsOverviewResponse",
+    data_serializer=R4JCaseOperationsOverviewSerializer,
+)
+
+
+def _audit_case_action(request: Request, *, action: str, case, extra_data: dict | None = None) -> None:
+    """Centralized async audit logging for R4J case admin actions."""
+    log_action_async(
+        user_id=request.user.pk,
+        action=action,
+        resource_type="r4j_investigation_case",
+        resource_id=str(case.pk),
+        extra_data={"case_number": case.case_number, **(extra_data or {})},
+        **extract_audit_metadata(request),
+    )
+
+
+def _case_or_404(*, case_number: str):
+    """Resolve case by number for admin endpoints."""
+    return selectors.get_admin_investigation_case_by_number(case_number=case_number)
+
+
+class R4JAdminCaseListView(APIView):
+    """Admin endpoint for listing operational investigation cases."""
+
+    permission_classes = [IsR4JAdminUser]
+
+    @extend_schema(
+        operation_id="r4j_admin_case_list",
+        tags=[TAG_R4J_ADMIN],
+        summary="لیست پرونده‌های عملیاتی R4J",
+        parameters=[*LIST_PAGINATION_PARAMS],
+        responses={200: CASE_LIST_RESPONSE},
+    )
+    def get(self, request: Request) -> Response:
+        queryset = selectors.get_admin_investigation_cases_queryset()
+        status_filter = request.query_params.get("status")
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+        priority = request.query_params.get("priority")
+        if priority:
+            queryset = queryset.filter(priority=priority)
+        assigned_to = request.query_params.get("assigned_to")
+        if assigned_to:
+            queryset = queryset.filter(assigned_to_id=assigned_to)
+        paginator = StandardPagination()
+        page = paginator.paginate_queryset(queryset, request, view=self)
+        serializer = R4JInvestigationCaseListSerializer(page, many=True)
+        return paginator.get_paginated_response(serializer.data, message="پرونده‌های عملیاتی دریافت شد.")
+
+
+class R4JAdminCaseCreateFromReportView(APIView):
+    """Admin endpoint to create an operational case from a report."""
+
+    permission_classes = [IsR4JAdminUser]
+
+    @extend_schema(
+        operation_id="r4j_admin_case_create_from_report",
+        tags=[TAG_R4J_ADMIN],
+        request=R4JCaseCreateFromReportSerializer,
+        responses={201: CASE_DETAIL_RESPONSE, 404: GENERIC_ERROR_RESPONSE},
+    )
+    def post(self, request: Request, report_id: int) -> Response:
+        report = selectors.get_admin_report_by_id(report_id=report_id)
+        if report is None:
+            return ErrorResponse(message="گزارش یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+        serializer = R4JCaseCreateFromReportSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            case = services.create_investigation_case_from_report(report=report, actor=request.user)
+        except InvestigationCaseAlreadyExists as exc:
+            return ErrorResponse(message=str(exc), status_code=status.HTTP_409_CONFLICT)
+        _audit_case_action(request, action=audit_actions.R4J_CASE_CREATED, case=case, extra_data={"report_id": report.pk})
+        return CreatedResponse(data=R4JInvestigationCaseDetailSerializer(case).data, message="پرونده عملیاتی ایجاد شد.")
+
+
+class R4JAdminCaseDetailView(APIView):
+    """Admin endpoint for case detail."""
+
+    permission_classes = [IsR4JAdminUser]
+
+    @extend_schema(
+        operation_id="r4j_admin_case_detail",
+        tags=[TAG_R4J_ADMIN],
+        responses={200: CASE_DETAIL_RESPONSE, 404: GENERIC_ERROR_RESPONSE},
+    )
+    def get(self, request: Request, case_number: str) -> Response:
+        case = _case_or_404(case_number=case_number)
+        if case is None:
+            return ErrorResponse(message="پرونده یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+        return SuccessResponse(data=R4JInvestigationCaseDetailSerializer(case).data, message="جزئیات پرونده دریافت شد.")
+
+
+class R4JAdminCaseTriageView(APIView):
+    """Admin endpoint for case triage."""
+
+    permission_classes = [IsR4JAdminUser]
+
+    @extend_schema(operation_id="r4j_admin_case_triage", tags=[TAG_R4J_ADMIN], request=R4JCaseTriageSerializer, responses={200: CASE_DETAIL_RESPONSE})
+    def post(self, request: Request, case_number: str) -> Response:
+        case = _case_or_404(case_number=case_number)
+        if case is None:
+            return ErrorResponse(message="پرونده یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+        serializer = R4JCaseTriageSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            case = services.triage_investigation_case(case=case, actor=request.user, **serializer.validated_data)
+        except R4JServiceError as exc:
+            return ErrorResponse(message=str(exc))
+        _audit_case_action(request, action=audit_actions.R4J_CASE_TRIAGED, case=case)
+        return SuccessResponse(data=R4JInvestigationCaseDetailSerializer(case).data, message="پرونده تریاژ شد.")
+
+
+class R4JAdminCaseAssignView(APIView):
+    """Admin endpoint for assigning a case."""
+
+    permission_classes = [IsR4JAdminUser]
+
+    @extend_schema(operation_id="r4j_admin_case_assign", tags=[TAG_R4J_ADMIN], request=R4JCaseAssignSerializer, responses={200: CASE_DETAIL_RESPONSE})
+    def post(self, request: Request, case_number: str) -> Response:
+        case = _case_or_404(case_number=case_number)
+        if case is None:
+            return ErrorResponse(message="پرونده یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+        serializer = R4JCaseAssignSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user_model = get_user_model()
+        assignee = user_model.objects.filter(pk=serializer.validated_data["assignee_id"], is_active=True).first()
+        if assignee is None:
+            return ErrorResponse(message="کاربر مسئول یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+        try:
+            case = services.assign_investigation_case(case=case, actor=request.user, assignee=assignee, note=serializer.validated_data.get("note", ""))
+        except R4JServiceError as exc:
+            return ErrorResponse(message=str(exc))
+        _audit_case_action(request, action=audit_actions.R4J_CASE_ASSIGNED, case=case, extra_data={"assignee_id": assignee.pk})
+        return SuccessResponse(data=R4JInvestigationCaseDetailSerializer(case).data, message="پرونده ارجاع شد.")
+
+
+class R4JAdminCasePriorityView(APIView):
+    """Admin endpoint for changing case priority."""
+
+    permission_classes = [IsR4JAdminUser]
+
+    @extend_schema(operation_id="r4j_admin_case_priority", tags=[TAG_R4J_ADMIN], request=R4JCasePrioritySerializer, responses={200: CASE_DETAIL_RESPONSE})
+    def post(self, request: Request, case_number: str) -> Response:
+        case = _case_or_404(case_number=case_number)
+        if case is None:
+            return ErrorResponse(message="پرونده یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+        serializer = R4JCasePrioritySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            case = services.change_investigation_case_priority(case=case, actor=request.user, **serializer.validated_data)
+        except R4JServiceError as exc:
+            return ErrorResponse(message=str(exc))
+        _audit_case_action(request, action=audit_actions.R4J_CASE_PRIORITY_CHANGED, case=case, extra_data={"priority": case.priority})
+        return SuccessResponse(data=R4JInvestigationCaseDetailSerializer(case).data, message="اولویت پرونده تغییر کرد.")
+
+
+class R4JAdminCaseEvidenceRequestView(APIView):
+    """Admin endpoint for requesting more evidence."""
+
+    permission_classes = [IsR4JAdminUser]
+
+    @extend_schema(operation_id="r4j_admin_case_evidence_request", tags=[TAG_R4J_ADMIN], request=R4JCaseEvidenceRequestSerializer, responses={200: CASE_DETAIL_RESPONSE})
+    def post(self, request: Request, case_number: str) -> Response:
+        case = _case_or_404(case_number=case_number)
+        if case is None:
+            return ErrorResponse(message="پرونده یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+        serializer = R4JCaseEvidenceRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            case = services.request_more_evidence(case=case, actor=request.user, note=serializer.validated_data["note"])
+        except R4JServiceError as exc:
+            return ErrorResponse(message=str(exc))
+        _audit_case_action(request, action=audit_actions.R4J_CASE_EVIDENCE_REQUESTED, case=case)
+        return SuccessResponse(data=R4JInvestigationCaseDetailSerializer(case).data, message="درخواست مدرک بیشتر ثبت شد.")
+
+
+class R4JAdminCaseEscalateView(APIView):
+    """Admin endpoint for escalating a case."""
+
+    permission_classes = [IsR4JAdminUser]
+
+    @extend_schema(operation_id="r4j_admin_case_escalate", tags=[TAG_R4J_ADMIN], request=R4JCaseNoteRequiredSerializer, responses={200: CASE_DETAIL_RESPONSE})
+    def post(self, request: Request, case_number: str) -> Response:
+        return _case_reason_transition(request, case_number, services.escalate_investigation_case, audit_actions.R4J_CASE_ESCALATED, "پرونده فوری شد.")
+
+
+class R4JAdminCaseResolveView(APIView):
+    """Admin endpoint for resolving a case."""
+
+    permission_classes = [IsR4JAdminUser]
+
+    @extend_schema(operation_id="r4j_admin_case_resolve", tags=[TAG_R4J_ADMIN], request=R4JCaseNoteRequiredSerializer, responses={200: CASE_DETAIL_RESPONSE})
+    def post(self, request: Request, case_number: str) -> Response:
+        return _case_reason_transition(request, case_number, services.resolve_investigation_case, audit_actions.R4J_CASE_RESOLVED, "پرونده حل شد.")
+
+
+class R4JAdminCaseRejectView(APIView):
+    """Admin endpoint for rejecting a case."""
+
+    permission_classes = [IsR4JAdminUser]
+
+    @extend_schema(operation_id="r4j_admin_case_reject", tags=[TAG_R4J_ADMIN], request=R4JCaseNoteRequiredSerializer, responses={200: CASE_DETAIL_RESPONSE})
+    def post(self, request: Request, case_number: str) -> Response:
+        return _case_reason_transition(request, case_number, services.reject_investigation_case, audit_actions.R4J_CASE_REJECTED, "پرونده رد شد.")
+
+
+class R4JAdminCaseCloseView(APIView):
+    """Admin endpoint for closing a case."""
+
+    permission_classes = [IsR4JAdminUser]
+
+    @extend_schema(operation_id="r4j_admin_case_close", tags=[TAG_R4J_ADMIN], request=R4JCaseNoteRequiredSerializer, responses={200: CASE_DETAIL_RESPONSE})
+    def post(self, request: Request, case_number: str) -> Response:
+        return _case_reason_transition(request, case_number, services.close_investigation_case, audit_actions.R4J_CASE_CLOSED, "پرونده بسته شد.")
+
+
+class R4JAdminCaseReopenView(APIView):
+    """Admin endpoint for reopening a terminal case."""
+
+    permission_classes = [IsR4JAdminUser]
+
+    @extend_schema(operation_id="r4j_admin_case_reopen", tags=[TAG_R4J_ADMIN], request=R4JCaseNoteRequiredSerializer, responses={200: CASE_DETAIL_RESPONSE})
+    def post(self, request: Request, case_number: str) -> Response:
+        return _case_reason_transition(request, case_number, services.reopen_investigation_case, audit_actions.R4J_CASE_REOPENED, "پرونده بازگشایی شد.")
+
+
+def _case_reason_transition(request: Request, case_number: str, service_func, audit_action: str, message: str) -> Response:
+    """Shared orchestration for reason-required case transitions."""
+    case = _case_or_404(case_number=case_number)
+    if case is None:
+        return ErrorResponse(message="پرونده یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+    serializer = R4JCaseNoteRequiredSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    try:
+        case = service_func(case=case, actor=request.user, reason=serializer.validated_data["reason"])
+    except R4JServiceError as exc:
+        return ErrorResponse(message=str(exc))
+    _audit_case_action(request, action=audit_action, case=case)
+    return SuccessResponse(data=R4JInvestigationCaseDetailSerializer(case).data, message=message)
+
+
+class R4JAdminCaseTimelineView(APIView):
+    """Admin endpoint for immutable case timeline."""
+
+    permission_classes = [IsR4JAdminUser]
+
+    @extend_schema(operation_id="r4j_admin_case_timeline", tags=[TAG_R4J_ADMIN], responses={200: CASE_EVENT_LIST_RESPONSE})
+    def get(self, request: Request, case_number: str) -> Response:
+        case = _case_or_404(case_number=case_number)
+        if case is None:
+            return ErrorResponse(message="پرونده یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+        events = selectors.get_admin_investigation_case_timeline(case=case)
+        return SuccessResponse(data=R4JCaseEventSerializer(events, many=True).data, message="خط زمانی پرونده دریافت شد.")
+
+
+class R4JAdminCaseOperationsOverviewView(APIView):
+    """Admin operational overview for R4J cases."""
+
+    permission_classes = [IsR4JAdminUser]
+
+    @extend_schema(operation_id="r4j_admin_case_operations_overview", tags=[TAG_R4J_ADMIN], responses={200: CASE_OVERVIEW_RESPONSE})
+    def get(self, request: Request) -> Response:
+        overview = selectors.get_r4j_case_operations_overview()
+        return SuccessResponse(data=overview, message="نمای کلی عملیات R4J دریافت شد.")

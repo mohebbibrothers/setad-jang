@@ -38,6 +38,10 @@ from .choices import (
     CriminalAttachmentKind,
     EvidenceCustodyEventType,
     Gender,
+    InvestigationCaseEventType,
+    InvestigationCasePriority,
+    InvestigationCaseSeverity,
+    InvestigationCaseStatus,
     ReportFieldChangeStatus,
     ReportStatus,
     SocialPlatform,
@@ -708,6 +712,138 @@ class R4JEvidenceCustodyEvent(BaseModel):
     def delete(self, *args: object, **kwargs: object):
         """Prevent deletion of custody events."""
         raise PermissionError("حذف رویدادهای custody مجاز نیست.")
+
+
+# ============================================================
+# R4JInvestigationCase
+# ============================================================
+
+
+class R4JInvestigationCase(BaseModel):
+    """Operational investigation case created from a community R4J report."""
+
+    case_number = models.CharField(max_length=32, unique=True, db_index=True, verbose_name="شماره پرونده")
+    report = models.OneToOneField(
+        R4JReport,
+        on_delete=models.PROTECT,
+        related_name="investigation_case",
+        verbose_name="گزارش",
+    )
+    criminal = models.ForeignKey(
+        R4JCriminal,
+        on_delete=models.PROTECT,
+        related_name="investigation_cases",
+        verbose_name="مجرم",
+    )
+    status = models.CharField(
+        max_length=40,
+        choices=InvestigationCaseStatus.choices,
+        default=InvestigationCaseStatus.NEW,
+        db_index=True,
+        verbose_name="وضعیت",
+    )
+    priority = models.CharField(
+        max_length=20,
+        choices=InvestigationCasePriority.choices,
+        default=InvestigationCasePriority.MEDIUM,
+        db_index=True,
+        verbose_name="اولویت",
+    )
+    severity = models.CharField(
+        max_length=20,
+        choices=InvestigationCaseSeverity.choices,
+        default=InvestigationCaseSeverity.MEDIUM,
+        db_index=True,
+        verbose_name="شدت",
+    )
+    evidence_completeness_score = models.PositiveSmallIntegerField(default=0, verbose_name="امتیاز تکمیل مدارک")
+    assigned_to = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="assigned_r4j_investigation_cases",
+        verbose_name="مسئول پرونده",
+    )
+    triaged_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="triaged_r4j_investigation_cases",
+        verbose_name="تریاژکننده",
+    )
+    closed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="closed_r4j_investigation_cases",
+        verbose_name="بسته‌کننده",
+    )
+    triaged_at = models.DateTimeField(null=True, blank=True, verbose_name="زمان تریاژ")
+    first_response_due_at = models.DateTimeField(null=True, blank=True, db_index=True, verbose_name="مهلت پاسخ اولیه")
+    resolution_due_at = models.DateTimeField(null=True, blank=True, db_index=True, verbose_name="مهلت حل پرونده")
+    closed_at = models.DateTimeField(null=True, blank=True, verbose_name="زمان بستن")
+    closure_reason = models.TextField(blank=True, verbose_name="دلیل بستن / رد / حل")
+    metadata = models.JSONField(default=dict, blank=True, verbose_name="متادیتا")
+
+    class Meta:
+        verbose_name = "پرونده عملیاتی R4J"
+        verbose_name_plural = "پرونده‌های عملیاتی R4J"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["status", "priority", "-created_at"]),
+            models.Index(fields=["criminal", "status", "-created_at"]),
+            models.Index(fields=["assigned_to", "status", "-created_at"]),
+            models.Index(fields=["priority", "severity", "-created_at"]),
+        ]
+
+    def __str__(self) -> str:
+        return self.case_number
+
+
+class R4JCaseEvent(BaseModel):
+    """Append-only operational timeline event for an R4J investigation case."""
+
+    case = models.ForeignKey(
+        R4JInvestigationCase,
+        on_delete=models.CASCADE,
+        related_name="events",
+        verbose_name="پرونده",
+    )
+    event_type = models.CharField(max_length=40, choices=InvestigationCaseEventType.choices, db_index=True)
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="r4j_case_events",
+        verbose_name="عامل",
+    )
+    from_status = models.CharField(max_length=40, blank=True)
+    to_status = models.CharField(max_length=40, blank=True)
+    note = models.TextField(blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        verbose_name = "رویداد پرونده R4J"
+        verbose_name_plural = "رویدادهای پرونده R4J"
+        ordering = ["created_at", "id"]
+        indexes = [models.Index(fields=["case", "created_at"]), models.Index(fields=["event_type", "-created_at"])]
+
+    def __str__(self) -> str:
+        return f"{self.case.case_number}:{self.event_type}"
+
+    def save(self, *args: object, **kwargs: object) -> None:
+        """Keep the case timeline append-only."""
+        if self.pk and not self._state.adding:
+            raise PermissionError("ویرایش رویدادهای پرونده مجاز نیست.")
+        super().save(*args, **kwargs)
+
+    def delete(self, *args: object, **kwargs: object):
+        """Prevent deletion of case timeline events."""
+        raise PermissionError("حذف رویدادهای پرونده مجاز نیست.")
 
 
 # ============================================================
