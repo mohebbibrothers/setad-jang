@@ -185,13 +185,17 @@ export function TabyinSection({ items }: { items: TabyinItem[] }) {
     [items, filter],
   );
 
-  // Fixed page geometry — 12 tiles fit a deterministic 4×4 row grid:
-  //   4 tall tiles (row-span 2) + 8 short tiles = 4·2 + 8·1 = 16 row slots
-  //   Tall positions within each page: 0, 5, 8 (1-based: 1st, 6th, 9th)
-  //   ↑ this rhythm matches the designer screenshot's variable-height wall
-  //   and stays stable across pages so the eye is never surprised on flip.
-  const PAGE_SIZE = 12;
-  const TALL_INDEXES_IN_PAGE = new Set([0, 5, 8]);
+  // Fixed page geometry — 10 tiles tile a perfect grid at EVERY breakpoint:
+  //   tall × 2 (row-span 2) + short × 8 (row-span 1) = 4 + 8 = 12 row slots
+  //   - Desktop (4 cols): 4 × 3 rows = 12 ✓
+  //   - Tablet  (3 cols): 3 × 4 rows = 12 ✓
+  //   - Mobile  (2 cols): 2 × 6 rows = 12 ✓
+  //   `grid-auto-flow: dense` packs the cells so there are NO empty slots
+  //   at any viewport — the wall is always rectangle-perfect.
+  //   Reducing from 12 → 10 also makes the mobile fold much shorter and
+  //   easier to digest at narrow widths.
+  const PAGE_SIZE = 10;
+  const TALL_INDEXES_IN_PAGE = new Set([0, 5]);
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
 
   const visible = useMemo(
@@ -301,17 +305,30 @@ export function TabyinSection({ items }: { items: TabyinItem[] }) {
           </button>
         </div>
 
-        {/* 'مشاهده همه محتوا' CTA — sits BELOW the pager, mint primary */}
-        <div className="flex justify-center mt-6">
+        {/* CTAs below the pager:
+            - 'مشاهده همه محتوا'  → secondary, brand-ghost (browsing intent)
+            - 'افزودن محتوا'      → primary, mint pill (action intent,
+              routes through the auth-required user-submission flow that
+              maps to POST /api/v1/tabyin/me/submissions/)                */}
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mt-6">
           <Link
             href="/tabyin"
-            className="inline-flex items-center gap-2 h-12 px-8 rounded-full
+            className="inline-flex items-center gap-2 h-12 px-7 rounded-full
+                       bg-white border-2 border-brand-500 text-brand-700 font-extrabold text-[14px]
+                       hover:bg-brand-50 transition-colors"
+          >
+            <span>مشاهده همه محتوا</span>
+            <Icon name="arrow-left" className="w-4 h-4" />
+          </Link>
+          <Link
+            href="/tabyin/new"
+            className="inline-flex items-center gap-2 h-12 px-7 rounded-full
                        bg-mint-500 hover:bg-mint-600 text-white font-extrabold text-[14px]
                        shadow-[0_8px_24px_-8px_rgba(37,197,186,.5)] transition-all
                        hover:scale-[1.02] active:scale-[.98]"
           >
-            <span>مشاهده همه محتوا</span>
-            <Icon name="arrow-left" className="w-4 h-4" />
+            <Icon name="plus" className="w-4 h-4" strokeWidth={2.5} />
+            <span>افزودن محتوا</span>
           </Link>
         </div>
       </div>

@@ -354,24 +354,23 @@ export async function loadTabyinItems(): Promise<TabyinItem[]> {
       };
     });
   }
-  // ── Seed: 24 tiles → exactly 2 pager pages of 12, each laid out on
-  //   the fixed 4×4 row grid (4 tall + 8 short) the section enforces.
-  //   - quote variant is dropped into one slot per page so every page
-  //     has a text card to break the visual rhythm.
-  //   - video tiles get a duration so the play affordance + media badge
-  //     light up; audio tiles get a duration too.
-  //   - 2 user-submitted tiles per page so the 'مردمی' chip is visible.
+  // ── Seed: 20 tiles → exactly 2 pager pages of 10, each laid out on
+  //   the perfect 4×3 / 3×4 / 2×6 row grid (2 tall + 8 short = 12 slots).
+  //   - quote variant: one per page (positions 4, 14)
+  //   - video tiles: one per page so the play affordance lights up
+  //   - audio: one per page
+  //   - user-submitted: one per page so the 'مردمی' chip is visible
   const tones: Array<[string, string]> = [
-    // page 1
+    // page 1 (indexes 0..9)
     ['#3FA797', '#0A6E64'], ['#0D8074', '#053832'], ['#3FA797', '#155F55'],
     ['#5DB3A4', '#0A6E64'], ['#0D8074', '#0A6E64'], ['#3FA797', '#053832'],
     ['#5DB3A4', '#0D8074'], ['#0A6E64', '#053832'], ['#3FA797', '#085C54'],
-    ['#5DB3A4', '#085C54'], ['#0D8074', '#085C54'], ['#3FA797', '#0A6E64'],
-    // page 2
+    ['#5DB3A4', '#085C54'],
+    // page 2 (indexes 10..19)
     ['#2FA08D', '#053832'], ['#155F55', '#0A6E64'], ['#5DB3A4', '#053832'],
     ['#3FA797', '#0A6E64'], ['#0A6E64', '#085C54'], ['#0D8074', '#155F55'],
     ['#5DB3A4', '#155F55'], ['#3FA797', '#0D8074'], ['#0D8074', '#053832'],
-    ['#5DB3A4', '#0A6E64'], ['#3FA797', '#053832'], ['#0A6E64', '#0D8074'],
+    ['#0A6E64', '#0D8074'],
   ];
   const titles = [
     // page 1
@@ -384,32 +383,28 @@ export async function loadTabyinItems(): Promise<TabyinItem[]> {
     'کبوتر صلح',
     'دفاع از وطن',
     'ریشه در تاریخ',
-    'نسل سوم انقلاب',
     'به یاد شهدا',
-    'لاإله إلا الله',
     // page 2
     'راه ادامه دارد',
     'پای سفره‌ی شهدا',
     'پرچم همیشه برافراشته',
-    '',                       // quote tile #2
     'صدای مقاومت',
+    '',                       // quote tile #2
     'تصویر آرامش',
     'مادران چشم‌انتظار',
     'گلستان عاشقان',
     'یاران ناشناخته',
-    'تا فردای پیروزی',
-    'پاسبانان غیرت',
     'روایت یک قهرمان',
   ];
   const quotes = [
     'او به خاطر نقاشی‌های واقع‌گرایانه‌اش از رویدادهای مذهبی شهرت دارد. خالق آثاری چون «عرش بر زمین افتاد»، «شیرین‌تر از عسل» و «آخرین سرباز لشکر» است.',
     'هنرِ مقاومت، روایتِ صادقِ مردمی است که در سکوتِ تاریخ، صدای حقیقت را با قلم و قلم‌مو نگه داشتند تا نسل‌های آینده بدانند که اینجا چه گذشت.',
   ];
-  // index → quote payload mapping
-  const quoteAt: Record<number, string> = { 4: quotes[0], 15: quotes[1] };
-  const videoAt = new Set([1, 9, 13, 22]);
-  const audioAt = new Set([11, 19]);
-  const userAt  = new Set([7, 10, 18, 23]);
+  // index → quote payload mapping (page 1: idx 4 · page 2: idx 14)
+  const quoteAt: Record<number, string> = { 4: quotes[0], 14: quotes[1] };
+  const videoAt = new Set([1, 11]);
+  const audioAt = new Set([9, 19]);
+  const userAt  = new Set([7, 16]);
 
   return tones.map((t, i) => {
     const isQuote = i in quoteAt;
