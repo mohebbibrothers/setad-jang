@@ -85,24 +85,27 @@ function AllIcon({ className = 'w-4 h-4' }: { className?: string }) {
   );
 }
 
-/** Offer help — a CUPPED HAND (U-bowl) holding a SOLID filled heart above it.
- *  This is the canonical 'hand-holding-heart' silhouette used by FontAwesome,
- *  Phosphor, Heroicons and most charity products — instantly readable as
- *  'I'm giving something with my hands' even at 16×16.                       */
+/** Offer help — a GIFT BOX with a SOLID heart sitting on top, in place of a bow.
+ *  Classic 'gift of love' metaphor; instantly readable at every scale. The
+ *  heart is filled solid so it carries the silhouette even in the tightest
+ *  in-pill size, and the box's vertical+horizontal ribbon makes the box
+ *  literacy unmistakable.                                                    */
 function GiveIcon({ className = 'w-4 h-4' }: { className?: string }) {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.9}
          strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
-      {/* Solid filled heart, centred above the cup */}
+      {/* Solid filled heart sitting on top of the lid */}
       <path
-        d="M12 11.7 7 6.7a2.5 2.5 0 1 1 3.5-3.5L12 4.7l1.5-1.5A2.5 2.5 0 1 1 17 6.7L12 11.7Z"
+        d="M12 7c-.7-.9-2-1.4-3-.5-.95.85-.95 2.25 0 3.1L12 12.4l3-2.8c.95-.85.95-2.25 0-3.1-1-.9-2.3-.4-3 .5Z"
         fill="currentColor"
         stroke="none"
       />
-      {/* U-shaped cupped hand below the heart */}
-      <path d="M4 14v1.5C4 18.5 6.5 21 9.5 21h5c3 0 5.5-2.5 5.5-5.5V14" />
-      {/* Small thumb hint on the right edge — adds 'hand' literacy */}
-      <path d="M20 14.5l1-.5a1 1 0 0 0 0-1.8l-1-.5" />
+      {/* Gift box lid */}
+      <rect x="3" y="12" width="18" height="3.5" rx="1" />
+      {/* Gift box body */}
+      <path d="M5 15.5v5.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-5.5" />
+      {/* Vertical ribbon down the centre */}
+      <line x1="12" y1="12" x2="12" y2="22" />
     </svg>
   );
 }
