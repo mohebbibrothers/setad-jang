@@ -297,9 +297,35 @@ export async function loadKindnessListings(): Promise<KindListing[]> {
 }
 
 /* ─── Tabyin ─────────────────────────────────────────────────────────── */
+/**
+ * Mirrors apps.tabyin.serializers.PublicTabyinContentListSerializer
+ * + apps.tabyin.serializers.TabyinAttachmentSerializer (nested).
+ *
+ * Public list fields:
+ *   external_id, title, description, author_username, origin,
+ *   source_created_at, source_url, primary_media_type,
+ *   attachments[]: { id, url, media_type, size, duration, file_size, title, order }
+ */
+type ApiTabyinAttachment = {
+  id?: number;
+  url: string;
+  media_type?: 'image' | 'video' | 'audio' | 'other';
+  size?: string;
+  duration?: number;
+  file_size?: number;
+  title?: string;
+  order?: number;
+};
 type ApiTabyin = {
-  id: string; slug: string; title?: string; summary?: string;
-  cover_image_url?: string;
+  external_id: string;
+  title?: string;
+  description?: string;
+  author_username?: string;
+  origin?: 'external' | 'user_submitted';
+  source_created_at?: string;
+  source_url?: string;
+  primary_media_type?: 'image' | 'video' | 'audio' | 'other';
+  attachments?: ApiTabyinAttachment[];
 };
 
 export async function loadTabyinItems(): Promise<TabyinItem[]> {
@@ -308,30 +334,69 @@ export async function loadTabyinItems(): Promise<TabyinItem[]> {
   );
   const list = unwrap(data);
   if (list.length) {
-    return list.slice(0, 12).map((t) => ({
-      id: t.id, slug: t.slug, title: t.title, summary: t.summary,
-      coverUrl: t.cover_image_url, variant: t.cover_image_url ? 'cover' : 'quote',
-    }));
+    return list.slice(0, 12).map((t, i) => {
+      // The first non-other attachment is the canonical cover
+      const cover = (t.attachments ?? []).find((a) => a.url) ?? null;
+      const dur   = (t.attachments ?? []).find((a) => a.duration)?.duration;
+      return {
+        id: t.external_id,
+        slug: t.external_id,
+        title: t.title,
+        summary: t.description,
+        coverUrl: cover?.url,
+        variant: cover ? 'cover' : 'quote',
+        mediaType: t.primary_media_type ?? 'image',
+        durationSeconds: dur,
+        origin: t.origin,
+        authorName: t.author_username,
+        // Variable height for editorial masonry rhythm — every 3rd & 7th tile tall
+        tall: i % 4 === 0 || i % 7 === 0,
+      };
+    });
   }
-  // Exactly 8 tiles → 2 rows of 4 on desktop, perfect designer rhythm
+  // ── Seed: 12 tiles with the asymmetric masonry rhythm from the mockup
+  //   tall positions   : 0, 6        (designer wall pattern)
+  //   quote variant    : 4           (one full-quote card in fold 1)
+  //   video tiles      : 1, 9        (with duration → renders play affordance)
+  //   user-submitted   : 7, 10       (gets the 'مردمی' chip)
   const tones: Array<[string, string]> = [
     ['#3FA797', '#0A6E64'], ['#0D8074', '#053832'], ['#3FA797', '#155F55'],
     ['#5DB3A4', '#0A6E64'], ['#0D8074', '#0A6E64'], ['#3FA797', '#053832'],
-    ['#5DB3A4', '#0D8074'], ['#0A6E64', '#053832'],
+    ['#5DB3A4', '#0D8074'], ['#0A6E64', '#053832'], ['#3FA797', '#085C54'],
+    ['#5DB3A4', '#085C54'], ['#0D8074', '#085C54'], ['#3FA797', '#0A6E64'],
   ];
   const titles = [
-    'دهه‌ی فجر انقلاب اسلامی', 'منبر انقلاب اسلامی', '«جلادها میان ما»',
-    'حضرت معصومه (س)', 'مقاومت اسلامی', 'هنر مسلح مقاومت',
-    'کبوتر صلح', 'دفاع از وطن',
+    'دهه‌ی فجر انقلاب اسلامی',
+    'منبر انقلاب اسلامی',
+    '«جلادها میان ما»',
+    'حضرت معصومه (س)',
+    '',                       // quote tile — no title
+    'هنر مسلح مقاومت',
+    'کبوتر صلح',
+    'دفاع از وطن',
+    'ریشه در تاریخ',
+    'نسل سوم انقلاب',
+    'به یاد شهدا',
+    'لاإله إلا الله',
   ];
-  return tones.map((t, i) => ({
-    id: `seed-${i}`, slug: `seed-${i}`,
-    title: titles[i],
-    summary: i === 4
-      ? 'او به خاطر نقاشی‌های واقع‌گرایانه‌اش از رویدادهای مذهبی شهرت دارد. خالق آثاری چون «عرش بر زمین افتاد»، «شیرین‌تر از عسل» و «آخرین سرباز لشکر» است.'
-      : undefined,
-    variant: i === 4 ? 'quote' : undefined,
-    tall: false,
-    toneFrom: t[0], toneTo: t[1],
-  }));
+  return tones.map((t, i) => {
+    const isQuote = i === 4;
+    const isVideo = i === 1 || i === 9;
+    const isAudio = i === 11;
+    return {
+      id: `seed-${i}`,
+      slug: `seed-${i}`,
+      title: titles[i] || undefined,
+      summary: isQuote
+        ? 'او به خاطر نقاشی‌های واقع‌گرایانه‌اش از رویدادهای مذهبی شهرت دارد. خالق آثاری چون «عرش بر زمین افتاد»، «شیرین‌تر از عسل» و «آخرین سرباز لشکر» است.'
+        : undefined,
+      variant: isQuote ? 'quote' : undefined,
+      tall: [0, 6, 8].includes(i),
+      mediaType: isQuote ? 'image' : isVideo ? 'video' : isAudio ? 'audio' : 'image',
+      durationSeconds: isVideo ? 95 + i * 30 : isAudio ? 240 : undefined,
+      origin: [7, 10].includes(i) ? 'user_submitted' : 'external',
+      authorName: i === 7 ? 'کاربر امید' : i === 10 ? 'تیم بسیج هنرمندان' : undefined,
+      toneFrom: t[0], toneTo: t[1],
+    };
+  });
 }
