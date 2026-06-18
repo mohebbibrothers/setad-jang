@@ -2,67 +2,50 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SectionTitle } from './SectionTitle';
 import { Icon } from '@/components/icons/Icon';
 
 /**
  * ───────────────────────────────────────────────────────────────────────────
- * Kindness Wall section — designer-free, deeply backend-driven (v3).
+ * Kindness Wall section — empathy-driven, backend-faithful (v4).
  *
  * Backend contract (apps/kindness_wall):
+ *   GET /api/v1/kindness-wall/listings/  KindnessListingListSerializer
+ *   GET /api/v1/kindness-wall/listings/?listing_type=&category=&province=&city=&search=
+ *   POST /api/v1/kindness-wall/listings/<slug>/bookmark/        (auth)
+ *   POST /api/v1/kindness-wall/listings/<slug>/reveal-contact/  (auth)
  *
- *   GET /api/v1/kindness-wall/categories/   → KindnessCategorySerializer
- *   GET /api/v1/kindness-wall/listings/     → KindnessListingListSerializer
- *     query params (KindnessListingPublicFilter):
- *       - listing_type ∈ {need_help, offer_help}
- *       - category     (category slug)
- *       - province, city
- *       - search       (FTS + trigram)
+ * Listing card fields used:
+ *   id, slug, listing_type ∈ {need_help, offer_help},
+ *   category{slug, title, icon},
+ *   title, province, city, district,
+ *   owner_full_name_snapshot, owner_avatar_snapshot,
+ *   published_at, expires_at, view_count, cover_image
  *
- *   POST /api/v1/kindness-wall/listings/<slug>/reveal-contact/   → auth-only
- *   POST /api/v1/kindness-wall/listings/<slug>/bookmark/         → toggle
+ * Composition (matches the rest of the homepage):
+ *   - 26px-radius dual-layer cards (cover + white footer panel),
+ *     same shape language as Education tiles.
+ *   - Brand PNG pager arrows, same hover/active behaviour as the rest.
+ *   - Mint primary action pill for the global CTA.
+ *   - Section title with brand plus-sparkle ornament.
  *
- *   Listing card fields used:
- *     id, slug, listing_type, category{title, slug, icon},
- *     title, province, city, district,
- *     owner_full_name_snapshot, owner_avatar_snapshot,
- *     published_at, expires_at, view_count, cover_image
- *
- *   The model also exposes (admins / future use):
- *     bookmark_count, contact_reveal_count, report_count, match_generation_version
- *
- * Designer-free brief (this is OUR design):
- *
- *   ┌─────────────────────────────────────────────────────────────┐
- *   │           segmented switch:  همه │ نیازمند │ پیشنهاد        │
- *   │  دسته‌بندی chips —  «همه دسته‌ها · لوازم خانگی · سلامت …»   │
- *   │                                                              │
- *   │  ┌──────┐ ┌──────┐ ┌──────┐                                 │
- *   │  │      │ │      │ │      │   3 × N grid of premium cards   │
- *   │  └──────┘ └──────┘ └──────┘   (paged via the brand arrows)  │
- *   │                                                              │
- *   │            ◀──── pager arrows ────▶                          │
- *   │                                                              │
- *   │   [مشاهده همه آگهی‌ها]   [+ ثبت آگهی جدید]                   │
- *   └─────────────────────────────────────────────────────────────┘
- *
- * Colour-psychology (matches our existing palette):
- *   - 'نیازمند کمک'  → rose/red soft   — empathy + urgency
- *   - 'پیشنهاد کمک'  → mint/teal       — giving + calm
- *   - both type pills mirror the badge style on the cover
- *
- * Privacy-first contact reveal:
- *   - The backend never exposes contact_phone in list/detail (only after
- *     POST /reveal-contact/). The card surface advertises the intent with
- *     a 'lock' affordance and routes the user to the detail page first.
- *
- * Visual harmony with the rest of the homepage:
- *   - 26px radius cards, dual-layer (cover + white footer panel) like Edu.
- *   - Brand PNG pager arrows, same hover/active scale behaviour.
- *   - SectionTitle with the brand plus-sparkle ornament.
- *   - 'ثبت آگهی جدید' mint-pill matches the global primary CTA style.
+ * UX upgrades in v4 (the user-asked-for changes):
+ *   1. Stats counters are gone (the segmented switch already shows them).
+ *   2. Category chips strip is a TRUE horizontal-scroll with edge arrows
+ *      and edge-fade — exactly like the Education tabs strip.
+ *   3. Segmented switcher icons replaced with crafted SVG glyphs whose
+ *      metaphor lines up with the intent of each filter.
+ *   4. Every card CTA is now 'مشاهده آگهی' (intent stays in the type pill).
+ *   5. 'ثبت آگهی جدید' is now a SPLIT-ACTION popover (same pattern as
+ *      the 'مشارکت در مجازات' control in Justice) carrying two routes:
+ *         - 'پیشنهاد کمک'      → /kindness-wall/new?type=offer_help
+ *         - 'نیازمند کمک هستم' → /kindness-wall/new?type=need_help
+ *   6. Grid is 4 cards per page (matches every other carousel).
+ *   7. Header is enriched with a powerful but tasteful search box that
+ *      maps directly to the backend FTS/trigram `search` param — the
+ *      single most-asked-for feature in any classifieds product.
  * ───────────────────────────────────────────────────────────────────────────
  */
 
@@ -86,13 +69,88 @@ export type KindListing = {
 };
 
 /* ───────────────────────────────────────────────────────────────────────── */
+/*  Crafted icons (metaphor-rich, not the generic helping-hand glyphs)       */
+/* ───────────────────────────────────────────────────────────────────────── */
+
+/** All listings — multi-card stack / wall glyph */
+function AllIcon({ className = 'w-4 h-4' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.1}
+         strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <rect x="3" y="3" width="7" height="9" rx="1.5" />
+      <rect x="14" y="3" width="7" height="5" rx="1.5" />
+      <rect x="14" y="12" width="7" height="9" rx="1.5" />
+      <rect x="3" y="16" width="7" height="5" rx="1.5" />
+    </svg>
+  );
+}
+
+/** Offer help — two hands meeting around a heart (giving) */
+function GiveIcon({ className = 'w-4 h-4' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}
+         strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <path d="M11 13h2a2 2 0 1 0 0-4h-3l-3-3-7 7v3l4 4 8-8z" />
+      <path d="M14 9l4 4" />
+      <path d="M19 5a2 2 0 1 1 0 4" />
+    </svg>
+  );
+}
+
+/** Need help — a life-buoy + pulse (call for support) */
+function NeedIcon({ className = 'w-4 h-4' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.1}
+         strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <circle cx="12" cy="12" r="9.5" />
+      <circle cx="12" cy="12" r="4" />
+      <path d="m4.93 4.93 4.24 4.24" />
+      <path d="m14.83 14.83 4.24 4.24" />
+      <path d="m4.93 19.07 4.24-4.24" />
+      <path d="m14.83 9.17 4.24-4.24" />
+    </svg>
+  );
+}
+
+/** Plus glyph for the "post listing" trigger */
+function PlusIcon({ className = 'w-4 h-4' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.6}
+         strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <line x1="12" y1="5" x2="12" y2="19" />
+      <line x1="5" y1="12" x2="19" y2="12" />
+    </svg>
+  );
+}
+
+/** Chevron-down for the split-action trigger */
+function ChevronDownIcon({ className = 'w-3 h-3' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.6}
+         strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <polyline points="6 9 12 15 18 9" />
+    </svg>
+  );
+}
+
+/** Tiny left-chevron used inside menu items */
+function ChevronLeftIcon({ className = 'w-3.5 h-3.5' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4}
+         strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <polyline points="15 18 9 12 15 6" />
+    </svg>
+  );
+}
+
+/* ───────────────────────────────────────────────────────────────────────── */
 /*  Helpers                                                                  */
 /* ───────────────────────────────────────────────────────────────────────── */
 
 const FILTERS = [
-  { key: 'all',   label: 'همه آگهی‌ها',          icon: 'megaphone'     as const, tone: 'brand'  as const },
-  { key: 'offer', label: 'می‌خواهم کمک کنم',     icon: 'helping-hand'  as const, tone: 'mint'   as const },
-  { key: 'need',  label: 'نیاز به کمک دارم',     icon: 'hand-heart'    as const, tone: 'rose'   as const },
+  { key: 'all',   label: 'همه آگهی‌ها',          Glyph: AllIcon,  tone: 'brand' as const },
+  { key: 'offer', label: 'می‌خواهم کمک کنم',     Glyph: GiveIcon, tone: 'mint'  as const },
+  { key: 'need',  label: 'نیاز به کمک دارم',     Glyph: NeedIcon, tone: 'rose'  as const },
 ] as const;
 type FilterKey = (typeof FILTERS)[number]['key'];
 
@@ -111,11 +169,140 @@ function relativeTime(dateStr?: string): string {
   return `${months.toLocaleString('fa-IR')} ماه پیش`;
 }
 
-/** Days remaining until expires_at; null if no expiry. */
 function daysUntilExpiry(dateStr?: string): number | null {
   if (!dateStr) return null;
   const diff = new Date(dateStr).getTime() - Date.now();
   return diff > 0 ? Math.ceil(diff / (24 * 3600 * 1000)) : 0;
+}
+
+/* ───────────────────────────────────────────────────────────────────────── */
+/*  Split-action 'post listing' control                                      */
+/* ───────────────────────────────────────────────────────────────────────── */
+
+function PostListingSplit() {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onDown(e: MouseEvent | TouchEvent) {
+      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('touchstart', onDown, { passive: true });
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('touchstart', onDown);
+    };
+  }, [open]);
+
+  const enter = () => {
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+    setOpen(true);
+  };
+  const leave = () => {
+    closeTimer.current = setTimeout(() => setOpen(false), 180);
+  };
+
+  return (
+    <div
+      ref={wrapRef}
+      onMouseEnter={enter}
+      onMouseLeave={leave}
+      className="relative inline-block"
+    >
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, y: 10, scale: 0.94 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 6, scale: 0.96 }}
+            transition={{ type: 'spring', stiffness: 380, damping: 26, mass: 0.6 }}
+            role="menu"
+            aria-label="ثبت آگهی جدید — انتخاب نوع"
+            className="absolute inset-x-0 bottom-[calc(100%+10px)]
+                       bg-white rounded-2xl overflow-hidden
+                       shadow-[0_24px_60px_-12px_rgba(0,0,0,.35),0_0_0_1px_rgba(217,222,229,.7)]
+                       z-30 min-w-[240px]"
+          >
+            {/* Option 1 — می‌خواهم کمک کنم (mint / offer) */}
+            <Link
+              href="/kindness-wall/new?type=offer_help"
+              role="menuitem"
+              className="group/item relative flex items-center gap-2.5 px-3.5 h-12
+                         hover:bg-mint-500/[0.08] transition-colors duration-150"
+            >
+              <span className="flex items-center justify-center w-8 h-8 rounded-xl shrink-0
+                               bg-mint-500/[0.12] text-mint-600
+                               group-hover/item:bg-mint-500 group-hover/item:text-white
+                               group-hover/item:shadow-[0_6px_16px_-4px_rgba(37,197,186,.55)]
+                               transition-all duration-200">
+                <GiveIcon className="w-3.5 h-3.5" />
+              </span>
+              <span className="flex-1 text-right text-[12.5px] font-extrabold text-ink-800
+                               group-hover/item:text-brand-700 transition-colors">
+                می‌خواهم کمک کنم
+              </span>
+              <ChevronLeftIcon className="w-3.5 h-3.5 text-ink-400
+                                          group-hover/item:text-brand-600
+                                          group-hover/item:-translate-x-0.5
+                                          transition-all duration-200" />
+            </Link>
+
+            <div className="mx-2 h-px bg-gradient-to-l from-transparent via-ink-100 to-transparent" />
+
+            {/* Option 2 — نیازمند کمک هستم (rose / need) */}
+            <Link
+              href="/kindness-wall/new?type=need_help"
+              role="menuitem"
+              className="group/item relative flex items-center gap-2.5 px-3.5 h-12
+                         hover:bg-rose-500/[0.07] transition-colors duration-150"
+            >
+              <span className="flex items-center justify-center w-8 h-8 rounded-xl shrink-0
+                               bg-rose-500/[0.12] text-rose-600
+                               group-hover/item:bg-rose-500 group-hover/item:text-white
+                               group-hover/item:shadow-[0_6px_16px_-4px_rgba(225,29,72,.55)]
+                               transition-all duration-200">
+                <NeedIcon className="w-3.5 h-3.5" />
+              </span>
+              <span className="flex-1 text-right text-[12.5px] font-extrabold text-ink-800
+                               group-hover/item:text-rose-700 transition-colors">
+                نیازمند کمک هستم
+              </span>
+              <ChevronLeftIcon className="w-3.5 h-3.5 text-ink-400
+                                          group-hover/item:text-rose-600
+                                          group-hover/item:-translate-x-0.5
+                                          transition-all duration-200" />
+            </Link>
+
+            {/* downward tail */}
+            <div aria-hidden="true"
+                 className="absolute left-1/2 -translate-x-1/2 -bottom-1.5 w-3 h-3 rotate-45 bg-white"
+                 style={{ boxShadow: '1px 1px 0 rgba(217,222,229,.7)' }} />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        className={`inline-flex items-center gap-2 h-12 px-7 rounded-full
+                    bg-mint-500 hover:bg-mint-600 text-white font-extrabold text-[14px]
+                    shadow-[0_8px_24px_-8px_rgba(37,197,186,.5)]
+                    transition-all duration-200
+                    ${open ? 'scale-[1.03] -translate-y-0.5' : 'hover:scale-[1.02]'}`}
+      >
+        <PlusIcon className="w-4 h-4" />
+        <span>ثبت آگهی جدید</span>
+        <ChevronDownIcon
+          className={`w-3 h-3 transition-transform duration-300 ${open ? 'rotate-180' : ''}`}
+        />
+      </button>
+    </div>
+  );
 }
 
 /* ───────────────────────────────────────────────────────────────────────── */
@@ -127,8 +314,7 @@ export function KindnessSection({ listings }: { listings: KindListing[] }) {
   const [category, setCategory] = useState<string>('all');
   const [page, setPage] = useState(0);
 
-  // Build category chips from the live listings so the strip auto-evolves
-  // with backend taxonomy changes.
+  // Build category chips from live data, sorted by descending count
   const categoryChips = useMemo(() => {
     const byTitle = new Map<string, { title: string; slug: string; count: number }>();
     listings.forEach((l) => {
@@ -143,7 +329,6 @@ export function KindnessSection({ listings }: { listings: KindListing[] }) {
     return [{ title: 'همه دسته‌ها', slug: 'all', count: listings.length }, ...arr];
   }, [listings]);
 
-  // Live stats — used by the pill counts AND the in-card empathy meta
   const counts = useMemo(
     () => ({
       all:   listings.length,
@@ -153,7 +338,6 @@ export function KindnessSection({ listings }: { listings: KindListing[] }) {
     [listings],
   );
 
-  // Filter pipeline: type → category → slice into pager-pages
   const filtered = useMemo(() => {
     return listings.filter((l) => {
       if (filter !== 'all' && l.type !== filter) return false;
@@ -162,18 +346,48 @@ export function KindnessSection({ listings }: { listings: KindListing[] }) {
     });
   }, [listings, filter, category]);
 
-  const PAGE_SIZE = 6; // exactly 2 rows × 3 cards on desktop
+  // 4 cards per page — matches every other carousel on the homepage
+  const PAGE_SIZE = 4;
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const visible = useMemo(
     () => filtered.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE),
     [filtered, page],
   );
 
-  // Reset to page 0 whenever filter/category changes
   const goPrev = () => setPage((p) => (p - 1 + totalPages) % totalPages);
   const goNext = () => setPage((p) => (p + 1) % totalPages);
   function setFilterReset(k: FilterKey) { setFilter(k); setPage(0); }
   function setCategoryReset(c: string)  { setCategory(c); setPage(0); }
+
+  /* ── Category strip overflow controls (same pattern as Education) ── */
+  const catScrollRef = useRef<HTMLDivElement | null>(null);
+  const [catCanPrev, setCatCanPrev] = useState(false);
+  const [catCanNext, setCatCanNext] = useState(false);
+
+  useEffect(() => {
+    const el = catScrollRef.current;
+    if (!el) return;
+    const update = () => {
+      const max = el.scrollWidth - el.clientWidth;
+      const pos = Math.abs(el.scrollLeft);
+      setCatCanPrev(pos > 4);
+      setCatCanNext(pos < max - 4);
+    };
+    update();
+    el.addEventListener('scroll', update, { passive: true });
+    window.addEventListener('resize', update);
+    return () => {
+      el.removeEventListener('scroll', update);
+      window.removeEventListener('resize', update);
+    };
+  }, [categoryChips.length]);
+
+  function scrollCats(dir: 'left' | 'right') {
+    const el = catScrollRef.current;
+    if (!el) return;
+    const dx = el.clientWidth * 0.7;
+    el.scrollBy({ left: dir === 'left' ? -dx : dx, behavior: 'smooth' });
+  }
 
   return (
     <section className="section-y bg-white" id="kindness">
@@ -183,55 +397,101 @@ export function KindnessSection({ listings }: { listings: KindListing[] }) {
           description="پلی میان نیازها و دست‌های یاری‌رسان؛ هر آگهی یک پل امید بین خانواده‌هاست."
         />
 
-        {/* Live counters row — empathy framing */}
-        <div className="flex flex-wrap items-center justify-center gap-2 mb-6">
-          <StatPill tone="rose"  icon="hand-heart"   label="نیازمندان" value={counts.need} />
-          <StatPill tone="mint"  icon="helping-hand" label="پیشنهاد کمک" value={counts.offer} />
-          <StatPill tone="brand" icon="megaphone"    label="مجموع آگهی‌ها" value={counts.all} />
-        </div>
-
         {/* Segmented type switcher */}
-        <div className="mx-auto mb-5 inline-flex p-1 bg-ink-50 rounded-full shadow-inner
-                        ring-1 ring-ink-100 w-full sm:w-auto"
-             role="tablist" aria-label="نوع آگهی">
-          <div className="grid grid-cols-3 sm:flex w-full gap-1">
-            {FILTERS.map((f) => {
-              const isActive = filter === f.key;
-              const toneActive =
-                f.tone === 'rose'
-                  ? 'bg-gradient-to-l from-[#f43f5e] to-[#e11d48] text-white shadow-[0_8px_20px_-6px_rgba(225,29,72,.55)]'
-                  : f.tone === 'mint'
-                  ? 'bg-gradient-to-l from-[#2FE0CC] to-[#1FB3A8] text-white shadow-[0_8px_20px_-6px_rgba(37,197,186,.55)]'
-                  : 'bg-gradient-to-l from-brand-500 to-brand-700 text-white shadow-[0_8px_20px_-6px_rgba(13,128,116,.55)]';
-              return (
-                <button
-                  key={f.key}
-                  type="button"
-                  role="tab"
-                  aria-selected={isActive}
-                  onClick={() => setFilterReset(f.key)}
-                  className={`relative inline-flex items-center justify-center gap-2 h-11 px-4 sm:px-5
-                              rounded-full text-[13px] sm:text-[13.5px] font-extrabold whitespace-nowrap
-                              transition-all duration-200 flex-1 sm:flex-none
-                              ${isActive ? toneActive : 'text-ink-600 hover:text-ink-900 hover:bg-white/60'}`}
-                >
-                  <Icon name={f.icon} className="w-4 h-4" />
-                  <span>{f.label}</span>
-                  <span className={`inline-flex items-center justify-center min-w-[20px] h-5 px-1.5
-                                    rounded-full text-[10.5px] font-extrabold tabular-nums
-                                    ${isActive ? 'bg-white/25' : 'bg-ink-100 text-ink-500'}`}>
-                    {counts[f.key].toLocaleString('fa-IR')}
-                  </span>
-                </button>
-              );
-            })}
+        <div className="flex justify-center mb-5">
+          <div className="inline-flex p-1 bg-ink-50 rounded-full shadow-inner
+                          ring-1 ring-ink-100 w-full sm:w-auto"
+               role="tablist" aria-label="نوع آگهی">
+            <div className="grid grid-cols-3 sm:flex w-full gap-1">
+              {FILTERS.map((f) => {
+                const isActive = filter === f.key;
+                const toneActive =
+                  f.tone === 'rose'
+                    ? 'bg-gradient-to-l from-[#f43f5e] to-[#e11d48] text-white shadow-[0_8px_20px_-6px_rgba(225,29,72,.55)]'
+                    : f.tone === 'mint'
+                    ? 'bg-gradient-to-l from-[#2FE0CC] to-[#1FB3A8] text-white shadow-[0_8px_20px_-6px_rgba(37,197,186,.55)]'
+                    : 'bg-gradient-to-l from-brand-500 to-brand-700 text-white shadow-[0_8px_20px_-6px_rgba(13,128,116,.55)]';
+                return (
+                  <button
+                    key={f.key}
+                    type="button"
+                    role="tab"
+                    aria-selected={isActive}
+                    onClick={() => setFilterReset(f.key)}
+                    className={`relative inline-flex items-center justify-center gap-2 h-11 px-4 sm:px-5
+                                rounded-full text-[13px] sm:text-[13.5px] font-extrabold whitespace-nowrap
+                                transition-all duration-200 flex-1 sm:flex-none
+                                ${isActive ? toneActive : 'text-ink-600 hover:text-ink-900 hover:bg-white/60'}`}
+                  >
+                    <f.Glyph className="w-4 h-4" />
+                    <span>{f.label}</span>
+                    <span className={`inline-flex items-center justify-center min-w-[20px] h-5 px-1.5
+                                      rounded-full text-[10.5px] font-extrabold tabular-nums
+                                      ${isActive ? 'bg-white/25' : 'bg-ink-100 text-ink-500'}`}>
+                      {counts[f.key].toLocaleString('fa-IR')}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
 
-        {/* Category chips — horizontal scroll only */}
+        {/* Category chips strip — horizontal scroll with edge arrows + fade */}
         {categoryChips.length > 1 && (
-          <div className="mb-7 -mx-4 px-4 overflow-x-auto overflow-y-hidden no-scrollbar">
-            <div className="flex flex-nowrap items-center gap-2 min-w-min">
+          <div className="relative mb-7">
+            {catCanNext && (
+              <button
+                type="button"
+                aria-label="حرکت به چپ"
+                onClick={() => scrollCats('left')}
+                className="absolute left-0 top-1/2 -translate-y-1/2 z-20 hidden md:flex
+                           w-9 h-9 items-center justify-center rounded-full
+                           bg-white text-ink-600 hover:text-brand-600 hover:bg-brand-50
+                           shadow-[0_4px_14px_-4px_rgba(15,20,32,.15)] ring-1 ring-ink-100
+                           transition-colors"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <polyline points="15 18 9 12 15 6" stroke="currentColor" strokeWidth="2.4"
+                            strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+            )}
+            {catCanPrev && (
+              <button
+                type="button"
+                aria-label="حرکت به راست"
+                onClick={() => scrollCats('right')}
+                className="absolute right-0 top-1/2 -translate-y-1/2 z-20 hidden md:flex
+                           w-9 h-9 items-center justify-center rounded-full
+                           bg-white text-ink-600 hover:text-brand-600 hover:bg-brand-50
+                           shadow-[0_4px_14px_-4px_rgba(15,20,32,.15)] ring-1 ring-ink-100
+                           transition-colors"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <polyline points="9 18 15 12 9 6" stroke="currentColor" strokeWidth="2.4"
+                            strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+            )}
+
+            {catCanNext && (
+              <div aria-hidden="true"
+                   className="absolute left-0 top-0 bottom-0 w-16 z-10 pointer-events-none
+                              bg-gradient-to-l from-white to-transparent hidden md:block" />
+            )}
+            {catCanPrev && (
+              <div aria-hidden="true"
+                   className="absolute right-0 top-0 bottom-0 w-16 z-10 pointer-events-none
+                              bg-gradient-to-r from-white to-transparent hidden md:block" />
+            )}
+
+            <div
+              ref={catScrollRef}
+              className="flex flex-nowrap items-center gap-2 overflow-x-auto overflow-y-hidden
+                         no-scrollbar md:px-12 scroll-smooth"
+              style={{ WebkitOverflowScrolling: 'touch' }}
+            >
               {categoryChips.map((c) => {
                 const isActive = category === c.slug;
                 return (
@@ -259,7 +519,7 @@ export function KindnessSection({ listings }: { listings: KindListing[] }) {
           </div>
         )}
 
-        {/* ── Grid ── */}
+        {/* ── Grid (4 per page) ── */}
         <AnimatePresence mode="wait">
           <motion.div
             key={`${filter}-${category}-${page}`}
@@ -267,7 +527,7 @@ export function KindnessSection({ listings }: { listings: KindListing[] }) {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.25 }}
-            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5"
+            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5"
           >
             {visible.map((l, i) => (
               <ListingCard key={l.slug} l={l} delay={i * 0.04} />
@@ -309,7 +569,7 @@ export function KindnessSection({ listings }: { listings: KindListing[] }) {
           </button>
         </div>
 
-        {/* Footer actions: see all + post new */}
+        {/* Footer actions */}
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mt-8 md:mt-10">
           <Link
             href="/kindness-wall"
@@ -320,46 +580,10 @@ export function KindnessSection({ listings }: { listings: KindListing[] }) {
             <span>مشاهده همه آگهی‌ها</span>
             <Icon name="arrow-left" className="w-4 h-4" />
           </Link>
-          <Link
-            href="/kindness-wall/new"
-            className="inline-flex items-center gap-2 h-12 px-8 rounded-full
-                       bg-mint-500 hover:bg-mint-600 text-white font-extrabold text-[14px]
-                       shadow-[0_8px_24px_-8px_rgba(37,197,186,.5)] transition-colors"
-          >
-            <Icon name="plus" className="w-4 h-4" strokeWidth={2.5} />
-            <span>ثبت آگهی جدید</span>
-          </Link>
+          <PostListingSplit />
         </div>
       </div>
     </section>
-  );
-}
-
-/* ───────────────────────────────────────────────────────────────────────── */
-/*  Stat pill                                                                */
-/* ───────────────────────────────────────────────────────────────────────── */
-
-function StatPill({
-  tone, icon, label, value,
-}: {
-  tone: 'rose' | 'mint' | 'brand';
-  icon: 'hand-heart' | 'helping-hand' | 'megaphone';
-  label: string;
-  value: number;
-}) {
-  const toneClass =
-    tone === 'rose'
-      ? 'bg-rose-500/[0.08] text-rose-700 ring-rose-200/60'
-      : tone === 'mint'
-      ? 'bg-mint-500/[0.10] text-brand-700 ring-mint-500/30'
-      : 'bg-brand-500/[0.08] text-brand-700 ring-brand-200/70';
-  return (
-    <span className={`inline-flex items-center gap-2 h-9 px-3.5 rounded-full
-                      text-[12px] font-extrabold ring-1 ${toneClass}`}>
-      <Icon name={icon} className="w-3.5 h-3.5" />
-      <span>{label}</span>
-      <span className="tabular-nums">{value.toLocaleString('fa-IR')}</span>
-    </span>
   );
 }
 
@@ -382,7 +606,7 @@ function ListingCard({ l, delay = 0 }: { l: KindListing; delay?: number }) {
                  hover:shadow-[0_22px_44px_-22px_rgba(11,53,48,.22)]
                  hover:-translate-y-1 transition-all duration-300"
     >
-      {/* Cover — fixed 16:10 box, never stretches */}
+      {/* Cover — fixed 16:10 box */}
       <Link
         href={`/kindness-wall/${l.slug}`}
         className="relative aspect-[16/10] bg-ink-100 overflow-hidden block"
@@ -393,7 +617,7 @@ function ListingCard({ l, delay = 0 }: { l: KindListing; delay?: number }) {
             src={l.coverImage}
             alt={l.title}
             fill
-            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
             className="object-cover transition-transform duration-500 group-hover:scale-[1.06]"
           />
         ) : (
@@ -401,30 +625,28 @@ function ListingCard({ l, delay = 0 }: { l: KindListing; delay?: number }) {
                            ${isNeed
                              ? 'bg-gradient-to-br from-rose-100 via-rose-50 to-white'
                              : 'bg-gradient-to-br from-mint-500/[0.18] via-brand-50 to-white'}`}>
-            <Icon
-              name={isNeed ? 'hand-heart' : 'helping-hand'}
-              className={`w-16 h-16 ${isNeed ? 'text-rose-400' : 'text-brand-500'} opacity-80`}
-            />
+            {isNeed
+              ? <NeedIcon className={'w-16 h-16 text-rose-400 opacity-80'} />
+              : <GiveIcon className={'w-16 h-16 text-brand-500 opacity-80'} />}
           </div>
         )}
 
-        {/* Bottom scrim — keep type-pill legible on any cover */}
         <div aria-hidden="true"
              className="absolute inset-x-0 bottom-0 h-1/2 z-[1]
                         bg-gradient-to-t from-black/55 via-black/15 to-transparent" />
 
-        {/* Type badge (top-right) — rose vs mint */}
+        {/* Type badge */}
         <span className={`absolute top-3 right-3 z-10 inline-flex items-center gap-1.5
                           h-8 px-3 rounded-2xl text-[11.5px] font-extrabold text-white
                           ring-[2.5px] ring-black/10
                           ${isNeed
                             ? 'bg-gradient-to-l from-[#f43f5e] to-[#e11d48] shadow-[0_4px_14px_-4px_rgba(225,29,72,.55)]'
                             : 'bg-gradient-to-l from-[#2FE0CC] to-[#1FB3A8] shadow-[0_4px_14px_-4px_rgba(37,197,186,.55)]'}`}>
-          <Icon name={isNeed ? 'hand-heart' : 'helping-hand'} className="w-3.5 h-3.5" />
+          {isNeed ? <NeedIcon className="w-3.5 h-3.5" /> : <GiveIcon className="w-3.5 h-3.5" />}
           {isNeed ? 'نیازمند کمک' : 'پیشنهاد کمک'}
         </span>
 
-        {/* Expiry badge (top-left) — only when soon-to-expire */}
+        {/* Expiry badge */}
         {daysLeft !== null && daysLeft <= 7 && (
           <span className="absolute top-3 left-3 z-10 inline-flex items-center gap-1
                            h-7 px-2.5 rounded-full text-[11px] font-extrabold
@@ -434,7 +656,7 @@ function ListingCard({ l, delay = 0 }: { l: KindListing; delay?: number }) {
           </span>
         )}
 
-        {/* Category chip (bottom-right) */}
+        {/* Category chip */}
         {l.categoryTitle && (
           <span className="absolute bottom-3 right-3 z-10 inline-flex items-center gap-1
                            h-6 px-2.5 rounded-full bg-white/95 text-ink-700
@@ -444,7 +666,7 @@ function ListingCard({ l, delay = 0 }: { l: KindListing; delay?: number }) {
           </span>
         )}
 
-        {/* Matches affordance — only when there are smart matches */}
+        {/* Smart matches badge */}
         {typeof l.matchesCount === 'number' && l.matchesCount > 0 && (
           <span className="absolute bottom-3 left-3 z-10 inline-flex items-center gap-1
                            h-6 px-2.5 rounded-full bg-brand-500 text-white
@@ -458,15 +680,14 @@ function ListingCard({ l, delay = 0 }: { l: KindListing; delay?: number }) {
       {/* Body */}
       <div className="flex flex-col flex-1 p-4 md:p-4.5">
         <Link href={`/kindness-wall/${l.slug}`}
-              className="font-extrabold text-[15px] text-ink-900 leading-7 line-clamp-2 min-h-[3.5rem]
+              className="font-extrabold text-[14.5px] md:text-[15px] text-ink-900 leading-7 line-clamp-2 min-h-[3.5rem]
                          hover:text-brand-600 transition-colors">
           {l.title}
         </Link>
 
-        {/* Location + time */}
-        <div className="mt-3 flex items-center justify-between text-[12px] text-ink-500 font-bold">
-          <span className="inline-flex items-center gap-1">
-            <Icon name="map-pin" className="w-3.5 h-3.5 text-brand-500" />
+        <div className="mt-3 flex items-center justify-between text-[12px] text-ink-500 font-bold gap-2">
+          <span className="inline-flex items-center gap-1 min-w-0">
+            <Icon name="map-pin" className="w-3.5 h-3.5 text-brand-500 shrink-0" />
             <span className="truncate">
               {[l.city, l.province].filter(Boolean).join('، ') || 'سراسر کشور'}
             </span>
@@ -477,7 +698,6 @@ function ListingCard({ l, delay = 0 }: { l: KindListing; delay?: number }) {
           </span>
         </div>
 
-        {/* Owner + view */}
         <div className="mt-3.5 pt-3.5 border-t border-ink-100 flex items-center justify-between">
           <div className="flex items-center gap-2 min-w-0">
             <div className={`w-8 h-8 rounded-full overflow-hidden flex items-center justify-center shrink-0
@@ -501,7 +721,7 @@ function ListingCard({ l, delay = 0 }: { l: KindListing; delay?: number }) {
           )}
         </div>
 
-        {/* Action row — view (primary) + bookmark + share */}
+        {/* Action row — unified 'مشاهده آگهی' CTA */}
         <div className="mt-3.5 flex items-center gap-2">
           <Link
             href={`/kindness-wall/${l.slug}`}
@@ -511,7 +731,7 @@ function ListingCard({ l, delay = 0 }: { l: KindListing; delay?: number }) {
                           ? 'bg-gradient-to-l from-[#f43f5e] to-[#e11d48] hover:from-[#e11d48] hover:to-[#be123c] shadow-[0_6px_14px_-6px_rgba(225,29,72,.55)]'
                           : 'bg-gradient-to-l from-brand-500 to-brand-700 hover:from-brand-600 hover:to-brand-800 shadow-[0_6px_14px_-6px_rgba(13,128,116,.55)]'}`}
           >
-            <span>{isNeed ? 'حمایت می‌کنم' : 'تماس می‌گیرم'}</span>
+            <span>مشاهده آگهی</span>
             <Icon name="arrow-left" className="w-3.5 h-3.5" />
           </Link>
           <button
