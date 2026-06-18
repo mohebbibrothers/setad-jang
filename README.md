@@ -1565,6 +1565,7 @@ Advanced detailed health diagnostics آماده است: migration state، media 
 DB query telemetry آماده است: X-DB-Query-Count، X-DB-Time-ms، slow DB query counters
 Request-scoped DB query count/time budgets آماده است
 Endpoint performance contract tests برای critical endpoints آماده است
+API envelope contract tests برای success/error/pagination آماده است
 N+1/query-count regression guards در CI آماده است
 Celery task metrics آماده است
 Slow query monitoring در فاز hardening بعدی قابل تکمیل است
