@@ -1564,6 +1564,8 @@ Response headers: X-Response-Time-ms و X-Performance-Budget-ms
 Advanced detailed health diagnostics آماده است: migration state، media storage، audit-chain quick، performance contracts
 DB query telemetry آماده است: X-DB-Query-Count، X-DB-Time-ms، slow DB query counters
 Request-scoped DB query count/time budgets آماده است
+Endpoint performance contract tests برای critical endpoints آماده است
+N+1/query-count regression guards در CI آماده است
 Celery task metrics آماده است
 Slow query monitoring در فاز hardening بعدی قابل تکمیل است
 ```
