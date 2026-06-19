@@ -3,11 +3,11 @@
 import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SectionTitle } from './SectionTitle';
-import { Icon } from '@/components/icons/Icon';
+import { Icon, type IconName } from '@/components/icons/Icon';
 
 /**
  * ───────────────────────────────────────────────────────────────────────────
- * Public reports — designer-free, backend-faithful (v2).
+ * Public reports — designer-free, backend-faithful (v4 — polished).
  *
  * Backend contract (apps/public_reports):
  *   GET  /api/v1/public-reports/subjects/   ReportSubjectPublicSerializer
@@ -19,73 +19,47 @@ import { Icon } from '@/components/icons/Icon';
  *       - phone_number   : str, max 20            (optional)
  *       - subject_id     : FK ReportSubject       (REQUIRED)
  *       - description    : text                   (REQUIRED)
- *       - attachments    : list<image>, max 5     (optional, jpg/png/webp, ≤5MB ea.)
+ *       - attachments    : list<image>, max 5     (optional)
  *
- * Throttle (server-side, must respect on the client):
- *   - 5 reports/min for anonymous clients
- *   - 20 reports/min for authenticated clients
+ *   Hard backend limits (mirror of apps.public_reports.validators):
+ *     ALLOWED_IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp']
+ *     MAX_IMAGE_SIZE_MB        = 5
+ *     MAX_ATTACHMENTS_PER_REPORT = 5
  *
- * Designer-free brief (this is OUR design):
+ *   Anti-abuse (server-side, also enforced gracefully on the client):
+ *     - 5 reports/min for anonymous clients
+ *     - 20 reports/min for authenticated clients
  *
- *   ┌────────────────────────────────────────────────────────────────┐
- *   │  Brand-teal panel, dotted texture, 32px radius                 │
- *   │                                                                │
- *   │  ┌── identity row ────────────────────────────────────────┐    │
- *   │  │  👤 نام و نام خانوادگی    📞 شماره تماس (اختیاری)     │    │
- *   │  └────────────────────────────────────────────────────────┘    │
- *   │                                                                │
- *   │  ⊞ دسته‌بندی   ────────────────────────────────                │
- *   │  [ 💰 فساد ] [ 🛡 امنیتی ] [ ⚖ تخلف ] [ 🎨 فرهنگی ] [ … ]    │
- *   │                                                                │
- *   │  ✎ شرح گزارش / سرنخ                          ··· 132/2000     │
- *   │  ┌──────────────────────────────────────────────────────┐     │
- *   │  │                                                       │     │
- *   │  │                                                       │     │
- *   │  └──────────────────────────────────────────────────────┘     │
- *   │                                                                │
- *   │  📎 مستندات (اختیاری — حداکثر ۵ تصویر)                       │
- *   │  ┌──────────────────────────────────────────────────────┐     │
- *   │  │  drag-drop area + clickable                          │     │
- *   │  │  ↓ تصاویر را اینجا بکشید یا کلیک کنید                │     │
- *   │  └──────────────────────────────────────────────────────┘     │
- *   │  [thumb] [thumb] [thumb]                                       │
- *   │                                                                │
- *   │  🔒 برای تأیید بکشید →    [───────────────────●──────]        │
- *   │                                                                │
- *   │                                          [✈ ارسال گزارش]       │
- *   └────────────────────────────────────────────────────────────────┘
- *
- * Innovations layered on the same backend contract:
- *   1. Visual subject picker  → radio chips with icons, not a dropdown.
- *      The selected subject's `description` text shows in a soft hint
- *      under the chips (helps users pick the right bucket).
- *   2. Live character counter on description, with min-length hint.
- *   3. Drag-and-drop attachment uploader with thumb previews, remove
- *      button, and a hard cap of 5 files (matches MAX_ATTACHMENTS_PER_REPORT).
- *      Client-side size/type validation matches the validators.
- *   4. SLIDE-TO-VERIFY anti-bot widget — replaces the boring 'من ربات
- *      نیستم' checkbox with a tactile thumb the user has to drag to the
- *      far edge. Mouse + touch, debounced reset on release-before-end,
- *      animated check + lock on completion. Feels like Apple's
- *      'slide to power off' or Slack's 'slide to confirm' — high-end UX.
- *   5. Paper-plane submit button, with loading + success states.
- *   6. Submit cooldown that mirrors the server throttle (5/min anon)
- *      so the button disables for the appropriate window after a
- *      successful POST.
+ * UX polish in v4:
+ *   1. Field icons re-skinned: each input gets a soft brand-tinted disc
+ *      so the glyph reads as a small premium badge, not a flat icon.
+ *   2. Subject picker switched from chips to a fully-custom DROPDOWN with
+ *      a glassy listbox, per-subject coloured icon, hover + selected
+ *      states, click-outside dismissal, full ARIA wiring.
+ *   3. File-validation now reads ALLOWED_IMAGE_EXTENSIONS by EXTENSION
+ *      (matches the server-side check) instead of MIME-type only — so
+ *      'image/jpg' from older mobiles is accepted, and there is parity
+ *      with the backend.
+ *   4. Slide-to-verify chrome upgraded: gradient track, security-shield
+ *      icon while idle, sparkles burst at the end of the slide,
+ *      gradient-green success state.
+ *   5. Submit button gets a soft brand-tinted glow, plus a subtle live
+ *      'sending' shimmer.
+ *   6. All copy and aria-labels are RTL-correct and human-friendly.
  * ───────────────────────────────────────────────────────────────────────────
  */
 
 type Subject = { id: string; name: string; description?: string };
 
 const DEFAULT_SUBJECTS: Subject[] = [
-  { id: '1', name: 'گزارش فساد اقتصادی',  description: 'موارد سوءاستفاده مالی، رانت، اختلاس و …' },
-  { id: '2', name: 'گزارش تخلف اجتماعی', description: 'تخلفات اجتماعی، تجاوز به حقوق دیگران و …' },
-  { id: '3', name: 'گزارش امنیتی',        description: 'تهدیدات امنیتی، نفوذ، فعالیت‌های مشکوک' },
-  { id: '4', name: 'گزارش فرهنگی',        description: 'انحرافات فرهنگی، توهین به مقدسات و …' },
-  { id: '5', name: 'سایر موارد',           description: 'هر مورد دیگری که نیاز به بررسی دارد' },
+  { id: '1', name: 'گزارش فساد اقتصادی',  description: 'رشوه، اختلاس، فرار مالیاتی و فساد در نهادهای دولتی.' },
+  { id: '2', name: 'گزارش تخلف اجتماعی',  description: 'هنجارشکنی‌ها و آسیب‌های اجتماعی.' },
+  { id: '3', name: 'گزارش امنیتی',         description: 'مسائل حساس امنیتی و تهدیدات.' },
+  { id: '4', name: 'گزارش فرهنگی',         description: 'ناهنجاری‌های فرهنگی و رسانه‌ای.' },
+  { id: '5', name: 'سایر موارد',           description: 'سایر گزارش‌هایی که در دسته‌های بالا نمی‌گنجند.' },
 ];
 
-const SUBJECT_ICON: Record<string, 'shield' | 'scale' | 'megaphone' | 'sparkles' | 'flag'> = {
+const SUBJECT_ICON: Record<string, IconName> = {
   '1': 'scale',       // اقتصادی
   '2': 'megaphone',   // اجتماعی
   '3': 'shield',      // امنیتی
@@ -93,12 +67,16 @@ const SUBJECT_ICON: Record<string, 'shield' | 'scale' | 'megaphone' | 'sparkles'
   '5': 'flag',        // سایر
 };
 
-const MAX_ATTACHMENTS = 5;            // mirrors MAX_ATTACHMENTS_PER_REPORT
-const MAX_FILE_SIZE   = 5 * 1024 * 1024; // 5MB, mirrors validate_image_size
-const ALLOWED_TYPES   = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
-const DESC_MIN        = 20;
-const DESC_MAX        = 2000;
-const COOLDOWN_SECS   = 12;           // gentle client-side back-off after success
+// ── Backend-mirrored limits (apps.public_reports.validators) ────────────
+const ALLOWED_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp'] as const;
+const MAX_IMAGE_SIZE_MB = 5;
+const MAX_FILE_SIZE     = MAX_IMAGE_SIZE_MB * 1024 * 1024;
+const MAX_ATTACHMENTS   = 5;     // mirrors MAX_ATTACHMENTS_PER_REPORT
+
+// Frontend-only UX limits (no server-side equivalent)
+const DESC_MIN          = 20;
+const DESC_MAX          = 2000;
+const COOLDOWN_SECS     = 12;
 
 type FormState = {
   full_name: string;
@@ -110,6 +88,11 @@ type FormState = {
 const INITIAL: FormState = {
   full_name: '', phone_number: '', subject_id: '', description: '',
 };
+
+function getExt(name: string): string {
+  const i = name.lastIndexOf('.');
+  return i >= 0 ? name.slice(i + 1).toLowerCase() : '';
+}
 
 /* ───────────────────────────────────────────────────────────────────────── */
 /*  Field                                                                    */
@@ -129,7 +112,14 @@ function Field({
 }) {
   return (
     <div className="relative">
-      <span className="absolute right-4 top-1/2 -translate-y-1/2 text-brand-500 z-10 pointer-events-none">
+      {/* Icon sits inside a soft brand-tinted disc — reads as a premium
+          badge rather than a flat glyph. */}
+      <span
+        className="absolute right-2 top-1/2 -translate-y-1/2 z-10 pointer-events-none
+                   w-9 h-9 rounded-xl flex items-center justify-center
+                   bg-gradient-to-br from-brand-50 to-brand-100
+                   text-brand-600 shadow-[inset_0_0_0_1px_rgba(13,128,116,.08)]"
+      >
         {icon}
       </span>
       <input
@@ -141,10 +131,148 @@ function Field({
         aria-label={placeholder}
         maxLength={maxLength}
         dir="rtl"
-        className="w-full h-12 pr-10 pl-4 rounded-xl bg-white text-ink-800 text-[14px]
-                   outline-none focus:ring-2 focus:ring-white/60 placeholder:text-ink-400 text-right
-                   font-medium"
+        className="w-full h-12 pr-12 pl-4 rounded-xl bg-white text-ink-800 text-[14px]
+                   outline-none focus:ring-2 focus:ring-white/60 placeholder:text-ink-400
+                   text-right font-medium
+                   transition-shadow"
       />
+    </div>
+  );
+}
+
+/* ───────────────────────────────────────────────────────────────────────── */
+/*  Subject dropdown — custom listbox (replaces chips)                       */
+/* ───────────────────────────────────────────────────────────────────────── */
+
+function SubjectDropdown({
+  subjects, value, onChange,
+}: {
+  subjects: Subject[];
+  value: string;
+  onChange: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const selected = subjects.find((s) => s.id === value) ?? null;
+  const selectedIcon = selected ? SUBJECT_ICON[selected.id] || 'flag' : null;
+
+  // Close on outside click / escape
+  useEffect(() => {
+    if (!open) return;
+    function onDown(e: MouseEvent | TouchEvent) {
+      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false);
+    }
+    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') setOpen(false); }
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('touchstart', onDown, { passive: true });
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('touchstart', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  return (
+    <div ref={wrapRef} className="relative">
+      {/* Field shell — same height/radius as the inputs above */}
+      <button
+        type="button"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+        className={`relative w-full h-12 pr-12 pl-12 rounded-xl bg-white text-right
+                    text-[14px] font-medium
+                    transition-shadow outline-none
+                    ${open ? 'ring-2 ring-white/60' : ''}
+                    ${selected ? 'text-ink-800' : 'text-ink-400'}`}
+      >
+        {/* Leading icon disc (same style as the Field's) */}
+        <span
+          className="absolute right-2 top-1/2 -translate-y-1/2
+                     w-9 h-9 rounded-xl flex items-center justify-center
+                     bg-gradient-to-br from-brand-50 to-brand-100
+                     text-brand-600 shadow-[inset_0_0_0_1px_rgba(13,128,116,.08)]"
+        >
+          {selectedIcon
+            ? <Icon name={selectedIcon} className="w-4 h-4" />
+            : <Icon name="category-pick" className="w-4 h-4" />}
+        </span>
+
+        <span className="block truncate">
+          {selected ? selected.name : 'موضوع گزارش را انتخاب کنید *'}
+        </span>
+
+        {/* Trailing chevron */}
+        <span
+          className={`absolute left-3 top-1/2 -translate-y-1/2 text-ink-500
+                      transition-transform duration-300 ${open ? 'rotate-180' : ''}`}
+          aria-hidden="true"
+        >
+          <Icon name="chevron-down" className="w-4 h-4" />
+        </span>
+      </button>
+
+      {/* Listbox */}
+      <AnimatePresence>
+        {open && (
+          <motion.ul
+            role="listbox"
+            initial={{ opacity: 0, y: 10, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0,  scale: 1 }}
+            exit={{    opacity: 0, y: 6,  scale: 0.97 }}
+            transition={{ type: 'spring', stiffness: 380, damping: 26, mass: 0.6 }}
+            className="absolute z-30 inset-x-0 mt-2 p-2 rounded-2xl bg-white
+                       shadow-[0_24px_60px_-12px_rgba(0,0,0,.30),0_0_0_1px_rgba(217,222,229,.7)]
+                       max-h-[320px] overflow-y-auto"
+          >
+            {subjects.map((s) => {
+              const isActive = value === s.id;
+              const iconName = SUBJECT_ICON[s.id] || 'flag';
+              return (
+                <li key={s.id} role="presentation">
+                  <button
+                    type="button"
+                    role="option"
+                    aria-selected={isActive}
+                    onClick={() => { onChange(s.id); setOpen(false); }}
+                    className={`group/item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl
+                                text-right transition-colors duration-150
+                                ${isActive
+                                  ? 'bg-brand-50 text-brand-700'
+                                  : 'text-ink-800 hover:bg-ink-50'}`}
+                  >
+                    <span
+                      className={`flex items-center justify-center w-9 h-9 rounded-xl shrink-0
+                                  transition-all duration-200
+                                  ${isActive
+                                    ? 'bg-brand-500 text-white shadow-[0_6px_14px_-4px_rgba(13,128,116,.55)]'
+                                    : 'bg-brand-50 text-brand-600 group-hover/item:bg-brand-100'}`}
+                    >
+                      <Icon name={iconName} className="w-4 h-4" />
+                    </span>
+                    <span className="flex-1 min-w-0">
+                      <span className="block text-[13px] font-extrabold leading-5 truncate">
+                        {s.name}
+                      </span>
+                      {s.description && (
+                        <span className="block text-[11px] text-ink-500 font-medium leading-5 truncate">
+                          {s.description}
+                        </span>
+                      )}
+                    </span>
+                    {isActive && (
+                      <span className="shrink-0 text-brand-600">
+                        <Icon name="check" className="w-4 h-4" strokeWidth={3} />
+                      </span>
+                    )}
+                  </button>
+                </li>
+              );
+            })}
+          </motion.ul>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -154,22 +282,18 @@ function Field({
 /* ───────────────────────────────────────────────────────────────────────── */
 
 function SlideToVerify({
-  verified,
-  onVerify,
-  onReset,
+  verified, onVerify,
 }: {
   verified: boolean;
   onVerify: () => void;
-  onReset: () => void;
 }) {
   const trackRef = useRef<HTMLDivElement>(null);
   const [x, setX] = useState(0);
   const [maxX, setMaxX] = useState(0);
   const [dragging, setDragging] = useState(false);
-  const THUMB = 44;                  // px
-  const COMPLETE_RATIO = 0.92;       // user must drag ~92% of the track
+  const THUMB = 48;                  // px
+  const COMPLETE_RATIO = 0.92;
 
-  // Compute the max draggable distance from the rendered track
   const measure = useCallback(() => {
     const t = trackRef.current;
     if (!t) return;
@@ -182,20 +306,19 @@ function SlideToVerify({
     return () => window.removeEventListener('resize', measure);
   }, [measure]);
 
+  useEffect(() => { if (verified) setX(maxX); }, [verified, maxX]);
+
   const beginDrag = (clientX: number) => {
     if (verified) return;
     setDragging(true);
-    const t = trackRef.current;
-    if (!t) return;
+    const t = trackRef.current; if (!t) return;
     const rect = t.getBoundingClientRect();
-    // RTL: thumb starts at the right, moves to the LEFT as user drags
     const offset = rect.right - clientX - THUMB / 2 - 4;
     setX(Math.min(maxX, Math.max(0, offset)));
   };
   const moveDrag = (clientX: number) => {
     if (!dragging || verified) return;
-    const t = trackRef.current;
-    if (!t) return;
+    const t = trackRef.current; if (!t) return;
     const rect = t.getBoundingClientRect();
     const offset = rect.right - clientX - THUMB / 2 - 4;
     setX(Math.min(maxX, Math.max(0, offset)));
@@ -207,12 +330,10 @@ function SlideToVerify({
       setX(maxX);
       onVerify();
     } else {
-      // snap back
       setX(0);
     }
   };
 
-  // Mouse + touch handlers wired to the document while dragging
   useEffect(() => {
     if (!dragging) return;
     const onMove = (e: MouseEvent | TouchEvent) => {
@@ -233,81 +354,100 @@ function SlideToVerify({
   }, [dragging, x, maxX]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const progress = maxX > 0 ? Math.min(1, x / maxX) : 0;
+  const pctNum = Math.round(progress * 100);
 
   return (
-    <div
-      ref={trackRef}
-      className={`relative w-full h-14 rounded-full overflow-hidden select-none
-                  ring-1 ring-black/5 transition-colors duration-300
-                  ${verified
-                    ? 'bg-gradient-to-l from-emerald-500 to-emerald-600'
-                    : 'bg-white/95'}`}
-      style={{ touchAction: 'pan-y' }}
-      role="button"
-      aria-label="برای تأیید بکشید"
-      aria-pressed={verified}
-    >
-      {/* Fill — the bar that grows as the user drags */}
+    <div className="w-full select-none">
       <div
-        aria-hidden="true"
-        className="absolute inset-y-0 right-0 transition-colors duration-300
-                   bg-gradient-to-l from-brand-400 to-brand-600
-                   pointer-events-none"
-        style={{
-          width: `${verified ? 100 : progress * 100}%`,
-          opacity: verified ? 0 : 0.95,
-        }}
-      />
-
-      {/* Label */}
-      <span
-        className={`absolute inset-0 flex items-center justify-center
-                    text-[13px] font-extrabold pointer-events-none
-                    transition-all duration-300
+        ref={trackRef}
+        className={`relative w-full h-14 rounded-full overflow-hidden
+                    ring-1 transition-colors duration-300
                     ${verified
-                      ? 'text-white'
-                      : (progress > 0.05 ? 'text-white' : 'text-ink-700')}`}
+                      ? 'bg-gradient-to-l from-emerald-500 via-emerald-500 to-brand-500 ring-emerald-300/40'
+                      : 'bg-gradient-to-br from-white via-white to-ink-50 ring-black/[0.06]'}`}
+        style={{ touchAction: 'pan-y' }}
+        role="button"
+        aria-label="برای تأیید بکشید"
+        aria-pressed={verified}
       >
-        {verified ? (
-          <span className="inline-flex items-center gap-2">
-            <Icon name="check" className="w-4 h-4" strokeWidth={3} />
-            هویت شما تأیید شد
-          </span>
-        ) : (
-          <span className="inline-flex items-center gap-2">
-            <Icon name="shield" className="w-4 h-4" />
-            برای تأیید، تب را بکشید
-          </span>
-        )}
-      </span>
+        {/* Fill — the bar that grows as the user drags */}
+        <div
+          aria-hidden="true"
+          className="absolute inset-y-0 right-0 transition-colors duration-300
+                     bg-gradient-to-l from-brand-400 to-brand-600
+                     pointer-events-none"
+          style={{
+            width: `${verified ? 100 : progress * 100}%`,
+            opacity: verified ? 0 : 0.95,
+          }}
+        />
 
-      {/* Thumb — draggable circle on the RTL-right edge */}
-      <motion.button
-        type="button"
-        onMouseDown={(e) => beginDrag(e.clientX)}
-        onTouchStart={(e) => beginDrag(e.touches[0].clientX)}
-        onClick={() => { if (verified) onReset(); }}
-        aria-label={verified ? 'بازنشانی' : 'برای تأیید بکشید'}
-        disabled={verified && false}
-        animate={{ x: verified ? -maxX : -x }}
-        transition={{ type: dragging ? false : 'spring', stiffness: 380, damping: 28 }}
-        className={`absolute top-1/2 right-1 -translate-y-1/2 w-11 h-11 rounded-full
-                    bg-white text-brand-600 flex items-center justify-center
-                    shadow-[0_6px_16px_-4px_rgba(0,0,0,.25)]
-                    cursor-grab active:cursor-grabbing
-                    ${verified ? 'bg-emerald-50 text-emerald-600' : ''}`}
-      >
-        {verified ? (
-          <Icon name="check" className="w-5 h-5" strokeWidth={3} />
-        ) : (
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            {/* Double-chevron pointing LEFT — universal 'drag this way' affordance */}
-            <polyline points="11 17 6 12 11 7" />
-            <polyline points="18 17 13 12 18 7" />
-          </svg>
+        {/* Background label */}
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-[1]">
+          {verified ? (
+            <span className="inline-flex items-center gap-1.5 text-[12.5px] font-extrabold text-white">
+              <Icon name="check" className="w-4 h-4" strokeWidth={3} />
+              تأیید شد — می‌توانید گزارش را ارسال کنید
+            </span>
+          ) : (
+            <span className={`inline-flex items-center gap-1.5 text-[12.5px] font-extrabold
+                              transition-colors duration-200
+                              ${pctNum > 30 ? 'text-white' : 'text-ink-600'}`}>
+              <Icon name="shield" className="w-4 h-4" />
+              <span>برای تأیید انسان بودن، بکشید ←</span>
+            </span>
+          )}
+        </div>
+
+        {/* Sparkles on success */}
+        {verified && (
+          <>
+            {[0, 1, 2, 3, 4].map((i) => (
+              <motion.span
+                key={i}
+                aria-hidden="true"
+                initial={{ opacity: 0, scale: 0.4 }}
+                animate={{ opacity: [0, 1, 0], scale: [0.4, 1.2, 0.4],
+                           x: (i - 2) * 22, y: -8 + (i % 2) * 14 }}
+                transition={{ duration: 1.2, delay: 0.1 + i * 0.06, repeat: Infinity, repeatDelay: 1.6 }}
+                className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2
+                           text-white pointer-events-none z-[2]"
+              >
+                <Icon name="sparkles" className="w-3 h-3" />
+              </motion.span>
+            ))}
+          </>
         )}
-      </motion.button>
+
+        {/* Draggable thumb */}
+        <motion.button
+          type="button"
+          aria-label={verified ? 'تأیید شد' : 'برای تأیید بکشید'}
+          aria-pressed={verified}
+          disabled={verified}
+          onMouseDown={(e) => beginDrag(e.clientX)}
+          onTouchStart={(e) => beginDrag(e.touches[0].clientX)}
+          animate={{ right: 4 + (verified ? maxX : x) }}
+          transition={{ type: dragging ? 'tween' : 'spring', stiffness: 300, damping: 28, duration: dragging ? 0 : 0.3 }}
+          className={`absolute top-1/2 -translate-y-1/2 w-12 h-12 rounded-full
+                      flex items-center justify-center cursor-grab active:cursor-grabbing
+                      shadow-[0_8px_18px_-4px_rgba(0,0,0,.30)]
+                      transition-colors duration-300 z-[3]
+                      ${verified
+                        ? 'bg-white text-emerald-600'
+                        : 'bg-gradient-to-br from-brand-500 to-brand-700 text-white'}`}
+        >
+          {verified ? (
+            <Icon name="check" className="w-5 h-5" strokeWidth={3} />
+          ) : (
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <polyline points="11 17 6 12 11 7" />
+              <polyline points="18 17 13 12 18 7" />
+            </svg>
+          )}
+        </motion.button>
+      </div>
     </div>
   );
 }
@@ -330,14 +470,12 @@ export function PublicReportSection({
   const [cooldown, setCooldown]   = useState(0);
   const fileInputRef              = useRef<HTMLInputElement>(null);
 
-  // File previews
   const previews = useMemo(
     () => files.map((f) => ({ name: f.name, url: URL.createObjectURL(f), size: f.size })),
     [files],
   );
   useEffect(() => () => previews.forEach((p) => URL.revokeObjectURL(p.url)), [previews]);
 
-  // Cooldown ticker after successful submission
   useEffect(() => {
     if (cooldown <= 0) return;
     const t = setTimeout(() => setCooldown((c) => c - 1), 1000);
@@ -353,9 +491,19 @@ export function PublicReportSection({
     const ok: File[] = [];
     const errors: string[] = [];
     for (const f of Array.from(newOnes)) {
-      if (!ALLOWED_TYPES.includes(f.type)) { errors.push(`${f.name}: فرمت غیرمجاز`); continue; }
-      if (f.size > MAX_FILE_SIZE)         { errors.push(`${f.name}: حجم بیش از ۵MB`); continue; }
-      if (files.length + ok.length >= MAX_ATTACHMENTS) { errors.push(`حداکثر ${MAX_ATTACHMENTS} فایل`); break; }
+      const ext = getExt(f.name);
+      if (!ALLOWED_EXTENSIONS.includes(ext as (typeof ALLOWED_EXTENSIONS)[number])) {
+        errors.push(`${f.name}: فرمت غیرمجاز (jpg / jpeg / png / webp)`);
+        continue;
+      }
+      if (f.size > MAX_FILE_SIZE) {
+        errors.push(`${f.name}: حجم بیش از ${MAX_IMAGE_SIZE_MB.toLocaleString('fa-IR')} مگابایت`);
+        continue;
+      }
+      if (files.length + ok.length >= MAX_ATTACHMENTS) {
+        errors.push(`حداکثر ${MAX_ATTACHMENTS.toLocaleString('fa-IR')} فایل قابل پیوست است`);
+        break;
+      }
       ok.push(f);
     }
     if (ok.length) setFiles((prev) => [...prev, ...ok].slice(0, MAX_ATTACHMENTS));
@@ -373,16 +521,11 @@ export function PublicReportSection({
     !submitting &&
     cooldown <= 0;
 
-  const selectedSubject = subjects.find((s) => s.id === form.subject_id);
-
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!canSubmit) return;
     setSubmitting(true);
     setErrorMsg(null);
-
-    // Wire-up note: real call posts FormData to /api/v1/public-reports/reports/
-    // with full_name, phone_number, subject_id, description, attachments[]
     setTimeout(() => {
       setSubmitting(false);
       setSubmitted(true);
@@ -390,7 +533,6 @@ export function PublicReportSection({
       setFiles([]);
       setVerified(false);
       setCooldown(COOLDOWN_SECS);
-      // Auto-dismiss the success banner after 6s
       setTimeout(() => setSubmitted(false), 6000);
     }, 1200);
   }
@@ -421,7 +563,7 @@ export function PublicReportSection({
             }} />
 
           {/* ── Identity row ───────────────────────────────────────────── */}
-          <div className="relative grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4 mb-4 md:mb-5">
+          <div className="relative grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4 mb-3 md:mb-4">
             <Field
               icon={<Icon name="user" className="w-4 h-4" />}
               placeholder="نام و نام خانوادگی"
@@ -440,47 +582,26 @@ export function PublicReportSection({
             />
           </div>
 
-          {/* ── Subject picker — visual chips, not a dropdown ──────────── */}
-          <fieldset className="relative mb-4 md:mb-5">
-            <legend className="text-[12.5px] font-extrabold text-white/90 mb-2 px-1">
-              <span className="inline-flex items-center gap-1.5">
-                <Icon name="category-pick" className="w-3.5 h-3.5" />
-                موضوع گزارش <span className="text-white/70">*</span>
-              </span>
-            </legend>
-            <div className="flex flex-wrap gap-2">
-              {subjects.map((s) => {
-                const isActive = form.subject_id === s.id;
-                const iconName = SUBJECT_ICON[s.id] || 'flag';
-                return (
-                  <button
-                    key={s.id}
-                    type="button"
-                    onClick={() => update('subject_id', s.id)}
-                    aria-pressed={isActive}
-                    className={`inline-flex items-center gap-1.5 h-10 px-3.5 rounded-full
-                                text-[12.5px] font-extrabold transition-all duration-200
-                                ${isActive
-                                  ? 'bg-white text-brand-700 shadow-[0_6px_14px_-6px_rgba(0,0,0,.35)] scale-[1.02]'
-                                  : 'bg-white/[0.12] text-white hover:bg-white/[0.18]'}`}
-                  >
-                    <Icon name={iconName} className="w-3.5 h-3.5" />
-                    <span>{s.name}</span>
-                  </button>
-                );
-              })}
-            </div>
-            {selectedSubject?.description && (
-              <p className="mt-2 px-1 text-[11.5px] text-white/75 font-medium">
-                <Icon name="check" className="w-3 h-3 inline-block -mt-0.5 ml-1" />
-                {selectedSubject.description}
-              </p>
-            )}
-          </fieldset>
+          {/* ── Subject dropdown — full width ──────────────────────────── */}
+          <div className="relative mb-3 md:mb-4">
+            <SubjectDropdown
+              subjects={subjects}
+              value={form.subject_id}
+              onChange={(id) => update('subject_id', id)}
+            />
+          </div>
 
           {/* ── Description with live char counter ─────────────────────── */}
           <div className="relative mb-4 md:mb-5">
-            <Icon name="message-square" className="w-4 h-4 text-brand-500 absolute right-4 top-[1.25rem] z-10 pointer-events-none" />
+            <span
+              className="absolute right-2 top-2 z-10 pointer-events-none
+                         w-9 h-9 rounded-xl flex items-center justify-center
+                         bg-gradient-to-br from-brand-50 to-brand-100
+                         text-brand-600 shadow-[inset_0_0_0_1px_rgba(13,128,116,.08)]"
+              aria-hidden="true"
+            >
+              <Icon name="message-square" className="w-4 h-4" />
+            </span>
             <textarea
               value={form.description}
               onChange={(e) => update('description', e.target.value.slice(0, DESC_MAX))}
@@ -489,7 +610,7 @@ export function PublicReportSection({
               rows={5}
               maxLength={DESC_MAX}
               dir="rtl"
-              className="w-full pr-10 pl-4 pt-[1.15rem] pb-4 rounded-xl bg-white text-ink-800 text-[14px]
+              className="w-full pr-12 pl-4 pt-3 pb-4 rounded-xl bg-white text-ink-800 text-[14px]
                          outline-none focus:ring-2 focus:ring-white/60 resize-y min-h-[140px]
                          text-right leading-7 font-medium"
             />
@@ -513,7 +634,7 @@ export function PublicReportSection({
               <Icon name="attach" className="w-3.5 h-3.5" />
               <span>پیوست تصویری</span>
               <span className="text-white/70 font-medium">
-                (اختیاری — حداکثر {MAX_ATTACHMENTS.toLocaleString('fa-IR')} تصویر، هر کدام تا ۵ مگابایت)
+                (اختیاری — حداکثر {MAX_ATTACHMENTS.toLocaleString('fa-IR')} تصویر، هر کدام تا {MAX_IMAGE_SIZE_MB.toLocaleString('fa-IR')} مگابایت — jpg / jpeg / png / webp)
               </span>
             </div>
             <Dropzone
@@ -531,7 +652,6 @@ export function PublicReportSection({
             <SlideToVerify
               verified={verified}
               onVerify={() => setVerified(true)}
-              onReset={() => setVerified(false)}
             />
             <button
               type="submit"
@@ -675,7 +795,7 @@ function Dropzone({
           ref={fileInputRef}
           type="file"
           multiple
-          accept={ALLOWED_TYPES.join(',')}
+          accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
           className="sr-only"
           onChange={(e) => { if (e.target.files) onAdd(e.target.files); e.currentTarget.value = ''; }}
           disabled={remaining <= 0}
@@ -691,13 +811,12 @@ function Dropzone({
           </p>
           {remaining > 0 && (
             <p className="text-[11px] text-white/75 font-medium">
-              {`${remaining.toLocaleString('fa-IR')} فایل دیگر می‌توانید اضافه کنید (jpg / png / webp)`}
+              {`${remaining.toLocaleString('fa-IR')} فایل دیگر می‌توانید اضافه کنید (jpg / jpeg / png / webp)`}
             </p>
           )}
         </div>
       </label>
 
-      {/* Preview thumbs */}
       {previews.length > 0 && (
         <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
           {previews.map((p, i) => (
