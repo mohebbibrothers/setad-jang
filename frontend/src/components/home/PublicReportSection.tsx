@@ -1,270 +1,399 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
-import Image from 'next/image';
+import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SectionTitle } from './SectionTitle';
+import { Icon } from '@/components/icons/Icon';
 
 /**
  * ───────────────────────────────────────────────────────────────────────────
- * Public Reports section — designer-free, backend-faithful (v2).
+ * Public reports — designer-free, backend-faithful (v2).
  *
  * Backend contract (apps/public_reports):
+ *   GET  /api/v1/public-reports/subjects/   ReportSubjectPublicSerializer
+ *     → { id, title, slug, description, order }
  *
- *   GET  /api/v1/public-reports/subjects/    ReportSubjectPublicSerializer
- *     → list of active subjects: { id, title, slug, description, order }
+ *   POST /api/v1/public-reports/reports/    ReportCreateSerializer
+ *     Fields (all required except where noted):
+ *       - full_name      : str, max 150           (REQUIRED)
+ *       - phone_number   : str, max 20            (optional)
+ *       - subject_id     : FK ReportSubject       (REQUIRED)
+ *       - description    : text                   (REQUIRED)
+ *       - attachments    : list<image>, max 5     (optional, jpg/png/webp, ≤5MB ea.)
  *
- *   POST /api/v1/public-reports/reports/     ReportCreateSerializer
- *     Fields the form must submit (multipart/form-data):
- *       - full_name       string  (required, max 150)
- *       - phone_number    string  (OPTIONAL, max 20)  — see model: blank/null OK
- *       - subject_id      int     (required, FK → ReportSubject)
- *       - description     string  (required, free text)
- *       - attachments[]   File[]  (optional, max 5 files, jpg|jpeg|png|webp,
- *                                  ≤ 5MB each — see validators.py)
- *     Throttle (anonymous): 5/min (ReportCreateAnonThrottle)
- *     Throttle (auth):     20/min (ReportCreateUserThrottle)
+ * Throttle (server-side, must respect on the client):
+ *   - 5 reports/min for anonymous clients
+ *   - 20 reports/min for authenticated clients
  *
- *   Status of a created report follows ReportStatus state machine:
- *     pending → reviewing → approved / rejected
+ * Designer-free brief (this is OUR design):
  *
- * UX upgrades wired to real backend features:
- *   1. Subject SELECT now becomes a chip-grid: every subject from the
- *      backend renders as a click-to-toggle chip. Easier to scan, less
- *      mobile keyboard friction. Description appears as a soft helper
- *      line under the active chip.
- *   2. Multi-file UPLOAD with drag-drop + thumbnail previews. Honours
- *      the backend's 5-file max, 5MB-per-file cap, and the allowed
- *      extension whitelist — client-side, so the user never wastes a
- *      submission on an invalid file.
- *   3. PRIVACY assurance card pinned beside the form (desktop) and as
- *      a soft banner on mobile — explains that phone is optional and
- *      identity is confidential. This is the single biggest psychology
- *      lever for getting users to send sensitive reports.
- *   4. Smart character counter on the description (motivates a useful
- *      length — 40 chars min is gently nudged).
- *   5. Success screen after submit shows the returned tracking id
- *      (#1234) with a copy-to-clipboard chip — matches the backend
- *      response payload.
- *   6. Submit button now carries a 'shield-check' icon (آیکن سپر-تأیید)
- *      that signals 'secure submission' — much more relevant than the
- *      generic paper-plane.
+ *   ┌────────────────────────────────────────────────────────────────┐
+ *   │  Brand-teal panel, dotted texture, 32px radius                 │
+ *   │                                                                │
+ *   │  ┌── identity row ────────────────────────────────────────┐    │
+ *   │  │  👤 نام و نام خانوادگی    📞 شماره تماس (اختیاری)     │    │
+ *   │  └────────────────────────────────────────────────────────┘    │
+ *   │                                                                │
+ *   │  ⊞ دسته‌بندی   ────────────────────────────────                │
+ *   │  [ 💰 فساد ] [ 🛡 امنیتی ] [ ⚖ تخلف ] [ 🎨 فرهنگی ] [ … ]    │
+ *   │                                                                │
+ *   │  ✎ شرح گزارش / سرنخ                          ··· 132/2000     │
+ *   │  ┌──────────────────────────────────────────────────────┐     │
+ *   │  │                                                       │     │
+ *   │  │                                                       │     │
+ *   │  └──────────────────────────────────────────────────────┘     │
+ *   │                                                                │
+ *   │  📎 مستندات (اختیاری — حداکثر ۵ تصویر)                       │
+ *   │  ┌──────────────────────────────────────────────────────┐     │
+ *   │  │  drag-drop area + clickable                          │     │
+ *   │  │  ↓ تصاویر را اینجا بکشید یا کلیک کنید                │     │
+ *   │  └──────────────────────────────────────────────────────┘     │
+ *   │  [thumb] [thumb] [thumb]                                       │
+ *   │                                                                │
+ *   │  🔒 برای تأیید بکشید →    [───────────────────●──────]        │
+ *   │                                                                │
+ *   │                                          [✈ ارسال گزارش]       │
+ *   └────────────────────────────────────────────────────────────────┘
+ *
+ * Innovations layered on the same backend contract:
+ *   1. Visual subject picker  → radio chips with icons, not a dropdown.
+ *      The selected subject's `description` text shows in a soft hint
+ *      under the chips (helps users pick the right bucket).
+ *   2. Live character counter on description, with min-length hint.
+ *   3. Drag-and-drop attachment uploader with thumb previews, remove
+ *      button, and a hard cap of 5 files (matches MAX_ATTACHMENTS_PER_REPORT).
+ *      Client-side size/type validation matches the validators.
+ *   4. SLIDE-TO-VERIFY anti-bot widget — replaces the boring 'من ربات
+ *      نیستم' checkbox with a tactile thumb the user has to drag to the
+ *      far edge. Mouse + touch, debounced reset on release-before-end,
+ *      animated check + lock on completion. Feels like Apple's
+ *      'slide to power off' or Slack's 'slide to confirm' — high-end UX.
+ *   5. Paper-plane submit button, with loading + success states.
+ *   6. Submit cooldown that mirrors the server throttle (5/min anon)
+ *      so the button disables for the appropriate window after a
+ *      successful POST.
  * ───────────────────────────────────────────────────────────────────────────
  */
 
-const MAX_ATTACHMENTS = 5;
-const MAX_FILE_MB = 5;
-const ALLOWED_EXT = ['jpg', 'jpeg', 'png', 'webp'];
-
 type Subject = { id: string; name: string; description?: string };
+
+const DEFAULT_SUBJECTS: Subject[] = [
+  { id: '1', name: 'گزارش فساد اقتصادی',  description: 'موارد سوءاستفاده مالی، رانت، اختلاس و …' },
+  { id: '2', name: 'گزارش تخلف اجتماعی', description: 'تخلفات اجتماعی، تجاوز به حقوق دیگران و …' },
+  { id: '3', name: 'گزارش امنیتی',        description: 'تهدیدات امنیتی، نفوذ، فعالیت‌های مشکوک' },
+  { id: '4', name: 'گزارش فرهنگی',        description: 'انحرافات فرهنگی، توهین به مقدسات و …' },
+  { id: '5', name: 'سایر موارد',           description: 'هر مورد دیگری که نیاز به بررسی دارد' },
+];
+
+const SUBJECT_ICON: Record<string, 'shield' | 'scale' | 'megaphone' | 'sparkles' | 'flag'> = {
+  '1': 'scale',       // اقتصادی
+  '2': 'megaphone',   // اجتماعی
+  '3': 'shield',      // امنیتی
+  '4': 'sparkles',    // فرهنگی
+  '5': 'flag',        // سایر
+};
+
+const MAX_ATTACHMENTS = 5;            // mirrors MAX_ATTACHMENTS_PER_REPORT
+const MAX_FILE_SIZE   = 5 * 1024 * 1024; // 5MB, mirrors validate_image_size
+const ALLOWED_TYPES   = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+const DESC_MIN        = 20;
+const DESC_MAX        = 2000;
+const COOLDOWN_SECS   = 12;           // gentle client-side back-off after success
 
 type FormState = {
   full_name: string;
-  phone: string;
+  phone_number: string;
   subject_id: string;
   description: string;
 };
 
-const INITIAL: FormState = { full_name: '', phone: '', subject_id: '', description: '' };
+const INITIAL: FormState = {
+  full_name: '', phone_number: '', subject_id: '', description: '',
+};
 
 /* ───────────────────────────────────────────────────────────────────────── */
-/*  Icons (hand-tuned, metaphor-rich)                                        */
+/*  Field                                                                    */
 /* ───────────────────────────────────────────────────────────────────────── */
 
-function ShieldCheckIcon({ className = 'w-4 h-4' }: { className?: string }) {
+function Field({
+  icon, placeholder, value, onChange, type = 'text', inputMode, maxLength, required,
+}: {
+  icon: React.ReactNode;
+  placeholder: string;
+  value: string;
+  onChange: (v: string) => void;
+  type?: string;
+  inputMode?: 'numeric' | 'tel' | 'text' | 'email';
+  maxLength?: number;
+  required?: boolean;
+}) {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2}
-         strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
-      <path d="M20 12.5V6.5L12 3 4 6.5v6c0 5 4 8.5 8 9.5 4-1 8-4.5 8-9.5Z" />
-      <path d="m8.5 12 2.5 2.5L16 9.5" />
-    </svg>
-  );
-}
-function UserIcon({ className = 'w-4 h-4' }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}
-         strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
-      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-      <circle cx="12" cy="7" r="4" />
-    </svg>
-  );
-}
-function PhoneIcon({ className = 'w-4 h-4' }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}
-         strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
-      <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92Z" />
-    </svg>
-  );
-}
-function MessageIcon({ className = 'w-4 h-4' }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}
-         strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
-      <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
-    </svg>
-  );
-}
-function UploadIcon({ className = 'w-4 h-4' }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}
-         strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
-      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-      <polyline points="17 8 12 3 7 8" />
-      <line x1="12" y1="3" x2="12" y2="15" />
-    </svg>
-  );
-}
-function CloseIcon({ className = 'w-3.5 h-3.5' }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4}
-         strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
-      <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-    </svg>
-  );
-}
-function CopyIcon({ className = 'w-3.5 h-3.5' }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}
-         strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
-      <rect x="9" y="9" width="13" height="13" rx="2" />
-      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-    </svg>
-  );
-}
-function CheckCircleIcon({ className = 'w-6 h-6' }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2}
-         strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
-      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-      <polyline points="22 4 12 14.01 9 11.01" />
-    </svg>
-  );
-}
-function LockIcon({ className = 'w-4 h-4' }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}
-         strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
-      <rect x="3" y="11" width="18" height="11" rx="2" />
-      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-    </svg>
-  );
-}
-function EyeOffIcon({ className = 'w-4 h-4' }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}
-         strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
-      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
-      <line x1="1" y1="1" x2="23" y2="23" />
-    </svg>
-  );
-}
-function BadgeIcon({ className = 'w-4 h-4' }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}
-         strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
-      <path d="m12 15 3.5 7-3.5-2-3.5 2 3.5-7" />
-      <circle cx="12" cy="9" r="7" />
-    </svg>
+    <div className="relative">
+      <span className="absolute right-4 top-1/2 -translate-y-1/2 text-brand-500 z-10 pointer-events-none">
+        {icon}
+      </span>
+      <input
+        type={type}
+        inputMode={inputMode}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder + (required ? ' *' : '')}
+        aria-label={placeholder}
+        maxLength={maxLength}
+        dir="rtl"
+        className="w-full h-12 pr-10 pl-4 rounded-xl bg-white text-ink-800 text-[14px]
+                   outline-none focus:ring-2 focus:ring-white/60 placeholder:text-ink-400 text-right
+                   font-medium"
+      />
+    </div>
   );
 }
 
 /* ───────────────────────────────────────────────────────────────────────── */
-/*  Helpers                                                                  */
+/*  Slide-to-verify ('من ربات نیستم' replacement)                            */
 /* ───────────────────────────────────────────────────────────────────────── */
 
-function bytesToHuman(b: number): string {
-  if (b < 1024) return `${b} B`;
-  if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`;
-  return `${(b / (1024 * 1024)).toFixed(1)} MB`;
+function SlideToVerify({
+  verified,
+  onVerify,
+  onReset,
+}: {
+  verified: boolean;
+  onVerify: () => void;
+  onReset: () => void;
+}) {
+  const trackRef = useRef<HTMLDivElement>(null);
+  const [x, setX] = useState(0);
+  const [maxX, setMaxX] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const THUMB = 44;                  // px
+  const COMPLETE_RATIO = 0.92;       // user must drag ~92% of the track
+
+  // Compute the max draggable distance from the rendered track
+  const measure = useCallback(() => {
+    const t = trackRef.current;
+    if (!t) return;
+    setMaxX(Math.max(0, t.clientWidth - THUMB - 8));
+  }, []);
+
+  useEffect(() => {
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, [measure]);
+
+  const beginDrag = (clientX: number) => {
+    if (verified) return;
+    setDragging(true);
+    const t = trackRef.current;
+    if (!t) return;
+    const rect = t.getBoundingClientRect();
+    // RTL: thumb starts at the right, moves to the LEFT as user drags
+    const offset = rect.right - clientX - THUMB / 2 - 4;
+    setX(Math.min(maxX, Math.max(0, offset)));
+  };
+  const moveDrag = (clientX: number) => {
+    if (!dragging || verified) return;
+    const t = trackRef.current;
+    if (!t) return;
+    const rect = t.getBoundingClientRect();
+    const offset = rect.right - clientX - THUMB / 2 - 4;
+    setX(Math.min(maxX, Math.max(0, offset)));
+  };
+  const endDrag = () => {
+    if (!dragging) return;
+    setDragging(false);
+    if (maxX > 0 && x / maxX >= COMPLETE_RATIO) {
+      setX(maxX);
+      onVerify();
+    } else {
+      // snap back
+      setX(0);
+    }
+  };
+
+  // Mouse + touch handlers wired to the document while dragging
+  useEffect(() => {
+    if (!dragging) return;
+    const onMove = (e: MouseEvent | TouchEvent) => {
+      const cx = e instanceof MouseEvent ? e.clientX : e.touches[0]?.clientX;
+      if (typeof cx === 'number') moveDrag(cx);
+    };
+    const onUp = () => endDrag();
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('touchmove', onMove, { passive: false });
+    document.addEventListener('mouseup', onUp);
+    document.addEventListener('touchend', onUp);
+    return () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('touchmove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      document.removeEventListener('touchend', onUp);
+    };
+  }, [dragging, x, maxX]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const progress = maxX > 0 ? Math.min(1, x / maxX) : 0;
+
+  return (
+    <div
+      ref={trackRef}
+      className={`relative w-full h-14 rounded-full overflow-hidden select-none
+                  ring-1 ring-black/5 transition-colors duration-300
+                  ${verified
+                    ? 'bg-gradient-to-l from-emerald-500 to-emerald-600'
+                    : 'bg-white/95'}`}
+      style={{ touchAction: 'pan-y' }}
+      role="button"
+      aria-label="برای تأیید بکشید"
+      aria-pressed={verified}
+    >
+      {/* Fill — the bar that grows as the user drags */}
+      <div
+        aria-hidden="true"
+        className="absolute inset-y-0 right-0 transition-colors duration-300
+                   bg-gradient-to-l from-brand-400 to-brand-600
+                   pointer-events-none"
+        style={{
+          width: `${verified ? 100 : progress * 100}%`,
+          opacity: verified ? 0 : 0.95,
+        }}
+      />
+
+      {/* Label */}
+      <span
+        className={`absolute inset-0 flex items-center justify-center
+                    text-[13px] font-extrabold pointer-events-none
+                    transition-all duration-300
+                    ${verified
+                      ? 'text-white'
+                      : (progress > 0.05 ? 'text-white' : 'text-ink-700')}`}
+      >
+        {verified ? (
+          <span className="inline-flex items-center gap-2">
+            <Icon name="check" className="w-4 h-4" strokeWidth={3} />
+            هویت شما تأیید شد
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-2">
+            <Icon name="shield" className="w-4 h-4" />
+            برای تأیید، تب را بکشید
+          </span>
+        )}
+      </span>
+
+      {/* Thumb — draggable circle on the RTL-right edge */}
+      <motion.button
+        type="button"
+        onMouseDown={(e) => beginDrag(e.clientX)}
+        onTouchStart={(e) => beginDrag(e.touches[0].clientX)}
+        onClick={() => { if (verified) onReset(); }}
+        aria-label={verified ? 'بازنشانی' : 'برای تأیید بکشید'}
+        disabled={verified && false}
+        animate={{ x: verified ? -maxX : -x }}
+        transition={{ type: dragging ? false : 'spring', stiffness: 380, damping: 28 }}
+        className={`absolute top-1/2 right-1 -translate-y-1/2 w-11 h-11 rounded-full
+                    bg-white text-brand-600 flex items-center justify-center
+                    shadow-[0_6px_16px_-4px_rgba(0,0,0,.25)]
+                    cursor-grab active:cursor-grabbing
+                    ${verified ? 'bg-emerald-50 text-emerald-600' : ''}`}
+      >
+        {verified ? (
+          <Icon name="check" className="w-5 h-5" strokeWidth={3} />
+        ) : (
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            {/* Double-chevron pointing LEFT — universal 'drag this way' affordance */}
+            <polyline points="11 17 6 12 11 7" />
+            <polyline points="18 17 13 12 18 7" />
+          </svg>
+        )}
+      </motion.button>
+    </div>
+  );
 }
 
-type Attachment = { file: File; previewUrl: string; id: string };
-
 /* ───────────────────────────────────────────────────────────────────────── */
-/*  Component                                                                */
+/*  Section                                                                  */
 /* ───────────────────────────────────────────────────────────────────────── */
 
 export function PublicReportSection({
-  subjects = [
-    { id: '1', name: 'گزارش فساد اقتصادی', description: 'اختلاس، رشوه، انحراف بودجه' },
-    { id: '2', name: 'گزارش تخلف اجتماعی', description: 'بی‌نظمی عمومی، آسیب‌های اجتماعی' },
-    { id: '3', name: 'گزارش امنیتی',        description: 'مسائل امنیت ملی و عمومی' },
-    { id: '4', name: 'گزارش فرهنگی',        description: 'انحرافات فرهنگی و رسانه‌ای' },
-    { id: '5', name: 'سایر موارد',          description: 'هر مورد دیگری که شایسته توجه است' },
-  ],
-}: { subjects?: Subject[] }) {
-  const [form, setForm] = useState<FormState>(INITIAL);
-  const [files, setFiles] = useState<Attachment[]>([]);
-  const [robot, setRobot] = useState(false);
+  subjects = DEFAULT_SUBJECTS,
+}: {
+  subjects?: Subject[];
+}) {
+  const [form, setForm]           = useState<FormState>(INITIAL);
+  const [files, setFiles]         = useState<File[]>([]);
+  const [verified, setVerified]   = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [submittedId, setSubmittedId] = useState<string | null>(null);
-  const [dragOver, setDragOver] = useState(false);
-  const [fileError, setFileError] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [submitted, setSubmitted] = useState(false);
+  const [errorMsg, setErrorMsg]   = useState<string | null>(null);
+  const [cooldown, setCooldown]   = useState(0);
+  const fileInputRef              = useRef<HTMLInputElement>(null);
+
+  // File previews
+  const previews = useMemo(
+    () => files.map((f) => ({ name: f.name, url: URL.createObjectURL(f), size: f.size })),
+    [files],
+  );
+  useEffect(() => () => previews.forEach((p) => URL.revokeObjectURL(p.url)), [previews]);
+
+  // Cooldown ticker after successful submission
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const t = setTimeout(() => setCooldown((c) => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [cooldown]);
 
   function update<K extends keyof FormState>(k: K, v: FormState[K]) {
     setForm((f) => ({ ...f, [k]: v }));
+    setErrorMsg(null);
   }
 
-  const addFiles = useCallback((list: FileList | File[]) => {
-    setFileError(null);
-    const incoming = Array.from(list);
-    const accepted: Attachment[] = [];
-    for (const f of incoming) {
-      if (files.length + accepted.length >= MAX_ATTACHMENTS) {
-        setFileError(`حداکثر ${MAX_ATTACHMENTS.toLocaleString('fa-IR')} فایل می‌توانید پیوست کنید.`);
-        break;
-      }
-      const ext = f.name.split('.').pop()?.toLowerCase() ?? '';
-      if (!ALLOWED_EXT.includes(ext)) {
-        setFileError(`فرمت مجاز نیست: «${f.name}». فقط ${ALLOWED_EXT.join('، ')}.`);
-        continue;
-      }
-      if (f.size > MAX_FILE_MB * 1024 * 1024) {
-        setFileError(`«${f.name}» بزرگ‌تر از ${MAX_FILE_MB.toLocaleString('fa-IR')} مگابایت است.`);
-        continue;
-      }
-      accepted.push({
-        file: f,
-        previewUrl: URL.createObjectURL(f),
-        id: `${f.name}-${f.size}-${Date.now()}-${Math.random()}`,
-      });
+  function addFiles(newOnes: FileList | File[]) {
+    const ok: File[] = [];
+    const errors: string[] = [];
+    for (const f of Array.from(newOnes)) {
+      if (!ALLOWED_TYPES.includes(f.type)) { errors.push(`${f.name}: فرمت غیرمجاز`); continue; }
+      if (f.size > MAX_FILE_SIZE)         { errors.push(`${f.name}: حجم بیش از ۵MB`); continue; }
+      if (files.length + ok.length >= MAX_ATTACHMENTS) { errors.push(`حداکثر ${MAX_ATTACHMENTS} فایل`); break; }
+      ok.push(f);
     }
-    if (accepted.length) setFiles((cur) => [...cur, ...accepted]);
-  }, [files.length]);
-
-  function removeFile(id: string) {
-    setFiles((cur) => {
-      const next = cur.filter((a) => a.id !== id);
-      const removed = cur.find((a) => a.id === id);
-      if (removed) URL.revokeObjectURL(removed.previewUrl);
-      return next;
-    });
+    if (ok.length) setFiles((prev) => [...prev, ...ok].slice(0, MAX_ATTACHMENTS));
+    if (errors.length) setErrorMsg(errors[0]);
   }
+  function removeFile(i: number) {
+    setFiles((prev) => prev.filter((_, idx) => idx !== i));
+  }
+
+  const canSubmit =
+    !!form.full_name.trim() &&
+    !!form.subject_id &&
+    form.description.trim().length >= DESC_MIN &&
+    verified &&
+    !submitting &&
+    cooldown <= 0;
+
+  const selectedSubject = subjects.find((s) => s.id === form.subject_id);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!robot || !form.full_name || !form.subject_id || !form.description) return;
+    if (!canSubmit) return;
     setSubmitting(true);
-    // Real call uses multipart/form-data → POST /api/v1/public-reports/reports/
-    // Demo: simulate a created-report id like the backend returns
+    setErrorMsg(null);
+
+    // Wire-up note: real call posts FormData to /api/v1/public-reports/reports/
+    // with full_name, phone_number, subject_id, description, attachments[]
     setTimeout(() => {
       setSubmitting(false);
-      setSubmittedId(`${Math.floor(Math.random() * 9000 + 1000)}`);
-      files.forEach((a) => URL.revokeObjectURL(a.previewUrl));
-      setFiles([]);
+      setSubmitted(true);
       setForm(INITIAL);
-      setRobot(false);
-    }, 1100);
+      setFiles([]);
+      setVerified(false);
+      setCooldown(COOLDOWN_SECS);
+      // Auto-dismiss the success banner after 6s
+      setTimeout(() => setSubmitted(false), 6000);
+    }, 1200);
   }
-
-  function resetForm() {
-    setSubmittedId(null);
-  }
-
-  const descLen = form.description.length;
-  const descMin = 40;
 
   return (
     <section className="section-y" id="reports">
@@ -274,419 +403,331 @@ export function PublicReportSection({
           description="چشم‌های شما، تیزترین چشم‌هاست. هر سرنخ، هر فساد و هر ناهنجاری را با ما در میان بگذارید — هویتتان محرمانه می‌ماند و هر گزارش با کد رهگیری قابل پیگیری است."
         />
 
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 md:gap-5 items-stretch">
-          {/* ── Form card ── */}
-          <motion.form
-            onSubmit={onSubmit}
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.5 }}
-            className="relative overflow-hidden rounded-[28px] md:rounded-[32px]
-                       bg-gradient-to-br from-brand-500 via-brand-500 to-brand-700
-                       p-5 md:p-8 lg:p-10 text-white"
-          >
-            {/* dotted texture */}
-            <div aria-hidden="true"
-                 className="absolute inset-0 opacity-[0.07] pointer-events-none"
-                 style={{
-                   backgroundImage:
-                     'radial-gradient(circle at 1px 1px, rgba(255,255,255,0.7) 1px, transparent 1px)',
-                   backgroundSize: '22px 22px',
-                 }} />
-            {/* soft glow corners */}
-            <div aria-hidden="true"
-                 className="absolute -top-32 -left-32 w-72 h-72 rounded-full bg-mint-500/15 blur-3xl" />
-            <div aria-hidden="true"
-                 className="absolute -bottom-24 -right-24 w-72 h-72 rounded-full bg-brand-900/30 blur-3xl" />
+        <motion.form
+          onSubmit={onSubmit}
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.5 }}
+          className="bg-brand-500 rounded-[2rem] md:rounded-[2.5rem] p-5 md:p-8 lg:p-10
+                     text-white relative overflow-hidden"
+        >
+          {/* Decorative dotted texture */}
+          <div aria-hidden="true" className="absolute inset-0 opacity-[0.06] pointer-events-none"
+            style={{
+              backgroundImage:
+                'radial-gradient(circle at 1px 1px, rgba(255,255,255,0.7) 1px, transparent 1px)',
+              backgroundSize: '22px 22px',
+            }} />
 
-            <AnimatePresence mode="wait">
-              {submittedId ? (
-                /* ── Success state ── */
-                <motion.div
-                  key="success"
-                  initial={{ opacity: 0, scale: 0.96 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.35 }}
-                  className="relative text-center py-10 md:py-14"
-                >
-                  <div className="mx-auto w-16 h-16 md:w-20 md:h-20 rounded-full
-                                  bg-white/15 backdrop-blur-md
-                                  ring-4 ring-white/30 flex items-center justify-center mb-5">
-                    <CheckCircleIcon className="w-8 h-8 md:w-10 md:h-10 text-mint-500" />
-                  </div>
-                  <h3 className="text-xl md:text-2xl font-extrabold mb-2">
-                    گزارش شما با موفقیت ثبت شد
-                  </h3>
-                  <p className="text-white/85 text-[13.5px] md:text-[14.5px] leading-7 max-w-md mx-auto">
-                    تیم بررسی به‌زودی به آن رسیدگی می‌کند. کد رهگیری گزارش شما را در جای امنی نگه دارید.
-                  </p>
-                  {/* tracking id chip */}
-                  <button
-                    type="button"
-                    onClick={() => navigator.clipboard?.writeText(submittedId)}
-                    className="mt-6 inline-flex items-center gap-2 px-4 h-11 rounded-full
-                               bg-white/95 text-brand-700 font-extrabold text-[13.5px]
-                               hover:bg-white transition-all hover:scale-[1.02]"
-                  >
-                    <CopyIcon className="w-4 h-4" />
-                    <span>کد رهگیری:</span>
-                    <span className="tabular-nums text-ink-900">#{submittedId}</span>
-                  </button>
-                  <div className="mt-5">
-                    <button
-                      type="button"
-                      onClick={resetForm}
-                      className="text-white/85 hover:text-white text-[13px] font-bold underline-offset-4 hover:underline"
-                    >
-                      ثبت گزارش جدید
-                    </button>
-                  </div>
-                </motion.div>
-              ) : (
-                /* ── Form state ── */
-                <motion.div
-                  key="form"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.25 }}
-                  className="relative"
-                >
-                  {/* row 1: full_name + phone */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
-                    <Field
-                      icon={<UserIcon className="w-4 h-4" />}
-                      placeholder="نام و نام خانوادگی"
-                      required
-                      value={form.full_name}
-                      onChange={(v) => update('full_name', v)}
-                    />
-                    <Field
-                      icon={<PhoneIcon className="w-4 h-4" />}
-                      placeholder="شماره تماس (اختیاری)"
-                      value={form.phone}
-                      onChange={(v) => update('phone', v)}
-                      type="tel"
-                      inputMode="tel"
-                      hint="می‌توانید ناشناس بمانید"
-                    />
-                  </div>
+          {/* ── Identity row ───────────────────────────────────────────── */}
+          <div className="relative grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4 mb-4 md:mb-5">
+            <Field
+              icon={<Icon name="user" className="w-4 h-4" />}
+              placeholder="نام و نام خانوادگی"
+              value={form.full_name}
+              onChange={(v) => update('full_name', v)}
+              maxLength={150}
+              required
+            />
+            <Field
+              icon={<Icon name="phone" className="w-4 h-4" />}
+              placeholder="شماره تماس (اختیاری)"
+              value={form.phone_number}
+              onChange={(v) => update('phone_number', v.replace(/[^0-9+]/g, '').slice(0, 14))}
+              type="tel"
+              inputMode="tel"
+            />
+          </div>
 
-                  {/* subject chips */}
-                  <div className="mt-3 md:mt-4">
-                    <label className="block text-[12.5px] font-extrabold text-white/90 mb-2">
-                      موضوع گزارش <span className="text-mint-500">*</span>
-                    </label>
-                    <div className="flex flex-wrap gap-2">
-                      {subjects.map((s) => {
-                        const active = form.subject_id === s.id;
-                        return (
-                          <button
-                            key={s.id}
-                            type="button"
-                            onClick={() => update('subject_id', s.id)}
-                            aria-pressed={active}
-                            className={`inline-flex items-center gap-1.5 h-10 px-4 rounded-full
-                                        text-[12.5px] font-extrabold transition-all duration-200
-                                        ${active
-                                          ? 'bg-white text-brand-700 shadow-[0_8px_18px_-6px_rgba(0,0,0,.3)] scale-[1.02]'
-                                          : 'bg-white/12 text-white ring-1 ring-white/20 hover:bg-white/20'}`}
-                          >
-                            {active && <CheckCircleIcon className="w-3.5 h-3.5" />}
-                            <span>{s.name}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                    <AnimatePresence>
-                      {form.subject_id && (
-                        <motion.p
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: 'auto' }}
-                          exit={{ opacity: 0, height: 0 }}
-                          className="mt-2 text-[11.5px] text-white/75 font-medium overflow-hidden"
-                        >
-                          {subjects.find((s) => s.id === form.subject_id)?.description}
-                        </motion.p>
-                      )}
-                    </AnimatePresence>
-                  </div>
-
-                  {/* description */}
-                  <div className="mt-3 md:mt-4 relative">
-                    <MessageIcon className="absolute right-4 top-[1.05rem] text-brand-500 z-10 pointer-events-none w-4 h-4" />
-                    <textarea
-                      value={form.description}
-                      onChange={(e) => update('description', e.target.value)}
-                      placeholder="شرح گزارش یا سرنخ شما را اینجا بنویسید…"
-                      aria-label="شرح گزارش"
-                      required
-                      rows={5}
-                      dir="rtl"
-                      className="w-full pr-10 pl-4 pt-[1.05rem] pb-9 rounded-2xl bg-white text-ink-800
-                                 text-[14px] outline-none focus:ring-2 focus:ring-mint-500/60
-                                 resize-y min-h-[140px] text-right leading-7
-                                 placeholder:text-ink-400"
-                    />
-                    {/* character counter (bottom-right of textarea) */}
-                    <span
-                      className={`absolute bottom-3 left-4 text-[11px] font-bold tabular-nums
-                                  ${descLen >= descMin ? 'text-brand-600' : 'text-ink-400'}`}
-                    >
-                      {descLen.toLocaleString('fa-IR')}
-                      {descLen < descMin && (
-                        <span className="text-ink-400 font-normal">
-                          {' '}/ حداقل {descMin.toLocaleString('fa-IR')}
-                        </span>
-                      )}
-                    </span>
-                  </div>
-
-                  {/* attachments — drag/drop + thumbnails */}
-                  <div className="mt-3 md:mt-4">
-                    <div
-                      onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-                      onDragLeave={() => setDragOver(false)}
-                      onDrop={(e) => {
-                        e.preventDefault(); setDragOver(false);
-                        if (e.dataTransfer.files?.length) addFiles(e.dataTransfer.files);
-                      }}
-                      className={`relative rounded-2xl border-2 border-dashed transition-colors
-                                  ${dragOver ? 'border-white bg-white/15' : 'border-white/30 bg-white/[0.06]'}`}
-                    >
-                      <input
-                        ref={fileInputRef}
-                        type="file"
-                        multiple
-                        accept={ALLOWED_EXT.map((e) => `.${e}`).join(',')}
-                        className="hidden"
-                        onChange={(e) => {
-                          if (e.target.files?.length) addFiles(e.target.files);
-                          if (e.target) e.target.value = '';
-                        }}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => fileInputRef.current?.click()}
-                        disabled={files.length >= MAX_ATTACHMENTS}
-                        className="w-full flex items-center justify-center gap-2 h-14 text-white/90
-                                   text-[13px] font-bold hover:text-white transition-colors
-                                   disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        <UploadIcon className="w-4 h-4" />
-                        <span>
-                          {files.length === 0
-                            ? 'افزودن پیوست — یا فایل را اینجا رها کنید'
-                            : `${files.length.toLocaleString('fa-IR')} از ${MAX_ATTACHMENTS.toLocaleString('fa-IR')} فایل`}
-                        </span>
-                        <span className="text-white/60 text-[11px] font-medium">
-                          (JPG · PNG · WEBP · حداکثر {MAX_FILE_MB.toLocaleString('fa-IR')}MB)
-                        </span>
-                      </button>
-
-                      {/* thumbnails */}
-                      {files.length > 0 && (
-                        <div className="flex flex-wrap gap-2 p-3 pt-0">
-                          {files.map((a) => (
-                            <div
-                              key={a.id}
-                              className="relative w-16 h-16 rounded-xl overflow-hidden ring-2 ring-white/30"
-                            >
-                              <Image
-                                src={a.previewUrl}
-                                alt={a.file.name}
-                                fill
-                                sizes="64px"
-                                className="object-cover"
-                                unoptimized
-                              />
-                              <button
-                                type="button"
-                                onClick={() => removeFile(a.id)}
-                                aria-label="حذف فایل"
-                                className="absolute -top-1.5 -right-1.5 w-6 h-6 rounded-full
-                                           bg-rose-500 text-white flex items-center justify-center
-                                           shadow-[0_4px_10px_-2px_rgba(225,29,72,.6)]
-                                           hover:scale-110 transition-transform"
-                              >
-                                <CloseIcon className="w-3 h-3" />
-                              </button>
-                              <span className="absolute inset-x-0 bottom-0 text-[9.5px] text-white
-                                               bg-black/55 text-center font-bold tabular-nums py-0.5">
-                                {bytesToHuman(a.file.size)}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                    {fileError && (
-                      <motion.p
-                        initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                        className="mt-2 text-[11.5px] font-bold text-rose-100
-                                   bg-rose-500/30 px-3 py-1.5 rounded-lg ring-1 ring-rose-200/40"
-                      >
-                        ⚠ {fileError}
-                      </motion.p>
-                    )}
-                  </div>
-
-                  {/* footer: robot check + submit */}
-                  <div className="mt-5 md:mt-6 flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
-                    <label
-                      className="inline-flex items-center gap-2.5 h-12 px-5 rounded-2xl
-                                 bg-white/95 hover:bg-white cursor-pointer transition-colors flex-shrink-0"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={robot}
-                        onChange={(e) => setRobot(e.target.checked)}
-                        className="sr-only peer"
-                      />
-                      <span
-                        className="w-[22px] h-[22px] rounded-md border-2 border-ink-300 bg-white
-                                   flex items-center justify-center transition-all
-                                   peer-checked:bg-brand-500 peer-checked:border-brand-500"
-                      >
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3}
-                             strokeLinecap="round" strokeLinejoin="round"
-                             className={`w-3.5 h-3.5 text-white transition-opacity ${robot ? 'opacity-100' : 'opacity-0'}`}>
-                          <polyline points="20 6 9 17 4 12" />
-                        </svg>
-                      </span>
-                      <span className="text-ink-800 font-extrabold text-[13px]">من ربات نیستم</span>
-                    </label>
-
-                    <button
-                      type="submit"
-                      disabled={!robot || submitting || !form.full_name || !form.subject_id || !form.description}
-                      className="sm:mr-auto inline-flex items-center justify-center gap-2 h-12 px-7 rounded-2xl
-                                 bg-gradient-to-l from-mint-500 to-[#1FB3A8] text-white
-                                 text-[14px] font-extrabold
-                                 shadow-[0_10px_28px_-8px_rgba(37,197,186,.65)]
-                                 hover:scale-[1.02] active:scale-[.98]
-                                 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100
-                                 transition-all"
-                    >
-                      {submitting ? (
-                        <>
-                          <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                            <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="3" opacity=".25" />
-                            <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="3"
-                                  strokeLinecap="round" />
-                          </svg>
-                          <span>در حال ارسال…</span>
-                        </>
-                      ) : (
-                        <>
-                          <ShieldCheckIcon className="w-[18px] h-[18px]" />
-                          <span>ارسال امن گزارش</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </motion.form>
-
-          {/* ── Privacy assurance card ── */}
-          <motion.aside
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.5, delay: 0.1 }}
-            className="rounded-[24px] bg-white border border-ink-100
-                       shadow-[0_2px_10px_-4px_rgba(15,20,32,.06)]
-                       p-5 md:p-6 flex flex-col gap-4"
-          >
-            <h3 className="text-[15px] font-extrabold text-ink-900 flex items-center gap-2">
-              <span className="inline-flex items-center justify-center w-9 h-9 rounded-xl
-                               bg-brand-50 text-brand-600">
-                <ShieldCheckIcon className="w-5 h-5" />
+          {/* ── Subject picker — visual chips, not a dropdown ──────────── */}
+          <fieldset className="relative mb-4 md:mb-5">
+            <legend className="text-[12.5px] font-extrabold text-white/90 mb-2 px-1">
+              <span className="inline-flex items-center gap-1.5">
+                <Icon name="category-pick" className="w-3.5 h-3.5" />
+                موضوع گزارش <span className="text-white/70">*</span>
               </span>
-              ضمانت محرمانگی
-            </h3>
-            <ul className="space-y-3 text-[12.5px] text-ink-700 leading-7">
-              <li className="flex items-start gap-2.5">
-                <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-brand-500 shrink-0" />
-                <span>هویت شما برای عموم محرمانه می‌ماند.</span>
-              </li>
-              <li className="flex items-start gap-2.5">
-                <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-brand-500 shrink-0" />
-                <span>شماره تماس اختیاری است؛ می‌توانید بدون آن گزارش بفرستید.</span>
-              </li>
-              <li className="flex items-start gap-2.5">
-                <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-brand-500 shrink-0" />
-                <span>ارتباط با سرور رمزنگاری end-to-end انجام می‌شود.</span>
-              </li>
-              <li className="flex items-start gap-2.5">
-                <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-brand-500 shrink-0" />
-                <span>بعد از ثبت، یک کد رهگیری دریافت می‌کنید تا وضعیت گزارش را پیگیری کنید.</span>
-              </li>
-            </ul>
-            <div className="mt-1 grid grid-cols-3 gap-2 text-center">
-              <Stat icon={<LockIcon className="w-3.5 h-3.5" />}        label="رمزنگاری" />
-              <Stat icon={<EyeOffIcon className="w-3.5 h-3.5" />}     label="ناشناس" />
-              <Stat icon={<BadgeIcon className="w-3.5 h-3.5" />}      label="پیگیری" />
+            </legend>
+            <div className="flex flex-wrap gap-2">
+              {subjects.map((s) => {
+                const isActive = form.subject_id === s.id;
+                const iconName = SUBJECT_ICON[s.id] || 'flag';
+                return (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => update('subject_id', s.id)}
+                    aria-pressed={isActive}
+                    className={`inline-flex items-center gap-1.5 h-10 px-3.5 rounded-full
+                                text-[12.5px] font-extrabold transition-all duration-200
+                                ${isActive
+                                  ? 'bg-white text-brand-700 shadow-[0_6px_14px_-6px_rgba(0,0,0,.35)] scale-[1.02]'
+                                  : 'bg-white/[0.12] text-white hover:bg-white/[0.18]'}`}
+                  >
+                    <Icon name={iconName} className="w-3.5 h-3.5" />
+                    <span>{s.name}</span>
+                  </button>
+                );
+              })}
             </div>
-          </motion.aside>
-        </div>
+            {selectedSubject?.description && (
+              <p className="mt-2 px-1 text-[11.5px] text-white/75 font-medium">
+                <Icon name="check" className="w-3 h-3 inline-block -mt-0.5 ml-1" />
+                {selectedSubject.description}
+              </p>
+            )}
+          </fieldset>
+
+          {/* ── Description with live char counter ─────────────────────── */}
+          <div className="relative mb-4 md:mb-5">
+            <Icon name="message-square" className="w-4 h-4 text-brand-500 absolute right-4 top-[1.25rem] z-10 pointer-events-none" />
+            <textarea
+              value={form.description}
+              onChange={(e) => update('description', e.target.value.slice(0, DESC_MAX))}
+              placeholder="شرح گزارش یا سرنخ شما را با جزئیات بنویسید…"
+              aria-label="شرح گزارش"
+              rows={5}
+              maxLength={DESC_MAX}
+              dir="rtl"
+              className="w-full pr-10 pl-4 pt-[1.15rem] pb-4 rounded-xl bg-white text-ink-800 text-[14px]
+                         outline-none focus:ring-2 focus:ring-white/60 resize-y min-h-[140px]
+                         text-right leading-7 font-medium"
+            />
+            <div className={`mt-1.5 px-1 flex items-center justify-between text-[11px] font-bold
+                             ${form.description.length < DESC_MIN ? 'text-white/70' : 'text-white/90'}`}>
+              <span>
+                {form.description.length < DESC_MIN
+                  ? `حداقل ${DESC_MIN.toLocaleString('fa-IR')} کاراکتر`
+                  : 'متن قابل قبول است'}
+              </span>
+              <span className="tabular-nums">
+                {form.description.length.toLocaleString('fa-IR')}
+                <span className="opacity-60"> / {DESC_MAX.toLocaleString('fa-IR')}</span>
+              </span>
+            </div>
+          </div>
+
+          {/* ── Attachments dropzone ───────────────────────────────────── */}
+          <div className="relative mb-5">
+            <div className="text-[12.5px] font-extrabold text-white/90 mb-2 px-1 inline-flex items-center gap-1.5">
+              <Icon name="attach" className="w-3.5 h-3.5" />
+              <span>پیوست تصویری</span>
+              <span className="text-white/70 font-medium">
+                (اختیاری — حداکثر {MAX_ATTACHMENTS.toLocaleString('fa-IR')} تصویر، هر کدام تا ۵ مگابایت)
+              </span>
+            </div>
+            <Dropzone
+              files={files}
+              previews={previews}
+              onAdd={addFiles}
+              onRemove={removeFile}
+              fileInputRef={fileInputRef}
+              max={MAX_ATTACHMENTS}
+            />
+          </div>
+
+          {/* ── Slide-to-verify + submit row ───────────────────────────── */}
+          <div className="relative grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3 items-center">
+            <SlideToVerify
+              verified={verified}
+              onVerify={() => setVerified(true)}
+              onReset={() => setVerified(false)}
+            />
+            <button
+              type="submit"
+              disabled={!canSubmit}
+              className="relative inline-flex items-center justify-center gap-2 h-14 px-7
+                         rounded-full bg-white text-brand-700 font-extrabold text-[14px]
+                         shadow-[0_8px_24px_-8px_rgba(0,0,0,.35)]
+                         transition-all duration-200
+                         disabled:opacity-50 disabled:cursor-not-allowed
+                         enabled:hover:scale-[1.02] enabled:active:scale-[.98] overflow-hidden"
+            >
+              <AnimatePresence mode="wait" initial={false}>
+                {submitting ? (
+                  <motion.span
+                    key="loading"
+                    initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}
+                    className="inline-flex items-center gap-2"
+                  >
+                    <svg className="w-5 h-5 animate-spin" viewBox="0 0 24 24" fill="none">
+                      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeOpacity="0.25" strokeWidth="3" />
+                      <path d="M22 12a10 10 0 0 0-10-10" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+                    </svg>
+                    در حال ارسال…
+                  </motion.span>
+                ) : cooldown > 0 ? (
+                  <motion.span
+                    key="cool"
+                    initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}
+                    className="inline-flex items-center gap-2 tabular-nums"
+                  >
+                    <Icon name="clock" className="w-4 h-4" />
+                    لطفاً {cooldown.toLocaleString('fa-IR')} ثانیه صبر کنید
+                  </motion.span>
+                ) : (
+                  <motion.span
+                    key="idle"
+                    initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}
+                    className="inline-flex items-center gap-2"
+                  >
+                    {/* Paper-plane icon — universal 'send' metaphor */}
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                         strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"
+                         className="-mt-0.5">
+                      <path d="M22 2 11 13" />
+                      <path d="M22 2 15 22l-4-9-9-4 20-7Z" />
+                    </svg>
+                    ارسال گزارش
+                  </motion.span>
+                )}
+              </AnimatePresence>
+            </button>
+          </div>
+
+          {/* ── Status banners ─────────────────────────────────────────── */}
+          <AnimatePresence>
+            {submitted && (
+              <motion.div
+                key="ok"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 4 }}
+                className="relative mt-4 flex items-start gap-3 px-4 py-3 rounded-xl
+                           bg-emerald-500/[0.15] ring-1 ring-emerald-300/40 text-white"
+                role="status"
+              >
+                <span className="w-8 h-8 rounded-full bg-emerald-500 text-white
+                                 flex items-center justify-center shrink-0
+                                 shadow-[0_6px_14px_-4px_rgba(16,185,129,.55)]">
+                  <Icon name="check" className="w-4 h-4" strokeWidth={3} />
+                </span>
+                <div className="flex-1 text-[13px] leading-7 font-bold">
+                  گزارش شما با موفقیت دریافت شد. کارشناسان ما در اولین فرصت پیگیری خواهند کرد.
+                </div>
+              </motion.div>
+            )}
+            {errorMsg && (
+              <motion.div
+                key="err"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 4 }}
+                className="relative mt-4 flex items-start gap-3 px-4 py-3 rounded-xl
+                           bg-rose-500/[0.18] ring-1 ring-rose-300/40 text-white"
+                role="alert"
+              >
+                <span className="w-8 h-8 rounded-full bg-rose-500 text-white
+                                 flex items-center justify-center shrink-0">
+                  <Icon name="close" className="w-4 h-4" strokeWidth={3} />
+                </span>
+                <div className="flex-1 text-[13px] leading-7 font-bold">{errorMsg}</div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* ── Privacy reassurance ────────────────────────────────────── */}
+          <p className="relative mt-4 text-center text-[11.5px] text-white/80 font-medium">
+            <Icon name="shield" className="w-3 h-3 inline-block -mt-0.5 ml-1" />
+            هویت گزارش‌دهنده محرمانه است · داده‌ها رمزنگاری شده ارسال می‌شوند
+          </p>
+        </motion.form>
       </div>
     </section>
   );
 }
 
 /* ───────────────────────────────────────────────────────────────────────── */
-/*  Atoms                                                                    */
+/*  Dropzone                                                                 */
 /* ───────────────────────────────────────────────────────────────────────── */
 
-function Field({
-  icon, placeholder, value, onChange, type = 'text', inputMode, required, hint,
+function Dropzone({
+  files, previews, onAdd, onRemove, fileInputRef, max,
 }: {
-  icon: React.ReactNode;
-  placeholder: string;
-  value: string;
-  onChange: (v: string) => void;
-  type?: string;
-  inputMode?: 'numeric' | 'tel';
-  required?: boolean;
-  hint?: string;
+  files: File[];
+  previews: { name: string; url: string; size: number }[];
+  onAdd: (f: FileList | File[]) => void;
+  onRemove: (i: number) => void;
+  fileInputRef: React.RefObject<HTMLInputElement | null>;
+  max: number;
 }) {
-  return (
-    <div>
-      <div className="relative">
-        <span className="absolute right-4 top-1/2 -translate-y-1/2 text-brand-500 z-10 pointer-events-none">
-          {icon}
-        </span>
-        <input
-          type={type}
-          inputMode={inputMode}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={placeholder}
-          aria-label={placeholder}
-          dir="rtl"
-          required={required}
-          className="w-full h-12 pr-10 pl-4 rounded-2xl bg-white text-ink-800
-                     text-[14px] outline-none focus:ring-2 focus:ring-mint-500/60
-                     placeholder:text-ink-400 text-right"
-        />
-      </div>
-      {hint && (
-        <p className="mt-1 mr-2 text-[10.5px] text-white/70 font-medium">{hint}</p>
-      )}
-    </div>
-  );
-}
+  const [hover, setHover] = useState(false);
+  const remaining = max - files.length;
 
-function Stat({ icon, label }: { icon: React.ReactNode; label: string }) {
   return (
-    <div className="flex flex-col items-center gap-1 p-2 rounded-xl bg-ink-50">
-      <span className="text-brand-600">{icon}</span>
-      <span className="text-[10.5px] font-extrabold text-ink-700">{label}</span>
-    </div>
+    <>
+      <label
+        onDragEnter={(e) => { e.preventDefault(); setHover(true); }}
+        onDragOver={(e)  => { e.preventDefault(); setHover(true); }}
+        onDragLeave={(e) => { e.preventDefault(); setHover(false); }}
+        onDrop={(e) => {
+          e.preventDefault();
+          setHover(false);
+          if (e.dataTransfer.files?.length) onAdd(e.dataTransfer.files);
+        }}
+        className={`relative block w-full rounded-2xl border-2 border-dashed cursor-pointer
+                    transition-all duration-200 px-4 py-5 text-center
+                    ${hover
+                      ? 'border-white bg-white/[0.15]'
+                      : 'border-white/30 bg-white/[0.06] hover:bg-white/[0.10]'}`}
+      >
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          accept={ALLOWED_TYPES.join(',')}
+          className="sr-only"
+          onChange={(e) => { if (e.target.files) onAdd(e.target.files); e.currentTarget.value = ''; }}
+          disabled={remaining <= 0}
+        />
+        <div className="flex flex-col items-center gap-1.5">
+          <span className="w-10 h-10 rounded-full bg-white/[0.15] flex items-center justify-center">
+            <Icon name="attach" className="w-5 h-5 text-white" />
+          </span>
+          <p className="text-[13px] font-extrabold text-white">
+            {remaining > 0
+              ? 'تصاویر را اینجا بکشید یا کلیک کنید'
+              : 'به سقف پیوست رسیدید'}
+          </p>
+          {remaining > 0 && (
+            <p className="text-[11px] text-white/75 font-medium">
+              {`${remaining.toLocaleString('fa-IR')} فایل دیگر می‌توانید اضافه کنید (jpg / png / webp)`}
+            </p>
+          )}
+        </div>
+      </label>
+
+      {/* Preview thumbs */}
+      {previews.length > 0 && (
+        <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
+          {previews.map((p, i) => (
+            <div
+              key={p.url}
+              className="relative aspect-square rounded-xl overflow-hidden bg-white/10
+                         ring-1 ring-white/20 group"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={p.url} alt={p.name} className="w-full h-full object-cover" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+              <button
+                type="button"
+                onClick={(e) => { e.preventDefault(); onRemove(i); }}
+                aria-label="حذف"
+                className="absolute top-1.5 left-1.5 w-7 h-7 rounded-full bg-rose-500 text-white
+                           flex items-center justify-center
+                           shadow-[0_4px_12px_-4px_rgba(225,29,72,.6)]
+                           hover:scale-110 active:scale-95 transition-transform"
+              >
+                <Icon name="close" className="w-3.5 h-3.5" strokeWidth={3} />
+              </button>
+              <p className="absolute bottom-1 inset-x-1 text-[10px] text-white font-bold
+                            truncate text-center px-1 drop-shadow opacity-0 group-hover:opacity-100 transition-opacity">
+                {(p.size / 1024).toFixed(0)} KB
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
+    </>
   );
 }
