@@ -49,15 +49,24 @@ type ApiCampaign = {
   remaining_shares?: number;
   progress_percent?: number;
   is_fully_funded?: boolean;
+  /** Some endpoints (detail or admin) embed the gallery directly. List
+   *  endpoint currently does NOT — the section fetches detail on demand. */
+  gallery_images?: Array<{
+    id: number;
+    image: string;
+    alt_text?: string;
+    display_order?: number;
+  }>;
 };
 
 export async function loadCampaigns(): Promise<CampaignCard[]> {
+  // Pull a full pager-worth (8) so the section's 2×4 pager has real data.
   const data = await safeApiFetch<Paginated<ApiCampaign>>(
-    '/madadkar/campaigns/?page_size=4', { revalidate: 300, tags: ['campaigns'] },
+    '/madadkar/campaigns/?page_size=8', { revalidate: 300, tags: ['campaigns'] },
   );
   const list = unwrap(data);
   if (list.length) {
-    return list.slice(0, 4).map((c) => ({
+    return list.map((c) => ({
       slug: c.slug,
       title: c.title,
       sponsor: c.sponsor?.name || 'گروه جهادی',
@@ -67,6 +76,10 @@ export async function loadCampaigns(): Promise<CampaignCard[]> {
       sharesRemaining: c.remaining_shares ?? 0,
       progressPercent: c.progress_percent ?? 0,
       coverUrl: c.cover_image ?? undefined,
+      gallery: (c.gallery_images ?? [])
+        .slice()
+        .sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0))
+        .map((g) => ({ url: g.image, alt: g.alt_text || c.title })),
     }));
   }
   // 8 campaigns → exactly 2 pager pages of 4 (2×2 on desktop each).

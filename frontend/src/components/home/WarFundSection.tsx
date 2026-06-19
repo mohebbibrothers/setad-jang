@@ -2,10 +2,12 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SectionTitle } from './SectionTitle';
 import { formatPersianNumber } from '@/lib/utils';
+import { apiFetch } from '@/lib/api';
+import { CampaignAlbum, type AlbumImage } from './CampaignAlbum';
 
 /**
  * ───────────────────────────────────────────────────────────────────────────
@@ -61,6 +63,10 @@ export type CampaignCard = {
   coverUrl?: string;
   toneFrom?: string;
   toneTo?: string;
+  /** Optional pre-loaded gallery (already sorted by display_order asc).
+   *  When absent and the user opens the album, the section fetches
+   *  /madadkar/campaigns/<slug>/ on-demand. */
+  gallery?: AlbumImage[];
 };
 
 /* ───────────────────────────────────────────────────────────────────────── */
@@ -181,10 +187,17 @@ function CoverFallback({
 /*  Card                                                                     */
 /* ───────────────────────────────────────────────────────────────────────── */
 
-function Card({ c, delay = 0 }: { c: CampaignCard; delay?: number }) {
+function Card({
+  c, delay = 0, onOpenAlbum,
+}: {
+  c: CampaignCard;
+  delay?: number;
+  onOpenAlbum: (c: CampaignCard) => void;
+}) {
   // UI displays Rial; backend stores Toman → ×10 at render time.
   const totalRial = c.totalAmount * 10;
   const pct = Math.round(c.progressPercent);
+  const galleryHint = (c.gallery?.length ?? (c.coverUrl ? 1 : 0));
 
   return (
     <motion.article
@@ -203,10 +216,13 @@ function Card({ c, delay = 0 }: { c: CampaignCard; delay?: number }) {
 
           {/* Right column: cover + percent + progress (DOM-first = RTL-right) */}
           <div className="flex flex-col items-center shrink-0 w-[96px] sm:w-[110px] md:w-[130px]">
-            <Link
-              href={`/madadkar/${c.slug}`}
+            <button
+              type="button"
+              onClick={() => onOpenAlbum(c)}
+              aria-label={`نمایش آلبوم تصاویر ${c.title}`}
               className="relative w-full aspect-square rounded-[14px] overflow-hidden
-                         ring-1 ring-ink-100 bg-ink-50"
+                         ring-1 ring-ink-100 bg-ink-50 cursor-zoom-in
+                         focus:outline-none focus:ring-2 focus:ring-brand-500"
             >
               {c.coverUrl ? (
                 <Image
@@ -219,7 +235,42 @@ function Card({ c, delay = 0 }: { c: CampaignCard; delay?: number }) {
               ) : (
                 <CoverFallback toneFrom={c.toneFrom} toneTo={c.toneTo} />
               )}
-            </Link>
+
+              {/* Album hint chip — bottom-left of the cover */}
+              {galleryHint > 1 && (
+                <span
+                  className="absolute bottom-1.5 left-1.5 inline-flex items-center gap-1
+                             px-1.5 h-5 rounded-md bg-black/55 backdrop-blur-sm
+                             text-white text-[10px] font-extrabold tabular-nums
+                             ring-1 ring-white/20"
+                  aria-hidden="true"
+                >
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
+                       stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"
+                       strokeLinejoin="round">
+                    <rect x="3" y="3" width="18" height="18" rx="3" />
+                    <circle cx="9" cy="9" r="2" />
+                    <path d="m21 15-5-5L5 21" />
+                  </svg>
+                  {formatPersianNumber(galleryHint)}
+                </span>
+              )}
+
+              {/* Hover veil + "view album" affordance */}
+              <span
+                className="absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-transparent
+                           opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                aria-hidden="true"
+              />
+              <span
+                className="absolute inset-x-0 bottom-1.5 text-center
+                           text-white text-[10.5px] font-extrabold
+                           opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                aria-hidden="true"
+              >
+                نمایش آلبوم
+              </span>
+            </button>
 
             {/* Percent — directly under the cover */}
             <div className="mt-2.5 text-[12px] font-extrabold text-ink-700 tabular-nums leading-none">
@@ -282,6 +333,19 @@ function Card({ c, delay = 0 }: { c: CampaignCard; delay?: number }) {
 /*  Section                                                                  */
 /* ───────────────────────────────────────────────────────────────────────── */
 
+/** Shape of the campaign detail endpoint we care about for the album.
+ *  Mirrors apps.madadkar.serializers.CampaignPublicDetailSerializer. */
+type ApiCampaignDetail = {
+  cover_image?: string | null;
+  title?: string;
+  gallery_images?: Array<{
+    id: number;
+    image: string;
+    alt_text?: string;
+    display_order?: number;
+  }>;
+};
+
 export function WarFundSection({ campaigns }: { campaigns: CampaignCard[] }) {
   // 4 cards per page (2×2 on desktop); extra pages reached via the pager.
   const PAGE_SIZE = 4;
@@ -294,6 +358,80 @@ export function WarFundSection({ campaigns }: { campaigns: CampaignCard[] }) {
 
   const prev = () => setPage((p) => (p - 1 + totalPages) % totalPages);
   const next = () => setPage((p) => (p + 1) % totalPages);
+
+  // ─── Album state ──────────────────────────────────────────────────────
+  const [album, setAlbum] = useState<{
+    open: boolean;
+    title: string;
+    sponsor?: string;
+    images: AlbumImage[];
+    loading: boolean;
+  }>({ open: false, title: '', images: [], loading: false });
+
+  // In-memory cache so reopening the same album never re-fetches.
+  const [galleryCache, setGalleryCache] = useState<Record<string, AlbumImage[]>>({});
+
+  const closeAlbum = useCallback(() => {
+    setAlbum((a) => ({ ...a, open: false }));
+  }, []);
+
+  const buildImages = useCallback(
+    (c: CampaignCard, extra?: AlbumImage[]): AlbumImage[] => {
+      const out: AlbumImage[] = [];
+      if (c.coverUrl) out.push({ url: c.coverUrl, alt: c.title });
+      if (extra && extra.length) {
+        // De-duplicate against the cover (some backends repeat the cover
+        // inside gallery_images by mistake).
+        for (const im of extra) {
+          if (!out.some((o) => o.url === im.url)) out.push(im);
+        }
+      }
+      return out;
+    },
+    [],
+  );
+
+  const openAlbum = useCallback(async (c: CampaignCard) => {
+    // 1. seed-supplied gallery → open immediately
+    if (c.gallery && c.gallery.length) {
+      setAlbum({
+        open: true, title: c.title, sponsor: c.sponsor,
+        images: buildImages(c, c.gallery), loading: false,
+      });
+      return;
+    }
+    // 2. cached → open immediately
+    const cached = galleryCache[c.slug];
+    if (cached) {
+      setAlbum({
+        open: true, title: c.title, sponsor: c.sponsor,
+        images: buildImages(c, cached), loading: false,
+      });
+      return;
+    }
+    // 3. fetch from detail endpoint
+    setAlbum({
+      open: true, title: c.title, sponsor: c.sponsor,
+      images: buildImages(c), loading: true,
+    });
+    try {
+      const detail = await apiFetch<ApiCampaignDetail>(
+        `/madadkar/campaigns/${encodeURIComponent(c.slug)}/`,
+        { revalidate: 300, tags: [`campaign:${c.slug}`] },
+      );
+      const fetched: AlbumImage[] = (detail.gallery_images ?? [])
+        .slice()
+        .sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0))
+        .map((g) => ({ url: g.image, alt: g.alt_text || c.title }));
+      setGalleryCache((prev) => ({ ...prev, [c.slug]: fetched }));
+      setAlbum((a) => a.open
+        ? { ...a, images: buildImages(c, fetched), loading: false }
+        : a);
+    } catch {
+      // Silent fallback — keep the cover-only album visible.
+      setAlbum((a) => a.open ? { ...a, loading: false } : a);
+    }
+  }, [galleryCache, buildImages]);
 
   return (
     <section className="section-y bg-white" id="warfund">
@@ -313,7 +451,7 @@ export function WarFundSection({ campaigns }: { campaigns: CampaignCard[] }) {
             className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-5"
           >
             {visible.map((c, i) => (
-              <Card key={c.slug} c={c} delay={i * 0.06} />
+              <Card key={c.slug} c={c} delay={i * 0.06} onOpenAlbum={openAlbum} />
             ))}
           </motion.div>
         </AnimatePresence>
@@ -360,6 +498,16 @@ export function WarFundSection({ campaigns }: { campaigns: CampaignCard[] }) {
           </Link>
         </div>
       </div>
+
+      {/* ── Album lightbox ───────────────────────────────────────────── */}
+      <CampaignAlbum
+        open={album.open}
+        onClose={closeAlbum}
+        title={album.title}
+        sponsor={album.sponsor}
+        images={album.images}
+        loading={album.loading}
+      />
     </section>
   );
 }
