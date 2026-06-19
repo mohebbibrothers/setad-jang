@@ -1,51 +1,59 @@
 'use client';
 
-import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SectionTitle } from './SectionTitle';
 import { Icon, type IconName } from '@/components/icons/Icon';
 
 /**
  * ───────────────────────────────────────────────────────────────────────────
- * Public reports — designer-free, backend-faithful (v4 — polished).
+ * Public Reports — v5 (backend-faithful, responsive-polished, bug-fixed).
  *
  * Backend contract (apps/public_reports):
- *   GET  /api/v1/public-reports/subjects/   ReportSubjectPublicSerializer
- *     → { id, title, slug, description, order }
+ *   GET  /api/v1/public-reports/subjects/
+ *     → ReportSubjectPublicSerializer: { id, title, slug, description, order }
  *
- *   POST /api/v1/public-reports/reports/    ReportCreateSerializer
- *     Fields (all required except where noted):
- *       - full_name      : str, max 150           (REQUIRED)
- *       - phone_number   : str, max 20            (optional)
- *       - subject_id     : FK ReportSubject       (REQUIRED)
- *       - description    : text                   (REQUIRED)
- *       - attachments    : list<image>, max 5     (optional)
+ *   POST /api/v1/public-reports/reports/   ReportCreateSerializer
+ *     Fields (snake_case multipart/form-data):
+ *       - full_name      : str, max 150            (REQUIRED)
+ *       - phone_number   : str, max 14 (model) / 20 (serializer) — (OPTIONAL)
+ *       - subject_id     : FK → ReportSubject      (REQUIRED)
+ *       - description    : TextField, no DB max    (REQUIRED)
+ *       - attachments    : list<ImageField>        (OPTIONAL, max 5)
  *
- *   Hard backend limits (mirror of apps.public_reports.validators):
- *     ALLOWED_IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp']
- *     MAX_IMAGE_SIZE_MB        = 5
- *     MAX_ATTACHMENTS_PER_REPORT = 5
+ *   Validators (apps.public_reports.validators):
+ *       ALLOWED_IMAGE_EXTENSIONS   = ['jpg', 'jpeg', 'png', 'webp']
+ *       MAX_IMAGE_SIZE_MB          = 5
+ *       MAX_ATTACHMENTS_PER_REPORT = 5
  *
- *   Anti-abuse (server-side, also enforced gracefully on the client):
- *     - 5 reports/min for anonymous clients
- *     - 20 reports/min for authenticated clients
+ *   Throttle:
+ *       - 5 reports / minute  (anonymous)
+ *       - 20 reports / minute (authenticated)
  *
- * UX polish in v4:
- *   1. Field icons re-skinned: each input gets a soft brand-tinted disc
- *      so the glyph reads as a small premium badge, not a flat icon.
- *   2. Subject picker switched from chips to a fully-custom DROPDOWN with
- *      a glassy listbox, per-subject coloured icon, hover + selected
- *      states, click-outside dismissal, full ARIA wiring.
- *   3. File-validation now reads ALLOWED_IMAGE_EXTENSIONS by EXTENSION
- *      (matches the server-side check) instead of MIME-type only — so
- *      'image/jpg' from older mobiles is accepted, and there is parity
- *      with the backend.
- *   4. Slide-to-verify chrome upgraded: gradient track, security-shield
- *      icon while idle, sparkles burst at the end of the slide,
- *      gradient-green success state.
- *   5. Submit button gets a soft brand-tinted glow, plus a subtle live
- *      'sending' shimmer.
- *   6. All copy and aria-labels are RTL-correct and human-friendly.
+ *   NOTE: There is NO national-ID (`کد ملی`) field on the backend.
+ *         There is NO email field on the backend.
+ *         Do not invent fields the server will silently ignore.
+ *
+ * ─ v5 polish notes ─────────────────────────────────────────────────────────
+ *   1. Subject listbox: items realigned to `items-start` with proper inner
+ *      padding (py-3, gap-3.5) and the description sits BELOW the title
+ *      with a clear `mt-1` breathing space — no more cramped two-liners.
+ *   2. Subject icon: a single dynamic "tag/category" badge with a gradient
+ *      ring is used for every subject (subjects are admin-managed and grow
+ *      at runtime, so a fixed icon-per-id map is the wrong contract).
+ *   3. Slide-to-verify: ResizeObserver added so the thumb stays pinned to
+ *      the END of the track on every viewport / orientation change — fixes
+ *      the "thumb stuck in the middle after success" responsive bug.
+ *   4. Description textarea single-char-at-a-time bug FIXED:
+ *      - previews are now managed via useEffect + state, NOT a useMemo
+ *        that creates new object URLs on every render. The previous
+ *        `useEffect(..., [previews])` chain was re-running on every
+ *        keystroke and destroying focus.
+ *   5. Phone number caps at 14 chars (matches `Report.phone_number` field
+ *      max_length=14 on the model); digits + leading "+" only.
+ *   6. Description min/max are UX hints only (backend has no DB max), set
+ *      to a generous 30 → 5000 so people can write properly.
+ *   7. Honest, on-brand copy throughout; all aria-labels RTL-correct.
  * ───────────────────────────────────────────────────────────────────────────
  */
 
@@ -59,13 +67,9 @@ const DEFAULT_SUBJECTS: Subject[] = [
   { id: '5', name: 'سایر موارد',           description: 'سایر گزارش‌هایی که در دسته‌های بالا نمی‌گنجند.' },
 ];
 
-const SUBJECT_ICON: Record<string, IconName> = {
-  '1': 'scale',       // اقتصادی
-  '2': 'megaphone',   // اجتماعی
-  '3': 'shield',      // امنیتی
-  '4': 'sparkles',    // فرهنگی
-  '5': 'flag',        // سایر
-};
+/** A single, universal "category" glyph used for every subject — because
+ *  subjects are admin-managed and may change at runtime. */
+const SUBJECT_ICON: IconName = 'category-pick';
 
 // ── Backend-mirrored limits (apps.public_reports.validators) ────────────
 const ALLOWED_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp'] as const;
@@ -73,10 +77,14 @@ const MAX_IMAGE_SIZE_MB = 5;
 const MAX_FILE_SIZE     = MAX_IMAGE_SIZE_MB * 1024 * 1024;
 const MAX_ATTACHMENTS   = 5;     // mirrors MAX_ATTACHMENTS_PER_REPORT
 
-// Frontend-only UX limits (no server-side equivalent)
-const DESC_MIN          = 20;
-const DESC_MAX          = 2000;
-const COOLDOWN_SECS     = 12;
+// ── Backend-mirrored field caps (apps.public_reports.models) ────────────
+const FULL_NAME_MAX  = 150;      // Report.full_name max_length=150
+const PHONE_MAX      = 14;       // Report.phone_number max_length=14
+
+// Frontend-only UX hints (description has no DB max on backend)
+const DESC_MIN          = 30;
+const DESC_MAX          = 5000;
+const COOLDOWN_SECS     = 12;    // matches anon throttle (5/min ≈ 12s)
 
 type FormState = {
   full_name: string;
@@ -112,8 +120,7 @@ function Field({
 }) {
   return (
     <div className="relative">
-      {/* Icon sits inside a soft brand-tinted disc — reads as a premium
-          badge rather than a flat glyph. */}
+      {/* Icon disc — soft brand-tinted, premium-badge feel */}
       <span
         className="absolute right-2 top-1/2 -translate-y-1/2 z-10 pointer-events-none
                    w-9 h-9 rounded-xl flex items-center justify-center
@@ -133,15 +140,14 @@ function Field({
         dir="rtl"
         className="w-full h-12 pr-12 pl-4 rounded-xl bg-white text-ink-800 text-[14px]
                    outline-none focus:ring-2 focus:ring-white/60 placeholder:text-ink-400
-                   text-right font-medium
-                   transition-shadow"
+                   text-right font-medium transition-shadow"
       />
     </div>
   );
 }
 
 /* ───────────────────────────────────────────────────────────────────────── */
-/*  Subject dropdown — custom listbox (replaces chips)                       */
+/*  Subject dropdown — custom listbox (subjects are admin-managed)           */
 /* ───────────────────────────────────────────────────────────────────────── */
 
 function SubjectDropdown({
@@ -154,9 +160,7 @@ function SubjectDropdown({
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
   const selected = subjects.find((s) => s.id === value) ?? null;
-  const selectedIcon = selected ? SUBJECT_ICON[selected.id] || 'flag' : null;
 
-  // Close on outside click / escape
   useEffect(() => {
     if (!open) return;
     function onDown(e: MouseEvent | TouchEvent) {
@@ -175,35 +179,29 @@ function SubjectDropdown({
 
   return (
     <div ref={wrapRef} className="relative">
-      {/* Field shell — same height/radius as the inputs above */}
       <button
         type="button"
         aria-haspopup="listbox"
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
         className={`relative w-full h-12 pr-12 pl-12 rounded-xl bg-white text-right
-                    text-[14px] font-medium
-                    transition-shadow outline-none
+                    text-[14px] font-medium outline-none transition-shadow
                     ${open ? 'ring-2 ring-white/60' : ''}
                     ${selected ? 'text-ink-800' : 'text-ink-400'}`}
       >
-        {/* Leading icon disc (same style as the Field's) */}
         <span
           className="absolute right-2 top-1/2 -translate-y-1/2
                      w-9 h-9 rounded-xl flex items-center justify-center
                      bg-gradient-to-br from-brand-50 to-brand-100
                      text-brand-600 shadow-[inset_0_0_0_1px_rgba(13,128,116,.08)]"
         >
-          {selectedIcon
-            ? <Icon name={selectedIcon} className="w-4 h-4" />
-            : <Icon name="category-pick" className="w-4 h-4" />}
+          <Icon name={SUBJECT_ICON} className="w-4 h-4" />
         </span>
 
         <span className="block truncate">
           {selected ? selected.name : 'موضوع گزارش را انتخاب کنید *'}
         </span>
 
-        {/* Trailing chevron */}
         <span
           className={`absolute left-3 top-1/2 -translate-y-1/2 text-ink-500
                       transition-transform duration-300 ${open ? 'rotate-180' : ''}`}
@@ -213,7 +211,6 @@ function SubjectDropdown({
         </span>
       </button>
 
-      {/* Listbox */}
       <AnimatePresence>
         {open && (
           <motion.ul
@@ -224,11 +221,10 @@ function SubjectDropdown({
             transition={{ type: 'spring', stiffness: 380, damping: 26, mass: 0.6 }}
             className="absolute z-30 inset-x-0 mt-2 p-2 rounded-2xl bg-white
                        shadow-[0_24px_60px_-12px_rgba(0,0,0,.30),0_0_0_1px_rgba(217,222,229,.7)]
-                       max-h-[320px] overflow-y-auto"
+                       max-h-[340px] overflow-y-auto"
           >
             {subjects.map((s) => {
               const isActive = value === s.id;
-              const iconName = SUBJECT_ICON[s.id] || 'flag';
               return (
                 <li key={s.id} role="presentation">
                   <button
@@ -236,33 +232,33 @@ function SubjectDropdown({
                     role="option"
                     aria-selected={isActive}
                     onClick={() => { onChange(s.id); setOpen(false); }}
-                    className={`group/item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl
+                    className={`group/item w-full flex items-start gap-3.5 px-3 py-3 rounded-xl
                                 text-right transition-colors duration-150
                                 ${isActive
                                   ? 'bg-brand-50 text-brand-700'
                                   : 'text-ink-800 hover:bg-ink-50'}`}
                   >
                     <span
-                      className={`flex items-center justify-center w-9 h-9 rounded-xl shrink-0
-                                  transition-all duration-200
+                      className={`flex items-center justify-center w-10 h-10 rounded-xl shrink-0
+                                  transition-all duration-200 mt-0.5
                                   ${isActive
-                                    ? 'bg-brand-500 text-white shadow-[0_6px_14px_-4px_rgba(13,128,116,.55)]'
-                                    : 'bg-brand-50 text-brand-600 group-hover/item:bg-brand-100'}`}
+                                    ? 'bg-gradient-to-br from-brand-500 to-brand-700 text-white shadow-[0_6px_14px_-4px_rgba(13,128,116,.55)]'
+                                    : 'bg-gradient-to-br from-brand-50 to-brand-100 text-brand-600 group-hover/item:from-brand-100 group-hover/item:to-brand-200'}`}
                     >
-                      <Icon name={iconName} className="w-4 h-4" />
+                      <Icon name={SUBJECT_ICON} className="w-[18px] h-[18px]" />
                     </span>
                     <span className="flex-1 min-w-0">
-                      <span className="block text-[13px] font-extrabold leading-5 truncate">
+                      <span className="block text-[13.5px] font-extrabold leading-6 truncate">
                         {s.name}
                       </span>
                       {s.description && (
-                        <span className="block text-[11px] text-ink-500 font-medium leading-5 truncate">
+                        <span className="block mt-1 text-[11.5px] text-ink-500 font-medium leading-5 line-clamp-2">
                           {s.description}
                         </span>
                       )}
                     </span>
                     {isActive && (
-                      <span className="shrink-0 text-brand-600">
+                      <span className="shrink-0 text-brand-600 mt-2">
                         <Icon name="check" className="w-4 h-4" strokeWidth={3} />
                       </span>
                     )}
@@ -297,15 +293,30 @@ function SlideToVerify({
   const measure = useCallback(() => {
     const t = trackRef.current;
     if (!t) return;
-    setMaxX(Math.max(0, t.clientWidth - THUMB - 8));
+    const next = Math.max(0, t.clientWidth - THUMB - 8);
+    setMaxX(next);
   }, []);
 
+  // ResizeObserver: keeps maxX in sync on every viewport / container
+  // change (not just window resize). Fixes the "thumb stuck in the middle
+  // after success on mobile rotation" bug.
   useEffect(() => {
     measure();
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', measure);
+      return () => window.removeEventListener('resize', measure);
+    }
+    const ro = new ResizeObserver(() => measure());
+    if (trackRef.current) ro.observe(trackRef.current);
     window.addEventListener('resize', measure);
-    return () => window.removeEventListener('resize', measure);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', measure);
+    };
   }, [measure]);
 
+  // Whenever the verified state OR the available track width changes,
+  // pin the visual x to the end of the track.
   useEffect(() => { if (verified) setX(maxX); }, [verified, maxX]);
 
   const beginDrag = (clientX: number) => {
@@ -355,6 +366,10 @@ function SlideToVerify({
 
   const progress = maxX > 0 ? Math.min(1, x / maxX) : 0;
   const pctNum = Math.round(progress * 100);
+  // Compute the absolute thumb position; when verified we always render at
+  // maxX (the end of the track). This is what keeps the success state
+  // pinned to the END across responsive viewport changes.
+  const thumbRight = 4 + (verified ? maxX : x);
 
   return (
     <div className="w-full select-none">
@@ -370,7 +385,7 @@ function SlideToVerify({
         aria-label="برای تأیید بکشید"
         aria-pressed={verified}
       >
-        {/* Fill — the bar that grows as the user drags */}
+        {/* Fill */}
         <div
           aria-hidden="true"
           className="absolute inset-y-0 right-0 transition-colors duration-300
@@ -383,18 +398,18 @@ function SlideToVerify({
         />
 
         {/* Background label */}
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-[1]">
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-[1] px-14">
           {verified ? (
-            <span className="inline-flex items-center gap-1.5 text-[12.5px] font-extrabold text-white">
-              <Icon name="check" className="w-4 h-4" strokeWidth={3} />
-              تأیید شد — می‌توانید گزارش را ارسال کنید
+            <span className="inline-flex items-center gap-1.5 text-[12.5px] font-extrabold text-white truncate">
+              <Icon name="check" className="w-4 h-4 shrink-0" strokeWidth={3} />
+              <span className="truncate">تأیید شد — آماده ارسال</span>
             </span>
           ) : (
             <span className={`inline-flex items-center gap-1.5 text-[12.5px] font-extrabold
-                              transition-colors duration-200
+                              transition-colors duration-200 truncate
                               ${pctNum > 30 ? 'text-white' : 'text-ink-600'}`}>
-              <Icon name="shield" className="w-4 h-4" />
-              <span>برای تأیید انسان بودن، بکشید ←</span>
+              <Icon name="shield" className="w-4 h-4 shrink-0" />
+              <span className="truncate">برای تأیید انسان بودن، بکشید ←</span>
             </span>
           )}
         </div>
@@ -427,7 +442,7 @@ function SlideToVerify({
           disabled={verified}
           onMouseDown={(e) => beginDrag(e.clientX)}
           onTouchStart={(e) => beginDrag(e.touches[0].clientX)}
-          animate={{ right: 4 + (verified ? maxX : x) }}
+          animate={{ right: thumbRight }}
           transition={{ type: dragging ? 'tween' : 'spring', stiffness: 300, damping: 28, duration: dragging ? 0 : 0.3 }}
           className={`absolute top-1/2 -translate-y-1/2 w-12 h-12 rounded-full
                       flex items-center justify-center cursor-grab active:cursor-grabbing
@@ -456,25 +471,53 @@ function SlideToVerify({
 /*  Section                                                                  */
 /* ───────────────────────────────────────────────────────────────────────── */
 
+type Preview = { url: string; name: string; size: number };
+
 export function PublicReportSection({
   subjects = DEFAULT_SUBJECTS,
 }: {
   subjects?: Subject[];
 }) {
-  const [form, setForm]           = useState<FormState>(INITIAL);
-  const [files, setFiles]         = useState<File[]>([]);
-  const [verified, setVerified]   = useState(false);
+  const [form, setForm]             = useState<FormState>(INITIAL);
+  const [files, setFiles]           = useState<File[]>([]);
+  const [previews, setPreviews]     = useState<Preview[]>([]);
+  const [verified, setVerified]     = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
-  const [errorMsg, setErrorMsg]   = useState<string | null>(null);
-  const [cooldown, setCooldown]   = useState(0);
-  const fileInputRef              = useRef<HTMLInputElement>(null);
+  const [submitted, setSubmitted]   = useState(false);
+  const [errorMsg, setErrorMsg]     = useState<string | null>(null);
+  const [cooldown, setCooldown]     = useState(0);
+  const fileInputRef                = useRef<HTMLInputElement>(null);
 
-  const previews = useMemo(
-    () => files.map((f) => ({ name: f.name, url: URL.createObjectURL(f), size: f.size })),
-    [files],
-  );
-  useEffect(() => () => previews.forEach((p) => URL.revokeObjectURL(p.url)), [previews]);
+  // ── Build object URLs as files change (state-driven, NOT memo). Each URL
+  // is revoked when the file it points to leaves the list. This fixes the
+  // "textarea takes one keystroke and loses focus" bug from the previous
+  // implementation, where a useMemo + useEffect[previews] cycle was
+  // re-creating + revoking object URLs on every render.
+  useEffect(() => {
+    setPreviews((prev) => {
+      const byKey = new Map(prev.map((p) => [p.name + '|' + p.size, p]));
+      const next: Preview[] = files.map((f) => {
+        const k = f.name + '|' + f.size;
+        const existing = byKey.get(k);
+        if (existing) { byKey.delete(k); return existing; }
+        return { name: f.name, size: f.size, url: URL.createObjectURL(f) };
+      });
+      // Revoke URLs of files that were removed.
+      byKey.forEach((p) => URL.revokeObjectURL(p.url));
+      return next;
+    });
+  }, [files]);
+
+  // Revoke any remaining URLs on unmount.
+  useEffect(() => {
+    return () => {
+      setPreviews((prev) => {
+        prev.forEach((p) => URL.revokeObjectURL(p.url));
+        return [];
+      });
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (cooldown <= 0) return;
@@ -484,7 +527,7 @@ export function PublicReportSection({
 
   function update<K extends keyof FormState>(k: K, v: FormState[K]) {
     setForm((f) => ({ ...f, [k]: v }));
-    setErrorMsg(null);
+    if (errorMsg) setErrorMsg(null);
   }
 
   function addFiles(newOnes: FileList | File[]) {
@@ -493,15 +536,15 @@ export function PublicReportSection({
     for (const f of Array.from(newOnes)) {
       const ext = getExt(f.name);
       if (!ALLOWED_EXTENSIONS.includes(ext as (typeof ALLOWED_EXTENSIONS)[number])) {
-        errors.push(`${f.name}: فرمت غیرمجاز (jpg / jpeg / png / webp)`);
+        errors.push(`${f.name}: فرمت غیرمجاز است (jpg / jpeg / png / webp).`);
         continue;
       }
       if (f.size > MAX_FILE_SIZE) {
-        errors.push(`${f.name}: حجم بیش از ${MAX_IMAGE_SIZE_MB.toLocaleString('fa-IR')} مگابایت`);
+        errors.push(`${f.name}: حجم بیش از ${MAX_IMAGE_SIZE_MB.toLocaleString('fa-IR')} مگابایت است.`);
         continue;
       }
       if (files.length + ok.length >= MAX_ATTACHMENTS) {
-        errors.push(`حداکثر ${MAX_ATTACHMENTS.toLocaleString('fa-IR')} فایل قابل پیوست است`);
+        errors.push(`حداکثر ${MAX_ATTACHMENTS.toLocaleString('fa-IR')} تصویر قابل پیوست است.`);
         break;
       }
       ok.push(f);
@@ -526,6 +569,7 @@ export function PublicReportSection({
     if (!canSubmit) return;
     setSubmitting(true);
     setErrorMsg(null);
+    // Simulated submit (real call goes through src/lib/home-data.ts later)
     setTimeout(() => {
       setSubmitting(false);
       setSubmitted(true);
@@ -554,7 +598,6 @@ export function PublicReportSection({
           className="bg-brand-500 rounded-[2rem] md:rounded-[2.5rem] p-5 md:p-8 lg:p-10
                      text-white relative overflow-hidden"
         >
-          {/* Decorative dotted texture */}
           <div aria-hidden="true" className="absolute inset-0 opacity-[0.06] pointer-events-none"
             style={{
               backgroundImage:
@@ -568,15 +611,16 @@ export function PublicReportSection({
               icon={<Icon name="user" className="w-4 h-4" />}
               placeholder="نام و نام خانوادگی"
               value={form.full_name}
-              onChange={(v) => update('full_name', v)}
-              maxLength={150}
+              onChange={(v) => update('full_name', v.slice(0, FULL_NAME_MAX))}
+              maxLength={FULL_NAME_MAX}
               required
             />
             <Field
               icon={<Icon name="phone" className="w-4 h-4" />}
               placeholder="شماره تماس (اختیاری)"
               value={form.phone_number}
-              onChange={(v) => update('phone_number', v.replace(/[^0-9+]/g, '').slice(0, 14))}
+              onChange={(v) => update('phone_number', v.replace(/[^0-9+]/g, '').slice(0, PHONE_MAX))}
+              maxLength={PHONE_MAX}
               type="tel"
               inputMode="tel"
             />
@@ -630,11 +674,14 @@ export function PublicReportSection({
 
           {/* ── Attachments dropzone ───────────────────────────────────── */}
           <div className="relative mb-5">
-            <div className="text-[12.5px] font-extrabold text-white/90 mb-2 px-1 inline-flex items-center gap-1.5">
-              <Icon name="attach" className="w-3.5 h-3.5" />
-              <span>پیوست تصویری</span>
+            <div className="text-[12.5px] font-extrabold text-white/90 mb-2 px-1 flex flex-wrap items-center gap-x-1.5 gap-y-1">
+              <span className="inline-flex items-center gap-1.5">
+                <Icon name="attach" className="w-3.5 h-3.5" />
+                <span>پیوست تصویری</span>
+              </span>
               <span className="text-white/70 font-medium">
-                (اختیاری — حداکثر {MAX_ATTACHMENTS.toLocaleString('fa-IR')} تصویر، هر کدام تا {MAX_IMAGE_SIZE_MB.toLocaleString('fa-IR')} مگابایت — jpg / jpeg / png / webp)
+                (اختیاری — حداکثر {MAX_ATTACHMENTS.toLocaleString('fa-IR')} تصویر،
+                هر کدام تا {MAX_IMAGE_SIZE_MB.toLocaleString('fa-IR')} مگابایت — jpg / jpeg / png / webp)
               </span>
             </div>
             <Dropzone
@@ -691,7 +738,6 @@ export function PublicReportSection({
                     initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}
                     className="inline-flex items-center gap-2"
                   >
-                    {/* Paper-plane icon — universal 'send' metaphor */}
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                          strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"
                          className="-mt-0.5">
@@ -765,7 +811,7 @@ function Dropzone({
   files, previews, onAdd, onRemove, fileInputRef, max,
 }: {
   files: File[];
-  previews: { name: string; url: string; size: number }[];
+  previews: Preview[];
   onAdd: (f: FileList | File[]) => void;
   onRemove: (i: number) => void;
   fileInputRef: React.RefObject<HTMLInputElement | null>;
