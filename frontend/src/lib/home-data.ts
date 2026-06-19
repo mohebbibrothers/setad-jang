@@ -434,3 +434,35 @@ export async function loadTabyinItems(): Promise<TabyinItem[]> {
     };
   });
 }
+
+/* ─── Public Reports ─────────────────────────────────────────────────── */
+/**
+ * Mirrors apps.public_reports.serializers.ReportSubjectPublicSerializer.
+ * GET /api/v1/public-reports/subjects/  → list of active subjects
+ *   fields: id, title, slug, description, order
+ */
+type ApiReportSubject = { id: number; title: string; slug?: string; description?: string; order?: number };
+
+export type ReportSubject = { id: string; name: string; description?: string };
+
+export async function loadReportSubjects(): Promise<ReportSubject[]> {
+  const data = await safeApiFetch<Paginated<ApiReportSubject>>(
+    '/public-reports/subjects/', { revalidate: 600, tags: ['report-subjects'] },
+  );
+  const list = unwrap(data);
+  if (list.length) {
+    return list.map((s) => ({
+      id: String(s.id),
+      name: s.title,
+      description: s.description,
+    }));
+  }
+  // Seed (fallback) — five common subject buckets matching the brief
+  return [
+    { id: '1', name: 'گزارش فساد اقتصادی',  description: 'اختلاس، رشوه، انحراف بودجه' },
+    { id: '2', name: 'گزارش تخلف اجتماعی',  description: 'بی‌نظمی عمومی، آسیب‌های اجتماعی' },
+    { id: '3', name: 'گزارش امنیتی',         description: 'مسائل امنیت ملی و عمومی' },
+    { id: '4', name: 'گزارش فرهنگی',         description: 'انحرافات فرهنگی و رسانه‌ای' },
+    { id: '5', name: 'سایر موارد',           description: 'هر مورد دیگری که شایسته توجه است' },
+  ];
+}
