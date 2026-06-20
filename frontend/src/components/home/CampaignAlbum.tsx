@@ -26,24 +26,18 @@ import { formatPersianNumber } from '@/lib/utils';
  *     happens server-side; we only need to render in order.
  *   - alt_text (max 200) is surfaced as a caption below the stage.
  *
- * v3 changes vs v2:
- *   1. Responsive overhaul — header, HUD, caption and filmstrip never
- *      collide on any viewport (320 px → desktop).
- *   2. Two HUD bars (zoom right + actions left) on ≥ sm; collapse into a
- *      single combined pill anchored bottom-centre on mobile.
- *   3. Filmstrip:
- *        - center-aligned when thumbs fit;
- *        - smooth horizontal scroll with edge-fade gradients + ←/→
- *          floating arrows when overflowing;
- *        - RTL-aware scroll mapping.
- *   4. Cylindrical 3D transition between images — the outgoing image
- *      rotates onto the back face of an invisible cylinder while the
- *      incoming image rotates in from the opposite face. Uses CSS 3D
- *      transforms with perspective; respects prefers-reduced-motion.
- *   5. All earlier features kept: cinematic backdrop, smart neighbour
- *      preloading, zoom + pan (wheel+ctrl, pinch, double-tap, HUD ±/0),
- *      slideshow with top progress bar, fullscreen API, RTL keyboard
- *      shortcuts, copy/download/open-original, help overlay, a11y.
+ * v5 — 3D Coverflow Carousel:
+ *   - Every image is mounted as a 3D card on a deep, perspective stage.
+ *   - The active card sits dead-centre, flat. ±1 neighbours rotate ~42°
+ *     inwards (face the camera at an angle), recede ~180 px and dim.
+ *     ±2 cards recede further, dim more, and ±3+ are hidden.
+ *   - Click any side card to navigate to it. The whole strip slides as
+ *     one cohesive spring-driven piece — true tactile cinema.
+ *   - Kept: cinematic backdrop, smart neighbour preloading, zoom + pan,
+ *     pinch + double-tap zoom, slideshow with Ken-Burns drift on the
+ *     centre card, fullscreen API, RTL keyboard shortcuts,
+ *     copy/download/open-original, help overlay, a11y, hover-to-pause
+ *     scoped to the stage only.
  * ═══════════════════════════════════════════════════════════════════════════
  */
 
@@ -73,7 +67,6 @@ export function CampaignAlbum({
 
   // ── State ──────────────────────────────────────────────────────────
   const [index, setIndexState] = useState(startIndex);
-  const [direction, setDirection] = useState<1 | -1>(1);
   const [zoom, setZoom] = useState(1);
   const [pan,  setPan]  = useState({ x: 0, y: 0 });
   const [imgReady, setImgReady] = useState(false);
@@ -101,7 +94,6 @@ export function CampaignAlbum({
   useEffect(() => {
     if (open) {
       setIndexState(Math.min(startIndex, Math.max(0, total - 1)));
-      setDirection(1);
       setZoom(1); setPan({ x: 0, y: 0 });
       setSlideshow(false); setHelpOpen(false); setProgress(0);
       setImgReady(false); setCopied(false);
@@ -124,16 +116,14 @@ export function CampaignAlbum({
   }, [open, index, total, images]);
 
   // ── Navigation ─────────────────────────────────────────────────────
-  const goTo = useCallback((nextIdx: number, dir?: 1 | -1) => {
+  // `dir` is accepted for API compatibility with the old cylinder
+  // transition; the coverflow layout doesn't need it (the whole strip
+  // re-lays out around the new active index on every change).
+  const goTo = useCallback((nextIdx: number, _dir?: 1 | -1) => {
+    void _dir;
     if (!total) return;
     const norm = ((nextIdx % total) + total) % total;
     if (norm === index) return;
-    const computedDir = dir ?? (
-      norm === (index + 1) % total ? 1 :
-      norm === (index - 1 + total) % total ? -1 :
-      norm > index ? 1 : -1
-    );
-    setDirection(computedDir);
     setIndexState(norm);
   }, [index, total]);
   const next = useCallback(() => goTo(index + 1,  1), [index, goTo]);
@@ -337,69 +327,9 @@ export function CampaignAlbum({
     inner.scrollBy({ left: sign * dist, behavior: 'smooth' });
   };
 
-  // ── Cylinder transition variants ───────────────────────────────────
+  // Honour the user's motion preference for any micro-animation we own.
   const reduced = typeof window !== 'undefined'
     && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  // Two motion presets:
-  //   - 'cylinder' (default, manual nav): slide wraps around an invisible
-  //     cylinder face — feels like turning a panoramic prism.
-  //   - 'cube' (slideshow only): each frame rotates 90° onto a deep cube
-  //     face — feels like turning a hardback book page. Pairs with a
-  //     subtle Ken-Burns drift on the current image (CSS keyframes).
-  const variants = useMemo(() => {
-    if (reduced) {
-      return {
-        enter:  () => ({ opacity: 0 }),
-        center: { opacity: 1, transition: { duration: 0.2 } },
-        exit:   () => ({ opacity: 0, transition: { duration: 0.18 } }),
-      };
-    }
-    if (slideshow) {
-      // CUBE FLIP — 90° rotation around the Y axis on a deep stage.
-      return {
-        enter: (d: 1 | -1) => ({
-          opacity: 0,
-          rotateY: d > 0 ? -90 : 90,
-          x: d > 0 ? '-100%' : '100%',
-          filter: 'brightness(.85)',
-        }),
-        center: {
-          opacity: 1, rotateY: 0, x: '0%', filter: 'brightness(1)',
-          transition: { duration: 0.9, ease: [0.7, 0, 0.2, 1] as const },
-        },
-        exit: (d: 1 | -1) => ({
-          opacity: 0,
-          rotateY: d > 0 ? 90 : -90,
-          x: d > 0 ? '100%' : '-100%',
-          filter: 'brightness(.85)',
-          transition: { duration: 0.9, ease: [0.7, 0, 0.2, 1] as const },
-        }),
-      };
-    }
-    // CYLINDER ROLL — default manual nav transition.
-    return {
-      enter: (d: 1 | -1) => ({
-        opacity: 0,
-        rotateY: d > 0 ? -80 : 80,
-        x: d > 0 ? '-35%' : '35%',
-        z: -260,
-        filter: 'blur(2px) brightness(.7)',
-      }),
-      center: {
-        opacity: 1, rotateY: 0, x: '0%', z: 0,
-        filter: 'blur(0px) brightness(1)',
-        transition: { duration: 0.62, ease: [0.22, 1, 0.36, 1] as const },
-      },
-      exit: (d: 1 | -1) => ({
-        opacity: 0,
-        rotateY: d > 0 ? 80 : -80,
-        x: d > 0 ? '35%' : '-35%',
-        z: -260,
-        filter: 'blur(2px) brightness(.7)',
-        transition: { duration: 0.55, ease: [0.22, 1, 0.36, 1] as const },
-      }),
-    };
-  }, [reduced, slideshow]);
 
   const counter = useMemo(() => {
     if (!total) return '۰';
@@ -630,67 +560,119 @@ export function CampaignAlbum({
                 </div>
               ) : (
                 <>
-                  <AnimatePresence mode="popLayout" custom={direction}>
-                    <motion.div
-                      key={index}
-                      custom={direction}
-                      variants={variants}
-                      initial="enter"
-                      animate="center"
-                      exit="exit"
-                      className="absolute inset-0 flex items-center justify-center select-none"
-                      style={{
-                        transformStyle: 'preserve-3d',
-                        cursor: zoom > 1 ? (panStartRef.current ? 'grabbing' : 'grab') : 'zoom-in',
-                        touchAction: zoom > 1 ? 'none' : 'pan-y',
-                      }}
-                    >
-                      {!imgReady && (
-                        <div className="absolute inset-0 flex items-center justify-center text-white/70"><Spinner/></div>
-                      )}
-                      {current?.url && (
-                        // Ken Burns drift kicks in only while slideshow is
-                        // playing AND the user isn't zoomed. Otherwise the
-                        // image obeys the pan/zoom transform.
-                        slideshow && zoom === 1 && !reduced ? (
-                          <motion.img
-                            key={`img-${index}`}
-                            src={current.url}
-                            alt={current.alt || title}
-                            draggable={false}
-                            onLoad={() => setImgReady(true)}
-                            initial={{ scale: 1.00, x: '0%', y: '0%', opacity: 0 }}
-                            animate={{ scale: 1.06, x: '-1.2%', y: '-0.8%', opacity: imgReady ? 1 : 0 }}
-                            transition={{
-                              scale:   { duration: 5.4, ease: 'easeOut' },
-                              x:       { duration: 5.4, ease: 'easeOut' },
-                              y:       { duration: 5.4, ease: 'easeOut' },
-                              opacity: { duration: 0.3 },
-                            }}
-                            className="max-w-[94%] max-h-[88%] object-contain pointer-events-none
-                                       drop-shadow-[0_20px_50px_rgba(0,0,0,.55)] rounded-[14px]"
-                            style={{ transformOrigin: 'center center' }}
-                          />
-                        ) : (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={current.url}
-                            alt={current.alt || title}
-                            draggable={false}
-                            onLoad={() => setImgReady(true)}
-                            className="max-w-[94%] max-h-[88%] object-contain pointer-events-none
-                                       drop-shadow-[0_20px_50px_rgba(0,0,0,.55)] rounded-[14px]"
-                            style={{
-                              transform: `translate3d(${pan.x}px, ${pan.y}px, 0) scale(${zoom})`,
-                              transformOrigin: 'center center',
-                              transition: 'transform .25s cubic-bezier(.22,1,.36,1), opacity .3s',
-                              opacity: imgReady ? 1 : 0,
-                            }}
-                          />
-                        )
-                      )}
-                    </motion.div>
-                  </AnimatePresence>
+                  {/* ── Coverflow Carousel ─────────────────────────────
+                      Every image is mounted as a 3D card on a deep stage.
+                      Offset from active index drives translateX / Z /
+                      rotateY / scale / opacity / blur so the whole strip
+                      animates as one cohesive piece on every nav. */}
+                  <div
+                    className="absolute inset-0"
+                    style={{ transformStyle: 'preserve-3d' }}
+                  >
+                    {images.map((img, i) => {
+                      // shortest signed distance on a circular index space
+                      let d = i - index;
+                      if      (d >  total / 2) d -= total;
+                      else if (d < -total / 2) d += total;
+                      const abs = Math.abs(d);
+                      const mounted = abs <= 2;
+                      const side = d === 0 ? 0 : (d > 0 ? 1 : -1);
+                      // Geometry table — mirrors the template build for
+                      // a pixel-identical experience between preview and
+                      // production.
+                      const SPEC = [
+                        { x:  0,  z:    0, ry:   0,  scale: 1.00, opacity: 1.00, blur: 0 },
+                        { x: 42,  z: -180, ry: -42,  scale: 0.78, opacity: 0.88, blur: 0 },
+                        { x: 70,  z: -360, ry: -60,  scale: 0.62, opacity: 0.55, blur: 1 },
+                      ];
+                      const s = mounted ? SPEC[abs] : SPEC[2];
+                      const tx     = s.x  * side;
+                      const ry     = s.ry * side;
+                      const tz     = s.z;
+                      const scale  = mounted ? s.scale : 0.35;
+                      const opac   = mounted ? s.opacity : 0;
+                      const filter = s.blur > 0 || !mounted
+                        ? `blur(${mounted ? s.blur : 2}px) brightness(${mounted ? .78 : .6})`
+                        : 'blur(0) brightness(1)';
+                      const isCenter = d === 0;
+                      const isSide   = mounted && !isCenter;
+                      return (
+                        <motion.div
+                          key={`cf-${i}`}
+                          className="absolute inset-0 flex items-center justify-center select-none"
+                          style={{
+                            transformStyle: 'preserve-3d',
+                            transformOrigin: 'center center',
+                            pointerEvents: mounted ? 'auto' : 'none',
+                            cursor: isSide ? 'pointer'
+                              : zoom > 1 ? (panStartRef.current ? 'grabbing' : 'grab') : 'zoom-in',
+                            touchAction: zoom > 1 ? 'none' : 'pan-y',
+                            zIndex: 50 - abs,
+                            willChange: 'transform, opacity, filter',
+                          }}
+                          animate={{
+                            x: `${tx}%`,
+                            z: tz,
+                            rotateY: ry,
+                            scale,
+                            opacity: opac,
+                            filter,
+                          }}
+                          transition={{
+                            type: 'spring',
+                            stiffness: 130,
+                            damping: 22,
+                            mass: 0.9,
+                          }}
+                          onClick={() => {
+                            if (isSide) goTo(i, side > 0 ? -1 : 1);
+                          }}
+                        >
+                          {isCenter && !imgReady && (
+                            <div className="absolute inset-0 flex items-center justify-center text-white/70"><Spinner/></div>
+                          )}
+                          {/* Center card gets pan/zoom + (optional) Ken-Burns */}
+                          {isCenter && slideshow && zoom === 1 && !reduced ? (
+                            <motion.img
+                              key={`img-kb-${index}`}
+                              src={img.url}
+                              alt={img.alt || title}
+                              draggable={false}
+                              onLoad={() => setImgReady(true)}
+                              initial={{ scale: 1.00, x: '0%', y: '0%', opacity: 0 }}
+                              animate={{ scale: 1.06, x: '-1.2%', y: '-0.8%', opacity: imgReady ? 1 : 0 }}
+                              transition={{
+                                scale:   { duration: 5.4, ease: 'easeOut' },
+                                x:       { duration: 5.4, ease: 'easeOut' },
+                                y:       { duration: 5.4, ease: 'easeOut' },
+                                opacity: { duration: 0.3 },
+                              }}
+                              className="max-w-[86%] sm:max-w-[94%] max-h-[82%] sm:max-h-[88%] object-contain pointer-events-none
+                                         drop-shadow-[0_20px_50px_rgba(0,0,0,.55)] rounded-[14px]"
+                              style={{ transformOrigin: 'center center' }}
+                            />
+                          ) : (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={img.url}
+                              alt={img.alt || title}
+                              draggable={false}
+                              loading={isCenter ? 'eager' : 'lazy'}
+                              onLoad={isCenter ? () => setImgReady(true) : undefined}
+                              className="max-w-[86%] sm:max-w-[94%] max-h-[82%] sm:max-h-[88%] object-contain pointer-events-none
+                                         drop-shadow-[0_20px_50px_rgba(0,0,0,.55)] rounded-[14px]"
+                              style={isCenter ? {
+                                transform: `translate3d(${pan.x}px, ${pan.y}px, 0) scale(${zoom})`,
+                                transformOrigin: 'center center',
+                                transition: 'transform .25s cubic-bezier(.22,1,.36,1), opacity .3s',
+                                opacity: imgReady ? 1 : 0,
+                              } : { opacity: 1 }}
+                            />
+                          )}
+                        </motion.div>
+                      );
+                    })}
+                  </div>
 
                   {/* Edge nav buttons */}
                   {total > 1 && (
