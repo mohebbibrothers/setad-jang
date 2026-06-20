@@ -8,6 +8,7 @@ import { SectionTitle } from './SectionTitle';
 import { formatPersianNumber } from '@/lib/utils';
 import { apiFetch } from '@/lib/api';
 import { CampaignAlbum, type AlbumImage } from './CampaignAlbum';
+import { CampaignParticipateModal } from './CampaignParticipateModal';
 
 /**
  * ───────────────────────────────────────────────────────────────────────────
@@ -188,11 +189,12 @@ function CoverFallback({
 /* ───────────────────────────────────────────────────────────────────────── */
 
 function Card({
-  c, delay = 0, onOpenAlbum,
+  c, delay = 0, onOpenAlbum, onOpenParticipate,
 }: {
   c: CampaignCard;
   delay?: number;
   onOpenAlbum: (c: CampaignCard) => void;
+  onOpenParticipate: (c: CampaignCard) => void;
 }) {
   // UI displays Rial; backend stores Toman → ×10 at render time.
   const totalRial = c.totalAmount * 10;
@@ -324,18 +326,23 @@ function Card({
           </div>
         </div>
 
-        {/* ── CTA: full-width, hand icon on the visual LEFT (end-of-line in RTL) ── */}
-        <Link
-          href={`/madadkar/${c.slug}/participate`}
+        {/* ── CTA: opens the Participate modal in-page (preserves session
+              cookies + lets the user pick share count with the slider
+              before redirecting to the gateway). Falls through to
+              /madadkar/<slug>/participate only via right-click / new-tab
+              for users who prefer the full-page flow. */}
+        <button
+          type="button"
+          onClick={() => onOpenParticipate(c)}
           className="relative inline-flex items-center justify-center gap-2 w-full h-[46px] mt-4
                      rounded-[12px] bg-brand-500 hover:bg-brand-600 active:bg-brand-700
                      text-white text-[14.5px] font-extrabold
                      shadow-[0_6px_14px_-6px_rgba(13,128,116,.55)]
-                     transition-colors overflow-hidden"
+                     transition-colors overflow-hidden cursor-pointer"
         >
           <span>مدد به حرکت</span>
           <HandIcon />
-        </Link>
+        </button>
       </div>
     </motion.article>
   );
@@ -389,6 +396,15 @@ export function WarFundSection({ campaigns }: { campaigns: CampaignCard[] }) {
   const closeAlbum = useCallback(() => {
     setAlbum((a) => ({ ...a, open: false }));
   }, []);
+
+  // ─── Participate modal state ─────────────────────────────────────────
+  const [participateOpen, setParticipateOpen] = useState(false);
+  const [participateCampaign, setParticipateCampaign] = useState<CampaignCard | null>(null);
+  const openParticipate = useCallback((c: CampaignCard) => {
+    setParticipateCampaign(c);
+    setParticipateOpen(true);
+  }, []);
+  const closeParticipate = useCallback(() => setParticipateOpen(false), []);
 
   const buildImages = useCallback(
     (c: CampaignCard, extra?: AlbumImage[]): AlbumImage[] => {
@@ -470,7 +486,13 @@ export function WarFundSection({ campaigns }: { campaigns: CampaignCard[] }) {
             className="flex flex-wrap justify-center gap-4 md:gap-5"
           >
             {visible.map((c, i) => (
-              <Card key={c.slug} c={c} delay={i * 0.06} onOpenAlbum={openAlbum} />
+              <Card
+                key={c.slug}
+                c={c}
+                delay={i * 0.06}
+                onOpenAlbum={openAlbum}
+                onOpenParticipate={openParticipate}
+              />
             ))}
           </motion.div>
         </AnimatePresence>
@@ -526,6 +548,14 @@ export function WarFundSection({ campaigns }: { campaigns: CampaignCard[] }) {
         sponsor={album.sponsor}
         images={album.images}
         loading={album.loading}
+      />
+
+      {/* ── Participate modal — slider + live financial breakdown +
+              gateway redirect (POST /madadkar/campaigns/<slug>/participate/) */}
+      <CampaignParticipateModal
+        open={participateOpen}
+        onClose={closeParticipate}
+        campaign={participateCampaign}
       />
     </section>
   );
