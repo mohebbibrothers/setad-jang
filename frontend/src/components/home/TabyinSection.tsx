@@ -263,17 +263,29 @@ export function TabyinSection({ items }: { items: TabyinItem[] }) {
                        gap-3 md:gap-4"
             style={{ gridAutoFlow: 'dense' }}
           >
-            {visible.map((it, i) => (
-              <TabyinTile
-                key={it.id}
-                it={it}
-                index={i}
-                /* tall hint comes from the item itself (data-driven).
-                   The seed places tall:true on tiles with portrait-leaning
-                   covers, so the cover always matches its slot's aspect
-                   and never gets distorted by `object-cover` cropping. */
-              />
-            ))}
+            {visible.map((it, i) => {
+              // ── PAGE-LOCAL tall pattern ─────────────────────────────
+              // We need EXACTLY 2 tall + 8 short on every page so:
+              //   tall(=2 slots) × 2 + short(=1 slot) × 8 = 12 slots
+              //   - 4-col: 3 rows × 4 = 12 ✓
+              //   - 3-col: 4 rows × 3 = 12 ✓
+              //   - 2-col: 6 rows × 2 = 12 ✓
+              // We place tall on slots 0 and 1 — the EARLIEST positions —
+              // so `grid-auto-flow: dense` never has to spill a tall into
+              // the bottom row, where it would push the grid past its
+              // declared row count and visually escape the panel.
+              const isLastPageAndShort =
+                visible.length < PAGE_SIZE; // last page may have fewer items
+              const tall = !isLastPageAndShort && (i === 0 || i === 1);
+              return (
+                <TabyinTile
+                  key={it.id}
+                  it={it}
+                  index={i}
+                  forceTall={tall}
+                />
+              );
+            })}
             {visible.length === 0 && (
               <div className="col-span-full text-center py-16">
                 <Icon name="search" className="w-12 h-12 mx-auto text-ink-300 mb-3" />
@@ -347,7 +359,10 @@ function TabyinTile({
   const isVideo = it.mediaType === 'video';
   const isAudio = it.mediaType === 'audio';
   const isUser  = it.origin === 'user_submitted';
-  const tall    = forceTall || !!it.tall;
+  // `forceTall` is computed PAGE-LOCALLY in the section so the tall slots
+  // always align to the dense grid and never overflow on the last row.
+  // The data-driven `it.tall` is intentionally ignored here.
+  const tall    = forceTall;
 
   return (
     <motion.article

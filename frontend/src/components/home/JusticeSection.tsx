@@ -2,9 +2,11 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SectionTitle } from './SectionTitle';
+import { apiFetch } from '@/lib/api';
+import { CampaignAlbum, type AlbumImage } from './CampaignAlbum';
 
 /**
  * ───────────────────────────────────────────────────────────────────────────
@@ -46,6 +48,10 @@ export type CriminalCard = {
   fullName: string;
   pillLabel?: string;
   imageUrl?: string;
+  /** Optional pre-loaded gallery (cover-substitute + sorted photos[]).
+   *  When absent and the user taps the portrait, the section fetches
+   *  /r4j/criminals/<slug>/ on-demand. */
+  gallery?: AlbumImage[];
 };
 
 /* ───────────────────────────────────────────────────────────────────────── */
@@ -258,7 +264,18 @@ function ActionPill({ slug, label = 'مشارکت در مجازات' }: { slug: 
 /*  Card                                                                     */
 /* ───────────────────────────────────────────────────────────────────────── */
 
-function CriminalCardView({ p, delay = 0 }: { p: CriminalCard; delay?: number }) {
+function CriminalCardView({
+  p, delay = 0, onOpenAlbum,
+}: {
+  p: CriminalCard;
+  delay?: number;
+  onOpenAlbum: (p: CriminalCard) => void;
+}) {
+  // The photo prefers — in order:
+  //   1. an explicit primary_photo from the list endpoint (imageUrl)
+  //   2. the first gallery photo (so seeded card art shows)
+  const thumbUrl = p.imageUrl ?? p.gallery?.[0]?.url;
+  const galleryHint = p.gallery?.length ?? (p.imageUrl ? 1 : 0);
   return (
     <motion.article
       initial={{ opacity: 0, y: 16 }}
@@ -273,14 +290,16 @@ function CriminalCardView({ p, delay = 0 }: { p: CriminalCard; delay?: number })
       {/* Photo — relative + overflow-hidden so the popover can pop INTO
           the upper part of the portrait without ever leaving the card. */}
       <div className="relative aspect-[3/4] bg-ink-200 overflow-hidden">
-        <Link
-          href={`/r4j/${p.slug}`}
-          aria-label={p.fullName}
-          className="absolute inset-0 block"
+        <button
+          type="button"
+          onClick={() => onOpenAlbum(p)}
+          aria-label={`نمایش آلبوم تصاویر ${p.fullName}`}
+          className="absolute inset-0 block cursor-zoom-in focus:outline-none
+                     focus-visible:ring-2 focus-visible:ring-brand-500"
         >
-          {p.imageUrl ? (
+          {thumbUrl ? (
             <Image
-              src={p.imageUrl}
+              src={thumbUrl}
               alt={p.fullName}
               fill
               sizes="(max-width: 768px) 50vw, 25vw"
@@ -292,7 +311,27 @@ function CriminalCardView({ p, delay = 0 }: { p: CriminalCard; delay?: number })
               ?
             </div>
           )}
-        </Link>
+
+          {/* Gallery-count chip when there's more than one image */}
+          {galleryHint > 1 && (
+            <span
+              className="absolute bottom-2 left-2 inline-flex items-center gap-1
+                         px-1.5 h-5 rounded-md bg-black/55 backdrop-blur-sm
+                         text-white text-[10.5px] font-extrabold tabular-nums
+                         ring-1 ring-white/20 z-[2]"
+              aria-hidden="true"
+            >
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
+                   stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"
+                   strokeLinejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="3" />
+                <circle cx="9" cy="9" r="2" />
+                <path d="m21 15-5-5L5 21" />
+              </svg>
+              {galleryHint.toLocaleString('fa-IR')}
+            </span>
+          )}
+        </button>
 
         {/* Split-action pill — popover opens upward inside the photo */}
         <ActionPill slug={p.slug} />
@@ -327,6 +366,78 @@ export function JusticeSection({ criminals }: { criminals: CriminalCard[] }) {
   const prev = () => setPage((p) => (p - 1 + totalPages) % totalPages);
   const next = () => setPage((p) => (p + 1) % totalPages);
 
+  // ── Album state ────────────────────────────────────────────────────
+  const [album, setAlbum] = useState<{
+    open: boolean;
+    title: string;
+    sponsor?: string;
+    images: AlbumImage[];
+    loading: boolean;
+  }>({ open: false, title: '', images: [], loading: false });
+
+  const [photoCache, setPhotoCache] = useState<Record<string, AlbumImage[]>>({});
+
+  const closeAlbum = useCallback(() => setAlbum((a) => ({ ...a, open: false })), []);
+
+  const buildImages = useCallback(
+    (p: CriminalCard, extra?: AlbumImage[]): AlbumImage[] => {
+      const out: AlbumImage[] = [];
+      if (p.imageUrl) out.push({ url: p.imageUrl, alt: p.fullName });
+      if (extra && extra.length) {
+        for (const im of extra) {
+          if (!out.some((o) => o.url === im.url)) out.push(im);
+        }
+      }
+      return out;
+    },
+    [],
+  );
+
+  const openAlbum = useCallback(async (p: CriminalCard) => {
+    if (p.gallery && p.gallery.length) {
+      setAlbum({
+        open: true, title: p.fullName, sponsor: p.pillLabel,
+        images: buildImages(p, p.gallery), loading: false,
+      });
+      return;
+    }
+    const cached = photoCache[p.slug];
+    if (cached) {
+      setAlbum({
+        open: true, title: p.fullName, sponsor: p.pillLabel,
+        images: buildImages(p, cached), loading: false,
+      });
+      return;
+    }
+    setAlbum({
+      open: true, title: p.fullName, sponsor: p.pillLabel,
+      images: buildImages(p), loading: true,
+    });
+    try {
+      // Public R4J detail endpoint takes a slug *or* an int id.
+      const detail = await apiFetch<{
+        photos?: Array<{ id: number; image: string; caption?: string; is_primary?: boolean; order?: number }>;
+      }>(
+        `/r4j/criminals/${encodeURIComponent(p.slug)}/`,
+        { revalidate: 600, tags: [`criminal:${p.slug}`] },
+      );
+      const fetched: AlbumImage[] = (detail.photos ?? [])
+        .slice()
+        // primary first, then ordered ascending
+        .sort((a, b) => {
+          if (!!b.is_primary !== !!a.is_primary) return b.is_primary ? 1 : -1;
+          return (a.order ?? 0) - (b.order ?? 0);
+        })
+        .map((g) => ({ url: g.image, alt: g.caption || p.fullName }));
+      setPhotoCache((prev) => ({ ...prev, [p.slug]: fetched }));
+      setAlbum((a) => a.open
+        ? { ...a, images: buildImages(p, fetched), loading: false }
+        : a);
+    } catch {
+      setAlbum((a) => a.open ? { ...a, loading: false } : a);
+    }
+  }, [photoCache, buildImages]);
+
   return (
     <section className="section-y bg-white" id="justice">
       <div className="container-edge">
@@ -344,7 +455,7 @@ export function JusticeSection({ criminals }: { criminals: CriminalCard[] }) {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-5">
             <AnimatePresence mode="wait" initial={false}>
               {visible.map((p, i) => (
-                <CriminalCardView key={`${page}-${p.slug}`} p={p} delay={i * 0.06} />
+                <CriminalCardView key={`${page}-${p.slug}`} p={p} delay={i * 0.06} onOpenAlbum={openAlbum} />
               ))}
             </AnimatePresence>
           </div>
@@ -376,6 +487,16 @@ export function JusticeSection({ criminals }: { criminals: CriminalCard[] }) {
           </div>
         </div>
       </div>
+
+      {/* ── Album lightbox ─────────────────────────────────────────── */}
+      <CampaignAlbum
+        open={album.open}
+        onClose={closeAlbum}
+        title={album.title}
+        sponsor={album.sponsor}
+        images={album.images}
+        loading={album.loading}
+      />
     </section>
   );
 }

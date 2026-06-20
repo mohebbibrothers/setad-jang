@@ -197,6 +197,12 @@ function Card({
   // UI displays Rial; backend stores Toman → ×10 at render time.
   const totalRial = c.totalAmount * 10;
   const pct = Math.round(c.progressPercent);
+  // Card thumbnail prefers — in order:
+  //   1. an explicit cover_image from the backend
+  //   2. the first gallery image (so the card always shows real artwork,
+  //      not the helping-hand glyph fallback)
+  //   3. the gradient + glyph fallback as a last resort
+  const thumbUrl = c.coverUrl ?? c.gallery?.[0]?.url;
   const galleryHint = (c.gallery?.length ?? (c.coverUrl ? 1 : 0));
 
   return (
@@ -224,9 +230,9 @@ function Card({
                          ring-1 ring-ink-100 bg-ink-50 cursor-zoom-in
                          focus:outline-none focus:ring-2 focus:ring-brand-500"
             >
-              {c.coverUrl ? (
+              {thumbUrl ? (
                 <Image
-                  src={c.coverUrl}
+                  src={thumbUrl}
                   alt={c.title}
                   fill
                   sizes="(min-width: 768px) 130px, (min-width: 640px) 110px, 96px"

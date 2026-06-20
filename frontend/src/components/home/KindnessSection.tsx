@@ -2,10 +2,12 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SectionTitle } from './SectionTitle';
 import { Icon } from '@/components/icons/Icon';
+import { apiFetch } from '@/lib/api';
+import { CampaignAlbum, type AlbumImage } from './CampaignAlbum';
 
 /**
  * ───────────────────────────────────────────────────────────────────────────
@@ -66,6 +68,10 @@ export type KindListing = {
   viewCount?: number;
   bookmarkCount?: number;
   matchesCount?: number;
+  /** Optional pre-loaded gallery (sorted by image.order asc, cover first).
+   *  When absent and the user taps the cover, the section fetches
+   *  /kindness-wall/listings/<slug>/ on-demand. */
+  gallery?: AlbumImage[];
 };
 
 /* ───────────────────────────────────────────────────────────────────────── */
@@ -160,9 +166,11 @@ function ChevronLeftIcon({ className = 'w-3.5 h-3.5' }: { className?: string }) 
 /* ───────────────────────────────────────────────────────────────────────── */
 
 const FILTERS = [
-  { key: 'all',   label: 'همه آگهی‌ها',          Glyph: AllIcon,  tone: 'brand' as const },
-  { key: 'offer', label: 'می‌خواهم کمک کنم',     Glyph: GiveIcon, tone: 'mint'  as const },
-  { key: 'need',  label: 'نیاز به کمک دارم',     Glyph: NeedIcon, tone: 'rose'  as const },
+  // `shortLabel` is what we render on phones (≤ 480 px) so the segmented
+  // switcher never overflows or wraps mid-word.
+  { key: 'all',   label: 'همه آگهی‌ها',      shortLabel: 'همه',       Glyph: AllIcon,  tone: 'brand' as const },
+  { key: 'offer', label: 'می‌خواهم کمک کنم', shortLabel: 'کمک می‌کنم', Glyph: GiveIcon, tone: 'mint'  as const },
+  { key: 'need',  label: 'نیاز به کمک دارم', shortLabel: 'نیازمندم',   Glyph: NeedIcon, tone: 'rose'  as const },
 ] as const;
 type FilterKey = (typeof FILTERS)[number]['key'];
 
@@ -373,6 +381,63 @@ export function KindnessSection({ listings }: { listings: KindListing[] }) {
   function setFilterReset(k: FilterKey) { setFilter(k); setPage(0); }
   function setCategoryReset(c: string)  { setCategory(c); setPage(0); }
 
+  // ── Album state ────────────────────────────────────────────────────
+  const [album, setAlbum] = useState<{
+    open: boolean;
+    title: string;
+    sponsor?: string;
+    images: AlbumImage[];
+    loading: boolean;
+  }>({ open: false, title: '', images: [], loading: false });
+  const [imgCache, setImgCache] = useState<Record<string, AlbumImage[]>>({});
+  const closeAlbum = useCallback(() => setAlbum((a) => ({ ...a, open: false })), []);
+  const buildImages = useCallback(
+    (l: KindListing, extra?: AlbumImage[]): AlbumImage[] => {
+      const out: AlbumImage[] = [];
+      if (l.coverImage) out.push({ url: l.coverImage, alt: l.title });
+      if (extra && extra.length) {
+        for (const im of extra) {
+          if (!out.some((o) => o.url === im.url)) out.push(im);
+        }
+      }
+      return out;
+    },
+    [],
+  );
+  const openAlbum = useCallback(async (l: KindListing) => {
+    const sponsor = l.ownerName || l.categoryTitle;
+    if (l.gallery && l.gallery.length) {
+      setAlbum({ open: true, title: l.title, sponsor, images: buildImages(l, l.gallery), loading: false });
+      return;
+    }
+    const cached = imgCache[l.slug];
+    if (cached) {
+      setAlbum({ open: true, title: l.title, sponsor, images: buildImages(l, cached), loading: false });
+      return;
+    }
+    setAlbum({ open: true, title: l.title, sponsor, images: buildImages(l), loading: true });
+    try {
+      const detail = await apiFetch<{
+        images?: Array<{ id: number; image: string; alt_text?: string; caption?: string; is_cover?: boolean; order?: number }>;
+      }>(
+        `/kindness-wall/listings/${encodeURIComponent(l.slug)}/`,
+        { revalidate: 600, tags: [`kindness:${l.slug}`] },
+      );
+      const fetched: AlbumImage[] = (detail.images ?? [])
+        .slice()
+        // cover first, then ordered ascending
+        .sort((a, b) => {
+          if (!!b.is_cover !== !!a.is_cover) return b.is_cover ? 1 : -1;
+          return (a.order ?? 0) - (b.order ?? 0);
+        })
+        .map((g) => ({ url: g.image, alt: g.alt_text || g.caption || l.title }));
+      setImgCache((prev) => ({ ...prev, [l.slug]: fetched }));
+      setAlbum((a) => a.open ? { ...a, images: buildImages(l, fetched), loading: false } : a);
+    } catch {
+      setAlbum((a) => a.open ? { ...a, loading: false } : a);
+    }
+  }, [imgCache, buildImages]);
+
   /* ── Category strip overflow controls (same pattern as Education) ── */
   const catScrollRef = useRef<HTMLDivElement | null>(null);
   const [catCanPrev, setCatCanPrev] = useState(false);
@@ -411,12 +476,18 @@ export function KindnessSection({ listings }: { listings: KindListing[] }) {
           description="گاهی یک یخچال کهنه، تمام دنیای یک خانواده است و گاهی یک قول کوچک، چراغ یک شب. اینجا نیازها و دست‌های یاری به هم می‌رسند."
         />
 
-        {/* Segmented type switcher */}
+        {/* Segmented type switcher — fully responsive:
+              - mobile  (< 480px): compact labels (shortLabel), counter is
+                                   absolutely positioned in the corner as a
+                                   small chip so nothing wraps or clips.
+              - tablet+ (≥ 480px): full labels with an inline counter pill.
+            The pill width is constrained by min-w-0 so flex children can
+            shrink and the gradient tab stays inside the segmented box. */}
         <div className="flex justify-center mb-5">
           <div className="inline-flex p-1 bg-ink-50 rounded-full shadow-inner
-                          ring-1 ring-ink-100 w-full sm:w-auto"
+                          ring-1 ring-ink-100 w-full sm:w-auto max-w-full"
                role="tablist" aria-label="نوع آگهی">
-            <div className="grid grid-cols-3 sm:flex w-full gap-1">
+            <div className="grid grid-cols-3 sm:flex w-full gap-1 min-w-0">
               {FILTERS.map((f) => {
                 const isActive = filter === f.key;
                 const toneActive =
@@ -432,16 +503,29 @@ export function KindnessSection({ listings }: { listings: KindListing[] }) {
                     role="tab"
                     aria-selected={isActive}
                     onClick={() => setFilterReset(f.key)}
-                    className={`relative inline-flex items-center justify-center gap-2 h-11 px-4 sm:px-5
-                                rounded-full text-[13px] sm:text-[13.5px] font-extrabold whitespace-nowrap
+                    className={`relative inline-flex items-center justify-center gap-1.5 sm:gap-2
+                                h-11 px-2.5 sm:px-5 min-w-0
+                                rounded-full text-[12px] sm:text-[13.5px] font-extrabold whitespace-nowrap
                                 transition-all duration-200 flex-1 sm:flex-none
                                 ${isActive ? toneActive : 'text-ink-600 hover:text-ink-900 hover:bg-white/60'}`}
                   >
-                    <f.Glyph className="w-4 h-4" />
-                    <span>{f.label}</span>
-                    <span className={`inline-flex items-center justify-center min-w-[20px] h-5 px-1.5
+                    <f.Glyph className="w-[15px] h-[15px] sm:w-4 sm:h-4 shrink-0" />
+                    {/* Compact label on phones, full label from sm+ */}
+                    <span className="sm:hidden truncate">{f.shortLabel}</span>
+                    <span className="hidden sm:inline">{f.label}</span>
+                    {/* Inline counter pill — only ≥ sm. On mobile a small
+                        corner chip avoids any chance of overflow. */}
+                    <span className={`hidden sm:inline-flex items-center justify-center min-w-[20px] h-5 px-1.5
                                       rounded-full text-[10.5px] font-extrabold tabular-nums
                                       ${isActive ? 'bg-white/25' : 'bg-ink-100 text-ink-500'}`}>
+                      {counts[f.key].toLocaleString('fa-IR')}
+                    </span>
+                    {/* Mobile corner counter */}
+                    <span className={`sm:hidden absolute -top-1 -left-1 min-w-[16px] h-[16px]
+                                      inline-flex items-center justify-center rounded-full
+                                      text-[9.5px] font-extrabold tabular-nums px-1
+                                      ${isActive ? 'bg-white text-ink-900' : 'bg-ink-200 text-ink-600'}
+                                      ring-2 ring-ink-50`}>
                       {counts[f.key].toLocaleString('fa-IR')}
                     </span>
                   </button>
@@ -570,7 +654,7 @@ export function KindnessSection({ listings }: { listings: KindListing[] }) {
               className="flex flex-wrap justify-center gap-4 md:gap-5"
             >
               {visible.map((l, i) => (
-                <ListingCard key={l.slug} l={l} delay={i * 0.04} />
+                <ListingCard key={l.slug} l={l} delay={i * 0.04} onOpenAlbum={openAlbum} />
               ))}
             </motion.div>
           )}
@@ -610,6 +694,16 @@ export function KindnessSection({ listings }: { listings: KindListing[] }) {
           <PostListingSplit />
         </div>
       </div>
+
+      {/* ── Album lightbox ─────────────────────────────────────────── */}
+      <CampaignAlbum
+        open={album.open}
+        onClose={closeAlbum}
+        title={album.title}
+        sponsor={album.sponsor}
+        images={album.images}
+        loading={album.loading}
+      />
     </section>
   );
 }
@@ -618,9 +712,17 @@ export function KindnessSection({ listings }: { listings: KindListing[] }) {
 /*  Listing card                                                             */
 /* ───────────────────────────────────────────────────────────────────────── */
 
-function ListingCard({ l, delay = 0 }: { l: KindListing; delay?: number }) {
+function ListingCard({
+  l, delay = 0, onOpenAlbum,
+}: {
+  l: KindListing;
+  delay?: number;
+  onOpenAlbum: (l: KindListing) => void;
+}) {
   const isNeed = l.type === 'need';
   const daysLeft = daysUntilExpiry(l.expiresAt);
+  const thumbUrl = l.coverImage ?? l.gallery?.[0]?.url;
+  const galleryHint = l.gallery?.length ?? (l.coverImage ? 1 : 0);
 
   return (
     <motion.article
@@ -643,15 +745,18 @@ function ListingCard({ l, delay = 0 }: { l: KindListing; delay?: number }) {
                  lg:w-[calc((100%-2.5rem)/3)]
                  min-w-0"
     >
-      {/* Cover — fixed 16:10 box */}
-      <Link
-        href={`/kindness-wall/${l.slug}`}
-        className="relative aspect-[16/10] bg-ink-100 overflow-hidden block"
-        aria-label={l.title}
+      {/* Cover — fixed 16:10 box, taps OPEN the album lightbox so the user
+          can browse every uploaded image without leaving the wall. */}
+      <button
+        type="button"
+        onClick={() => onOpenAlbum(l)}
+        className="relative aspect-[16/10] bg-ink-100 overflow-hidden block w-full text-right
+                   cursor-zoom-in focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+        aria-label={`نمایش آلبوم تصاویر ${l.title}`}
       >
-        {l.coverImage ? (
+        {thumbUrl ? (
           <Image
-            src={l.coverImage}
+            src={thumbUrl}
             alt={l.title}
             fill
             sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
@@ -666,6 +771,26 @@ function ListingCard({ l, delay = 0 }: { l: KindListing; delay?: number }) {
               ? <NeedIcon className={'w-16 h-16 text-rose-400 opacity-80'} />
               : <GiveIcon className={'w-16 h-16 text-brand-500 opacity-80'} />}
           </div>
+        )}
+
+        {/* Gallery-count chip */}
+        {galleryHint > 1 && (
+          <span
+            className="absolute bottom-2 left-2 inline-flex items-center gap-1
+                       px-1.5 h-5 rounded-md bg-black/55 backdrop-blur-sm
+                       text-white text-[10.5px] font-extrabold tabular-nums
+                       ring-1 ring-white/20 z-[3]"
+            aria-hidden="true"
+          >
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"
+                 strokeLinejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="3" />
+              <circle cx="9" cy="9" r="2" />
+              <path d="m21 15-5-5L5 21" />
+            </svg>
+            {galleryHint.toLocaleString('fa-IR')}
+          </span>
         )}
 
         <div aria-hidden="true"
@@ -712,7 +837,7 @@ function ListingCard({ l, delay = 0 }: { l: KindListing; delay?: number }) {
             {l.matchesCount.toLocaleString('fa-IR')} مرتبط
           </span>
         )}
-      </Link>
+      </button>
 
       {/* Body */}
       <div className="flex flex-col flex-1 p-4 md:p-4.5">

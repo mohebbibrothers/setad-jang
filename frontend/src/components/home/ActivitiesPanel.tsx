@@ -6,12 +6,16 @@ import { motion } from 'framer-motion';
 
 type Activity = { href: string; label: string; icon: string; iconAlt: string };
 
+// Order matches the on-page section order so the right-most card (RTL
+// "first") is the first section the user scrolls to. Each href is an
+// in-page anchor so clicking smooth-scrolls to that section instead of
+// navigating away.
 const ACTIVITIES: Activity[] = [
-  { href: '/tabyin',        label: 'جهاد تبیین',         icon: '/brand/icon-tabyin.png',   iconAlt: 'جهاد تبیین' },
-  { href: '/kindness-wall', label: 'دیوار مهربانی',      icon: '/brand/icon-kindness.png', iconAlt: 'دیوار مهربانی' },
-  { href: '/lms',           label: 'قرارگاه آموزشی',     icon: '/brand/icon-lms.png',      iconAlt: 'قرارگاه آموزشی' },
-  { href: '/r4j',           label: 'جایزه برای عدالت',   icon: '/brand/icon-r4j.png',      iconAlt: 'جایزه برای عدالت' },
-  { href: '/madadkar',      label: 'پشتیبانی مالی جنگ',  icon: '/brand/icon-warfund.png',  iconAlt: 'پشتیبانی مالی جنگ' },
+  { href: '#warfund',  label: 'پشتیبانی مالی جنگ',  icon: '/brand/icon-warfund.png',  iconAlt: 'پشتیبانی مالی جنگ' },
+  { href: '#justice',  label: 'جایزه برای عدالت',   icon: '/brand/icon-r4j.png',      iconAlt: 'جایزه برای عدالت' },
+  { href: '#education', label: 'قرارگاه آموزشی',    icon: '/brand/icon-lms.png',      iconAlt: 'قرارگاه آموزشی' },
+  { href: '#kindness', label: 'دیوار مهربانی',      icon: '/brand/icon-kindness.png', iconAlt: 'دیوار مهربانی' },
+  { href: '#tabyin',   label: 'جهاد تبیین',         icon: '/brand/icon-tabyin.png',   iconAlt: 'جهاد تبیین' },
 ];
 
 /**
