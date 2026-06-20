@@ -1,8 +1,8 @@
-# ستاد جنگ — Setad Jang Enterprise Backend
+# ستاد جنگ — Setad Jang Enterprise Platform
 
 <p align="center">
-  <strong>Enterprise-grade, production-minded Django REST Framework backend</strong><br />
-  Django 6 · DRF · PostgreSQL · Redis · Celery · OpenAPI · JWT · Audit Trail · LMS · Kindness Wall · Support Desk
+  <strong>Backend/Platform چنددامنه‌ای، API-first، production-minded و قابل دفاع در سطح enterprise</strong><br />
+  Django 6 · DRF · PostgreSQL · Redis · Celery · OpenAPI · JWT · Audit Trail · Observability · Financial Workflows · Case Management
 </p>
 
 <p align="center">
@@ -11,182 +11,244 @@
   <img alt="PostgreSQL" src="https://img.shields.io/badge/PostgreSQL-production-4169E1?style=for-the-badge&logo=postgresql&logoColor=white" />
   <img alt="Redis" src="https://img.shields.io/badge/Redis-cache%20%2B%20broker-DC382D?style=for-the-badge&logo=redis&logoColor=white" />
   <img alt="Celery" src="https://img.shields.io/badge/Celery-worker%20%2B%20beat-37814A?style=for-the-badge&logo=celery&logoColor=white" />
-  <img alt="Tests" src="https://img.shields.io/badge/tests-1118%2B%20passed-brightgreen?style=for-the-badge" />
+  <img alt="Tests" src="https://img.shields.io/badge/tests-1236%20passed-brightgreen?style=for-the-badge" />
   <img alt="Security" src="https://img.shields.io/badge/security-pip--audit%20%2B%20bandit%20%2B%20detect--secrets-blue?style=for-the-badge" />
 </p>
 
 ---
 
-## 0. فهرست سریع
+## 0. فهرست انتخاب سریع
 
-- [1. هدف پروژه](#1-هدف-پروژه)
-- [2. وضعیت کیفیت فعلی](#2-وضعیت-کیفیت-فعلی)
-- [3. معماری کلان](#3-معماری-کلان)
-- [4. نصب و اجرای Local](#4-نصب-و-اجرای-local)
-- [5. Docker و Runtime](#5-docker-و-runtime)
-- [6. Quality / Security / CI](#6-quality--security--ci)
-- [7. API Documentation](#7-api-documentation)
-- [8. Core Infrastructure](#8-core-infrastructure)
-- [9. Authentication](#9-authentication)
-- [10. Public Reports](#10-public-reports)
-- [11. Tabyin](#11-tabyin)
-- [12. Audit Logs](#12-audit-logs)
-- [13. R4J](#13-r4j)
-- [14. Madadkar](#14-madadkar)
-- [15. LMS](#15-lms)
-- [16. Kindness Wall](#16-kindness-wall)
-- [17. Support Desk](#17-support-desk)
-- [18. Redis / Cache / Celery / Observability](#18-redis--cache--celery--observability)
-- [19. Providers: SMS / Payment / Email](#19-providers-sms--payment--email)
-- [20. Production Runbooks](#20-production-runbooks)
-- [21. Production Checklist](#21-production-checklist)
-- [22. فلسفه مهندسی](#22-فلسفه-مهندسی)
+### شروع سریع و عملیات روزانه
+
+- [1. معرفی پروژه و فلسفه طراحی](#1-معرفی-پروژه-و-فلسفه-طراحی)
+- [2. وضعیت کیفیت، تست و امنیت](#2-وضعیت-کیفیت-تست-و-امنیت)
+- [3. نصب و اجرای Local](#3-نصب-و-اجرای-local)
+- [4. Docker، Runtime و Orchestration محلی](#4-docker-runtime-و-orchestration-محلی)
+- [5. Makefile، CI و Quality Gates](#5-makefile-ci-و-quality-gates)
+- [6. OpenAPI، Swagger و قرارداد API](#6-openapi-swagger-و-قرارداد-api)
+- [7. تنظیمات Environment و Providerها](#7-تنظیمات-environment-و-providerها)
+
+### معماری و زیرساخت مشترک
+
+- [8. معماری کلان و قراردادهای کدنویسی](#8-معماری-کلان-و-قراردادهای-کدنویسی)
+- [9. Core Infrastructure](#9-core-infrastructure)
+- [10. Audit Logs و Forensics](#10-audit-logs-و-forensics)
+- [11. Notification Engine](#11-notification-engine)
+- [12. Activity Timeline](#12-activity-timeline)
+- [13. Unified Admin Command Center](#13-unified-admin-command-center)
+
+### اپ‌های دامنه‌ای
+
+- [14. Authentication و Identity](#14-authentication-و-identity)
+- [15. Public Reports](#15-public-reports)
+- [16. Tabyin](#16-tabyin)
+- [17. R4J — Reward for Justice](#17-r4j--reward-for-justice)
+- [18. Madadkar — Charitable Crowdfunding](#18-madadkar--charitable-crowdfunding)
+- [19. LMS — Learning Management System](#19-lms--learning-management-system)
+- [20. Kindness Wall — Divar-e Mehrabani](#20-kindness-wall--divar-e-mehrabani)
+- [21. Support Desk](#21-support-desk)
+
+### عملیات، دیپلوی، نگه‌داری
+
+- [22. Celery، Redis، Cache و Job Scheduling](#22-celery-redis-cache-و-job-scheduling)
+- [23. Media، Object Storage و CDN Readiness](#23-media-object-storage-و-cdn-readiness)
+- [24. Observability، Health و Metrics](#24-observability-health-و-metrics)
+- [25. سناریوهای عملیاتی انتها به انتها](#25-سناریوهای-عملیاتی-انتها-به-انتها)
+- [26. Production Runbooks](#26-production-runbooks)
+- [27. چک‌لیست Production](#27-چکلیست-production)
+- [28. نقشه فایل‌ها و مسئولیت هر بخش](#28-نقشه-فایلها-و-مسئولیت-هر-بخش)
 
 ---
 
-## 1. هدف پروژه
+## 1. معرفی پروژه و فلسفه طراحی
 
-**Setad Jang** یک backend چنددامنه‌ای، ماژولار، API-first و production-minded است. هدف آن فقط ساخت چند endpoint نیست؛ هدف، نمایش یک backend قابل دفاع در سطح senior/enterprise است:
+**Setad Jang** یک پروژه تک‌اپلیکیشنی ساده نیست؛ یک platform چنددامنه‌ای است که چندین دامنه عملیاتی را زیر یک backend منسجم جمع کرده است:
 
 ```text
-Architecture discipline
-Security by default
-Service-layer mutations
-Selector-layer reads
-Auditability
-Operational readiness
-Observability hooks
-Performance contracts
-Admin-grade analytics/export
-CI/CD quality gates
+Identity / Auth
+Public Reports
+Tabyin Content Sync
+R4J Criminal Profiles + Evidence + Investigation Cases
+Madadkar Financial Crowdfunding
+LMS Learning Platform
+Kindness Wall Matching Platform
+Support Desk Ticketing
+Notifications
+Activity Timeline
+Audit / Forensics
+Command Center
+Core Observability / Health / Performance
 ```
 
-اصل محوری:
+هدف اصلی پروژه:
 
-> View فقط مرز HTTP است. هر mutation باید از service layer و هر read مهم باید از selector layer عبور کند.
+```text
+ساخت یک backend قابل اجرا، قابل تست، قابل audit، قابل توسعه و قابل دفاع در سطح production.
+```
+
+اصل معماری کلیدی:
+
+> View فقط مرز HTTP و orchestration است؛ mutation باید در service layer و read مهم باید در selector layer انجام شود.
+
+این یعنی:
+
+- APIها thin هستند.
+- business logic در view پخش نشده است.
+- mutationها transaction-safe هستند.
+- readها قابل optimize و test هستند.
+- audit و side-effectها در نقاط مشخص کنترل می‌شوند.
+- OpenAPI قرارداد رسمی API است.
 
 ---
 
-## 2. وضعیت کیفیت فعلی
+## 2. وضعیت کیفیت، تست و امنیت
 
-آخرین verification موفق:
+آخرین gate کامل پروژه:
 
 ```bash
 make verify
 ```
 
-خروجی مورد انتظار:
+وضعیت آخرین verification موفق:
 
 ```text
-python -m pip check                              ✅ No broken requirements
-python -m pip_audit                              ✅ No known vulnerabilities
-python -m bandit                                 ✅ Clean production SAST gate
-detect-secrets scan                              ✅ Baseline-controlled secret scan
-python -m ruff check .                           ✅ All checks passed
-python manage.py check                           ✅ No issues
-python manage.py check --deploy                  ✅ No issues
-python manage.py makemigrations --check --dry-run ✅ No changes detected
-python manage.py spectacular --validate          ✅ Clean OpenAPI schema
-python -m pytest with coverage gate                              ✅ 1118+ passed
+pip check                         ✅ No broken requirements
+pip-audit                         ✅ No known vulnerabilities
+bandit                            ✅ Production SAST gate clean
+detect-secrets                    ✅ Baseline-controlled secret scan
+ruff                              ✅ All checks passed
+django check                      ✅ No issues
+django deploy check               ✅ No issues
+makemigrations --check            ✅ No changes detected
+OpenAPI validation                ✅ Valid schema
+pytest + coverage gate            ✅ 1236 passed
+coverage                          ✅ 83.73% >= 82%
 ```
 
-Policyهای enforced:
+Policyهای مهندسی enforced:
 
 ```text
 Zero-warning policy
-No TODO/FIXME/pass/placeholder in production code
-No direct database mutation in views
-Security gate is part of verify
-OpenAPI must validate without warnings
-Migration drift is forbidden
-Full regression before push
+No placeholder/TODO/pass in production code
+No direct DB mutation in views
+No migration drift
+No OpenAPI warning
+No security gate bypass
+Sensitive mutations must be audit logged
+```
+
+نکته مهم: اگر اجرای `make verify` روی محیط تازه با خطای `No module named ...` شکست، دلیل آن نصب نبودن dependencyهای محیط است، نه خرابی پروژه. ابتدا اجرا کن:
+
+```bash
+python -m pip install -r requirements.txt -r requirements-dev.txt
 ```
 
 ---
 
-## 3. معماری کلان
+## 3. نصب و اجرای Local
+
+### 3.1 پیش‌نیازها
 
 ```text
-Client / Frontend
-      │
-      ▼
-DRF API Layer
-      │
-      ├── Views              → HTTP orchestration only
-      ├── Serializers        → input/output contracts + validation
-      ├── Services           → business workflows, mutations, transactions
-      ├── Selectors          → optimized reads, select_related/prefetch_related
-      ├── Filters            → query param filtering
-      ├── Permissions        → role/ownership boundaries
-      ├── Throttles          → abuse/rate protection
-      ├── Audit Logs         → forensic trail
-      ├── Celery Tasks       → async/scheduled jobs
-      └── OpenAPI            → schema-first API docs
-
-PostgreSQL                  → production DB
-Redis                       → cache + Celery broker/result backend
-Celery Worker/Beat          → background and scheduled jobs
-Docker Compose              → web/postgres/redis/worker/beat/flower
-GitHub Actions              → quality + security gate
+Python 3.14 برای CI/Docker هدف‌گذاری شده است.
+PostgreSQL برای production-like runtime توصیه می‌شود.
+Redis برای cache/Celery لازم است.
 ```
 
----
-
-## 4. نصب و اجرای Local
-
-### نصب استاندارد
+### 3.2 نصب استاندارد با virtualenv
 
 ```bash
 python -m venv .venv
-source .venv/bin/activate        # Linux/macOS
-# Windows PowerShell:
-# .venv\Scripts\Activate.ps1
-
+source .venv/bin/activate
+python -m pip install --upgrade pip
 make install
 python manage.py migrate
 python manage.py runserver
 ```
 
-### نصب مستقیم بدون Makefile
+Windows PowerShell:
 
-```bash
-python -m pip install -r requirements.txt -r requirements-dev.txt
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+make install
 python manage.py migrate
 python manage.py runserver
 ```
 
-### ساخت ادمین
+### 3.3 ساخت superuser
 
 ```bash
 python manage.py createsuperuser
 ```
 
-### اجرای تست‌ها
+### 3.4 اجرای تست‌ها
 
 ```bash
 make test
-pytest with coverage gate
+make coverage
+make verify
+```
+
+### 3.5 regenerate کردن schema
+
+```bash
+make schema-update
+```
+
+فایل تولیدی:
+
+```text
+schema.yaml
 ```
 
 ---
 
-## 5. Docker و Runtime
+## 4. Docker، Runtime و Orchestration محلی
 
-سرویس‌ها در `docker-compose.yml`:
+### 4.1 سرویس‌ها
+
+`docker-compose.yml` یک runtime production-like محلی می‌سازد:
 
 ```text
 web       → Django/Gunicorn
 postgres  → PostgreSQL 17
-redis     → Redis cache/broker
+redis     → Redis cache/broker/result backend
 worker    → Celery worker
-beat      → Celery beat
+beat      → Celery beat scheduler
 flower    → Celery monitoring UI
 ```
 
-اجرای local production-like:
+### 4.2 اجرا
+
+ابتدا فایل `.env` بساز:
+
+```bash
+cp .env.example .env
+```
+
+حداقل مقدار لازم:
+
+```env
+SECRET_KEY=یک-کلید-بلند-و-تصادفی
+POSTGRES_PASSWORD=یک-password-قوی
+ALLOWED_HOSTS=127.0.0.1,localhost
+```
+
+اجرا:
 
 ```bash
 docker-compose up --build -d
+```
+
+مشاهده لاگ:
+
+```bash
+docker-compose logs -f web
+docker-compose logs -f worker
+docker-compose logs -f beat
 ```
 
 خاموش کردن:
@@ -195,115 +257,120 @@ docker-compose up --build -d
 docker-compose down
 ```
 
-Dockerfile:
+حذف volumeها فقط وقتی مطمئنی داده local مهم نیست:
 
-- multi-stage build
-- wheel build در stage جدا
-- runtime کوچک‌تر
-- `tini` برای signal handling
-- `gosu` برای privilege drop
-- user غیر-root برای app
-- healthcheck روی readiness endpoint:
+```bash
+docker-compose down -v
+```
+
+### 4.3 Dockerfile
+
+Dockerfile فعلی:
+
+- multi-stage است.
+- wheelها در stage جدا ساخته می‌شوند.
+- runtime کوچک‌تر و تمیزتر است.
+- `tini` برای signal handling دارد.
+- `gosu` برای privilege drop دارد.
+- container ابتدا root است تا volume ownership را درست کند، سپس به user غیر-root drop می‌شود.
+- healthcheck روی readiness است:
 
 ```text
 /api/v1/health/ready/
 ```
 
-entrypoint:
+### 4.4 entrypoint
 
-- آماده‌سازی writable dirs
-- wait for Redis
-- migrations opt-in با `RUN_MIGRATIONS=1`
-- collectstatic opt-in با `RUN_COLLECTSTATIC=1`
-- privilege drop به user app
+`entrypoint.sh` مسئول این موارد است:
+
+```text
+ساخت/اصلاح runtime directories
+wait-for Redis در صورت نیاز
+اجرای migration اختیاری با RUN_MIGRATIONS=1
+اجرای collectstatic اختیاری با RUN_COLLECTSTATIC=1
+drop privilege به app user
+اجرای command نهایی
+```
 
 ---
 
-## 6. Quality / Security / CI
+## 5. Makefile، CI و Quality Gates
 
-### دستورهای Makefile
-
-```bash
-make install
-make lint
-make check
-make deploy-check
-make migrations-check
-make schema-check
-make schema-update
-make pip-check
-make pip-audit
-make bandit
-make secrets-scan
-make security
-make test
-make verify
-```
-
-### security gate
+### 5.1 دستورات اصلی Makefile
 
 ```bash
-make security
+make install           # نصب requirements اصلی و dev
+make lint              # ruff
+make check             # django check
+make deploy-check      # django deployment check با env امن
+make migrations-check  # کنترل migration drift
+make schema-check      # validate schema در /tmp
+make schema-update     # regenerate schema.yaml
+make test              # pytest
+make coverage          # pytest + coverage threshold
+make security          # pip-audit + bandit + detect-secrets
+make verify            # کل gate production
+make docker-up         # docker-compose up --build -d
+make docker-down       # docker-compose down
 ```
 
-اجرا می‌کند:
+### 5.2 CI
+
+`.github/workflows/ci.yml` روی push/PR به `main` اجرا می‌شود و شامل:
 
 ```text
-pip-audit                         dependency vulnerability scan
-bandit                            production SAST scan
-locally controlled detect-secrets baseline scan
-```
-
-### full verify
-
-```bash
-make verify
-```
-
-اجرا می‌کند:
-
-```text
+PostgreSQL service
+Redis service
+Python setup
+Dependency install
 pip check
-security
+security gate
 ruff
 Django check
 Django deploy check
 migration drift check
-OpenAPI validate
-full pytest with coverage threshold
+OpenAPI validation
+pytest coverage gate
+schema artifact upload
 ```
 
-### CI
+### 5.3 فلسفه CI
 
-`.github/workflows/ci.yml` شامل:
+CI فقط تست واحد نیست؛ CI قرارداد production است. اگر هرکدام از این‌ها شکست بخورد، یعنی پروژه آماده merge/push نیست:
 
-- PostgreSQL service
-- Redis service
-- Python 3.14
-- dependency install
-- pip check
-- security gate
-- Ruff
-- Django check
-- deploy check
-- migration drift check
-- OpenAPI schema validation
-- full pytest with coverage threshold
-- schema artifact upload
+```text
+dependency graph
+known vulnerabilities
+static security scan
+secret scan
+style/lint
+Django config health
+production deploy warnings
+migration drift
+OpenAPI contract
+test + coverage
+```
 
 ---
 
-## 7. API Documentation
+## 6. OpenAPI، Swagger و قرارداد API
 
-بعد از اجرای سرور:
+مسیرها:
 
 ```text
-Swagger UI : /api/docs/
-ReDoc      : /api/redoc/
-Schema     : /api/schema/
+/api/schema/    → raw OpenAPI schema
+/api/docs/      → Swagger UI
+/api/redoc/     → ReDoc
+schema.yaml     → schema commit شده و قابل کنترل در CI
 ```
 
-Regenerate committed schema:
+قواعد:
+
+- هر endpoint جدید باید schema-friendly باشد.
+- response envelope باید یکپارچه بماند.
+- warningهای drf-spectacular قابل قبول نیستند.
+- enum collision باید با `ENUM_NAME_OVERRIDES` حل شود.
+- schema باید بعد از تغییر endpoint/serializer regenerate شود:
 
 ```bash
 make schema-update
@@ -311,62 +378,170 @@ make schema-update
 
 ---
 
-## 8. Core Infrastructure
+## 7. تنظیمات Environment و Providerها
 
-اپ `core` زیرساخت مشترک کل پروژه است:
-
-- `BaseModel`: `created_at`, `updated_at`, `is_active`
-- active/all managers
-- response envelope
-- custom pagination
-- custom exception handler
-- request ID middleware
-- cache helpers با namespace versioning
-- health checks
-- OpenAPI schema helpers
-
-
-### Cross-App Search Foundation
-
-Apex A1 یک search foundation مشترک اضافه کرده است که برای production روی PostgreSQL از full-text search و trigram similarity استفاده می‌کند و برای local/test روی SQLite به fallback امن `icontains` برمی‌گردد.
-
-فایل اصلی:
+فایل مرجع:
 
 ```text
-apps/core/search.py
+.env.example
 ```
 
-قابلیت‌ها:
+### 7.1 Django / Security
+
+```env
+DJANGO_SETTINGS_MODULE=config.settings.production
+SECRET_KEY=...
+DEBUG=False
+ALLOWED_HOSTS=example.com,www.example.com
+CORS_ALLOWED_ORIGINS=https://example.com
+CSRF_TRUSTED_ORIGINS=https://example.com
+```
+
+### 7.2 Database
+
+برای production واقعی:
+
+```env
+DATABASE_ENGINE=postgres
+POSTGRES_DB=setadjang
+POSTGRES_USER=setadjang
+POSTGRES_PASSWORD=strong-password
+POSTGRES_HOST=postgres
+POSTGRES_PORT=5432
+```
+
+SQLite فقط برای development ساده مناسب است.
+
+### 7.3 Redis / Celery
+
+```env
+CACHE_BACKEND=redis
+REDIS_URL=redis://redis:6379/1
+CELERY_BROKER_URL=redis://redis:6379/2
+CELERY_RESULT_BACKEND=redis://redis:6379/2
+```
+
+### 7.4 Email SMTP
+
+پروژه provider-ready است. پیش‌فرض توسعه console-readable است، اما برای SMTP واقعی می‌توان از Brevo SMTP رایگان/transactional استفاده کرد:
+
+```env
+EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
+EMAIL_HOST=smtp-relay.brevo.com
+EMAIL_PORT=587
+EMAIL_USE_TLS=True
+EMAIL_HOST_USER=...
+EMAIL_HOST_PASSWORD=...
+DEFAULT_FROM_EMAIL=no-reply@example.com
+```
+
+هیچ credential واقعی نباید commit شود.
+
+### 7.5 SMS Provider
+
+تا قبل از گرفتن مجوز SMS، provider می‌تواند dev/console بماند. کدها provider-ready هستند تا بعد از گرفتن مجوز با تغییر env فعال شوند:
+
+```env
+OTP_PROVIDER=sms
+OTP_SMS_PROVIDER=http
+OTP_SMS_ENDPOINT=https://provider.example/api/send
+OTP_SMS_API_KEY=...
+```
+
+### 7.6 Payment Provider / Zarinpal Readiness
+
+Madadkar از provider contract استفاده می‌کند. تا قبل از مجوز رسمی، sandbox/dev provider قابل استفاده است. بعد از دریافت مجوز، جایگزینی باید از طریق تنظیم env و provider implementation انجام شود، نه تغییر workflow مالی.
+
+```env
+MADADKAR_PAYMENT_PROVIDER=sandbox
+MADADKAR_PAYMENT_CALLBACK_URL=https://example.com/api/v1/madadkar/payment/verify/
+```
+
+### 7.7 Media / Object Storage
+
+```env
+MEDIA_STORAGE_BACKEND=local
+# یا:
+MEDIA_STORAGE_BACKEND=s3
+AWS_ACCESS_KEY_ID=...
+AWS_SECRET_ACCESS_KEY=...
+AWS_STORAGE_BUCKET_NAME=...
+AWS_S3_ENDPOINT_URL=...
+MEDIA_CDN_DOMAIN=cdn.example.com
+```
+
+---
+
+## 8. معماری کلان و قراردادهای کدنویسی
+
+### 8.1 جریان استاندارد یک request
 
 ```text
-Persian/Arabic query normalization
-weighted searchable fields
-PostgreSQL SearchVector/SearchRank
-pg_trgm TrigramSimilarity
-SQLite-safe fallback
-bounded query length برای جلوگیری از abuse
-shared helper برای Tabyin, Kindness Wall, Support Desk, LMS, R4J, Madadkar
+Client
+  ↓
+DRF View/APIView
+  ↓
+Serializer validation
+  ↓
+Service برای mutation یا Selector برای read
+  ↓
+Model/DB/Cache/Celery/Audit
+  ↓
+Response envelope
 ```
 
-PostgreSQL extensions در migration هسته فعال می‌شوند، بدون شکستن SQLite:
+### 8.2 نقش فایل‌ها در هر app
 
 ```text
-pg_trgm
-unaccent
+models.py       → state/domain persistence
+choices.py      → enumهای دامنه
+validators.py   → validationهای reusable
+serializers.py  → input/output contract
+services.py     → mutation، workflow، transaction، side-effect
+selectors.py    → query/read optimization
+filters.py      → query params
+permissions.py  → authorization
+throttles.py    → rate/abuse boundaries
+views.py        → HTTP orchestration only
+urls.py         → route contract
+admin.py        → Django admin visibility
+apps.py         → app config
+migrations/     → DB schema history
+tests/          → scenario + edge + contract tests
 ```
 
-اپ‌هایی که به search مشترک وصل شده‌اند:
+### 8.3 ممنوعیت‌های مهم
 
 ```text
-tabyin content search
-kindness wall listing search
-support desk ticket search
-lms course search
-r4j criminal search
-madadkar campaign search
+mutation مستقیم در view ممنوع است
+business rule داخل serializer سنگین ممنوع است
+queryهای پیچیده و تکراری خارج از selector ممنوع است
+حذف audit برای عملیات حساس ممنوع است
+تغییر schema بدون schema-update ممنوع است
+migration دستی بدون makemigrations/check ممنوع است
 ```
 
-### Response envelope
+---
+
+## 9. Core Infrastructure
+
+اپ `core` زیرساخت مشترک پروژه است.
+
+### 9.1 BaseModel
+
+اکثر مدل‌ها از `BaseModel` استفاده می‌کنند:
+
+```text
+id
+created_at
+updated_at
+is_active
+soft_delete behavior
+```
+
+### 9.2 Response Envelope
+
+فرمت پاسخ‌ها استاندارد است:
 
 ```json
 {
@@ -377,350 +552,755 @@ madadkar campaign search
 }
 ```
 
-### Error envelope
+خطا:
 
 ```json
 {
   "success": false,
   "status_code": 400,
-  "message": "درخواست نامعتبر است.",
+  "message": "ورودی نامعتبر است.",
   "errors": {}
 }
 ```
 
-### Health endpoints
+### 9.3 Health Checks
+
+Endpointها:
 
 ```text
-GET /api/v1/health/live/
+GET /api/v1/health/
 GET /api/v1/health/ready/
 GET /api/v1/health/detailed/
 ```
 
-Health checks شامل database/cache/Celery-relevant dependencies است و secret-safe طراحی شده است. detailed health علاوه بر این‌ها وضعیت non-critical provider readiness مثل email/sms/payment را هم بدون ارسال واقعی پیام یا پرداخت گزارش می‌کند.
+`detailed` فقط یک ping ساده نیست؛ وضعیت‌های زیر را هم پوشش می‌دهد:
+
+```text
+database
+cache
+migration_state
+media_storage
+audit_chain_quick
+performance_contracts
+tabyin_sync
+provider_readiness
+```
+
+### 9.4 Performance Contracts
+
+فایل‌ها:
+
+```text
+apps/core/performance.py
+apps/core/performance_contracts.py
+apps/core/db_performance.py
+apps/core/middleware.py
+apps/core/metrics.py
+```
+
+هدرهای runtime:
+
+```text
+X-Response-Time-ms
+X-Performance-Budget-ms
+X-DB-Query-Count
+X-DB-Time-ms
+```
+
+metrics:
+
+```text
+setadjang_http_slow_requests_total
+setadjang_http_db_query_count
+setadjang_http_db_query_time_seconds
+setadjang_http_db_slow_queries_total
+```
+
+### 9.5 Cross-App Quality Contracts
+
+تست‌های معماری enforce می‌کنند:
+
+```text
+module docstrings
+top-level class/function docstrings
+عدم وجود placeholder markers
+عدم mutation مستقیم در views
+OpenAPI contract
+API envelope contract
+critical endpoint performance budget
+```
 
 ---
 
-## 9. Authentication
+## 10. Audit Logs و Forensics
 
-اپ `authentication` احراز هویت چندشناسه‌ای و OTP امن را فراهم می‌کند.
+اپ `audit_logs` ستون فقرات forensic پروژه است.
 
-### قابلیت‌ها
+### 10.1 هدف
 
-- custom user
-- email/phone identifiers
-- signup with OTP
-- login با password
-- login با OTP
-- forgot/reset password
-- add secondary identifier
-- make primary identifier
-- JWT access/refresh
-- tracked device/session registry
-- user/admin session revoke workflows
-- risk-based authentication signals برای new device/new IP/session anomalies
-- admin risk review workflow
-- logout/blacklist
-- profile completion
-- admin user management
-- legacy endpoint deprecation
+هر عملیات حساس باید قابل پاسخ دادن به این سؤال‌ها باشد:
 
-### OTP security
+```text
+چه کسی؟
+چه زمانی؟
+از کجا؟
+روی چه resource؟
+چه عملیاتی؟
+چه تغییری؟
+با چه request_id؟
+```
 
-- OTP خام در DB ذخیره نمی‌شود.
-- HMAC/SHA256 hashing
-- replay protection
-- DB-side attempt/cooldown controls
-- identifier masking
-- provider abstraction برای email/SMS
-- anomaly guard
-- throttling
+### 10.2 مدل AuditLog
 
-### API summary
+اطلاعات کلیدی:
+
+```text
+user
+action
+resource_type
+resource_id
+ip_address
+user_agent
+path
+method
+request_id
+changes
+extra_data
+hash chain fields
+created_at
+```
+
+### 10.3 Tamper-Evident Hash Chain
+
+برای جلوگیری از دستکاری بی‌صدا، audit chain دارای hash continuity است. اگر یک log تغییر کند یا حذف شود، verification chain آن را نشان می‌دهد.
+
+دستور بررسی:
+
+```bash
+python manage.py verify_audit_chain
+```
+
+### 10.4 Export Forensic Package
+
+برای incident response یا legal hold:
+
+```bash
+python manage.py export_audit_package --output ./audit_exports
+```
+
+Endpoint ادمین:
+
+```text
+GET /api/v1/audit-logs/admin/logs/export/
+```
+
+### 10.5 Retention Report
+
+```bash
+python manage.py audit_retention_report
+```
+
+نکته production: حذف خودکار audit logs عمداً aggressive نیست. طراحی فعلی archive-first است تا در forensic review داده از بین نرود.
+
+### 10.6 APIها
+
+```text
+GET /api/v1/audit-logs/admin/logs/
+GET /api/v1/audit-logs/admin/logs/{audit_log_id}/
+GET /api/v1/audit-logs/admin/logs/export/
+```
+
+---
+
+## 11. Notification Engine
+
+اپ `notifications` موتور notification داخلی است.
+
+### 11.1 هدف
+
+به جای اینکه هر app مستقیم پیام بسازد، eventها و templateها در یک موتور مرکزی مدیریت می‌شوند:
+
+```text
+Domain event → Notification template → Delivery → User notification center
+```
+
+### 11.2 مفاهیم
+
+```text
+NotificationTemplate  → قالب قابل مدیریت
+NotificationEvent     → رخداد دامنه‌ای
+NotificationDelivery  → ارسال/نمایش برای کاربر
+NotificationPreference → preference کاربر
+```
+
+### 11.3 سناریو
+
+مثلاً در Support Desk وقتی ticket reply می‌خورد:
+
+```text
+service mutation انجام می‌شود
+activity/audit ثبت می‌شود
+notification event dispatch می‌شود
+delivery برای user ساخته می‌شود
+کاربر در /notifications/me آن را می‌بیند
+```
+
+### 11.4 APIها
+
+```text
+GET  /api/v1/notifications/me/
+POST /api/v1/notifications/me/{delivery_id}/read/
+POST /api/v1/notifications/me/read-all/
+GET,POST /api/v1/notifications/me/preferences/
+GET /api/v1/notifications/admin/events/
+GET /api/v1/notifications/admin/deliveries/
+GET /api/v1/notifications/admin/templates/
+```
+
+---
+
+## 12. Activity Timeline
+
+اپ `activity` timeline واحد برای فعالیت‌های کاربر و ادمین است.
+
+### 12.1 هدف
+
+Audit برای forensic است، Activity برای UX و مشاهده تاریخچه عملیاتی است. هر دو مهم‌اند اما کاربردشان متفاوت است.
+
+```text
+AuditLog  → امنیت/ردیابی/حقوقی
+Activity  → timeline کاربردی/محصولی
+```
+
+### 12.2 APIها
+
+```text
+GET /api/v1/activity/me/
+GET /api/v1/activity/admin/
+```
+
+### 12.3 سناریو
+
+وقتی کاربر:
+
+```text
+ثبت‌نام می‌کند
+در LMS ثبت‌نام می‌کند
+در Madadkar مشارکت می‌کند
+ticket می‌سازد
+در Kindness Wall listing ثبت می‌کند
+```
+
+می‌توان این رویدادها را در timeline او نمایش داد.
+
+---
+
+## 13. Unified Admin Command Center
+
+اپ `command_center` نمای مدیریتی یکپارچه است.
+
+### 13.1 هدف
+
+ادمین نباید برای فهم سلامت عملیاتی سیستم بین ۱۰ صفحه پراکنده بچرخد. Command Center snapshot خلاصه از وضعیت دامنه‌ها می‌دهد:
+
+```text
+کاربران
+گزارش‌ها
+R4J cases
+Madadkar finance
+Support queue
+LMS activity
+Kindness Wall moderation
+Tabyin sync
+provider readiness
+```
+
+### 13.2 API
+
+```text
+GET /api/v1/admin/command-center/
+```
+
+### 13.3 منطق
+
+این endpoint read-only است و باید از selectorهای appها استفاده کند. هدف آن mutation نیست؛ هدف command visibility است.
+
+---
+
+## 14. Authentication و Identity
+
+اپ `authentication` مسئول identity، OTP، login، profile، session و risk است.
+
+### 14.1 قابلیت‌ها
+
+```text
+ثبت‌نام چندمرحله‌ای
+OTP email/SMS-ready
+login با password
+login با OTP
+JWT access/refresh
+profile/me endpoints
+مدیریت identifierها
+password reset/change
+admin user management
+device/session management
+risk-based authentication
+risk signal review
+legacy endpoint deprecation headers
+anti-abuse global OTP guard
+```
+
+### 14.2 مدل‌ها و منطق
+
+```text
+User
+UserIdentifier
+OTPChallenge
+AuthSession
+AuthRiskSignal
+```
+
+- `UserIdentifier` اجازه می‌دهد email/phone و primary identifier مدیریت شود.
+- `OTPChallenge` برای ثبت و کنترل lifecycle OTP است.
+- `AuthSession` session/device-level visibility می‌دهد.
+- `AuthRiskSignal` رخدادهایی مثل IP/device anomaly را قابل review می‌کند.
+
+### 14.3 سناریوی ثبت‌نام OTP
+
+```text
+POST /signup/request
+  → identifier normalize می‌شود
+  → anti-abuse guard چک می‌شود
+  → OTPChallenge ساخته می‌شود
+  → provider email/sms ارسال می‌کند
+
+POST /signup/verify
+  → OTP verify می‌شود
+  → user ساخته یا فعال می‌شود
+  → identifier verified می‌شود
+  → JWT صادر می‌شود
+  → audit/activity قابل ثبت است
+```
+
+### 14.4 سناریوی login با password
+
+```text
+POST /login/password
+  → credential validate
+  → risk signals evaluate
+  → AuthSession ساخته می‌شود
+  → JWT صادر می‌شود
+```
+
+### 14.5 Session Management
+
+کاربر می‌تواند sessionهای خودش را ببیند و revoke کند:
+
+```text
+GET  /api/v1/auth/sessions/
+POST /api/v1/auth/sessions/{session_id}/revoke/
+```
+
+ادمین:
+
+```text
+GET  /api/v1/auth/admin/users/{user_id}/sessions/
+POST /api/v1/auth/admin/users/{user_id}/sessions/revoke-all/
+```
+
+### 14.6 Risk Review
+
+```text
+GET  /api/v1/auth/admin/risk-signals/
+POST /api/v1/auth/admin/risk-signals/{signal_id}/review/
+```
+
+### 14.7 API Summary
 
 ```text
 POST /api/v1/auth/signup/request/
 POST /api/v1/auth/signup/verify/
+POST /api/v1/auth/register/
+POST /api/v1/auth/login/
 POST /api/v1/auth/login/password/
 POST /api/v1/auth/login/otp/request/
 POST /api/v1/auth/login/otp/verify/
+POST /api/v1/auth/token/refresh/
+POST /api/v1/auth/logout/
+GET,PATCH /api/v1/auth/me/
+GET,PATCH /api/v1/auth/profile/
+POST /api/v1/auth/password/change/
 POST /api/v1/auth/password/forgot/request/
 POST /api/v1/auth/password/forgot/confirm/
 POST /api/v1/auth/identifiers/add/request/
 POST /api/v1/auth/identifiers/add/verify/
 POST /api/v1/auth/identifiers/make-primary/
-POST /api/v1/auth/token/refresh/
-POST /api/v1/auth/logout/
-GET  /api/v1/auth/sessions/
-POST /api/v1/auth/sessions/{session_id}/revoke/
-GET  /api/v1/auth/me/
-GET/PATCH /api/v1/auth/profile/
-GET  /api/v1/auth/admin/users/
-GET  /api/v1/auth/admin/users/{id}/
-POST /api/v1/auth/admin/users/{id}/role/
-GET  /api/v1/auth/admin/users/{id}/sessions/
-POST /api/v1/auth/admin/users/{id}/sessions/revoke-all/
-GET  /api/v1/auth/admin/risk-signals/
-POST /api/v1/auth/admin/risk-signals/{id}/review/
+GET /api/v1/auth/admin/users/
+GET,PATCH,DELETE /api/v1/auth/admin/users/{user_id}/
+POST /api/v1/auth/admin/users/{user_id}/role/
 ```
-
-### Disposable email blocklist
-
-Management command:
-
-```bash
-python manage.py update_disposable_email_blocklist
-```
-
-این command لیست دامنه‌های disposable را به‌روزرسانی می‌کند و برای hardening ثبت‌نام مفید است.
 
 ---
 
-## 10. Public Reports
+## 15. Public Reports
 
-اپ `public_reports` برای ثبت و بررسی گزارشات مردمی است.
+اپ `public_reports` برای دریافت گزارش‌های عمومی درباره موضوعات تعریف‌شده است.
 
-### قابلیت‌ها
+### 15.1 هدف
 
-- subjectهای قابل مدیریت
-- ثبت گزارش عمومی/کاربری
-- attachment validation
-- workflow بررسی ادمین
-- privacy-safe public response
-- admin list/detail/update/status
-- audit-sensitive actions
-
-### Workflow
+یک report ساده نباید فقط یک فرم خام باشد. این app ساختار زیر را فراهم می‌کند:
 
 ```text
-PENDING   → REVIEWING / APPROVED / REJECTED
-REVIEWING → PENDING / APPROVED / REJECTED
-APPROVED  → terminal
-REJECTED  → terminal
+Subject catalog
+Report submission
+Attachment support
+Admin review
+Status transitions
+Audit for admin status changes
 ```
 
-### API summary
+### 15.2 مدل ذهنی
+
+```text
+ReportSubject → موضوع قابل انتخاب برای گزارش
+PublicReport  → گزارش کاربر/عموم
+Attachment    → فایل‌های پشتیبان
+Status        → وضعیت بررسی
+```
+
+### 15.3 سناریوی کاربر
+
+```text
+GET /subjects/
+  → کاربر موضوعات فعال را می‌بیند
+
+POST /reports/
+  → گزارش ثبت می‌شود
+  → attachmentها validate می‌شوند
+  → status اولیه در حالت pending قرار می‌گیرد
+```
+
+### 15.4 سناریوی ادمین
+
+```text
+GET /admin/reports/
+  → لیست گزارش‌ها با فیلتر
+
+GET /admin/reports/{id}/
+  → جزئیات کامل
+
+PATCH /admin/reports/{id}/status/
+  → تغییر وضعیت بررسی
+  → audit log ثبت می‌شود
+```
+
+### 15.5 APIها
 
 ```text
 GET  /api/v1/public-reports/subjects/
 POST /api/v1/public-reports/reports/
-GET  /api/v1/public-reports/reports/{tracking_code}/
-GET  /api/v1/public-reports/admin/subjects/
-POST /api/v1/public-reports/admin/subjects/
-PATCH/DELETE /api/v1/public-reports/admin/subjects/{id}/
 GET  /api/v1/public-reports/admin/reports/
-GET  /api/v1/public-reports/admin/reports/{id}/
-PATCH /api/v1/public-reports/admin/reports/{id}/
-POST /api/v1/public-reports/admin/reports/{id}/status/
+GET  /api/v1/public-reports/admin/reports/{report_id}/
+PATCH /api/v1/public-reports/admin/reports/{report_id}/status/
+GET,POST /api/v1/public-reports/admin/subjects/
+GET,PATCH,DELETE /api/v1/public-reports/admin/subjects/{subject_id}/
 ```
 
 ---
 
-## 11. Tabyin
+## 16. Tabyin
 
-اپ `tabyin` بانک محتوای جهاد تبیین است؛ شامل محتوای sync شده از provider خارجی و محتوای ارسالی کاربران.
+اپ `tabyin` برای sync و مدیریت محتوای تبیین از source خارجی است.
 
-### قابلیت‌ها
+### 16.1 هدف
 
-- Public content list/detail
-- cache سطح selector برای public reads
-- sync engine با provider abstraction
-- manual admin sync API
-- Celery async sync
-- incremental/full sync modes
-- user submission workflow
-- admin submission review
-- content toggle publish/archive
-- cache invalidation بعد از sync/toggle
+به جای ورود دستی محتوا، سیستم می‌تواند از provider خارجی محتوا دریافت کند، normalize کند، hash کند، upsert کند و برای نمایش عمومی آماده کند.
 
-### Manual crawl / sync با command line
+### 16.2 اجزای اصلی
 
-دو mode رسمی برای crawl دستی وجود دارد:
+```text
+Content مدل محتوای sync شده
+UserSubmission محتوای پیشنهادی کاربر
+Provider client برای Mohtavanegar
+Sync parser
+Sync hasher
+Sync engine
+Celery tasks
+Admin sync endpoints
+Management command
+```
 
-#### Incremental sync
+### 16.3 دو حالت sync دستی
 
-برای sync سبک و دوره‌ای:
+از CLI:
 
 ```bash
 python manage.py sync_tabyin --mode incremental
-```
-
-#### Full sync
-
-برای crawl کامل همه داده‌ها:
-
-```bash
 python manage.py sync_tabyin --mode full
 ```
 
-نمونه PowerShell:
+PowerShell:
 
 ```powershell
 python manage.py sync_tabyin --mode incremental
 python manage.py sync_tabyin --mode full
 ```
 
-این command از service/sync engine استفاده می‌کند و خروجی شمارشی از عملیات sync می‌دهد.
-
-### Celery tasks
+تفاوت:
 
 ```text
-apps.tabyin.tasks.sync_tabyin_incremental_task
-apps.tabyin.tasks.sync_tabyin_full_task
+incremental → مناسب syncهای دوره‌ای، سریع‌تر، فقط تغییرات جدید/اخیر
+full        → مناسب rebuild یا audit کامل source، سنگین‌تر
 ```
 
-Beat schedule:
+### 16.4 Sync از API ادمین
 
 ```text
-incremental: every 30 minutes
-full: daily at 03:00
-```
-
-Queue:
-
-```text
-tabyin_sync
-```
-
-### API summary
-
-```text
-GET  /api/v1/tabyin/contents/
-GET  /api/v1/tabyin/contents/{id}/
-POST /api/v1/tabyin/me/submissions/
-GET  /api/v1/tabyin/me/submissions/
-GET  /api/v1/tabyin/me/submissions/{id}/
-GET  /api/v1/tabyin/admin/contents/
-GET  /api/v1/tabyin/admin/contents/{id}/
-POST /api/v1/tabyin/admin/contents/{id}/toggle/
 POST /api/v1/tabyin/admin/sync/
-GET  /api/v1/tabyin/admin/sync/tasks/{task_id}/
-GET  /api/v1/tabyin/admin/submissions/
-POST /api/v1/tabyin/admin/submissions/{id}/review/
+GET  /api/v1/tabyin/admin/sync/status/{task_id}/
+```
+
+در حالت async:
+
+```text
+API task را dispatch می‌کند
+Celery task sync را اجرا می‌کند
+status با task_id قابل مشاهده است
+```
+
+### 16.5 User submissions
+
+کاربر می‌تواند محتوا پیشنهاد دهد:
+
+```text
+GET,POST /api/v1/tabyin/me/submissions/
+GET /api/v1/tabyin/me/submissions/{content_id}/
+```
+
+ادمین:
+
+```text
+GET /api/v1/tabyin/admin/submissions/
+POST /api/v1/tabyin/admin/submissions/{content_id}/approve/
+POST /api/v1/tabyin/admin/submissions/{content_id}/reject/
+```
+
+### 16.6 API Summary
+
+```text
+GET /api/v1/tabyin/contents/
+GET /api/v1/tabyin/contents/{external_id}/
+GET /api/v1/tabyin/admin/contents/
+GET /api/v1/tabyin/admin/contents/{external_id}/
+PATCH /api/v1/tabyin/admin/contents/{external_id}/toggle/
+POST /api/v1/tabyin/admin/sync/
+GET /api/v1/tabyin/admin/sync/status/{task_id}/
 ```
 
 ---
 
+## 17. R4J — Reward for Justice
 
-## Apex Tamper-Evident Audit Hash Chain
+اپ `r4j` یک سیستم Reward for Justice برای پروفایل مجرم، گزارش جامعه، جایزه، evidence custody و پرونده عملیاتی است.
 
-Audit logs include a forensic hash chain:
-
-```text
-previous_hash
-event_hash
-hash_version
-```
-
-Verification command:
-
-```bash
-python manage.py verify_audit_chain
-```
-
-Any direct database tampering with hash-covered fields breaks the chain and is detected by the command.
-
-## 12. Audit Logs
-
-اپ `audit_logs` برای forensic audit trail طراحی شده است: append-only، tamper-evident و incident-response-ready.
-
-### قابلیت‌ها
-
-- append-oriented audit log
-- action constants برای همه دامنه‌ها
-- async audit dispatch via Celery
-- metadata extraction:
-  - IP
-  - user agent
-  - request id
-- admin list/detail
-- immutability hardening در model/queryset/admin/API
-- tamper-evident hash-chain verification
-- forensic export package شامل:
-  - `manifest.json`
-  - `audit_logs.jsonl`
-  - `audit_logs.csv`
-  - `audit_logs.xlsx`
-- SHA-256 digest برای فایل‌های داخل package و header خروجی API
-- spreadsheet formula-injection hardening برای CSV/XLSX
-- audit شدن خود عملیات export با action `AUDIT_PACKAGE_EXPORTED`
-- retention policy محافظه‌کارانه، archive-first و non-destructive به‌صورت پیش‌فرض
-
-### API summary
+### 17.1 مفاهیم اصلی
 
 ```text
-GET /api/v1/audit-logs/admin/logs/
-GET /api/v1/audit-logs/admin/logs/export/
-GET /api/v1/audit-logs/admin/logs/{id}/
+R4JCriminal                  → پروفایل مجرم
+R4JCriminalAlias             → نام‌های مستعار
+R4JCriminalPhone             → شماره‌ها
+R4JCriminalSocial            → شبکه‌های اجتماعی
+R4JCriminalPhoto             → تصاویر
+R4JCriminalAttachment        → اسناد ادمین
+R4JCriminalFieldVisibility   → کنترل visibility فیلدها
+R4JReport                    → گزارش کاربر درباره مجرم
+R4JReportFieldChange         → پیشنهاد تغییر فیلد
+R4JReportAttachment          → ضمیمه گزارش
+R4JEvidenceCustodyEvent      → chain-of-custody مدارک
+R4JBounty                    → تعهد جایزه کاربر
+R4JInvestigationCase         → پرونده عملیاتی
+R4JCaseEvent                 → timeline پرونده
 ```
 
-### Forensic commands
+### 17.2 Public Criminal Browse
 
-```bash
-python manage.py verify_audit_chain
-python manage.py export_audit_package --output ./audit_exports
-python manage.py export_audit_package --output ./audit_exports --action LOGIN_SUCCESS
-python manage.py export_audit_package --output ./audit_exports --created-after 2026-06-01T00:00:00Z --created-before 2026-06-16T23:59:59Z
-python manage.py audit_retention_report
-```
-
-### Retention env
-
-```env
-AUDIT_LOG_ARCHIVE_ROOT=/var/lib/setad-jang/audit_exports
-AUDIT_LOG_RETENTION_DAYS=2555
-AUDIT_LOG_LEGAL_HOLD_ENABLED=True
-AUDIT_LOG_RETENTION_DELETE_ENABLED=False
-AUDIT_LOG_EXPORT_MAX_RECORDS=100000
-```
-
-نکته production: حذف خودکار audit logs عمداً غیرفعال است؛ retention فعلی archive-first است تا در incident response و legal hold هیچ evidence از بین نرود.
-
----
-
-## 13. R4J
-
-اپ `r4j` سیستم Reward for Justice است.
-
-### قابلیت‌ها
-
-- پروفایل مجرم
-- public criminal browse/detail
-- گزارش کاربر درباره مجرم
-- attachmentها
-- evidence SHA-256 hashing برای ضمیمه‌های criminal/report
-- chain-of-custody events برای uploaded/hashed/reviewed/transferred/rejected/deleted
-- admin evidence custody review endpoint
-- Investigation Case Management برای تبدیل گزارش‌ها به پرونده عملیاتی
-- case_number انسانی، status/priority/severity، SLA due dates و evidence completeness score
-- timeline immutable برای create/triage/assign/priority/evidence/escalate/resolve/reject/close/reopen
-- operations overview برای صف‌های unassigned/overdue و توزیع وضعیت/اولویت
-- audit کامل برای تمام mutationهای حساس پرونده
-- admin review گزارش
-- field-change workflow
-- bounty management
-- cancel request/approve/reject
-- performance query contracts
-
-### API summary
+کاربر عمومی فقط پروفایل‌های `published + active` را می‌بیند. فیلدهای حساس با visibility map کنترل می‌شوند.
 
 ```text
-GET  /api/v1/r4j/criminals/
-GET  /api/v1/r4j/criminals/{slug}/
-GET  /api/v1/r4j/criminals/{slug}/bounties/
-POST /api/v1/r4j/reports/
-GET  /api/v1/r4j/me/reports/
-GET/PATCH/DELETE /api/v1/r4j/me/reports/{id}/
-POST /api/v1/r4j/me/reports/{id}/submit/
-POST /api/v1/r4j/me/reports/{id}/cancel-request/
-GET/POST /api/v1/r4j/admin/criminals/
-GET/PATCH/DELETE /api/v1/r4j/admin/criminals/{id}/
-GET /api/v1/r4j/admin/reports/
-POST /api/v1/r4j/admin/reports/{id}/review/
-GET /api/v1/r4j/admin/evidence-custody/
-POST /api/v1/r4j/admin/evidence-custody/{id}/review/
-GET /api/v1/r4j/admin/cases/
-POST /api/v1/r4j/admin/reports/{id}/create-case/
-GET /api/v1/r4j/admin/cases/{case_number}/
+GET /api/v1/r4j/criminals/
+GET /api/v1/r4j/criminals/{lookup}/
+```
+
+`lookup` می‌تواند slug یا id-like باشد.
+
+### 17.3 Admin Criminal Management
+
+ادمین می‌تواند criminal بسازد، ویرایش کند، publish/unpublish کند، و nested resources را مدیریت کند.
+
+```text
+GET,POST /api/v1/r4j/admin/criminals/
+GET,PATCH,DELETE /api/v1/r4j/admin/criminals/{criminal_id}/
+POST /api/v1/r4j/admin/criminals/{criminal_id}/publish/
+POST /api/v1/r4j/admin/criminals/{criminal_id}/unpublish/
+```
+
+Nested:
+
+```text
+aliases
+phones
+socials
+photos
+attachments
+visibility
+```
+
+### 17.4 Report Workflow
+
+کاربر می‌تواند برای یک criminal گزارش تکمیلی بدهد:
+
+```text
+POST /api/v1/r4j/criminals/{criminal_id}/reports/
+```
+
+گزارش شامل:
+
+```text
+notes
+field_changes
+attachments
+```
+
+ادمین می‌تواند report را review کند:
+
+```text
+GET  /api/v1/r4j/admin/reports/
+GET  /api/v1/r4j/admin/reports/{report_id}/
+POST /api/v1/r4j/admin/reports/{report_id}/review/
+```
+
+Field-change workflow اجازه می‌دهد بعضی فیلدها approve و بعضی reject شوند؛ یعنی review لزوماً all-or-nothing نیست.
+
+### 17.5 Evidence Chain of Custody
+
+هر attachment مهم `SHA-256` و `file_size` دارد:
+
+```text
+R4JCriminalAttachment.file_sha256
+R4JCriminalAttachment.file_size
+R4JReportAttachment.file_sha256
+R4JReportAttachment.file_size
+```
+
+برای هر evidence رویداد append-only ساخته می‌شود:
+
+```text
+uploaded
+hashed
+reviewed
+transferred
+rejected
+deleted
+```
+
+Admin API:
+
+```text
+GET  /api/v1/r4j/admin/evidence-custody/
+POST /api/v1/r4j/admin/evidence-custody/{event_id}/review/
+```
+
+قواعد:
+
+```text
+custody event قابل ویرایش نیست
+custody event قابل حذف نیست
+هر event دقیقاً به یک evidence target وصل است
+review/transfer/reject audit می‌شود
+```
+
+### 17.6 Bounty Workflow
+
+کاربر می‌تواند برای criminal جایزه declarative ثبت کند:
+
+```text
+POST /api/v1/r4j/criminals/{criminal_id}/bounty/
+GET  /api/v1/r4j/me/bounties/
+POST /api/v1/r4j/me/bounties/{bounty_id}/cancel/
+```
+
+ادمین cancel را approve/reject می‌کند:
+
+```text
+GET  /api/v1/r4j/admin/bounties/
+GET  /api/v1/r4j/admin/bounties/{bounty_id}/
+POST /api/v1/r4j/admin/bounties/{bounty_id}/cancel/approve/
+POST /api/v1/r4j/admin/bounties/{bounty_id}/cancel/reject/
+```
+
+Denormalized counters روی criminal نگه‌داری می‌شود:
+
+```text
+total_bounty_toman
+bounties_count
+```
+
+### 17.7 Investigation Case Management
+
+بعد از report، ادمین می‌تواند پرونده عملیاتی بسازد:
+
+```text
+POST /api/v1/r4j/admin/reports/{report_id}/create-case/
+```
+
+پرونده دارای:
+
+```text
+case_number
+status
+priority
+severity
+assigned_to
+evidence_completeness_score
+first_response_due_at
+resolution_due_at
+closure_reason
+```
+
+Workflow:
+
+```text
+new
+triaged
+assigned
+investigating
+waiting_for_evidence
+escalated
+resolved
+rejected
+closed
+```
+
+هر تغییر مهم در `R4JCaseEvent` ثبت می‌شود:
+
+```text
+created
+triaged
+assigned
+priority_changed
+evidence_requested
+escalated
+resolved
+rejected
+closed
+reopened
+```
+
+Case APIها:
+
+```text
+GET  /api/v1/r4j/admin/cases/
+GET  /api/v1/r4j/admin/cases/{case_number}/
 POST /api/v1/r4j/admin/cases/{case_number}/triage/
 POST /api/v1/r4j/admin/cases/{case_number}/assign/
 POST /api/v1/r4j/admin/cases/{case_number}/priority/
@@ -730,780 +1310,844 @@ POST /api/v1/r4j/admin/cases/{case_number}/resolve/
 POST /api/v1/r4j/admin/cases/{case_number}/reject/
 POST /api/v1/r4j/admin/cases/{case_number}/close/
 POST /api/v1/r4j/admin/cases/{case_number}/reopen/
-GET /api/v1/r4j/admin/cases/{case_number}/timeline/
-GET /api/v1/r4j/admin/operations/overview/
-GET/POST /api/v1/r4j/admin/bounties/
-PATCH/DELETE /api/v1/r4j/admin/bounties/{id}/
+GET  /api/v1/r4j/admin/cases/{case_number}/timeline/
+GET  /api/v1/r4j/admin/operations/overview/
+```
+
+### 17.8 سناریوی end-to-end R4J
+
+```text
+1. ادمین criminal draft می‌سازد.
+2. عکس، alias، phone، social و attachment اضافه می‌کند.
+3. attachment hash و custody event می‌گیرد.
+4. ادمین پروفایل را publish می‌کند.
+5. کاربر عمومی criminal را می‌بیند.
+6. کاربر report با field_changes و attachment ارسال می‌کند.
+7. report attachment hash و custody event می‌گیرد.
+8. ادمین report را review می‌کند.
+9. ادمین از report پرونده عملیاتی می‌سازد.
+10. پرونده triage و assign می‌شود.
+11. اگر نیاز باشد priority تغییر می‌کند یا evidence بیشتر درخواست می‌شود.
+12. پرونده resolve/reject/close می‌شود.
+13. همه اقدامات حساس audit/timeline دارند.
 ```
 
 ---
 
+## 18. Madadkar — Charitable Crowdfunding
 
-## Apex Madadkar Payment Reconciliation
+اپ `madadkar` مالی‌ترین و حساس‌ترین دامنه پروژه است. طراحی آن فقط campaign/donation ساده نیست؛ شامل reconciliation، refund، adjustment، risk scoring، receipt verification، transparency و financial controls است.
 
-Madadkar now has finance-grade reconciliation models and services for comparing provider settlement/report rows with internal payment ledger records.
-
-Models:
+### 18.1 مفاهیم اصلی
 
 ```text
+Sponsor
+Campaign
+CampaignImage
+Participation
+Payment
+PaymentRefund
+CampaignFinancialAdjustment
+MadadkarRiskSignal
+DonationReceipt
 PaymentReconciliationBatch
 PaymentReconciliationItem
+CampaignDisbursement
+MadadkarFinancialControlSnapshot
 ```
 
-Classifications:
+### 18.2 Campaign Lifecycle
 
 ```text
-matched
-missing_internal
-amount_mismatch
-status_mismatch
-duplicate_provider_ref
+draft → published → completed/closed
 ```
 
-Service:
-
-```python
-reconcile_provider_payments(provider_name="sandbox", rows=[...], source_name="settlement.csv")
-```
-
-This enables future Zarinpal settlement reconciliation without rewriting payment flows.
-
-## 14. Madadkar
-
-اپ `madadkar` سیستم crowdfunding خیریه سهم‌محور است.
-
-### قابلیت‌ها
-
-- sponsor management
-- campaign management
-- campaign images
-- public campaign browse/detail
-- share-based participation
-- payment initiation
-- payment verify callback
-- sandbox payment provider
-- Zarinpal provider آماده برای بعد از مجوز
-- immutable payment event ledger
-- provider settlement reconciliation
-- refund workflow با request/approve/reject/complete
-- campaign financial adjustment workflow با create/approve/reject/apply
-- financial-control summary با gross/refunds/adjustments/net amount
-- fraud/risk scoring برای payment/refund/adjustment abuse
-- campaign intelligence dashboard با net/refund-adjusted metrics، funnel، velocity، donor concentration و health score
-- portfolio intelligence overview برای تشخیص ضعیف‌ترین و قوی‌ترین campaignها
-- verifiable donation receipts با receipt_number و SHA-256 receipt_hash
-- public-safe receipt verification endpoint
-- audited receipt access/resend workflow
-- settlement CSV/XLSX import و reconciliation API
-- discrepancy CSV export برای finance review
-- campaign disbursement/allocation ledger برای خروج پول و تخصیص منابع
-- disbursable amount calculation با جلوگیری از over-allocation
-- public transparency layer برای نمایش امن gross/refund/adjustment/net/disbursed/remaining بدون PII
-- financial ops automation/control snapshots برای daily finance review
-- scheduled Celery control snapshot و management command برای runbook مالی
-- admin risk-signal review workflow
-- command center open risk-signal counter
-- audit logging برای همه عملیات حساس مالی
-- admin analytics
-- Excel export participants
-- Celery cleanup tasks
-
-### Payment provider modes
-
-تا قبل از گرفتن مجوز Zarinpal:
-
-```env
-MADADKAR_PAYMENT_PROVIDER=sandbox
-```
-
-بعد از گرفتن merchant id واقعی:
-
-```env
-MADADKAR_PAYMENT_PROVIDER=zarinpal
-MADADKAR_ZARINPAL_MERCHANT_ID=...
-MADADKAR_ZARINPAL_SANDBOX=False
-```
-
-کد provider آماده است؛ تغییر اصلی باید در env باشد، نه rewrite کد.
-
-### API summary
+ادمین:
 
 ```text
-GET  /api/v1/madadkar/campaigns/
-GET  /api/v1/madadkar/campaigns/{slug}/
+GET,POST /api/v1/madadkar/admin/campaigns/
+GET,PATCH,DELETE /api/v1/madadkar/admin/campaigns/{campaign_id}/
+POST /api/v1/madadkar/admin/campaigns/{campaign_id}/publish/
+POST /api/v1/madadkar/admin/campaigns/{campaign_id}/close/
+```
+
+عمومی:
+
+```text
+GET /api/v1/madadkar/campaigns/
+GET /api/v1/madadkar/campaigns/{slug}/
+```
+
+### 18.3 Participation / Payment
+
+کاربر در campaign مشارکت می‌کند:
+
+```text
 POST /api/v1/madadkar/campaigns/{slug}/participate/
-POST /api/v1/madadkar/payments/verify/
-GET  /api/v1/madadkar/me/participations/
-GET  /api/v1/madadkar/admin/sponsors/
-POST /api/v1/madadkar/admin/sponsors/
-GET/PATCH/DELETE /api/v1/madadkar/admin/sponsors/{id}/
-GET/POST /api/v1/madadkar/admin/campaigns/
-GET/PATCH/DELETE /api/v1/madadkar/admin/campaigns/{id}/
-POST /api/v1/madadkar/admin/campaigns/{id}/publish/
-POST /api/v1/madadkar/admin/campaigns/{id}/close/
-GET /api/v1/madadkar/admin/campaigns/{id}/analytics/
-GET /api/v1/madadkar/admin/campaigns/{id}/export/
-GET /api/v1/madadkar/admin/campaigns/{id}/financial-control/
-GET/POST /api/v1/madadkar/admin/refunds/
-POST /api/v1/madadkar/admin/refunds/{id}/approve/
-POST /api/v1/madadkar/admin/refunds/{id}/reject/
-POST /api/v1/madadkar/admin/refunds/{id}/complete/
-GET/POST /api/v1/madadkar/admin/adjustments/
-POST /api/v1/madadkar/admin/adjustments/{id}/approve/
-POST /api/v1/madadkar/admin/adjustments/{id}/reject/
-POST /api/v1/madadkar/admin/adjustments/{id}/apply/
-GET /api/v1/madadkar/admin/risk-signals/
-POST /api/v1/madadkar/admin/risk-signals/{id}/review/
-GET /api/v1/madadkar/admin/campaigns/{id}/intelligence/
+```
+
+سپس پرداخت verify می‌شود:
+
+```text
+GET,POST /api/v1/madadkar/payment/verify/
+```
+
+provider فعلی sandbox/dev-ready است اما workflow برای provider واقعی آماده است.
+
+### 18.4 Refund Workflow
+
+مدل `PaymentRefund` برای refund کنترل‌شده:
+
+```text
+requested → approved/rejected → completed
+```
+
+API:
+
+```text
+GET,POST /api/v1/madadkar/admin/refunds/
+POST /api/v1/madadkar/admin/refunds/{refund_id}/{action}/
+```
+
+Actionها:
+
+```text
+approve
+reject
+complete
+```
+
+قواعد:
+
+```text
+refund بدون payment معتبر انجام نمی‌شود
+transition نامعتبر رد می‌شود
+refund حساس audit می‌شود
+```
+
+### 18.5 Financial Adjustments
+
+برای اصلاح مالی campaign بدون دستکاری مستقیم payment ledger:
+
+```text
+GET,POST /api/v1/madadkar/admin/adjustments/
+POST /api/v1/madadkar/admin/adjustments/{adjustment_id}/{action}/
+```
+
+Actionها:
+
+```text
+approve
+reject
+apply
+```
+
+### 18.6 Risk Scoring
+
+`MadadkarRiskSignal` برای تشخیص ریسک‌های مالی/رفتاری:
+
+```text
+GET  /api/v1/madadkar/admin/risk-signals/
+POST /api/v1/madadkar/admin/risk-signals/{signal_id}/review/
+```
+
+Signalها برای review انسانی نگه‌داری می‌شوند، نه تصمیم خودکار خطرناک.
+
+### 18.7 Campaign Intelligence
+
+برای insight مدیریتی:
+
+```text
+GET /api/v1/madadkar/admin/campaigns/{campaign_id}/intelligence/
 GET /api/v1/madadkar/admin/intelligence/overview/
-GET /api/v1/madadkar/me/receipts/
-GET /api/v1/madadkar/me/receipts/{id}/
+GET /api/v1/madadkar/admin/campaigns/{campaign_id}/analytics/
+GET /api/v1/madadkar/admin/campaigns/{campaign_id}/leaderboard/
+```
+
+### 18.8 Donation Receipts
+
+هر donation موفق می‌تواند receipt قابل verification داشته باشد:
+
+```text
+GET  /api/v1/madadkar/me/receipts/
+GET  /api/v1/madadkar/me/receipts/{receipt_id}/
 POST /api/v1/madadkar/receipts/verify/
-POST /api/v1/madadkar/admin/receipts/{id}/resend/
+POST /api/v1/madadkar/admin/receipts/{receipt_id}/resend/
+```
+
+Verification برای این است که receipt بدون اعتماد blind به UI قابل بررسی باشد.
+
+### 18.9 Reconciliation
+
+برای تطبیق settlement/provider report با ledger داخلی:
+
+```text
 POST /api/v1/madadkar/admin/reconciliation/import/
-GET /api/v1/madadkar/admin/reconciliation/batches/
-GET /api/v1/madadkar/admin/reconciliation/batches/{id}/
-GET /api/v1/madadkar/admin/reconciliation/batches/{id}/items/
-GET /api/v1/madadkar/admin/reconciliation/batches/{id}/export/
-GET/POST /api/v1/madadkar/admin/disbursements/
-GET /api/v1/madadkar/admin/disbursements/{id}/
-POST /api/v1/madadkar/admin/disbursements/{id}/approve/
-POST /api/v1/madadkar/admin/disbursements/{id}/reject/
-POST /api/v1/madadkar/admin/disbursements/{id}/mark-paid/
-GET /api/v1/madadkar/admin/campaigns/{id}/disbursable/
+GET  /api/v1/madadkar/admin/reconciliation/batches/
+GET  /api/v1/madadkar/admin/reconciliation/batches/{batch_id}/
+GET  /api/v1/madadkar/admin/reconciliation/batches/{batch_id}/items/
+GET  /api/v1/madadkar/admin/reconciliation/batches/{batch_id}/export/
+```
+
+سناریو:
+
+```text
+1. فایل reconciliation از provider وارد می‌شود.
+2. سیستم ردیف‌ها را با payment داخلی match می‌کند.
+3. mismatchها مشخص می‌شوند.
+4. batch قابل export و audit است.
+```
+
+### 18.10 Disbursement Ledger
+
+برای خروج پول از campaign به beneficiary/هدف:
+
+```text
+GET,POST /api/v1/madadkar/admin/disbursements/
+GET /api/v1/madadkar/admin/disbursements/{disbursement_id}/
+POST /api/v1/madadkar/admin/disbursements/{disbursement_id}/{action}/
+GET /api/v1/madadkar/admin/campaigns/{campaign_id}/disbursable/
+```
+
+Actionها:
+
+```text
+approve
+reject
+mark-paid
+```
+
+### 18.11 Public Transparency
+
+برای اعتماد عمومی:
+
+```text
 GET /api/v1/madadkar/campaigns/{slug}/transparency/
-GET /api/v1/madadkar/admin/financial-controls/
-GET /api/v1/madadkar/admin/financial-controls/latest/
+```
+
+این endpoint summary مالی public-safe می‌دهد، نه اطلاعات حساس کاربران.
+
+### 18.12 Financial Controls
+
+snapshotهای کنترل مالی:
+
+```text
+GET  /api/v1/madadkar/admin/financial-controls/
+GET  /api/v1/madadkar/admin/financial-controls/latest/
 POST /api/v1/madadkar/admin/financial-controls/generate/
 ```
 
-### Celery tasks
+Task/command:
+
+```bash
+python manage.py generate_madadkar_financial_control
+```
+
+Celery task:
 
 ```text
-apps.madadkar.tasks.expire_stale_participations_task
-apps.madadkar.tasks.close_expired_campaigns_task
 apps.madadkar.tasks.generate_financial_control_snapshot_task
 ```
 
-Queue:
+### 18.13 سناریوی مالی end-to-end
 
 ```text
-madadkar
+1. ادمین sponsor و campaign می‌سازد.
+2. campaign publish می‌شود.
+3. کاربر participate می‌کند.
+4. payment provider verify انجام می‌دهد.
+5. payment موفق ledger را update می‌کند.
+6. receipt صادر می‌شود.
+7. campaign analytics/intelligence قابل مشاهده است.
+8. reconciliation batch وارد می‌شود.
+9. mismatchها بررسی می‌شوند.
+10. disbursement request ساخته می‌شود.
+11. approve/reject/mark-paid audit می‌شود.
+12. transparency public-safe نمایش داده می‌شود.
+13. financial control snapshot برای نظارت ساخته می‌شود.
 ```
 
 ---
 
+## 19. LMS — Learning Management System
 
-## Apex LMS Signed Media Delivery
+اپ `lms` یک پلتفرم آموزشی کامل است.
 
-LMS media delivery now has a dedicated access contract:
+### 19.1 مفاهیم اصلی
+
+```text
+Category
+Course
+Lesson
+Enrollment
+LessonProgress
+Question
+Answer
+DiscussionReport
+Quiz
+QuizQuestion
+QuizOption
+QuizAttempt
+Certificate
+Badge/Skill-oriented data
+LessonVideoProcessingJob
+LearningActivityStatement
+```
+
+### 19.2 Course Lifecycle
+
+ادمین course می‌سازد و publish/archive می‌کند:
+
+```text
+GET,POST /api/v1/lms/admin/courses/
+GET,PATCH,DELETE /api/v1/lms/admin/courses/{course_id}/
+POST /api/v1/lms/admin/courses/{course_id}/publish/
+POST /api/v1/lms/admin/courses/{course_id}/archive/
+```
+
+کاربر:
+
+```text
+GET /api/v1/lms/courses/
+GET /api/v1/lms/courses/{slug}/
+POST /api/v1/lms/courses/{slug}/enroll/
+```
+
+### 19.3 Lessons و Progress
+
+```text
+GET /api/v1/lms/courses/{slug}/lessons/
+GET /api/v1/lms/courses/{slug}/lessons/{lesson_slug}/
+POST /api/v1/lms/lessons/{lesson_id}/progress/
+```
+
+Progress service باید enrollment و state را enforce کند.
+
+### 19.4 Signed Media / CDN Readiness
+
+Media access از endpoint کنترل‌شده می‌آید:
 
 ```text
 GET /api/v1/lms/lessons/{lesson_id}/media/{media_kind}/
 ```
 
-Supported media kinds:
+هدف:
 
 ```text
-video
-attachment
+عدم expose مستقیم فایل حساس
+قابلیت جایگزینی با signed URL/CDN
+audit media access
 ```
 
-Security and delivery behavior:
+### 19.5 Video Processing Worker
+
+مدل:
 
 ```text
-non-preview lessons require active/completed enrollment
-preview lessons may expose media to authenticated users
-uploaded files use Django storage URL; with S3 private storage this becomes signed URL
-direct URL and embed lessons are still returned through the same media access contract
-each access is audit logged with LMS_LESSON_MEDIA_ACCESSED
-CDN/Object Storage flow is ready for uploaded video and handouts
+LessonVideoProcessingJob
 ```
 
-## 15. LMS
-
-اپ `lms` سامانه آموزش بعثت مردم است.
-
-### قابلیت‌ها
-
-- category dynamic
-- course management
-- lessons با content/video metadata
-- video processing job lifecycle با no-op/local provider تا آماده‌شدن زیرساخت transcode
-- admin trigger/status برای پردازش ویدئو
-- learning recommendations بر اساس category affinity، skill gap، level progression و popularity
-- xAPI-like learning activity statements برای progress/quiz/certificate analytics
-- idempotent learning statement capture و admin statement list
-- enrollment رایگان با profile requirement
-- progress tracking
-- Q&A/discussion
-- report discussion
-- timed quiz engine
-- attempt limit
-- pass/fail grading
-- certificate PDF
-- public certificate verification
-- user skills/badges
-- admin analytics
-- leaderboard
-- Excel export participants
-- performance contracts
-
-### Quiz rules
-
-- تلاش محدود
-- retry policy
-- admin unlock
-- correct answers hidden until pass/finalization policy
-
-### Certificate
-
-- certificate code
-- verification slug
-- public verification endpoint
-- PDF renderer
-- tracked sample certificate asset
-
-### API summary
+Endpoint:
 
 ```text
-GET  /api/v1/lms/categories/
-GET  /api/v1/lms/categories/{slug}/
-GET  /api/v1/lms/courses/
-GET  /api/v1/lms/courses/{slug}/
-GET  /api/v1/lms/courses/{slug}/lessons/
-GET  /api/v1/lms/courses/{slug}/lessons/{lesson_slug}/
-POST /api/v1/lms/courses/{slug}/enroll/
-GET  /api/v1/lms/courses/{slug}/quiz/
-POST /api/v1/lms/courses/{slug}/quiz/start/
-GET  /api/v1/lms/quiz/attempts/{id}/
-POST /api/v1/lms/quiz/attempts/{id}/submit/
-GET  /api/v1/lms/me/enrollments/
-GET  /api/v1/lms/me/recommendations/
-GET  /api/v1/lms/me/certificates/
-GET  /api/v1/lms/certificates/verify/{slug}/
-GET/POST/PATCH/DELETE admin course/category/lesson/quiz/question endpoints
-GET  /api/v1/lms/admin/courses/{id}/analytics/
-GET  /api/v1/lms/admin/recommendations/overview/
-GET  /api/v1/lms/admin/activity-statements/
-GET  /api/v1/lms/admin/courses/{id}/leaderboard/
 POST /api/v1/lms/admin/lessons/{lesson_id}/video-processing/
 GET  /api/v1/lms/admin/lessons/{lesson_id}/video-processing/status/
-GET  /api/v1/lms/admin/courses/{id}/export/
 ```
 
-### Celery tasks
+Celery task:
 
 ```text
 apps.lms.tasks.process_lesson_video_job_task
 ```
 
+Workflow:
+
+```text
+queued → processing → completed/failed/canceled
+```
+
+### 19.6 Quiz / Certificate
+
+```text
+GET,POST /api/v1/lms/admin/courses/{course_id}/quiz/
+POST /api/v1/lms/admin/courses/{course_id}/quiz/publish/
+POST /api/v1/lms/courses/{slug}/quiz/start/
+GET  /api/v1/lms/quiz/attempts/{attempt_id}/
+POST /api/v1/lms/quiz/attempts/{attempt_id}/submit/
+GET  /api/v1/lms/certificates/verify/{verification_slug}/
+```
+
+### 19.7 Recommendations
+
+```text
+GET /api/v1/lms/me/recommendations/
+GET /api/v1/lms/admin/recommendations/overview/
+```
+
+منطق recommendation می‌تواند بر اساس enrollment، progress، skill gaps و course status خروجی بدهد.
+
+### 19.8 Learning Activity Statements
+
+xAPI-like foundation:
+
+```text
+LearningActivityStatement
+LearningStatementVerb
+```
+
+Endpoint admin:
+
+```text
+GET /api/v1/lms/admin/activity-statements/
+```
+
+Verbها:
+
+```text
+initialized
+progressed
+completed
+passed
+failed
+certificate_issued
+```
+
+### 19.9 Discussion / Q&A
+
+```text
+GET,POST /api/v1/lms/lessons/{lesson_id}/questions/
+POST /api/v1/lms/questions/{question_id}/answers/
+POST /api/v1/lms/questions/{question_id}/answers/{answer_id}/accept/
+POST /api/v1/lms/questions/{question_id}/report/
+POST /api/v1/lms/answers/{answer_id}/report/
+```
+
+ادمین moderation:
+
+```text
+PATCH /api/v1/lms/admin/questions/{question_id}/moderate/
+PATCH /api/v1/lms/admin/answers/{answer_id}/moderate/
+GET   /api/v1/lms/admin/discussion-reports/
+PATCH /api/v1/lms/admin/discussion-reports/{report_id}/review/
+```
+
 ---
 
+## 20. Kindness Wall — Divar-e Mehrabani
 
-## Apex Kindness Geo Matching and Risk Signals
+اپ `kindness_wall` برای نیاز/کمک، matching، moderation و risk controls است.
 
-Kindness Wall now has geo-aware matching and safety/risk signals:
+### 20.1 مفاهیم اصلی
 
 ```text
-Haversine distance scoring for listings with lat/lng
-nearby_5km / nearby_25km / nearby_75km reason codes
-city/province fallback preserved
-KindnessRiskSignal model
-contact reveal velocity detection
-listing contact spike detection
-admin risk signal queue foundation
-command center open risk signal counter
+Category
+Listing
+Bookmark
+Match
+ContactReveal
+Report
+DuplicateReview
+Geo/Risk signals
 ```
 
-Risk signal types:
+### 20.2 Listing Lifecycle
+
+کاربر listing می‌سازد:
 
 ```text
-contact_reveal_velocity
-listing_contact_spike
-duplicate_abuse
+GET,POST /api/v1/kindness-wall/me/listings/
+GET,PATCH,DELETE /api/v1/kindness-wall/me/listings/{listing_id}/
+POST /api/v1/kindness-wall/me/listings/{listing_id}/submit/
+POST /api/v1/kindness-wall/me/listings/{listing_id}/close/
+POST /api/v1/kindness-wall/me/listings/{listing_id}/renew/
 ```
 
-This improves both match quality and human-safety monitoring in the Kindness Wall app.
-
-## 16. Kindness Wall
-
-اپ `kindness_wall` دیوار مهربانی است: آگهی کمک/نیاز بدون خریدوفروش.
-
-### قابلیت‌ها
-
-- دو نوع ثابت listing:
-  - need_help
-  - offer_help
-- dynamic tree categories
-- profile completeness requirement
-- moderation workflow
-- public list/detail بدون شماره تماس
-- authenticated contact reveal
-- contact reveal audit row
-- bookmarks
-- reports
-- matching engine
-- duplicate candidates
-- admin analytics
-- Excel exports
-- N+1 performance contracts
-
-### Privacy rule
-
-Public list/detail هیچ‌وقت `contact_phone_snapshot` را expose نمی‌کند. شماره فقط از endpoint زیر، برای authenticated user، همراه با audit قابل مشاهده است:
+ادمین moderate می‌کند:
 
 ```text
-POST /api/v1/kindness-wall/listings/{slug}/reveal-contact/
+GET /api/v1/kindness-wall/admin/listings/
+GET /api/v1/kindness-wall/admin/listings/{listing_id}/
+POST /api/v1/kindness-wall/admin/listings/{listing_id}/approve/
+POST /api/v1/kindness-wall/admin/listings/{listing_id}/reject/
+POST /api/v1/kindness-wall/admin/listings/{listing_id}/suspend/
+POST /api/v1/kindness-wall/admin/listings/{listing_id}/restore/
 ```
 
-### API summary
+عمومی:
 
 ```text
-GET  /api/v1/kindness-wall/categories/
-GET  /api/v1/kindness-wall/listings/
-GET  /api/v1/kindness-wall/listings/{slug}/
-GET  /api/v1/kindness-wall/listings/{slug}/matches/
-POST /api/v1/kindness-wall/listings/{slug}/reveal-contact/
-POST /api/v1/kindness-wall/listings/{slug}/report/
-POST/DELETE /api/v1/kindness-wall/listings/{slug}/bookmark/
-GET/POST /api/v1/kindness-wall/me/listings/
-GET/PATCH/DELETE /api/v1/kindness-wall/me/listings/{id}/
-POST /api/v1/kindness-wall/me/listings/{id}/submit/
-POST /api/v1/kindness-wall/me/listings/{id}/renew/
-POST /api/v1/kindness-wall/me/listings/{id}/close/
-GET /api/v1/kindness-wall/me/bookmarks/
+GET /api/v1/kindness-wall/listings/
+GET /api/v1/kindness-wall/listings/{slug}/
+```
+
+### 20.3 Matching
+
+Matching برای اتصال نیاز و کمک است:
+
+```text
+GET /api/v1/kindness-wall/listings/{slug}/matches/
 GET /api/v1/kindness-wall/me/matches/
-POST /api/v1/kindness-wall/me/matches/{id}/dismiss/
-POST /api/v1/kindness-wall/me/matches/{id}/contacted/
-GET/POST/PATCH/DELETE admin categories/listings/reports/matches/contact-reveals/duplicates/analytics/export
+POST /api/v1/kindness-wall/me/matches/{match_id}/contacted/
+POST /api/v1/kindness-wall/me/matches/{match_id}/dismiss/
+```
+
+منطق matching می‌تواند بر اساس category، location، type، freshness و risk score باشد.
+
+### 20.4 Contact Reveal
+
+برای حفظ privacy، اطلاعات تماس مستقیم از ابتدا public نیست:
+
+```text
+POST /api/v1/kindness-wall/listings/{slug}/reveal-contact/
+GET  /api/v1/kindness-wall/admin/contact-reveals/
+```
+
+### 20.5 Duplicate / Report Review
+
+```text
+POST /api/v1/kindness-wall/listings/{slug}/report/
+GET  /api/v1/kindness-wall/admin/reports/
+POST /api/v1/kindness-wall/admin/reports/{report_id}/review/
+GET  /api/v1/kindness-wall/admin/duplicates/
+POST /api/v1/kindness-wall/admin/duplicates/{duplicate_id}/review/
+```
+
+### 20.6 Export / Analytics
+
+```text
+GET /api/v1/kindness-wall/admin/analytics/
+GET /api/v1/kindness-wall/admin/listings/export/
+GET /api/v1/kindness-wall/admin/reports/export/
 ```
 
 ---
 
+## 21. Support Desk
 
-## Apex Support Business Hours SLA
+اپ `support_desk` یک ticketing system کامل با SLA، business calendar، assignment، knowledge base و smart replies است.
 
-Support Desk now supports enterprise business-hours SLA calculation:
-
-```text
-SupportBusinessCalendar
-SupportHoliday
-business_hours_only SLA policies
-department-specific calendars
-holiday-aware working-minute calculation
-admin calendar/holiday APIs
-```
-
-Admin APIs:
+### 21.1 مفاهیم اصلی
 
 ```text
-GET/POST /api/v1/support/admin/business-calendars/
-PATCH    /api/v1/support/admin/business-calendars/{calendar_id}/
-GET/POST /api/v1/support/admin/holidays/
-PATCH    /api/v1/support/admin/holidays/{holiday_id}/
+Department
+Category
+TicketType
+SLAPolicy
+BusinessCalendar
+Holiday
+SupportTicket
+SupportMessage
+SupportAttachment
+Satisfaction
+CannedResponse
+SupportDuplicateReview
+SupportKnowledgeArticle
+SupportKnowledgeArticleUse
+SmartReply bundle/suggestion
 ```
 
-When `business_hours_only=True`, first response and resolution deadlines are computed using the resolved business calendar instead of raw wall-clock minutes.
+### 21.2 Ticket Lifecycle
 
-## 17. Support Desk
-
-اپ `support_desk` میز پشتیبانی enterprise است.
-
-### قابلیت‌ها
-
-- dynamic departments
-- fully tree-based support categories
-- dynamic ticket types/reasons
-- SLA policies
-- ticket workflow
-- user/admin timeline
-- internal notes hidden from user
-- attachments
-- assignment history
-- load-balanced assignment recommendation
-- auto-assignment بر اساس workload score، SLA pressure و department affinity
-- status history
-- knowledge base articles با public/help-center API و admin lifecycle
-- article recommendation برای ticket subject/description
-- smart reply suggestions از ترکیب KB + canned responses + public ticket timeline
-- audited smart reply generation/use با exclusion یادداشت‌های داخلی
-- audited article usage in support replies/context
-- smart triage
-- duplicate candidates
-- canned responses/macros
-- CSAT satisfaction rating
-- analytics dashboard
-- Excel exports
-- SLA breach tasks
-- stale draft cleanup
-- daily digest task
-- performance contracts
-
-### Workflow
+کاربر draft می‌سازد و submit می‌کند:
 
 ```text
-DRAFT → SUBMITTED → WAITING_FOR_ADMIN / WAITING_FOR_USER / IN_PROGRESS
-      → RESOLVED → CLOSED
-      → REOPENED
-      → ESCALATED
+GET,POST /api/v1/support/me/tickets/
+GET,PATCH /api/v1/support/me/tickets/{ticket_number}/
+POST /api/v1/support/me/tickets/{ticket_number}/submit/
+POST /api/v1/support/me/tickets/{ticket_number}/reply/
+POST /api/v1/support/me/tickets/{ticket_number}/attachments/
+POST /api/v1/support/me/tickets/{ticket_number}/reopen/
+POST /api/v1/support/me/tickets/{ticket_number}/satisfaction/
+GET  /api/v1/support/me/tickets/{ticket_number}/timeline/
 ```
 
-### User API summary
+ادمین:
 
 ```text
-GET    /api/v1/support/departments/
-GET    /api/v1/support/categories/
-GET    /api/v1/support/ticket-types/
-GET    /api/v1/support/knowledge/articles/
-GET    /api/v1/support/knowledge/articles/{slug}/
-POST   /api/v1/support/knowledge/articles/recommend/
-POST   /api/v1/support/me/tickets/suggest/
-GET    /api/v1/support/me/tickets/
-POST   /api/v1/support/me/tickets/
-GET    /api/v1/support/me/tickets/{ticket_number}/
-PATCH  /api/v1/support/me/tickets/{ticket_number}/
-POST   /api/v1/support/me/tickets/{ticket_number}/submit/
-POST   /api/v1/support/me/tickets/{ticket_number}/reply/
-GET    /api/v1/support/me/tickets/{ticket_number}/timeline/
-POST   /api/v1/support/me/tickets/{ticket_number}/attachments/
-POST   /api/v1/support/me/tickets/{ticket_number}/reopen/
-POST   /api/v1/support/me/tickets/{ticket_number}/satisfaction/
+GET /api/v1/support/admin/tickets/
+GET /api/v1/support/admin/tickets/{ticket_number}/
+POST /api/v1/support/admin/tickets/{ticket_number}/assign/
+POST /api/v1/support/admin/tickets/{ticket_number}/reply/
+POST /api/v1/support/admin/tickets/{ticket_number}/internal-note/
+POST /api/v1/support/admin/tickets/{ticket_number}/status/
+POST /api/v1/support/admin/tickets/{ticket_number}/close/
+POST /api/v1/support/admin/tickets/{ticket_number}/escalate/
 ```
 
-### Admin API summary
+### 21.3 SLA و Business Hours
+
+SLA فقط deadline ساده نیست. Business calendar و holidayها روی محاسبه deadline اثر دارند.
 
 ```text
-GET/POST       /api/v1/support/admin/departments/
-GET/PATCH/DELETE /api/v1/support/admin/departments/{id}/
-GET/POST       /api/v1/support/admin/categories/
-PATCH/DELETE   /api/v1/support/admin/categories/{id}/
-GET/POST       /api/v1/support/admin/ticket-types/
-PATCH          /api/v1/support/admin/ticket-types/{id}/
-GET/POST       /api/v1/support/admin/sla-policies/
-PATCH          /api/v1/support/admin/sla-policies/{id}/
-GET/POST       /api/v1/support/admin/canned-responses/
-PATCH          /api/v1/support/admin/canned-responses/{id}/
-POST           /api/v1/support/admin/canned-responses/{id}/use/
-GET/POST       /api/v1/support/admin/knowledge/articles/
-GET/PATCH      /api/v1/support/admin/knowledge/articles/{id}/
-POST           /api/v1/support/admin/knowledge/articles/{id}/publish/
-POST           /api/v1/support/admin/knowledge/articles/{id}/archive/
-POST           /api/v1/support/admin/knowledge/articles/{id}/use/
-GET            /api/v1/support/admin/tickets/
-GET            /api/v1/support/admin/tickets/{ticket_number}/
-POST           /api/v1/support/admin/tickets/{ticket_number}/reply/
-POST           /api/v1/support/admin/tickets/{ticket_number}/internal-note/
-POST           /api/v1/support/admin/tickets/{ticket_number}/assign/
-GET            /api/v1/support/admin/tickets/{ticket_number}/assignment-recommendation/
-POST           /api/v1/support/admin/tickets/{ticket_number}/auto-assign/
-GET            /api/v1/support/admin/tickets/{ticket_number}/smart-replies/
-POST           /api/v1/support/admin/tickets/{ticket_number}/smart-replies/use/
-POST           /api/v1/support/admin/tickets/{ticket_number}/status/
-POST           /api/v1/support/admin/tickets/{ticket_number}/escalate/
-POST           /api/v1/support/admin/tickets/{ticket_number}/close/
-GET            /api/v1/support/admin/duplicates/
-POST           /api/v1/support/admin/duplicates/{id}/review/
-GET            /api/v1/support/admin/analytics/
-GET            /api/v1/support/admin/export/tickets/
-GET            /api/v1/support/admin/export/messages/
-GET            /api/v1/support/admin/export/sla/
-GET            /api/v1/support/admin/export/csat/
+GET,POST /api/v1/support/admin/business-calendars/
+PATCH /api/v1/support/admin/business-calendars/{calendar_id}/
+GET,POST /api/v1/support/admin/holidays/
+PATCH /api/v1/support/admin/holidays/{holiday_id}/
+GET,POST /api/v1/support/admin/sla-policies/
+PATCH /api/v1/support/admin/sla-policies/{policy_id}/
 ```
 
-### Celery tasks
+Celery task برای breach:
 
 ```text
 apps.support_desk.tasks.mark_support_sla_breaches_task
-apps.support_desk.tasks.cleanup_stale_support_drafts_task
-apps.support_desk.tasks.daily_support_digest_task
+```
+
+### 21.4 Assignment Load Balancing
+
+برای کاهش assignment دستی کورکورانه:
+
+```text
+GET  /api/v1/support/admin/tickets/{ticket_number}/assignment-recommendation/
+POST /api/v1/support/admin/tickets/{ticket_number}/auto-assign/
+```
+
+Recommendation بر اساس workload و context agentها ساخته می‌شود.
+
+### 21.5 Knowledge Base
+
+Public/user-facing:
+
+```text
+GET  /api/v1/support/knowledge/articles/
+GET  /api/v1/support/knowledge/articles/{slug}/
+POST /api/v1/support/knowledge/articles/recommend/
+```
+
+Admin:
+
+```text
+GET,POST /api/v1/support/admin/knowledge/articles/
+GET,PATCH /api/v1/support/admin/knowledge/articles/{article_id}/
+POST /api/v1/support/admin/knowledge/articles/{article_id}/publish/
+POST /api/v1/support/admin/knowledge/articles/{article_id}/archive/
+POST /api/v1/support/admin/knowledge/articles/{article_id}/use/
+```
+
+### 21.6 Smart Replies
+
+برای کمک به agent:
+
+```text
+GET  /api/v1/support/admin/tickets/{ticket_number}/smart-replies/
+POST /api/v1/support/admin/tickets/{ticket_number}/smart-replies/use/
+```
+
+Smart replies جایگزین agent نیست؛ پیشنهاد operational است و use آن audit/activity می‌شود.
+
+### 21.7 Export و Analytics
+
+```text
+GET /api/v1/support/admin/analytics/
+GET /api/v1/support/admin/export/tickets/
+GET /api/v1/support/admin/export/messages/
+GET /api/v1/support/admin/export/sla/
+GET /api/v1/support/admin/export/csat/
 ```
 
 ---
 
+## 22. Celery، Redis، Cache و Job Scheduling
 
-
-## Apex Unified Admin Command Center
-
-Apex B4 یک مرکز فرماندهی مرکزی برای ادمین اضافه کرده است:
+### 22.1 Queueها
 
 ```text
-GET /api/v1/admin/command-center/
+default      → tasks عمومی، notifications، support maintenance، LMS processing
+tabyin_sync  → sync محتوای تبیین
+madadkar     → عملیات scheduled مالی/کمپین
 ```
 
-این endpoint وضعیت عملیاتی همه اپ‌های مهم را یکجا نشان می‌دهد:
+`docker-compose.yml` worker را با queueهای زیر اجرا می‌کند:
 
 ```text
-Support Desk: open/unassigned/SLA breached/escalated tickets
-Kindness Wall: pending listings/reports/duplicates/contact reveals
-Tabyin: pending user submissions/deleted-in-source contents
-Public Reports: pending/reviewing/approved/rejected reports
-R4J: published criminals/pending reports/active bounties
-Madadkar: campaigns/payments success/failure/pending
-LMS: courses/enrollments/certificates
-Notifications: pending/failed events and deliveries
-Activity Timeline: total/recent activities
-Provider readiness: email/sms/payment
-Health summary: database/cache/celery broker status
+default,tabyin_sync,madadkar
 ```
 
-این فاز پروژه را از مجموعه‌ای از اپ‌های مستقل به یک platform مدیریتی قابل مانیتور و عملیات نزدیک می‌کند.
+### 22.2 Task routing
 
-## Apex Notification Engine
-
-Apex A2 یک notification engine مشترک اضافه کرده است:
+در `config/settings/base.py`:
 
 ```text
-apps/notifications/
+apps.tabyin.tasks.sync_tabyin_incremental_task       → tabyin_sync
+apps.tabyin.tasks.sync_tabyin_full_task              → tabyin_sync
+apps.madadkar.tasks.expire_stale_participations_task → madadkar
+apps.madadkar.tasks.close_expired_campaigns_task     → madadkar
+apps.madadkar.tasks.generate_financial_control_snapshot_task → madadkar
+apps.lms.tasks.process_lesson_video_job_task         → default
+apps.support_desk.tasks.*                            → default
+apps.notifications.tasks.dispatch_notification_event_task → default
 ```
 
-قابلیت‌ها:
+### 22.3 Beat schedule
+
+Celery Beat برای jobهای دوره‌ای مثل:
 
 ```text
-NotificationTemplate
-NotificationEvent
-NotificationDelivery
-NotificationPreference
-channel abstraction: in_app, email, sms, webhook
-service-layer event creation and dispatch
-Celery async dispatch task
-user inbox APIs
-user preferences
-admin event/delivery/template inspection
-provider integration with Django email and configured SMS adapter
+Tabyin incremental sync
+Madadkar stale participation expiry
+Madadkar expired campaign close
+Madadkar financial control snapshot
+Support SLA breach marking
+Support draft cleanup/digest
 ```
 
-API summary:
+---
+
+## 23. Media، Object Storage و CDN Readiness
+
+### 23.1 Local media
+
+در development/local:
 
 ```text
-GET  /api/v1/notifications/me/
-POST /api/v1/notifications/me/{id}/read/
-POST /api/v1/notifications/me/read-all/
-GET  /api/v1/notifications/me/preferences/
-POST /api/v1/notifications/me/preferences/
-GET  /api/v1/notifications/admin/events/
-GET  /api/v1/notifications/admin/deliveries/
-GET  /api/v1/notifications/admin/templates/
+MEDIA_ROOT=/app/media یا media/
+MEDIA_URL=/media/
 ```
 
-این engine برای اتصال رویدادهای Support Desk، Kindness Wall، LMS، Madadkar، R4J، Tabyin و Auth آماده است.
+### 23.2 S3/MinIO compatible
 
-## 18. Redis / Cache / Celery / Observability
-
-### Redis
-
-در production-like runtime:
-
-```text
-Redis DB 1 → cache
-Redis DB 2 → Celery broker/result backend
-```
-
-envها:
+برای production:
 
 ```env
-CACHE_BACKEND=redis
-REDIS_URL=redis://redis:6379/1
-CELERY_BROKER_URL=redis://redis:6379/2
-CELERY_RESULT_BACKEND=redis://redis:6379/2
+MEDIA_STORAGE_BACKEND=s3
+AWS_ACCESS_KEY_ID=...
+AWS_SECRET_ACCESS_KEY=...
+AWS_STORAGE_BUCKET_NAME=...
+AWS_S3_ENDPOINT_URL=...
+AWS_S3_REGION_NAME=...
+MEDIA_CDN_DOMAIN=cdn.example.com
 ```
 
-### Cache
+### 23.3 امنیت فایل
 
-- cache helpers در `apps/core/cache.py`
-- namespace versioning
-- selector-level cache در Tabyin public content
-- invalidation بعد از sync/toggle
-
-### Celery queues
+فایل‌ها در دامنه‌های مختلف validate می‌شوند:
 
 ```text
-default
-tabyin_sync
-madadkar
+R4J evidence attachments
+Support attachments
+Public report attachments
+Madadkar campaign images
+LMS media
+Kindness Wall images
 ```
 
-Worker docker command:
+برای evidenceهای R4J، hash و custody event نیز ثبت می‌شود.
 
-```text
-celery -A config worker --loglevel=info -Q default,tabyin_sync,madadkar
-```
+---
 
-Beat schedule:
+## 24. Observability، Health و Metrics
 
-```text
-Tabyin incremental sync every 30 min
-Tabyin full sync daily
-Madadkar stale participation cleanup every 5 min
-Madadkar expired campaign close every 10 min
-Support SLA breach detection every 5 min
-Support stale draft cleanup daily
-Support daily digest daily
-Notification event async dispatch
-```
-
-### Structured logging
-
-Production logging می‌تواند JSON شود:
-
-```env
-LOG_FORMAT=json
-```
-
-فرمت JSON شامل موارد زیر است:
-
-```text
-timestamp
-level
-logger
-message
-request_id
-module
-function
-line
-exception.type/message/stacktrace
-```
-
-در development مقدار پیش‌فرض خواناتر است:
+### 24.1 Logging
 
 ```env
 LOG_FORMAT=text
+# یا production:
+LOG_FORMAT=json
 ```
 
-### Request ID
+### 24.2 Sentry
 
-هر request دارای header زیر است:
-
-```text
-X-Request-ID
+```env
+SENTRY_DSN=...
+SENTRY_ENVIRONMENT=production
 ```
 
-اگر client/proxy مقدار معتبر بدهد حفظ می‌شود، در غیر این صورت server مقدار جدید می‌سازد. همین مقدار وارد logها هم می‌شود.
+اگر DSN خالی باشد initialize نمی‌شود.
 
-### Prometheus metrics
+### 24.3 OpenTelemetry
 
-Endpoint:
+پروژه env-driven readiness دارد. اگر exporter/provider تنظیم شود، tracing قابل فعال‌سازی است.
+
+### 24.4 Prometheus
 
 ```text
 GET /api/v1/metrics/
 ```
 
-فعال/غیرفعال:
-
-```env
-PROMETHEUS_METRICS_ENABLED=True
-```
-
-Metrics فعلی:
+### 24.5 Health Strategy
 
 ```text
-setadjang_http_requests_total
-setadjang_http_request_duration_seconds
-setadjang_celery_tasks_total
-setadjang_celery_task_duration_seconds
+/health/        → health پایه
+/health/ready/  → readiness برای container/orchestrator
+/health/detailed/ → diagnostic کامل برای admin/ops
 ```
-
-برای کنترل cardinality، pathها normalize می‌شوند؛ مثل `{id}` و `{token}`.
-
-### Sentry
-
-Sentry کاملاً اختیاری و env-driven است:
-
-```env
-SENTRY_DSN=
-SENTRY_TRACES_SAMPLE_RATE=0.0
-SENTRY_PROFILES_SAMPLE_RATE=0.0
-```
-
-اگر DSN خالی باشد initialize نمی‌شود. `send_default_pii=False` تنظیم شده تا PII به‌صورت پیش‌فرض ارسال نشود.
-
-### OpenTelemetry
-
-Tracer provider اختیاری:
-
-```env
-OTEL_ENABLED=False
-OTEL_SERVICE_NAME=setad-jang-api
-```
-
-Exporter wiring در deployment layer قابل اضافه شدن است بدون تغییر business code.
 
 ---
 
-## 19. Providers: SMS / Payment / Email
+## 25. سناریوهای عملیاتی انتها به انتها
 
-### SMS
-
-SMS provider واقعی به مجوز نیاز دارد. تا قبل از مجوز:
-
-- provider abstraction باید باقی بماند.
-- dev/test از email/console/mock استفاده می‌کند.
-- بعد از مجوز، فقط env/provider credentials باید عوض شود.
-
-هدف production readiness پس از اخذ مجوز:
-
-```env
-OTP_PROVIDER=sms
-OTP_SMS_PROVIDER=http
-SMS_API_URL=https://sms-provider.example/send
-SMS_API_KEY=...
-SMS_SENDER=...
-SMS_TIMEOUT_SECONDS=10
-```
-
-Adapter عمومی HTTP آماده است و payload استاندارد `to/message/sender/purpose` ارسال می‌کند. اگر vendor نهایی schema متفاوتی بخواهد، فقط adapter جدید اضافه می‌شود؛ OTP service و business flow تغییر نمی‌کند.
-
-Provider readiness بدون ارسال SMS واقعی قابل بررسی است و در detailed health به‌صورت diagnostic گزارش می‌شود.
-
-### Zarinpal
-
-Zarinpal هم به مجوز/merchant id نیاز دارد. تا قبل از مجوز:
-
-```env
-MADADKAR_PAYMENT_PROVIDER=sandbox
-```
-
-بعد از مجوز:
-
-```env
-MADADKAR_PAYMENT_PROVIDER=zarinpal
-MADADKAR_ZARINPAL_MERCHANT_ID=...
-MADADKAR_ZARINPAL_SANDBOX=False
-```
-
-کد provider آماده است و هدف این است که بعداً فقط env جایگزین شود.
-
-### Email SMTP رایگان پیشنهادی
-
-برای SMTP رایگان و transactional، پیشنهاد عملی:
+### 25.1 سناریوی Auth تا Activity
 
 ```text
-Brevo SMTP
+1. کاربر signup/request می‌زند.
+2. OTPChallenge ساخته و ارسال می‌شود.
+3. signup/verify کاربر را فعال می‌کند.
+4. JWT صادر می‌شود.
+5. AuthSession ساخته می‌شود.
+6. activity timeline قابل نمایش است.
+7. اگر risk anomaly باشد AuthRiskSignal ساخته می‌شود.
+8. ادمین risk signal را review می‌کند.
 ```
 
-env پیشنهادی:
+### 25.2 سناریوی Madadkar مالی
 
-```env
-EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
-EMAIL_HOST=smtp-relay.brevo.com
-EMAIL_PORT=587
-EMAIL_USE_TLS=True
-EMAIL_HOST_USER=<brevo-login>
-EMAIL_HOST_PASSWORD=<brevo-smtp-key>
-DEFAULT_FROM_EMAIL=noreply@your-domain.com
+```text
+1. campaign ساخته و publish می‌شود.
+2. کاربر participate می‌کند.
+3. payment verify می‌شود.
+4. receipt صادر می‌شود.
+5. reconciliation batch وارد می‌شود.
+6. risk signal یا mismatch review می‌شود.
+7. disbursement approve و paid می‌شود.
+8. transparency endpoint public-safe خروجی می‌دهد.
+9. financial control snapshot ساخته می‌شود.
 ```
 
-نکته production:
+### 25.3 سناریوی R4J پرونده‌ای
 
-- دامنه باید SPF/DKIM داشته باشد.
-- از Gmail شخصی برای transactional production استفاده نشود.
-- staging باید email sandbox/console داشته باشد.
+```text
+1. criminal ساخته و publish می‌شود.
+2. کاربر report و evidence ارسال می‌کند.
+3. evidence hash و custody chain می‌گیرد.
+4. ادمین report را review می‌کند.
+5. case از report ساخته می‌شود.
+6. case triage و assign می‌شود.
+7. timeline پرونده کامل می‌شود.
+8. case resolve/reject/close می‌شود.
+```
+
+### 25.4 سناریوی Support Desk
+
+```text
+1. کاربر ticket draft می‌سازد.
+2. ticket submit می‌شود و SLA due محاسبه می‌شود.
+3. assignment recommendation ساخته می‌شود.
+4. agent auto-assign می‌کند.
+5. smart replies پیشنهاد می‌شوند.
+6. agent reply/internal note/status change انجام می‌دهد.
+7. user satisfaction ثبت می‌کند.
+8. SLA/CSAT export برای مدیر قابل دریافت است.
+```
+
+### 25.5 سناریوی LMS
+
+```text
+1. ادمین course/lesson/quiz می‌سازد.
+2. course publish می‌شود.
+3. کاربر enroll می‌کند.
+4. lesson media از endpoint کنترل‌شده access می‌شود.
+5. progress ثبت می‌شود.
+6. learning activity statement ساخته می‌شود.
+7. quiz attempt submit می‌شود.
+8. certificate صادر و verify می‌شود.
+9. recommendation endpoint مسیر بعدی را پیشنهاد می‌دهد.
+```
 
 ---
 
-## 20. Production Runbooks
+## 26. Production Runbooks
 
-Runbookهای production در مسیر زیر هستند:
+مستندات عملیاتی production در مسیر `docs/production/` نگه‌داری می‌شوند و README فقط خلاصه اجرایی آن‌هاست. فایل‌های کلیدی:
 
 ```text
 docs/production/ENVIRONMENT_MATRIX.md
@@ -1515,118 +2159,165 @@ docs/production/RELEASE_CHECKLIST.md
 docs/production/PRODUCTION_10_10_STATUS.md
 ```
 
-این اسناد پوشش می‌دهند:
+برای release واقعی، مخصوصاً این سه فایل باید قبل از deploy خوانده شوند:
 
 ```text
-environment matrix
-deployment order
-rollback
-backup/restore
-incident response
-secret rotation
-release checklist
-provider go-live checklist
-production 10/10 status
+docs/production/DEPLOYMENT_RUNBOOK.md
+docs/production/BACKUP_RESTORE_RUNBOOK.md
+docs/production/PRODUCTION_10_10_STATUS.md
+```
+
+### 26.1 اولین deploy
+
+```bash
+cp .env.example .env
+# envها را تنظیم کن
+make verify
+docker-compose up --build -d
+docker-compose logs -f web
+```
+
+### 26.2 migration در container
+
+در compose فعلی web با `RUN_MIGRATIONS=1` migration را هنگام start اجرا می‌کند. برای کنترل دستی:
+
+```bash
+docker-compose exec web python manage.py migrate
+```
+
+### 26.3 collectstatic
+
+```bash
+docker-compose exec web python manage.py collectstatic --noinput
+```
+
+### 26.4 ساخت superuser در Docker
+
+```bash
+docker-compose exec web python manage.py createsuperuser
+```
+
+### 26.5 بررسی health
+
+```bash
+curl http://127.0.0.1:8000/api/v1/health/
+curl http://127.0.0.1:8000/api/v1/health/ready/
+curl http://127.0.0.1:8000/api/v1/health/detailed/
+```
+
+### 26.6 بررسی Celery
+
+```bash
+docker-compose logs -f worker
+docker-compose exec worker celery -A config inspect ping
+```
+
+Flower:
+
+```text
+http://127.0.0.1:5555/
+```
+
+### 26.7 Audit chain verification
+
+```bash
+python manage.py verify_audit_chain
+```
+
+### 26.8 Audit package export
+
+```bash
+python manage.py export_audit_package --output ./audit_exports
+```
+
+### 26.9 Tabyin sync دستی
+
+```bash
+python manage.py sync_tabyin --mode incremental
+python manage.py sync_tabyin --mode full
+```
+
+### 26.10 Madadkar financial control
+
+```bash
+python manage.py generate_madadkar_financial_control
 ```
 
 ---
 
-## 21. Production Checklist
+## 27. چک‌لیست Production
 
-### Security
-
-```text
-SECRET_KEY قوی
-JWT_SIGNING_KEY جداگانه
-DEBUG=False
-ALLOWED_HOSTS دقیق
-CORS محدود
-pip-audit clean
-Bandit clean
-Detect-secrets baseline clean
-GitHub tokenها rotate/revoke شده باشند
-```
-
-### Runtime
+قبل از production واقعی:
 
 ```text
-PostgreSQL production
-Redis persistent/managed
-Gunicorn behind HTTPS reverse proxy
-Celery worker + beat
-Flower protected or internal-only
-Docker healthcheck readiness
-backup/restore policy
-```
-
-### Media / Object Storage / CDN
-
-```text
-MEDIA_STORAGE_BACKEND=local برای development
-MEDIA_STORAGE_BACKEND=s3 برای production/MinIO/S3
-public_media storage برای فایل‌های public و CDN-friendly
-private_media storage برای فایل‌های private با signed URL
-AWS_S3_CUSTOM_DOMAIN برای CDN domain
-FILE_SCAN_PROVIDER=extension_blocklist به‌عنوان baseline security scanner
-```
-
-برای LMS، ویدیوها و فایل‌های حجیم نباید در production از خود Django سرو شوند. مسیر حرفه‌ای:
-
-```text
-Django metadata/permission را مدیریت می‌کند
-Object Storage فایل را نگه می‌دارد
-CDN فایل‌های public/heavy را تحویل می‌دهد
-Private files با signed URL تحویل می‌شوند
-Worker/Celery برای scan/cleanup/processing قابل استفاده است
-```
-
-### Providers
-
-```text
-Brevo SMTP یا SMTP transactional رایگان با DKIM/SPF
-SMS provider بعد از مجوز
-Zarinpal بعد از مجوز
-Object storage برای media
-Signed URLs برای فایل‌های private
-```
-
-### Observability
-
-```text
-Structured JSON logging آماده است
-Sentry env-driven آماده است
-OpenTelemetry tracer provider آماده است
-Prometheus metrics endpoint آماده است
-HTTP request latency metrics آماده است
-HTTP performance contracts آماده است
-Slow request telemetry و Prometheus counter آماده است
-Response headers: X-Response-Time-ms و X-Performance-Budget-ms
-Advanced detailed health diagnostics آماده است: migration state، media storage، audit-chain quick، performance contracts
-DB query telemetry آماده است: X-DB-Query-Count، X-DB-Time-ms، slow DB query counters
-Request-scoped DB query count/time budgets آماده است
-Endpoint performance contract tests برای critical endpoints آماده است
-API envelope contract tests برای success/error/pagination آماده است
-OpenAPI contract hardening برای operationId، critical path coverage، component schemas و content-types آماده است
-N+1/query-count regression guards در CI آماده است
-Celery task metrics آماده است
-Slow query monitoring در فاز hardening بعدی قابل تکمیل است
+SECRET_KEY قوی و محرمانه تنظیم شده باشد
+DEBUG=False باشد
+ALLOWED_HOSTS واقعی باشد
+CSRF_TRUSTED_ORIGINS واقعی باشد
+CORS_ALLOWED_ORIGINS محدود باشد
+PostgreSQL production آماده باشد
+Redis production آماده باشد
+Email SMTP واقعی تنظیم شده باشد
+SMS provider بعد از مجوز فعال شود
+Payment provider بعد از مجوز فعال شود
+S3/MinIO/CDN برای media تصمیم‌گیری شود
+Sentry/Logging/Monitoring تنظیم شود
+Backup strategy برای DB و media مشخص باشد
+Audit export و retention policy مشخص باشد
+TLS/Reverse proxy تنظیم شود
+make verify قبل از release پاس شود
+schema.yaml با API واقعی sync باشد
 ```
 
 ---
 
-## 22. فلسفه مهندسی
+## 28. نقشه فایل‌ها و مسئولیت هر بخش
 
 ```text
-Correctness before speed
-Security by default
-No shortcut MVP in important domains
-Service-layer mutations
-Selector-layer reads
-Auditability for sensitive actions
-Tests as contracts
-OpenAPI as contract
-Zero-warning policy
-Production readiness is a feature
+README.md                         → مستند اصلی پروژه
+STRUCTURE.md                      → ساختار پروژه
+Makefile                          → quality/operation commands
+Dockerfile                        → production runtime image
+docker-compose.yml                → local production-like orchestration
+entrypoint.sh                     → container bootstrapping
+.env.example                      → reference env config
+schema.yaml                       → committed OpenAPI schema
+pyproject.toml                    → pytest/ruff/coverage config
+requirements.txt                  → production dependencies
+requirements-dev.txt              → dev/security/test dependencies
+.github/workflows/ci.yml          → GitHub Actions quality gate
+config/settings/base.py           → shared settings
+config/settings/development.py    → dev settings
+config/settings/production.py     → production settings
+config/urls.py                    → root routing
+apps/core                         → shared infra
+apps/authentication               → identity/auth/session/risk
+apps/public_reports               → public reports
+apps/tabyin                       → content sync/submissions
+apps/audit_logs                   → audit/forensics
+apps/r4j                          → reward for justice/cases/evidence
+apps/madadkar                     → charitable finance platform
+apps/lms                          → learning platform
+apps/kindness_wall                → kindness listings/matching
+apps/support_desk                 → ticketing/SLA/KB/smart replies
+apps/notifications                → notification engine
+apps/activity                     → user/admin activity timeline
+apps/command_center               → unified admin overview
+frontend                          → Next.js/UI layer
 ```
 
-هدف نهایی: backendای که نه فقط کار کند، بلکه از نظر senior/enterprise engineering قابل دفاع باشد.
+---
+
+## 29. اصل نهایی مهندسی پروژه
+
+این پروژه با این فرض نوشته شده است:
+
+```text
+اگر چیزی حساس است، audit شود.
+اگر چیزی state را تغییر می‌دهد، service شود.
+اگر چیزی read پیچیده است، selector شود.
+اگر چیزی public API است، OpenAPI آن تمیز باشد.
+اگر چیزی production است، verify باید آن را ثابت کند.
+```
+
+این README باید همراه با رشد پروژه زنده بماند؛ هر feature بزرگ جدید باید همراه با توضیح معماری، سناریو، endpoint و runbook لازم در همین سند یا docs اختصاصی ثبت شود.
