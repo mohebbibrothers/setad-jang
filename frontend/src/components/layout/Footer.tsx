@@ -1,6 +1,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { Instagram, Twitter, Linkedin, Send } from 'lucide-react';
+import { BackToTop } from './BackToTop';
 
 /**
  * Footer v3 — center-aligned, premium presentation.
@@ -177,28 +178,10 @@ export function Footer() {
           </div>
         </div>
 
-        {/* Back-to-top pill — tiny, polished ergonomics */}
-        <div className="relative mt-7 flex justify-center">
-          <a
-            href="#main"
-            className="inline-flex items-center gap-2 text-[12px] font-extrabold text-ink-500
-                       hover:text-brand-700 transition-colors"
-          >
-            <span
-              className="w-7 h-7 rounded-full bg-white border border-ink-200
-                         flex items-center justify-center
-                         shadow-[0_2px_6px_-3px_rgba(15,20,32,.10)]
-                         transition-all duration-200
-                         group-hover:border-brand-300"
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                   strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <polyline points="18 15 12 9 6 15" />
-              </svg>
-            </span>
-            بازگشت به بالا
-          </a>
-        </div>
+        {/* Back-to-top pill — interactive client island so window.scrollTo
+            with smooth behaviour always fires, even if the URL hash is
+            already #main or the browser doesn't honour the hash jump.   */}
+        <BackToTop />
       </div>
     </footer>
   );

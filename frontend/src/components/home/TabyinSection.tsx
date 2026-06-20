@@ -205,6 +205,22 @@ export function TabyinSection({ items }: { items: TabyinItem[] }) {
   // Reset to first page when filter changes
   useEffect(() => { setPage(0); }, [filter]);
 
+  // ── Sparse-mode detection ───────────────────────────────────────────
+  // When the visible set is smaller than ONE full row at the current
+  // viewport, we drop out of CSS grid into flex+wrap+justify-center so
+  // orphan tiles centre instead of clinging to the RTL-right edge.
+  const [cols, setCols] = useState(4);
+  useEffect(() => {
+    const measure = () => {
+      const w = window.innerWidth;
+      setCols(w >= 1024 ? 4 : w >= 768 ? 3 : 2);
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, []);
+  const isSparse = visible.length > 0 && visible.length < cols;
+
   const goPrev = () => setPage((p) => (p - 1 + totalPages) % totalPages);
   const goNext = () => setPage((p) => (p + 1) % totalPages);
 
@@ -258,10 +274,14 @@ export function TabyinSection({ items }: { items: TabyinItem[] }) {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.28 }}
-            className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4
-                       auto-rows-[120px] sm:auto-rows-[140px] md:auto-rows-[160px]
-                       gap-3 md:gap-4"
-            style={{ gridAutoFlow: 'dense' }}
+            className={
+              isSparse
+                ? 'flex flex-wrap justify-center items-start gap-3 md:gap-4'
+                : 'grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 ' +
+                  'auto-rows-[120px] sm:auto-rows-[140px] md:auto-rows-[160px] ' +
+                  'gap-3 md:gap-4'
+            }
+            style={isSparse ? undefined : { gridAutoFlow: 'dense' }}
           >
             {visible.map((it, i) => {
               // ── PAGE-LOCAL tall pattern ─────────────────────────────
@@ -283,6 +303,7 @@ export function TabyinSection({ items }: { items: TabyinItem[] }) {
                   it={it}
                   index={i}
                   forceTall={tall}
+                  sparse={isSparse}
                 />
               );
             })}
@@ -351,9 +372,9 @@ export function TabyinSection({ items }: { items: TabyinItem[] }) {
 /* ───────────────────────────────────────────────────────────────────────── */
 
 function TabyinTile({
-  it, index, forceTall = false,
+  it, index, forceTall = false, sparse = false,
 }: {
-  it: TabyinItem; index: number; forceTall?: boolean;
+  it: TabyinItem; index: number; forceTall?: boolean; sparse?: boolean;
 }) {
   const isQuote = it.variant === 'quote';
   const isVideo = it.mediaType === 'video';
@@ -362,7 +383,18 @@ function TabyinTile({
   // `forceTall` is computed PAGE-LOCALLY in the section so the tall slots
   // always align to the dense grid and never overflow on the last row.
   // The data-driven `it.tall` is intentionally ignored here.
-  const tall    = forceTall;
+  // In SPARSE mode every tile is short (a single centred row).
+  const tall    = !sparse && forceTall;
+
+  // Width / height presets for sparse mode mirror each breakpoint's
+  // column count so the visual rhythm stays identical to the dense grid.
+  const sparseSizing = sparse
+    ? 'w-[calc((100%-0.75rem)/2)] h-[120px] ' +
+      'sm:h-[140px] ' +
+      'md:w-[calc((100%-2*1rem)/3)] md:h-[160px] ' +
+      'lg:w-[calc((100%-3*1rem)/4)] ' +
+      'flex-none'
+    : (tall ? 'row-span-2' : 'row-span-1');
 
   return (
     <motion.article
@@ -374,7 +406,7 @@ function TabyinTile({
                   shadow-[0_2px_10px_-4px_rgba(15,20,32,.06)]
                   hover:shadow-[0_22px_44px_-22px_rgba(11,53,48,.28)]
                   hover:-translate-y-1 transition-all duration-300
-                  ${tall ? 'row-span-2' : 'row-span-1'}`}
+                  ${sparseSizing}`}
     >
       {isQuote ? (
         /* ── Quote tile (solid brand-green text card) ───────────────── */
