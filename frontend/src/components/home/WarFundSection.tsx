@@ -211,10 +211,16 @@ function Card({
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: '-40px' }}
       transition={{ duration: 0.45, delay }}
+      /* Width math matches the parent flex gap (1rem mobile, 1.25rem md+).
+         - mobile / tablet (< 1024px): 1 column → 100%
+         - desktop (≥ 1024px)        : 2 columns → calc((100% - 1.25rem)/2)
+         Combined with parent flex+wrap+justify-center, an orphan in the
+         last row auto-centres. min-w-0 lets long titles shrink cleanly. */
       className="group bg-white rounded-[18px] border border-ink-100
                  shadow-[0_2px_10px_-4px_rgba(15,20,32,.06)]
                  hover:shadow-[0_22px_44px_-22px_rgba(11,53,48,.22)]
-                 hover:-translate-y-0.5 transition-all duration-300 overflow-hidden"
+                 hover:-translate-y-0.5 transition-all duration-300 overflow-hidden
+                 w-full lg:w-[calc((100%-1.25rem)/2)] min-w-0"
     >
       <div className="p-4 md:p-5">
         {/* ── Body: 2-column layout (cover on RTL-right, content on left) ── */}
@@ -362,8 +368,11 @@ export function WarFundSection({ campaigns }: { campaigns: CampaignCard[] }) {
     [campaigns, page],
   );
 
-  const prev = () => setPage((p) => (p - 1 + totalPages) % totalPages);
-  const next = () => setPage((p) => (p + 1) % totalPages);
+  // No-op when there's only one (or zero) page. The pager buttons are
+  // already visually disabled via the `disabled` prop below, but the
+  // explicit guard keeps keyboard / spacebar activations honest too.
+  const prev = () => { if (totalPages <= 1) return; setPage((p) => (p - 1 + totalPages) % totalPages); };
+  const next = () => { if (totalPages <= 1) return; setPage((p) => (p + 1) % totalPages); };
 
   // ─── Album state ──────────────────────────────────────────────────────
   const [album, setAlbum] = useState<{
@@ -454,7 +463,11 @@ export function WarFundSection({ campaigns }: { campaigns: CampaignCard[] }) {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.25 }}
-            className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-5"
+            /* flex+wrap+justify-center so a SINGLE orphan in the last row
+               centres itself instead of clinging to the RTL-right edge.
+               Cards take the column width via the responsive className
+               applied on <Card> itself. */
+            className="flex flex-wrap justify-center gap-4 md:gap-5"
           >
             {visible.map((c, i) => (
               <Card key={c.slug} c={c} delay={i * 0.06} onOpenAlbum={openAlbum} />

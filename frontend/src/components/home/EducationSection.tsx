@@ -151,8 +151,10 @@ export function EducationSection({
   // Reset paging whenever the active category changes
   useEffect(() => { setPage(0); }, [active]);
 
-  const prev = () => setPage((p) => (p - 1 + totalPages) % totalPages);
-  const next = () => setPage((p) => (p + 1) % totalPages);
+  // Pager no-op when there's only one (or zero) page — pairs with the
+  // `disabled` prop on the buttons so the affordance stays honest.
+  const prev = () => { if (totalPages <= 1) return; setPage((p) => (p - 1 + totalPages) % totalPages); };
+  const next = () => { if (totalPages <= 1) return; setPage((p) => (p + 1) % totalPages); };
 
   /* ── Horizontal-only scroll tab strip ── */
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -292,7 +294,10 @@ export function EducationSection({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.25 }}
-            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5"
+            /* flex+wrap+justify-center: orphans in the last row centre
+               instead of clinging to the RTL-right edge. Card widths
+               are set on <CourseCard> itself to match the parent gap. */
+            className="flex flex-wrap justify-center gap-4 md:gap-5"
           >
             {visibleCourses.map((c, i) => (
               <CourseTile key={c.slug} c={c} delay={i * 0.04} />
@@ -360,7 +365,13 @@ function CourseTile({ c, delay = 0 }: { c: CourseCard; delay?: number }) {
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: '-40px' }}
       transition={{ duration: 0.4, delay }}
-      className="group"
+      /* Width math matches parent flex gap (1rem mobile, 1.25rem md+):
+         - mobile (< 640px) : 1 col  → 100%
+         - sm     (≥ 640px) : 2 cols → calc((100% - 1.25rem) / 2)
+         - lg     (≥ 1024px): 4 cols → calc((100% - 3 * 1.25rem) / 4)
+         Combined with parent flex+wrap+justify-center, an orphan in the
+         last row auto-centres. min-w-0 keeps content shrinkable. */
+      className="group w-full sm:w-[calc((100%-1.25rem)/2)] lg:w-[calc((100%-3*1.25rem)/4)] min-w-0"
     >
       <Link
         href={`/lms/courses/${c.slug}`}

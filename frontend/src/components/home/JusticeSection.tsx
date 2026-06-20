@@ -282,10 +282,16 @@ function CriminalCardView({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -8 }}
       transition={{ duration: 0.4, delay }}
+      /* Width math matches parent flex gap (0.75rem mobile, 1.25rem md+):
+         - mobile (< 768px): 2 cols → calc((100% - 0.75rem)/2)
+         - md+   (≥ 768px): 4 cols → calc((100% - 3*1.25rem)/4)
+         Combined with parent flex+wrap+justify-center an orphan in the
+         last row auto-centres. min-w-0 keeps card content shrinkable. */
       className="group flex flex-col bg-white rounded-[28px] overflow-hidden isolate
                  shadow-[0_2px_10px_-4px_rgba(15,20,32,.06)]
                  hover:shadow-[0_22px_44px_-22px_rgba(11,53,48,.22)]
-                 hover:-translate-y-0.5 transition-all duration-300"
+                 hover:-translate-y-0.5 transition-all duration-300
+                 w-[calc((100%-0.75rem)/2)] md:w-[calc((100%-3*1.25rem)/4)] min-w-0"
     >
       {/* Photo — relative + overflow-hidden so the popover can pop INTO
           the upper part of the portrait without ever leaving the card. */}
@@ -363,8 +369,9 @@ export function JusticeSection({ criminals }: { criminals: CriminalCard[] }) {
     [criminals, page],
   );
 
-  const prev = () => setPage((p) => (p - 1 + totalPages) % totalPages);
-  const next = () => setPage((p) => (p + 1) % totalPages);
+  // No-op when there's only one page — pair with `disabled={...}` below.
+  const prev = () => { if (totalPages <= 1) return; setPage((p) => (p - 1 + totalPages) % totalPages); };
+  const next = () => { if (totalPages <= 1) return; setPage((p) => (p + 1) % totalPages); };
 
   // ── Album state ────────────────────────────────────────────────────
   const [album, setAlbum] = useState<{
@@ -452,7 +459,9 @@ export function JusticeSection({ criminals }: { criminals: CriminalCard[] }) {
         <div className="bg-ink-50/60
                         rounded-[32px] md:rounded-[48px] lg:rounded-[56px]
                         p-4 md:p-8 lg:p-10 border border-ink-100">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-5">
+          {/* flex+wrap+justify-center so orphan cards in the last row
+              centre instead of clinging to the RTL-right edge. */}
+          <div className="flex flex-wrap justify-center gap-3 md:gap-5">
             <AnimatePresence mode="wait" initial={false}>
               {visible.map((p, i) => (
                 <CriminalCardView key={`${page}-${p.slug}`} p={p} delay={i * 0.06} onOpenAlbum={openAlbum} />
