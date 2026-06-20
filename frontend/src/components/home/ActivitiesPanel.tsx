@@ -1,8 +1,28 @@
 'use client';
 
 import Image from 'next/image';
-import Link from 'next/link';
 import { motion } from 'framer-motion';
+
+/** Smooth-scroll handler for the in-page anchors.
+ *  Next's <Link> only updates the URL hash; on a page that has been
+ *  scroll-restored or where the hash doesn't change because the user is
+ *  already on the route, the browser sometimes skips the scroll.
+ *  This handler scrolls reliably to the target section using the native
+ *  scrollIntoView() API + `behavior: 'smooth'`, accounts for the sticky
+ *  header by reading the section's computed `scroll-margin-top`, and
+ *  still updates the URL hash so links remain shareable. */
+function scrollToAnchor(e: React.MouseEvent<HTMLAnchorElement>, href: string) {
+  if (!href.startsWith('#')) return;
+  const id = href.slice(1);
+  const el = typeof document !== 'undefined' ? document.getElementById(id) : null;
+  if (!el) return;
+  e.preventDefault();
+  el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  // Keep the URL shareable without an extra history entry.
+  if (typeof window !== 'undefined') {
+    window.history.replaceState(null, '', href);
+  }
+}
 
 type Activity = { href: string; label: string; icon: string; iconAlt: string };
 
@@ -119,8 +139,9 @@ export function ActivitiesPanel() {
                            min-[480px]:w-[calc((100%-2*clamp(0.5rem,1.4vw,1.125rem))/3)]
                            min-[760px]:w-[calc((100%-4*clamp(0.5rem,1.4vw,1.125rem))/5)]"
               >
-                <Link
+                <a
                   href={a.href}
+                  onClick={(e) => scrollToAnchor(e, a.href)}
                   className="group flex flex-col items-center justify-between
                              aspect-square w-full min-w-0 max-w-full overflow-hidden
                              bg-white text-ink-700
@@ -165,7 +186,7 @@ export function ActivitiesPanel() {
                   >
                     {a.label}
                   </p>
-                </Link>
+                </a>
               </motion.div>
             ))}
           </div>

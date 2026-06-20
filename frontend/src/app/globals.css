@@ -149,6 +149,14 @@
   /* Section padding */
   .section-y { @apply py-16 md:py-20 lg:py-24; }
 
+  /* In-page anchor scroll offset.
+   * The header (.sticky-wrap) is ~64-72 px tall, so when an in-page
+   * anchor like #warfund / #justice scrolls a section into view, we
+   * pull it down by that amount so the section title isn't tucked
+   * under the sticky header. */
+  section[id] { scroll-margin-top: 88px; }
+  @media (min-width: 768px) { section[id] { scroll-margin-top: 96px; } }
+
   /* Reduce motion */
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after {
