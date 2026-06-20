@@ -340,35 +340,66 @@ export function CampaignAlbum({
   // ── Cylinder transition variants ───────────────────────────────────
   const reduced = typeof window !== 'undefined'
     && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const variants = useMemo(() => ({
-    enter: (d: 1 | -1) => reduced
-      ? { opacity: 0 }
-      : {
+  // Two motion presets:
+  //   - 'cylinder' (default, manual nav): slide wraps around an invisible
+  //     cylinder face — feels like turning a panoramic prism.
+  //   - 'cube' (slideshow only): each frame rotates 90° onto a deep cube
+  //     face — feels like turning a hardback book page. Pairs with a
+  //     subtle Ken-Burns drift on the current image (CSS keyframes).
+  const variants = useMemo(() => {
+    if (reduced) {
+      return {
+        enter:  () => ({ opacity: 0 }),
+        center: { opacity: 1, transition: { duration: 0.2 } },
+        exit:   () => ({ opacity: 0, transition: { duration: 0.18 } }),
+      };
+    }
+    if (slideshow) {
+      // CUBE FLIP — 90° rotation around the Y axis on a deep stage.
+      return {
+        enter: (d: 1 | -1) => ({
           opacity: 0,
-          rotateY: d > 0 ? -80 : 80,
-          x: d > 0 ? '-35%' : '35%',
-          z: -260,
-          filter: 'blur(2px) brightness(.7)',
+          rotateY: d > 0 ? -90 : 90,
+          x: d > 0 ? '-100%' : '100%',
+          filter: 'brightness(.85)',
+        }),
+        center: {
+          opacity: 1, rotateY: 0, x: '0%', filter: 'brightness(1)',
+          transition: { duration: 0.9, ease: [0.7, 0, 0.2, 1] as const },
         },
-    center: {
-      opacity: 1,
-      rotateY: 0,
-      x: '0%',
-      z: 0,
-      filter: 'blur(0px) brightness(1)',
-      transition: { duration: reduced ? 0.2 : 0.62, ease: [0.22, 1, 0.36, 1] as const },
-    },
-    exit: (d: 1 | -1) => reduced
-      ? { opacity: 0, transition: { duration: 0.18 } }
-      : {
+        exit: (d: 1 | -1) => ({
           opacity: 0,
-          rotateY: d > 0 ? 80 : -80,
-          x: d > 0 ? '35%' : '-35%',
-          z: -260,
-          filter: 'blur(2px) brightness(.7)',
-          transition: { duration: 0.55, ease: [0.22, 1, 0.36, 1] as const },
-        },
-  }), [reduced]);
+          rotateY: d > 0 ? 90 : -90,
+          x: d > 0 ? '100%' : '-100%',
+          filter: 'brightness(.85)',
+          transition: { duration: 0.9, ease: [0.7, 0, 0.2, 1] as const },
+        }),
+      };
+    }
+    // CYLINDER ROLL — default manual nav transition.
+    return {
+      enter: (d: 1 | -1) => ({
+        opacity: 0,
+        rotateY: d > 0 ? -80 : 80,
+        x: d > 0 ? '-35%' : '35%',
+        z: -260,
+        filter: 'blur(2px) brightness(.7)',
+      }),
+      center: {
+        opacity: 1, rotateY: 0, x: '0%', z: 0,
+        filter: 'blur(0px) brightness(1)',
+        transition: { duration: 0.62, ease: [0.22, 1, 0.36, 1] as const },
+      },
+      exit: (d: 1 | -1) => ({
+        opacity: 0,
+        rotateY: d > 0 ? 80 : -80,
+        x: d > 0 ? '35%' : '-35%',
+        z: -260,
+        filter: 'blur(2px) brightness(.7)',
+        transition: { duration: 0.55, ease: [0.22, 1, 0.36, 1] as const },
+      }),
+    };
+  }, [reduced, slideshow]);
 
   const counter = useMemo(() => {
     if (!total) return '۰';
@@ -485,8 +516,6 @@ export function CampaignAlbum({
             animate={{ opacity: 1, scale: 1,    y: 0  }}
             exit   ={{ opacity: 0, scale: 0.96, y: 10 }}
             transition={{ type: 'spring', stiffness: 320, damping: 28 }}
-            onMouseEnter={() => setHovering(true)}
-            onMouseLeave={() => setHovering(false)}
             className="relative w-full max-w-[1180px] h-[92vh]
                        bg-ink-900 rounded-[28px] overflow-hidden flex flex-col
                        shadow-[0_50px_100px_-25px_rgba(0,0,0,.65)]"
@@ -555,15 +584,20 @@ export function CampaignAlbum({
               </div>
             </div>
 
-            {/* Stage */}
+            {/* Stage — hover-to-pause is scoped to THIS region only, so
+                resting the cursor on the title / HUD / filmstrip never
+                freezes the slideshow. */}
             <div
               ref={stageRef}
               className="relative flex-1 overflow-hidden"
               style={{ perspective: '1400px', perspectiveOrigin: '50% 50%' }}
               onWheel={onWheel}
-              onTouchStart={onTouchStart}
+              onTouchStart={(e) => { setHovering(true); onTouchStart(e); }}
               onTouchMove={onTouchMove}
-              onTouchEnd={onTouchEnd}
+              onTouchEnd={(e) => { setHovering(false); onTouchEnd(); /* no-arg */ void e; }}
+              onTouchCancel={() => setHovering(false)}
+              onMouseEnter={() => setHovering(true)}
+              onMouseLeave={() => setHovering(false)}
               onPointerDown={onPointerDown}
               onPointerMove={onPointerMove}
               onPointerUp={onPointerUp}
@@ -615,21 +649,45 @@ export function CampaignAlbum({
                         <div className="absolute inset-0 flex items-center justify-center text-white/70"><Spinner/></div>
                       )}
                       {current?.url && (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={current.url}
-                          alt={current.alt || title}
-                          draggable={false}
-                          onLoad={() => setImgReady(true)}
-                          className="max-w-[94%] max-h-[88%] object-contain pointer-events-none
-                                     drop-shadow-[0_20px_50px_rgba(0,0,0,.55)] rounded-[14px]"
-                          style={{
-                            transform: `translate3d(${pan.x}px, ${pan.y}px, 0) scale(${zoom})`,
-                            transformOrigin: 'center center',
-                            transition: 'transform .25s cubic-bezier(.22,1,.36,1), opacity .3s',
-                            opacity: imgReady ? 1 : 0,
-                          }}
-                        />
+                        // Ken Burns drift kicks in only while slideshow is
+                        // playing AND the user isn't zoomed. Otherwise the
+                        // image obeys the pan/zoom transform.
+                        slideshow && zoom === 1 && !reduced ? (
+                          <motion.img
+                            key={`img-${index}`}
+                            src={current.url}
+                            alt={current.alt || title}
+                            draggable={false}
+                            onLoad={() => setImgReady(true)}
+                            initial={{ scale: 1.00, x: '0%', y: '0%', opacity: 0 }}
+                            animate={{ scale: 1.06, x: '-1.2%', y: '-0.8%', opacity: imgReady ? 1 : 0 }}
+                            transition={{
+                              scale:   { duration: 5.4, ease: 'easeOut' },
+                              x:       { duration: 5.4, ease: 'easeOut' },
+                              y:       { duration: 5.4, ease: 'easeOut' },
+                              opacity: { duration: 0.3 },
+                            }}
+                            className="max-w-[94%] max-h-[88%] object-contain pointer-events-none
+                                       drop-shadow-[0_20px_50px_rgba(0,0,0,.55)] rounded-[14px]"
+                            style={{ transformOrigin: 'center center' }}
+                          />
+                        ) : (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={current.url}
+                            alt={current.alt || title}
+                            draggable={false}
+                            onLoad={() => setImgReady(true)}
+                            className="max-w-[94%] max-h-[88%] object-contain pointer-events-none
+                                       drop-shadow-[0_20px_50px_rgba(0,0,0,.55)] rounded-[14px]"
+                            style={{
+                              transform: `translate3d(${pan.x}px, ${pan.y}px, 0) scale(${zoom})`,
+                              transformOrigin: 'center center',
+                              transition: 'transform .25s cubic-bezier(.22,1,.36,1), opacity .3s',
+                              opacity: imgReady ? 1 : 0,
+                            }}
+                          />
+                        )
                       )}
                     </motion.div>
                   </AnimatePresence>
@@ -681,7 +739,7 @@ export function CampaignAlbum({
                   {/* Caption */}
                   {current?.alt && (
                     <div
-                      className="absolute bottom-16 sm:bottom-[72px] inset-x-0 z-[5] flex justify-center px-3 sm:px-4 pointer-events-none"
+                      className="absolute bottom-24 sm:bottom-[104px] inset-x-0 z-[5] flex justify-center px-3 sm:px-4 pointer-events-none"
                       aria-hidden="true"
                     >
                       <motion.span
@@ -699,30 +757,27 @@ export function CampaignAlbum({
                     </div>
                   )}
 
-                  {/* Mobile combined HUD (zoom + actions) — bottom-center */}
-                  <div className="album-hud sm:hidden absolute z-[7] bottom-2 left-1/2 -translate-x-1/2
-                                  inline-flex items-center gap-1 p-[5px] rounded-full
-                                  bg-black/55 ring-1 ring-white/15 backdrop-blur max-w-[calc(100%-1rem)]">
+                  {/* ── Unified HUD — ALWAYS bottom-centered ────────
+                      Mobile + desktop: a single floating pill containing
+                      zoom controls + slideshow + fullscreen + copy +
+                      download + open-original + help.
+                      No left-anchored bar (was redundant — every action is
+                      reachable from this one place).
+                   */}
+                  <div
+                    className="absolute z-[7] bottom-2 sm:bottom-3 left-1/2 -translate-x-1/2
+                               inline-flex items-center gap-1 sm:gap-1.5 p-[5px] sm:p-1.5 rounded-full
+                               bg-black/55 ring-1 ring-white/15 backdrop-blur
+                               max-w-[calc(100%-1rem)] overflow-x-auto no-scrollbar"
+                  >
                     {zoomControlsRender}
-                    <span aria-hidden="true" className="w-px h-[18px] bg-white/15 mx-0.5 shrink-0" />
-                    {hudControlsRender}
-                  </div>
-
-                  {/* Desktop split HUDs */}
-                  <div className="album-hud hidden sm:inline-flex absolute z-[7] bottom-3 right-3
-                                  items-center gap-1.5 p-1.5 rounded-full
-                                  bg-black/55 ring-1 ring-white/15 backdrop-blur">
-                    {zoomControlsRender}
-                  </div>
-                  <div className="album-hud hidden sm:inline-flex absolute z-[7] bottom-3 left-3
-                                  items-center gap-1.5 p-1.5 rounded-full
-                                  bg-black/55 ring-1 ring-white/15 backdrop-blur">
+                    <span aria-hidden="true" className="w-px h-[18px] bg-white/18 mx-0.5 shrink-0" />
                     {hudControlsRender}
                   </div>
 
                   {/* Dot indicator (≤ 8) — desktop only */}
                   {total > 1 && total <= 8 && (
-                    <div className="album-dots hidden sm:flex absolute z-[5] bottom-[108px] left-1/2 -translate-x-1/2 items-center gap-1.5">
+                    <div className="album-dots hidden sm:flex absolute z-[5] bottom-[72px] left-1/2 -translate-x-1/2 items-center gap-1.5">
                       {images.map((_, i) => (
                         <button
                           key={i}
