@@ -266,11 +266,19 @@ export function EducationSection({
                               ${isActive ? 'text-brand-600' : 'text-ink-500 hover:text-ink-800'}`}
                 >
                   <span>{c.title}</span>
-                  {typeof c.count === 'number' && c.count > 0 && (
+                  {/* ALWAYS render the count chip — even when zero — so an
+                      empty category reads as "0 آموزش" instead of looking
+                      like a missing chip. Keeps the tab strip's rhythm
+                      uniform and gives clearer empty-state signalling. */}
+                  {typeof c.count === 'number' && (
                     <span
                       className={`inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5
                                   rounded-full text-[11px] font-extrabold tabular-nums
-                                  ${isActive ? 'bg-brand-500 text-white' : 'bg-ink-100 text-ink-500'}`}
+                                  ${isActive
+                                    ? 'bg-brand-500 text-white'
+                                    : c.count === 0
+                                      ? 'bg-ink-50 text-ink-400 ring-1 ring-ink-100'
+                                      : 'bg-ink-100 text-ink-500'}`}
                     >
                       {c.count.toLocaleString('fa-IR')}
                     </span>
