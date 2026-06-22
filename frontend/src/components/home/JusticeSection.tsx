@@ -495,6 +495,25 @@ export function JusticeSection({ criminals }: { criminals: CriminalCard[] }) {
             </button>
           </div>
         </div>
+
+        {/* See-all CTA — matches the WarFund pattern for cross-section
+            consistency. Pulls the user out of the home preview and into
+            the full R4J case browser. */}
+        <div className="flex justify-center mt-6">
+          <Link
+            href="/r4j"
+            className="inline-flex items-center gap-2 h-12 px-7 rounded-full
+                       bg-white border-2 border-brand-500 text-brand-700 font-extrabold text-[14px]
+                       hover:bg-brand-50 transition-colors"
+          >
+            <span>مشاهده همه پرونده‌ها</span>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <line x1="19" y1="12" x2="5" y2="12" />
+              <polyline points="12 19 5 12 12 5" />
+            </svg>
+          </Link>
+        </div>
       </div>
 
       {/* ── Album lightbox ─────────────────────────────────────────── */}
