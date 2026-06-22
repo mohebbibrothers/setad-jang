@@ -6,6 +6,7 @@ import { useState, useRef, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SectionTitle } from './SectionTitle';
 import { Icon } from '@/components/icons/Icon';
+import { EmptyState } from './EmptyState';
 
 /**
  * ───────────────────────────────────────────────────────────────────────────
@@ -303,9 +304,16 @@ export function EducationSection({
               <CourseTile key={c.slug} c={c} delay={i * 0.04} />
             ))}
             {visibleCourses.length === 0 && (
-              <div className="col-span-full text-center py-16">
-                <Icon name="graduation" className="w-12 h-12 mx-auto text-ink-300 mb-3" />
-                <p className="text-ink-500">دوره‌ای در این دسته منتشر نشده است.</p>
+              <div className="w-full">
+                <EmptyState
+                  title={courses.length === 0
+                    ? 'هنوز دوره‌ای منتشر نشده'
+                    : 'دوره‌ای در این دسته یافت نشد'}
+                  description={courses.length === 0
+                    ? 'به‌محض انتشار اولین دوره‌های قرارگاه آموزشی، اینجا قابل ثبت‌نام خواهد بود.'
+                    : 'دسته‌ی دیگری را امتحان کن یا «همه آموزش‌ها» را انتخاب کن.'}
+                  iconPath="M22 10v6 M2 10l10-5 10 5-10 5z M6 12v5c0 1.66 4 3 6 3s6-1.34 6-3v-5"
+                />
               </div>
             )}
           </motion.div>

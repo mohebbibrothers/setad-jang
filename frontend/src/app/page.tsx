@@ -14,6 +14,7 @@ import {
   loadLmsCategories,
   loadKindnessListings,
   loadTabyinItems,
+  loadReportSubjects,
 } from '@/lib/home-data';
 import { siteConfig } from '@/lib/site';
 
@@ -32,13 +33,17 @@ export const metadata: Metadata = {
 export const revalidate = 300;
 
 export default async function HomePage() {
-  const [campaigns, criminals, lmsCategories, courses, kindness, tabyin] = await Promise.all([
+  const [
+    campaigns, criminals, lmsCategories, courses,
+    kindness, tabyin, reportSubjects,
+  ] = await Promise.all([
     loadCampaigns(),
     loadCriminals(),
     loadLmsCategories(),
     loadCourses(),
     loadKindnessListings(),
     loadTabyinItems(),
+    loadReportSubjects(),
   ]);
 
   return (
@@ -50,7 +55,7 @@ export default async function HomePage() {
       <EducationSection categories={lmsCategories} courses={courses} />
       <KindnessSection listings={kindness} />
       <TabyinSection items={tabyin} />
-      <PublicReportSection />
+      <PublicReportSection subjects={reportSubjects} />
     </>
   );
 }

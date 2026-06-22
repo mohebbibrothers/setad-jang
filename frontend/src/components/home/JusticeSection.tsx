@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { SectionTitle } from './SectionTitle';
 import { apiFetch } from '@/lib/api';
 import { CampaignAlbum, type AlbumImage } from './CampaignAlbum';
+import { EmptyState } from './EmptyState';
 
 /**
  * ───────────────────────────────────────────────────────────────────────────
@@ -46,8 +47,12 @@ import { CampaignAlbum, type AlbumImage } from './CampaignAlbum';
 export type CriminalCard = {
   slug: string;
   fullName: string;
+  /** location tag (city / province / country) when the backend exposes it */
   pillLabel?: string;
   imageUrl?: string;
+  /** Total active bounty pledged (Toman). */
+  totalBounty?: number;
+  bountiesCount?: number;
   /** Optional pre-loaded gallery (cover-substitute + sorted photos[]).
    *  When absent and the user taps the portrait, the section fetches
    *  /r4j/criminals/<slug>/ on-demand. */
@@ -461,13 +466,21 @@ export function JusticeSection({ criminals }: { criminals: CriminalCard[] }) {
                         p-4 md:p-8 lg:p-10 border border-ink-100">
           {/* flex+wrap+justify-center so orphan cards in the last row
               centre instead of clinging to the RTL-right edge. */}
-          <div className="flex flex-wrap justify-center gap-3 md:gap-5">
-            <AnimatePresence mode="wait" initial={false}>
-              {visible.map((p, i) => (
-                <CriminalCardView key={`${page}-${p.slug}`} p={p} delay={i * 0.06} onOpenAlbum={openAlbum} />
-              ))}
-            </AnimatePresence>
-          </div>
+          {criminals.length === 0 ? (
+            <EmptyState
+              title="هنوز پرونده‌ای منتشر نشده"
+              description="به‌محض انتشار پرونده‌های متهمان جنایت‌های جنگی، اینجا قابل مشاهده خواهد بود."
+              iconPath="m14.5 12.5-8 8a2.119 2.119 0 1 1-3-3l8-8 M16 16l6-6 M8 8l6-6 M9 7l8 8 M21 11-8-8"
+            />
+          ) : (
+            <div className="flex flex-wrap justify-center gap-3 md:gap-5">
+              <AnimatePresence mode="wait" initial={false}>
+                {visible.map((p, i) => (
+                  <CriminalCardView key={`${page}-${p.slug}`} p={p} delay={i * 0.06} onOpenAlbum={openAlbum} />
+                ))}
+              </AnimatePresence>
+            </div>
+          )}
 
           {/* Pager — lives INSIDE the off-white panel, centred below the cards */}
           <div className="flex items-center justify-center gap-4 mt-6 md:mt-8">

@@ -4,6 +4,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SectionTitle } from './SectionTitle';
 import { Icon, type IconName } from '@/components/icons/Icon';
+import { apiFetch, ApiError } from '@/lib/api';
 
 /**
  * ───────────────────────────────────────────────────────────────────────────
@@ -58,14 +59,6 @@ import { Icon, type IconName } from '@/components/icons/Icon';
  */
 
 type Subject = { id: string; name: string; description?: string };
-
-const DEFAULT_SUBJECTS: Subject[] = [
-  { id: '1', name: 'گزارش فساد اقتصادی',  description: 'رشوه، اختلاس، فرار مالیاتی و فساد در نهادهای دولتی.' },
-  { id: '2', name: 'گزارش تخلف اجتماعی',  description: 'هنجارشکنی‌ها و آسیب‌های اجتماعی.' },
-  { id: '3', name: 'گزارش امنیتی',         description: 'مسائل حساس امنیتی و تهدیدات.' },
-  { id: '4', name: 'گزارش فرهنگی',         description: 'ناهنجاری‌های فرهنگی و رسانه‌ای.' },
-  { id: '5', name: 'سایر موارد',           description: 'سایر گزارش‌هایی که در دسته‌های بالا نمی‌گنجند.' },
-];
 
 /** A single, universal "category" glyph used for every subject — because
  *  subjects are admin-managed and may change at runtime. */
@@ -474,8 +467,10 @@ function SlideToVerify({
 type Preview = { url: string; name: string; size: number };
 
 export function PublicReportSection({
-  subjects = DEFAULT_SUBJECTS,
+  subjects = [],
 }: {
+  /** Admin-managed list from /public-reports/subjects/ — pass through
+   *  from the page-level loader so SSR has data on first paint. */
   subjects?: Subject[];
 }) {
   const [form, setForm]             = useState<FormState>(INITIAL);
@@ -569,16 +564,33 @@ export function PublicReportSection({
     if (!canSubmit) return;
     setSubmitting(true);
     setErrorMsg(null);
-    // Simulated submit (real call goes through src/lib/home-data.ts later)
-    setTimeout(() => {
-      setSubmitting(false);
+    try {
+      // Real POST → apps.public_reports.views.ReportCreateAPIView
+      //   ReportCreateSerializer:
+      //     full_name, phone_number?, subject_id, description, attachments[]
+      const fd = new FormData();
+      fd.append('full_name',   form.full_name.trim());
+      if (form.phone_number.trim()) fd.append('phone_number', form.phone_number.trim());
+      fd.append('subject_id',  form.subject_id);
+      fd.append('description', form.description.trim());
+      files.forEach((f) => fd.append('attachments', f));
+
+      await apiFetch('/public-reports/reports/', { method: 'POST', body: fd });
+
       setSubmitted(true);
       setForm(INITIAL);
       setFiles([]);
       setVerified(false);
       setCooldown(COOLDOWN_SECS);
       setTimeout(() => setSubmitted(false), 6000);
-    }, 1200);
+    } catch (err) {
+      const msg = err instanceof ApiError
+        ? err.message
+        : 'ارتباط با سرور برقرار نشد. لطفاً دوباره تلاش کنید.';
+      setErrorMsg(msg);
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (

@@ -6,6 +6,7 @@ import { useState, useMemo, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SectionTitle } from './SectionTitle';
 import { Icon } from '@/components/icons/Icon';
+import { EmptyState } from './EmptyState';
 
 /**
  * ───────────────────────────────────────────────────────────────────────────
@@ -73,6 +74,9 @@ export type TabyinItem = {
   durationSeconds?: number;
   origin?: 'external' | 'user_submitted';
   authorName?: string;
+  /** Original publisher URL (e.g. Telegram channel post) — surfaces an
+   *  'منبع اصلی' affordance on the tile when present. */
+  sourceUrl?: string;
   toneFrom?: string;
   toneTo?: string;
 };
@@ -308,9 +312,16 @@ export function TabyinSection({ items }: { items: TabyinItem[] }) {
               );
             })}
             {visible.length === 0 && (
-              <div className="col-span-full text-center py-16">
-                <Icon name="search" className="w-12 h-12 mx-auto text-ink-300 mb-3" />
-                <p className="text-ink-500 font-bold">محتوایی در این فیلتر یافت نشد.</p>
+              <div className="col-span-full w-full">
+                <EmptyState
+                  title={items.length === 0
+                    ? 'هنوز محتوایی منتشر نشده'
+                    : 'محتوایی در این فیلتر یافت نشد'}
+                  description={items.length === 0
+                    ? 'به‌محض انتشار اولین روایت‌های جهاد تبیین، اینجا قابل مشاهده خواهد بود.'
+                    : 'فیلتر دیگری را امتحان کن یا «همه» را انتخاب کن.'}
+                  iconPath="m3 11 18-5v12L3 14v-3z M11.6 16.8a3 3 0 1 1-5.8-1.6"
+                />
               </div>
             )}
           </motion.div>

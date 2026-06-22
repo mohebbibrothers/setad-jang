@@ -9,6 +9,7 @@ import { formatPersianNumber } from '@/lib/utils';
 import { apiFetch } from '@/lib/api';
 import { CampaignAlbum, type AlbumImage } from './CampaignAlbum';
 import { CampaignParticipateModal } from './CampaignParticipateModal';
+import { EmptyState } from './EmptyState';
 
 /**
  * ───────────────────────────────────────────────────────────────────────────
@@ -55,6 +56,7 @@ export type CampaignCard = {
   slug: string;
   title: string;
   sponsor: string;
+  sponsorLogo?: string;
   /** Toman (storage unit); UI multiplies by 10 to render Rial. */
   totalAmount: number;
   sharePrice: number;
@@ -68,6 +70,13 @@ export type CampaignCard = {
    *  When absent and the user opens the album, the section fetches
    *  /madadkar/campaigns/<slug>/ on-demand. */
   gallery?: AlbumImage[];
+  /** Extra signals the backend exposes (CampaignPublicListSerializer). */
+  participantCount?: number;
+  isFullyFunded?: boolean;
+  hasDeadline?: boolean;
+  /** ISO8601 — only meaningful when hasDeadline is true. */
+  deadline?: string;
+  statusDisplay?: string;
 };
 
 /* ───────────────────────────────────────────────────────────────────────── */
@@ -472,30 +481,38 @@ export function WarFundSection({ campaigns }: { campaigns: CampaignCard[] }) {
           description="کنار هر دست خالی، صدها دست یاری‌رسان ایستاده. هر سهمی که می‌خری، یک قدم نزدیک‌تر به آرامش مدافعان و خانواده‌هاست."
         />
 
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={page}
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            transition={{ duration: 0.25 }}
-            /* flex+wrap+justify-center so a SINGLE orphan in the last row
-               centres itself instead of clinging to the RTL-right edge.
-               Cards take the column width via the responsive className
-               applied on <Card> itself. */
-            className="flex flex-wrap justify-center gap-4 md:gap-5"
-          >
-            {visible.map((c, i) => (
-              <Card
-                key={c.slug}
-                c={c}
-                delay={i * 0.06}
-                onOpenAlbum={openAlbum}
-                onOpenParticipate={openParticipate}
-              />
-            ))}
-          </motion.div>
-        </AnimatePresence>
+        {campaigns.length === 0 ? (
+          <EmptyState
+            title="هنوز حرکتی منتشر نشده"
+            description="به‌محض انتشار اولین حرکت‌های پشتیبانی مالی جنگ، اینجا قابل مشارکت خواهد بود."
+            iconPath="M18 11V6a2 2 0 0 0-4 0v5 M14 10V4a2 2 0 0 0-4 0v6 M10 10.5V6a2 2 0 0 0-4 0v8 M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.9-5.7-2.5L1.5 14a2 2 0 0 1 3-2.6L7 13"
+          />
+        ) : (
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={page}
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.25 }}
+              /* flex+wrap+justify-center so a SINGLE orphan in the last row
+                 centres itself instead of clinging to the RTL-right edge.
+                 Cards take the column width via the responsive className
+                 applied on <Card> itself. */
+              className="flex flex-wrap justify-center gap-4 md:gap-5"
+            >
+              {visible.map((c, i) => (
+                <Card
+                  key={c.slug}
+                  c={c}
+                  delay={i * 0.06}
+                  onOpenAlbum={openAlbum}
+                  onOpenParticipate={openParticipate}
+                />
+              ))}
+            </motion.div>
+          </AnimatePresence>
+        )}
 
         {/* Pager — brand PNG arrows, real interactive paging */}
         <div className="flex items-center justify-center gap-4 mt-8">

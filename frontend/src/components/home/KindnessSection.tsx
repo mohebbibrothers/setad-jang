@@ -8,6 +8,7 @@ import { SectionTitle } from './SectionTitle';
 import { Icon } from '@/components/icons/Icon';
 import { apiFetch } from '@/lib/api';
 import { CampaignAlbum, type AlbumImage } from './CampaignAlbum';
+import { EmptyState } from './EmptyState';
 
 /**
  * ───────────────────────────────────────────────────────────────────────────
@@ -626,18 +627,28 @@ export function KindnessSection({ listings }: { listings: KindListing[] }) {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.25 }}
-              className="text-center py-16"
             >
-              <Icon name="search" className="w-12 h-12 mx-auto text-ink-300 mb-3" />
-              <p className="text-ink-500 font-bold">آگهی‌ای در این فیلتر یافت نشد.</p>
-              <button
-                type="button"
-                onClick={() => { setFilterReset('all'); setCategoryReset('all'); }}
-                className="mt-3 inline-flex items-center gap-1.5 text-[13px] text-brand-600 font-extrabold hover:gap-2 transition-all"
-              >
-                پاک کردن فیلترها
-                <Icon name="arrow-left" className="w-3.5 h-3.5" />
-              </button>
+              <EmptyState
+                title={listings.length === 0
+                  ? 'هنوز آگهی منتشر نشده'
+                  : 'آگهی‌ای در این فیلتر یافت نشد'}
+                description={listings.length === 0
+                  ? 'به‌محض ثبت اولین آگهی‌های دیوار مهربانی، اینجا قابل مشاهده خواهد بود.'
+                  : 'فیلترها را پاک کن یا با عنوان دیگری جست‌وجو کن.'}
+                iconPath="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"
+              />
+              {listings.length > 0 && (
+                <div className="mt-2 text-center">
+                  <button
+                    type="button"
+                    onClick={() => { setFilterReset('all'); setCategoryReset('all'); }}
+                    className="inline-flex items-center gap-1.5 text-[13px] text-brand-600 font-extrabold hover:gap-2 transition-all"
+                  >
+                    پاک کردن فیلترها
+                    <Icon name="arrow-left" className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
             </motion.div>
           ) : (
             <motion.div
