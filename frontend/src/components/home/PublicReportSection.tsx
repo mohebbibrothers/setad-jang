@@ -216,6 +216,18 @@ function SubjectDropdown({
                        shadow-[0_24px_60px_-12px_rgba(0,0,0,.30),0_0_0_1px_rgba(217,222,229,.7)]
                        max-h-[340px] overflow-y-auto"
           >
+            {subjects.length === 0 && (
+              <li role="presentation" className="px-3 py-5 flex flex-col items-center text-center">
+                <span className="mb-2.5 w-10 h-10 rounded-xl bg-gradient-to-br from-ink-100 to-ink-50
+                                 text-ink-400 flex items-center justify-center" aria-hidden="true">
+                  <Icon name={SUBJECT_ICON} className="w-5 h-5" />
+                </span>
+                <span className="block text-[13px] font-extrabold text-ink-700">دسته‌بندی‌ای یافت نشد</span>
+                <span className="block mt-1 text-[11.5px] text-ink-500 font-medium leading-5">
+                  دسته‌بندی‌های گزارش توسط مدیران سامانه ثبت می‌شوند.
+                </span>
+              </li>
+            )}
             {subjects.map((s) => {
               const isActive = value === s.id;
               return (

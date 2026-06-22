@@ -141,7 +141,9 @@ export function Header() {
           )}
         >
           <div className="h-16 flex items-center justify-between px-4 border-b border-ink-100">
-            <Logo width={100} />
+            <Link href="/" onClick={() => setOpen(false)} aria-label="بعثت مردم — صفحه اصلی">
+              <Logo width={100} />
+            </Link>
             <button
               type="button"
               onClick={() => setOpen(false)}
