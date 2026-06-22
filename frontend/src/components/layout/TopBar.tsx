@@ -11,10 +11,10 @@ export function TopBar() {
       <div className="container-edge h-9 flex items-center gap-4">
         {/* Partner links — visually RIGHT in RTL */}
         <div className="flex items-center gap-8">
-          <Link href="#" className="opacity-90 hover:opacity-100 transition-opacity">بنیاد علوی</Link>
-          <Link href="#" className="opacity-90 hover:opacity-100 transition-opacity">زرفام کیش</Link>
+          <Link href="#" className="opacity-90 hover:opacity-100 transition-opacity">رسانه‌ی رهبر انقلاب</Link>
+          <Link href="#" className="opacity-90 hover:opacity-100 transition-opacity">رسانه‌ی رهبر شهید</Link>
+          <Link href="#" className="opacity-90 hover:opacity-100 transition-opacity">جانفدا</Link>
           <Link href="#" className="opacity-90 hover:opacity-100 transition-opacity">جهادآرا</Link>
-          <Link href="#" className="opacity-90 hover:opacity-100 transition-opacity">حرکت‌های مردمی و جهادی</Link>
         </div>
 
         {/* Social icons — visually LEFT */}
