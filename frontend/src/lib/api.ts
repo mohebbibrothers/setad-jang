@@ -37,6 +37,8 @@ export type FetchOptions = RequestInit & {
   /** Cache + revalidate hints for Next.js fetch. */
   revalidate?: number | false;
   tags?: string[];
+  /** AbortSignal for in-flight cancellation (live search, etc). */
+  signal?: AbortSignal;
 };
 
 function resolveBaseUrl(absolute: boolean): string {

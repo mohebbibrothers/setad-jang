@@ -15,7 +15,8 @@ export type IconName =
   | 'user' | 'users' | 'phone' | 'id-card' | 'category-pick' | 'message-square'
   | 'map-pin' | 'clock' | 'tag' | 'shield' | 'handshake' | 'megaphone'
   | 'helping-hand' | 'graduation' | 'scale' | 'flag' | 'hand-heart'
-  | 'sparkles' | 'play' | 'arrow-left' | 'filter' | 'grid' | 'list';
+  | 'sparkles' | 'play' | 'arrow-left' | 'filter' | 'grid' | 'list'
+  | 'heart-handshake' | 'gavel' | 'gift';
 
 type Props = {
   name: IconName;
@@ -244,6 +245,34 @@ const PATHS: Record<IconName, JSX.Element> = {
       <circle cx="4" cy="6" r="1" />
       <circle cx="4" cy="12" r="1" />
       <circle cx="4" cy="18" r="1" />
+    </>
+  ),
+  /* Campaign-style "heart on a handshake" — pillar icon for مددکاری */
+  'heart-handshake': (
+    <>
+      <path d="M11 17 9 19l-1.5 1.5a1.121 1.121 0 1 1-1.6-1.6L7 18" />
+      <path d="m21 3 1 7-7 1 1-5-9 9-5-5 9-9 5 1z" />
+      <path d="M3 11v5a2 2 0 0 0 2 2h3" />
+      <path d="M9 18a4 4 0 0 1 4-4h2a4 4 0 0 1 4 4v3" />
+    </>
+  ),
+  /* Gavel — pillar icon for R4J / justice */
+  'gavel': (
+    <>
+      <path d="m14.5 12.5-8 8a2.121 2.121 0 1 1-3-3l8-8" />
+      <path d="m16 16 6-6" />
+      <path d="m8 8 6-6" />
+      <path d="m9 7 8 8" />
+      <path d="m21 11-8-8" />
+    </>
+  ),
+  /* Gift — pillar icon for دیوار مهربانی */
+  'gift': (
+    <>
+      <rect x="3" y="8" width="18" height="4" rx="1" />
+      <path d="M12 8v13" />
+      <path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7" />
+      <path d="M7.5 8a2.5 2.5 0 0 1 0-5C9 3 12 5 12 8c0-3 3-5 4.5-5a2.5 2.5 0 0 1 0 5" />
     </>
   ),
 };

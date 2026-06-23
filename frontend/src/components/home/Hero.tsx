@@ -1,14 +1,16 @@
 'use client';
 
 import Image from 'next/image';
-import { Search } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { HeroSearch } from './HeroSearch';
 
 /**
  * Hero — matches designer 1:1.
- * Centered defenders cutout, dotted-wave decorations mirrored,
- * thin brand-coloured search pill overlapping the bottom edge with
- * a search-icon submit button (no text label).
+ * Centered defenders cutout, dotted-wave decorations mirrored, and the
+ * production global-search affordance overlapping the bottom edge.
+ *
+ * The search bar itself lives in <HeroSearch /> — a backend-faithful
+ * client island that fans-out to every public list endpoint in parallel.
  */
 export function Hero() {
   return (
@@ -54,36 +56,8 @@ export function Hero() {
           />
         </motion.div>
 
-        <motion.form
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.3 }}
-          role="search"
-          action="/search"
-          method="get"
-          className="relative z-30 mx-auto -mt-[100px] md:-mt-[120px] lg:-mt-[140px] max-w-3xl
-                     bg-white rounded-full
-                     flex items-center pl-1.5 pr-6 py-1.5 gap-2
-                     focus-within:shadow-[0_4px_14px_-8px_rgba(11,53,48,0.10)] transition-all"
-        >
-          <input
-            type="search"
-            name="q"
-            placeholder="جست‌وجو در حرکت‌ها، آموزش‌ها، چالش‌ها و مشاغل"
-            aria-label="جست‌وجو در سایت"
-            dir="rtl"
-            className="flex-1 h-10 md:h-11 bg-transparent outline-none text-[14px] md:text-[15px]
-                       text-ink-900 placeholder:text-ink-400 text-right"
-          />
-          <button
-            type="submit"
-            aria-label="جست‌وجو"
-            className="w-10 h-10 md:w-11 md:h-11 rounded-full text-brand-500 hover:bg-brand-50
-                       inline-flex items-center justify-center transition-colors shrink-0"
-          >
-            <Search className="w-5 h-5" strokeWidth={2.2} />
-          </button>
-        </motion.form>
+        {/* Global search — backend-wired, debounced, keyboard-friendly. */}
+        <HeroSearch />
       </div>
     </section>
   );
