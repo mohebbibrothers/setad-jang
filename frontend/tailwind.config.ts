@@ -34,9 +34,12 @@ const config: Config = {
         },
         // brighter cyan-teal used in "+ جدید" CTA buttons in design
         mint: {
+          50:  '#E6F8F6',
+          100: '#C5EFEB',
           400: '#3FD0C2',
           500: '#25C5BA',
           600: '#1FB3A8',
+          700: '#178C84',
         },
         accent: {
           50:  '#FFF1E6',

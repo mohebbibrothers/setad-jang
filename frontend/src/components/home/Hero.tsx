@@ -2,15 +2,15 @@
 
 import Image from 'next/image';
 import { motion } from 'framer-motion';
-import { HeroSearch } from './HeroSearch';
+import { GlobalSearch } from './GlobalSearch';
 
 /**
  * Hero — matches designer 1:1.
- * Centered defenders cutout, dotted-wave decorations mirrored, and the
- * production global-search affordance overlapping the bottom edge.
- *
- * The search bar itself lives in <HeroSearch /> — a backend-faithful
- * client island that fans-out to every public list endpoint in parallel.
+ * Centered defenders cutout, dotted-wave decorations mirrored,
+ * with the production-grade GlobalSearch pill overlapping the bottom
+ * edge. The search bar is wired to every public DRF endpoint via
+ * `lib/global-search.ts` and renders a rich suggestions panel with
+ * keyboard navigation, recents, trending, and a ⌘K/Ctrl+K hotkey.
  */
 export function Hero() {
   return (
@@ -56,8 +56,16 @@ export function Hero() {
           />
         </motion.div>
 
-        {/* Global search — backend-wired, debounced, keyboard-friendly. */}
-        <HeroSearch />
+        {/* Production-grade omni-search — every public app is queried in
+            parallel; results group by source with keyboard navigation,
+            recents, trending, and a ⌘K hotkey. See GlobalSearch.tsx. */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.3 }}
+        >
+          <GlobalSearch variant="hero" />
+        </motion.div>
       </div>
     </section>
   );

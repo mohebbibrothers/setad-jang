@@ -202,3 +202,18 @@
   outline: 3px solid rgba(13, 128, 116, .35);
   outline-offset: 2px;
 }
+
+/* ── GlobalSearch — quiet scrollbar inside the suggestions panel ────── */
+.custom-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(94, 104, 120, .35) transparent;
+}
+.custom-scroll::-webkit-scrollbar { width: 6px; }
+.custom-scroll::-webkit-scrollbar-track { background: transparent; }
+.custom-scroll::-webkit-scrollbar-thumb {
+  background: rgba(94, 104, 120, .25);
+  border-radius: 9999px;
+}
+.custom-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(94, 104, 120, .45);
+}

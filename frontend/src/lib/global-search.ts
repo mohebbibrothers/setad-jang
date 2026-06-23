@@ -1,358 +1,479 @@
 /**
- * Global Search — multi-domain backend-faithful client.
+ * ───────────────────────────────────────────────────────────────────────────
+ *  Global Search — backend-faithful omni-search across every public dataset.
  *
- * Maps the hero's universal search bar onto the five public list endpoints
- * exposed by the Django backend. Every endpoint already supports a
- * `?search=` query parameter wired to `apps.core.search.apply_smart_search`
- * (PostgreSQL FTS + trigram, SQLite icontains fallback) — see:
+ *  Backend contract (apps/<app>/filters.py):
  *
- *   apps/madadkar/filters.py     → CampaignPublicFilter.filter_search
- *   apps/r4j/filters.py          → R4JCriminalPublicFilter.filter_search
- *   apps/lms/filters.py          → CoursePublicFilter.filter_search
- *   apps/kindness_wall/filters.py→ KindnessListingPublicFilter.filter_search
- *   apps/tabyin/filters.py       → PublicTabyinContentFilter.filter_search
+ *    1. madadkar / campaigns      — "?search=" (title A, description B,
+ *                                              sponsor.name C; trigram on
+ *                                              title/description/sponsor)
+ *                                  — optional facets: sponsor_slug, status,
+ *                                              has_deadline, is_fully_funded
  *
- * Each scope fetches a small slice (`page_size=4`) in parallel so the
- * dropdown stays snappy. Errors per scope are isolated — one slow domain
- * never blocks the rest.
+ *    2. r4j      / criminals      — "?search=" (first_name A, last_name A,
+ *                                              slug B, aliases B)
+ *                                  — optional facets: country, province,
+ *                                              city, gender
+ *
+ *    3. lms      / courses        — "?search=" (title A, subtitle B,
+ *                                              short_description B,
+ *                                              description C, instructor C)
+ *                                  — optional facets: category, level
+ *
+ *    4. kindness / listings       — "?search=" (title A, description B,
+ *                                              search_document C)
+ *                                  — optional facets: listing_type, category,
+ *                                              province, city
+ *
+ *    5. tabyin   / contents       — "?search=" (title A, description B,
+ *                                              author_username C)
+ *                                  — optional facets: media_type, author
+ *
+ *    6. support  / knowledge      — "?search=" (icontains title/summary/body)
+ *
+ *  Everything is GET, public, paginated, returns the envelope:
+ *    "{ success, status_code, message, data: { results, count, ... } }"
+ *  unwrapped to "{ results, ... }" by apiFetch().
+ *
+ *  This module aggregates a single user query across all six endpoints in
+ *  parallel and shapes the results into a uniform SearchHit for the UI.
+ * ───────────────────────────────────────────────────────────────────────────
  */
 
 import { apiFetch } from './api';
 
-/* ─────────────────────────────────────────────────────────────────────── */
-/*  Public scope contract                                                  */
-/* ─────────────────────────────────────────────────────────────────────── */
+/* ───────────────────────────────────────────────────────────────────────── */
+/*  Public types                                                              */
+/* ───────────────────────────────────────────────────────────────────────── */
 
-export type SearchScope =
-  | 'all'        // fan-out to every scope
-  | 'campaign'   // madadkar
-  | 'criminal'   // r4j
-  | 'course'     // lms
-  | 'listing'    // kindness wall
-  | 'tabyin';    // jihad-e tabyin
+export type SearchSource =
+  | 'madadkar'
+  | 'r4j'
+  | 'lms'
+  | 'kindness'
+  | 'tabyin'
+  | 'knowledge';
 
 export type SearchHit = {
-  /** Stable per-scope key — used as React key. */
+  source: SearchSource;
+  /** Stable id used as React key */
   id: string;
-  scope: Exclude<SearchScope, 'all'>;
   title: string;
-  /** One-line subtitle: sponsor / instructor / category etc. */
+  /** One-line context shown under the title */
   subtitle?: string;
-  /** Image thumb URL when the backend provides one. */
-  imageUrl?: string;
-  /** Optional badge text (e.g. مبلغ کل، تعداد فراگیر، شهر). */
-  badge?: string;
-  /** Internal route the hit links to. */
+  /** Optional cover/thumb URL */
+  thumb?: string;
+  /** Click destination */
   href: string;
+  /** Optional badge text (e.g. ۹۸٪، ۱۲ درس، ۲ ساعت) */
+  badge?: string;
+  /** Pill on the right (مکان / سطح / نوع رسانه) */
+  pill?: string;
 };
 
-export type SearchScopeResult = {
-  scope: Exclude<SearchScope, 'all'>;
-  hits: SearchHit[];
-  total: number;
-  ok: boolean;
-};
-
-export type SearchResults = {
-  query: string;
-  scopes: SearchScopeResult[];
-  /** Overall hit count across every scope. */
-  total: number;
-};
-
-/* ─────────────────────────────────────────────────────────────────────── */
-/*  Scope metadata — used by chip strip + group headers                     */
-/* ─────────────────────────────────────────────────────────────────────── */
-
-export const SCOPE_META: Record<Exclude<SearchScope, 'all'>, {
+export type SearchSourceMeta = {
+  key: SearchSource;
   label: string;
-  short: string;
-  iconKey: 'warfund' | 'r4j' | 'lms' | 'kindness' | 'tabyin';
-  href: string;          // see-all target
-  tone: string;          // CSS-class fragment for chip tinting
-}> = {
-  campaign: { label: 'پشتیبانی مالی جنگ', short: 'حرکت‌ها',     iconKey: 'warfund',  href: '/madadkar',      tone: 'campaign'  },
-  criminal: { label: 'جایزه برای عدالت', short: 'پرونده‌ها',    iconKey: 'r4j',      href: '/r4j',           tone: 'criminal'  },
-  course:   { label: 'قرارگاه آموزشی',   short: 'دوره‌ها',      iconKey: 'lms',      href: '/lms',           tone: 'course'    },
-  listing:  { label: 'دیوار مهربانی',    short: 'آگهی‌ها',      iconKey: 'kindness', href: '/kindness-wall', tone: 'kindness'  },
-  tabyin:   { label: 'جهاد تبیین',       short: 'محتواها',      iconKey: 'tabyin',   href: '/tabyin',        tone: 'tabyin'    },
+  /** Persian short label used by the source chip */
+  shortLabel: string;
+  /** Lucide-compatible glyph keyword for the UI */
+  glyph:
+    | 'campaign'
+    | 'gavel'
+    | 'graduation'
+    | 'heart'
+    | 'megaphone'
+    | 'book';
+  /** Brand-friendly accent (tailwind color tokens) */
+  accent: 'brand' | 'rose' | 'amber' | 'mint' | 'sky' | 'violet';
+  /** Endpoint the search hits */
+  endpoint: string;
+  /** Listing page the "see all in <source>" button routes to */
+  seeAllHref: (q: string) => string;
 };
 
-export const SCOPE_ORDER: Array<Exclude<SearchScope, 'all'>> = [
-  'campaign', 'criminal', 'course', 'listing', 'tabyin',
+/* ───────────────────────────────────────────────────────────────────────── */
+/*  Source registry                                                          */
+/* ───────────────────────────────────────────────────────────────────────── */
+
+export const SEARCH_SOURCES: Record<SearchSource, SearchSourceMeta> = {
+  madadkar: {
+    key: 'madadkar',
+    label: 'پشتیبانی مالی جنگ',
+    shortLabel: 'حرکت‌ها',
+    glyph: 'campaign',
+    accent: 'brand',
+    endpoint: '/madadkar/campaigns/',
+    seeAllHref: (q) => `/madadkar?search=${encodeURIComponent(q)}`,
+  },
+  r4j: {
+    key: 'r4j',
+    label: 'جایزه‌ای برای عدالت',
+    shortLabel: 'پرونده‌ها',
+    glyph: 'gavel',
+    accent: 'rose',
+    endpoint: '/r4j/criminals/',
+    seeAllHref: (q) => `/r4j?search=${encodeURIComponent(q)}`,
+  },
+  lms: {
+    key: 'lms',
+    label: 'قرارگاه آموزشی',
+    shortLabel: 'دوره‌ها',
+    glyph: 'graduation',
+    accent: 'amber',
+    endpoint: '/lms/courses/',
+    seeAllHref: (q) => `/lms?search=${encodeURIComponent(q)}`,
+  },
+  kindness: {
+    key: 'kindness',
+    label: 'دیوار مهربانی',
+    shortLabel: 'آگهی‌ها',
+    glyph: 'heart',
+    accent: 'mint',
+    endpoint: '/kindness-wall/listings/',
+    seeAllHref: (q) => `/kindness-wall?search=${encodeURIComponent(q)}`,
+  },
+  tabyin: {
+    key: 'tabyin',
+    label: 'جهاد تبیین',
+    shortLabel: 'محتواها',
+    glyph: 'megaphone',
+    accent: 'violet',
+    endpoint: '/tabyin/contents/',
+    seeAllHref: (q) => `/tabyin?search=${encodeURIComponent(q)}`,
+  },
+  knowledge: {
+    key: 'knowledge',
+    label: 'پایگاه دانش پشتیبانی',
+    shortLabel: 'راهنماها',
+    glyph: 'book',
+    accent: 'sky',
+    endpoint: '/support-desk/knowledge/articles/',
+    seeAllHref: (q) => `/support?search=${encodeURIComponent(q)}`,
+  },
+};
+
+export const SEARCH_SOURCE_ORDER: SearchSource[] = [
+  'madadkar',
+  'r4j',
+  'lms',
+  'kindness',
+  'tabyin',
+  'knowledge',
 ];
 
-/* ─────────────────────────────────────────────────────────────────────── */
-/*  Persian number helper (kept local — no util import to keep tree-shake)  */
-/* ─────────────────────────────────────────────────────────────────────── */
+/* ───────────────────────────────────────────────────────────────────────── */
+/*  Helpers — Persian-friendly text formatters                                */
+/* ───────────────────────────────────────────────────────────────────────── */
 
-function fa(n: number | string): string {
-  return Number(n).toLocaleString('fa-IR');
+const LEVEL_LABEL: Record<string, string> = {
+  beginner: 'مقدماتی',
+  intermediate: 'متوسط',
+  advanced: 'پیشرفته',
+  professional: 'حرفه‌ای',
+};
+
+const MEDIA_LABEL: Record<string, string> = {
+  image: 'تصویر',
+  video: 'ویدئو',
+  audio: 'صوت',
+  other: 'سایر',
+};
+
+function fa(n: number | undefined | null): string {
+  return (n ?? 0).toLocaleString('fa-IR');
 }
 
-function tomanShort(toman: number | undefined | null): string | undefined {
-  if (!toman || toman <= 0) return undefined;
-  if (toman >= 1_000_000_000) return `${fa((toman / 1_000_000_000).toFixed(1))} میلیارد تومان`;
-  if (toman >= 1_000_000)     return `${fa((toman / 1_000_000).toFixed(1))} میلیون تومان`;
-  if (toman >= 1_000)         return `${fa((toman / 1_000).toFixed(0))} هزار تومان`;
-  return `${fa(toman)} تومان`;
+function formatToman(n: number | undefined | null): string {
+  if (!n || n <= 0) return '';
+  if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1).replace('.0', '')} میلیارد تومان`;
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1).replace('.0', '')} میلیون تومان`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(0)} هزار تومان`;
+  return `${fa(n)} تومان`;
 }
 
-/* ─────────────────────────────────────────────────────────────────────── */
-/*  Server contracts (subset — only what the dropdown displays)            */
-/* ─────────────────────────────────────────────────────────────────────── */
+function clean(s: unknown): string {
+  if (typeof s !== 'string') return '';
+  return s.replace(/\s+/g, ' ').trim();
+}
+
+/* ───────────────────────────────────────────────────────────────────────── */
+/*  Per-source fetchers                                                       */
+/* ───────────────────────────────────────────────────────────────────────── */
 
 type Paginated<T> = { results?: T[]; count?: number } | T[];
-function unwrap<T>(p: Paginated<T> | null | undefined): { list: T[]; count: number } {
-  if (!p) return { list: [], count: 0 };
-  if (Array.isArray(p)) return { list: p, count: p.length };
-  return { list: p.results ?? [], count: p.count ?? (p.results?.length ?? 0) };
+
+function unwrap<T>(p: Paginated<T> | null | undefined): T[] {
+  if (!p) return [];
+  if (Array.isArray(p)) return p;
+  return p.results ?? [];
 }
 
-type ApiCampaign = {
-  slug: string; title: string; cover_image?: string | null;
-  sponsor?: { name?: string } | null;
-  total_amount?: number; participant_count?: number;
-  status_display?: string;
-};
-type ApiCriminal = {
-  slug: string; first_name?: string; last_name?: string;
-  country?: string; province?: string; city?: string;
-  primary_photo?: { image?: string } | null;
-  total_bounty_toman?: number;
-};
-type ApiCourse = {
-  slug: string; title: string; subtitle?: string;
-  cover_image?: string | null; instructor_name?: string;
-  level?: string; enrollments_count?: number;
-};
-type ApiListing = {
-  slug: string; title: string; cover_image?: string | null;
-  listing_type?: string;
-  category?: { title?: string } | null;
-  province?: string; city?: string;
-};
-type ApiTabyin = {
-  external_id: string; title?: string; description?: string;
-  primary_media_type?: 'image' | 'video' | 'audio' | 'other';
-  attachments?: Array<{ url?: string; media_type?: string }>;
-  author_username?: string;
-};
+const PER_SOURCE_LIMIT = 5;
 
-/* ─────────────────────────────────────────────────────────────────────── */
-/*  Per-scope adapters                                                      */
-/* ─────────────────────────────────────────────────────────────────────── */
+async function fetchMadadkar(q: string, signal?: AbortSignal): Promise<SearchHit[]> {
+  type C = {
+    slug: string; title: string; sponsor?: { name?: string };
+    progress_percent?: number; deadline?: string;
+    cover_image?: string; gallery_images?: { image?: string }[];
+    is_fully_funded?: boolean; status_display?: string;
+  };
+  const data = await apiFetch<Paginated<C>>(
+    `/madadkar/campaigns/?search=${encodeURIComponent(q)}&page_size=${PER_SOURCE_LIMIT}`,
+    { signal, revalidate: 60 } as never,
+  );
+  return unwrap(data).slice(0, PER_SOURCE_LIMIT).map((c) => ({
+    source: 'madadkar',
+    id: `madadkar:${c.slug}`,
+    title: clean(c.title) || 'حرکت بدون عنوان',
+    subtitle: c.sponsor?.name ? `مددکار: ${clean(c.sponsor.name)}` : undefined,
+    thumb: c.cover_image || c.gallery_images?.[0]?.image,
+    href: `/madadkar/${c.slug}`,
+    badge: typeof c.progress_percent === 'number'
+      ? `${fa(Math.round(c.progress_percent))}٪ تأمین شد`
+      : undefined,
+    pill: c.is_fully_funded ? 'تکمیل شد' : c.status_display,
+  }));
+}
 
-const PER_SCOPE_SIZE = 4;
-
-async function fetchCampaigns(q: string, signal?: AbortSignal): Promise<SearchScopeResult> {
-  try {
-    const data = await apiFetch<Paginated<ApiCampaign>>(
-      `/madadkar/campaigns/?search=${encodeURIComponent(q)}&page_size=${PER_SCOPE_SIZE}`,
-      { signal },
-    );
-    const { list, count } = unwrap(data);
+async function fetchR4J(q: string, signal?: AbortSignal): Promise<SearchHit[]> {
+  type P = {
+    slug: string; first_name?: string; last_name?: string;
+    country?: string; province?: string; city?: string;
+    total_bounty_toman?: number; bounties_count?: number;
+    primary_photo?: { image?: string };
+  };
+  const data = await apiFetch<Paginated<P>>(
+    `/r4j/criminals/?search=${encodeURIComponent(q)}&page_size=${PER_SOURCE_LIMIT}`,
+    { signal, revalidate: 120 } as never,
+  );
+  return unwrap(data).slice(0, PER_SOURCE_LIMIT).map((p) => {
+    const fullName = clean(`${p.first_name ?? ''} ${p.last_name ?? ''}`) || p.slug;
+    const loc = [p.city, p.province, p.country].filter(Boolean).join('، ');
     return {
-      scope: 'campaign', ok: true, total: count,
-      hits: list.map<SearchHit>((c) => ({
-        id: `campaign:${c.slug}`,
-        scope: 'campaign',
-        title: c.title,
-        subtitle: [c.sponsor?.name, c.status_display].filter(Boolean).join(' · ') || undefined,
-        imageUrl: c.cover_image ?? undefined,
-        badge: tomanShort(c.total_amount),
-        href: `/madadkar/${c.slug}`,
-      })),
+      source: 'r4j',
+      id: `r4j:${p.slug}`,
+      title: fullName,
+      subtitle: loc || undefined,
+      thumb: p.primary_photo?.image,
+      href: `/r4j/${p.slug}`,
+      badge: p.total_bounty_toman ? formatToman(p.total_bounty_toman) : undefined,
+      pill: p.bounties_count ? `${fa(p.bounties_count)} جایزه` : undefined,
     };
-  } catch {
-    return { scope: 'campaign', ok: false, hits: [], total: 0 };
-  }
+  });
 }
 
-async function fetchCriminals(q: string, signal?: AbortSignal): Promise<SearchScopeResult> {
-  try {
-    const data = await apiFetch<Paginated<ApiCriminal>>(
-      `/r4j/criminals/?search=${encodeURIComponent(q)}&page_size=${PER_SCOPE_SIZE}`,
-      { signal },
-    );
-    const { list, count } = unwrap(data);
+async function fetchLms(q: string, signal?: AbortSignal): Promise<SearchHit[]> {
+  type Co = {
+    slug: string; title: string; subtitle?: string;
+    instructor_name?: string; level?: string;
+    cover_image?: string; lessons_count?: number;
+    enrollments_count?: number;
+  };
+  const data = await apiFetch<Paginated<Co>>(
+    `/lms/courses/?search=${encodeURIComponent(q)}&page_size=${PER_SOURCE_LIMIT}`,
+    { signal, revalidate: 60 } as never,
+  );
+  return unwrap(data).slice(0, PER_SOURCE_LIMIT).map((c) => ({
+    source: 'lms',
+    id: `lms:${c.slug}`,
+    title: clean(c.title),
+    subtitle: c.instructor_name ? `مدرس: ${clean(c.instructor_name)}` : c.subtitle,
+    thumb: c.cover_image,
+    href: `/lms/courses/${c.slug}`,
+    badge: c.lessons_count ? `${fa(c.lessons_count)} درس` : undefined,
+    pill: c.level ? LEVEL_LABEL[c.level] ?? c.level : undefined,
+  }));
+}
+
+async function fetchKindness(q: string, signal?: AbortSignal): Promise<SearchHit[]> {
+  type L = {
+    slug: string; title: string; listing_type?: 'need_help' | 'offer_help' | string;
+    category?: { title?: string }; province?: string; city?: string;
+    cover_image?: string; view_count?: number;
+  };
+  const data = await apiFetch<Paginated<L>>(
+    `/kindness-wall/listings/?search=${encodeURIComponent(q)}&page_size=${PER_SOURCE_LIMIT}`,
+    { signal, revalidate: 60 } as never,
+  );
+  return unwrap(data).slice(0, PER_SOURCE_LIMIT).map((l) => {
+    const loc = [l.city, l.province].filter(Boolean).join('، ');
     return {
-      scope: 'criminal', ok: true, total: count,
-      hits: list.map<SearchHit>((c) => ({
-        id: `criminal:${c.slug}`,
-        scope: 'criminal',
-        title: `${c.first_name ?? ''} ${c.last_name ?? ''}`.trim() || c.slug,
-        subtitle: [c.country, c.province, c.city].filter(Boolean).join(' · ') || undefined,
-        imageUrl: c.primary_photo?.image ?? undefined,
-        badge: tomanShort(c.total_bounty_toman),
-        href: `/r4j/${c.slug}`,
-      })),
+      source: 'kindness',
+      id: `kindness:${l.slug}`,
+      title: clean(l.title),
+      subtitle: [l.category?.title, loc].filter(Boolean).join(' · ') || undefined,
+      thumb: l.cover_image,
+      href: `/kindness-wall/${l.slug}`,
+      badge: l.view_count ? `${fa(l.view_count)} بازدید` : undefined,
+      pill: l.listing_type === 'need_help'
+        ? 'نیازمند کمک'
+        : l.listing_type === 'offer_help'
+          ? 'پیشنهاد کمک'
+          : undefined,
     };
-  } catch {
-    return { scope: 'criminal', ok: false, hits: [], total: 0 };
-  }
+  });
 }
 
-const LEVEL_FA: Record<string, string> = {
-  beginner: 'مقدماتی', intermediate: 'متوسط', advanced: 'پیشرفته', professional: 'حرفه‌ای',
+async function fetchTabyin(q: string, signal?: AbortSignal): Promise<SearchHit[]> {
+  type T = {
+    external_id: string; title?: string; description?: string;
+    author_username?: string; primary_media_type?: string;
+    attachments?: { url?: string; media_type?: string }[];
+    origin?: string;
+  };
+  const data = await apiFetch<Paginated<T>>(
+    `/tabyin/contents/?search=${encodeURIComponent(q)}&page_size=${PER_SOURCE_LIMIT}`,
+    { signal, revalidate: 60 } as never,
+  );
+  return unwrap(data).slice(0, PER_SOURCE_LIMIT).map((t) => {
+    const image = t.attachments?.find((a) => a.media_type === 'image')?.url
+              ?? t.attachments?.[0]?.url;
+    return {
+      source: 'tabyin',
+      id: `tabyin:${t.external_id}`,
+      title: clean(t.title) || (t.description ? clean(t.description).slice(0, 60) + '…' : 'محتوای تبیینی'),
+      subtitle: t.author_username ? `@${clean(t.author_username)}` : undefined,
+      thumb: image,
+      href: `/tabyin/${t.external_id}`,
+      pill: t.primary_media_type
+        ? MEDIA_LABEL[t.primary_media_type] ?? t.primary_media_type
+        : undefined,
+      badge: t.origin === 'user_submitted' ? 'مردمی' : undefined,
+    };
+  });
+}
+
+async function fetchKnowledge(q: string, signal?: AbortSignal): Promise<SearchHit[]> {
+  type K = {
+    slug: string; title: string; summary?: string;
+    category?: { title?: string };
+  };
+  const data = await apiFetch<Paginated<K>>(
+    `/support-desk/knowledge/articles/?search=${encodeURIComponent(q)}&page_size=${PER_SOURCE_LIMIT}`,
+    { signal, revalidate: 300 } as never,
+  );
+  return unwrap(data).slice(0, PER_SOURCE_LIMIT).map((a) => ({
+    source: 'knowledge',
+    id: `knowledge:${a.slug}`,
+    title: clean(a.title),
+    subtitle: clean(a.summary) || undefined,
+    href: `/support/knowledge/${a.slug}`,
+    pill: a.category?.title,
+  }));
+}
+
+const FETCHERS: Record<SearchSource, (q: string, signal?: AbortSignal) => Promise<SearchHit[]>> = {
+  madadkar: fetchMadadkar,
+  r4j: fetchR4J,
+  lms: fetchLms,
+  kindness: fetchKindness,
+  tabyin: fetchTabyin,
+  knowledge: fetchKnowledge,
 };
 
-async function fetchCourses(q: string, signal?: AbortSignal): Promise<SearchScopeResult> {
-  try {
-    const data = await apiFetch<Paginated<ApiCourse>>(
-      `/lms/courses/?search=${encodeURIComponent(q)}&page_size=${PER_SCOPE_SIZE}`,
-      { signal },
-    );
-    const { list, count } = unwrap(data);
-    return {
-      scope: 'course', ok: true, total: count,
-      hits: list.map<SearchHit>((c) => ({
-        id: `course:${c.slug}`,
-        scope: 'course',
-        title: c.title,
-        subtitle: [c.instructor_name && `مدرس: ${c.instructor_name}`,
-                   c.level && LEVEL_FA[c.level]].filter(Boolean).join(' · ') || c.subtitle || undefined,
-        imageUrl: c.cover_image ?? undefined,
-        badge: c.enrollments_count && c.enrollments_count > 0
-          ? `${fa(c.enrollments_count)} فراگیر` : undefined,
-        href: `/lms/courses/${c.slug}`,
-      })),
-    };
-  } catch {
-    return { scope: 'course', ok: false, hits: [], total: 0 };
-  }
-}
+/* ───────────────────────────────────────────────────────────────────────── */
+/*  Aggregator                                                                */
+/* ───────────────────────────────────────────────────────────────────────── */
 
-async function fetchListings(q: string, signal?: AbortSignal): Promise<SearchScopeResult> {
-  try {
-    const data = await apiFetch<Paginated<ApiListing>>(
-      `/kindness-wall/listings/?search=${encodeURIComponent(q)}&page_size=${PER_SCOPE_SIZE}`,
-      { signal },
-    );
-    const { list, count } = unwrap(data);
-    return {
-      scope: 'listing', ok: true, total: count,
-      hits: list.map<SearchHit>((l) => ({
-        id: `listing:${l.slug}`,
-        scope: 'listing',
-        title: l.title,
-        subtitle: [l.category?.title, l.province, l.city].filter(Boolean).join(' · ') || undefined,
-        imageUrl: l.cover_image ?? undefined,
-        badge: l.listing_type === 'offer_help' ? 'ارائه کمک'
-             : l.listing_type === 'need_help'  ? 'درخواست کمک' : undefined,
-        href: `/kindness-wall/${l.slug}`,
-      })),
-    };
-  } catch {
-    return { scope: 'listing', ok: false, hits: [], total: 0 };
-  }
-}
-
-async function fetchTabyin(q: string, signal?: AbortSignal): Promise<SearchScopeResult> {
-  try {
-    const data = await apiFetch<Paginated<ApiTabyin>>(
-      `/tabyin/contents/?search=${encodeURIComponent(q)}&page_size=${PER_SCOPE_SIZE}`,
-      { signal },
-    );
-    const { list, count } = unwrap(data);
-    return {
-      scope: 'tabyin', ok: true, total: count,
-      hits: list.map<SearchHit>((t) => {
-        const cover = t.attachments?.find((a) => a.media_type === 'image')?.url
-                   ?? t.attachments?.[0]?.url;
-        return {
-          id: `tabyin:${t.external_id}`,
-          scope: 'tabyin',
-          title: t.title || (t.description?.slice(0, 60) ?? 'محتوای تبیینی'),
-          subtitle: [t.author_username && `از: ${t.author_username}`,
-                     t.primary_media_type && ({
-                       image: 'تصویر', video: 'ویدئو', audio: 'صوت', other: 'سایر',
-                     } as const)[t.primary_media_type]]
-                   .filter(Boolean).join(' · ') || undefined,
-          imageUrl: cover ?? undefined,
-          href: `/tabyin/${t.external_id}`,
-        };
-      }),
-    };
-  } catch {
-    return { scope: 'tabyin', ok: false, hits: [], total: 0 };
-  }
-}
-
-const FETCHERS: Record<Exclude<SearchScope, 'all'>, typeof fetchCampaigns> = {
-  campaign: fetchCampaigns,
-  criminal: fetchCriminals,
-  course:   fetchCourses,
-  listing:  fetchListings,
-  tabyin:   fetchTabyin,
+export type SearchAggregate = {
+  q: string;
+  /** Hits grouped by source, only sources that returned ≥1 hit are present. */
+  groups: { source: SearchSource; hits: SearchHit[] }[];
+  /** Total hits across every source. */
+  total: number;
+  /** Sources that errored (network / 4xx / 5xx) — UI may surface a quiet note. */
+  errored: SearchSource[];
 };
 
-/* ─────────────────────────────────────────────────────────────────────── */
-/*  Public API                                                              */
-/* ─────────────────────────────────────────────────────────────────────── */
+export async function searchAll(
+  q: string,
+  opts?: { sources?: SearchSource[]; signal?: AbortSignal },
+): Promise<SearchAggregate> {
+  const cleaned = (q ?? '').trim();
+  const empty: SearchAggregate = { q: cleaned, groups: [], total: 0, errored: [] };
+  if (!cleaned || cleaned.length < 2) return empty;
 
-/**
- * Run a query across one or all scopes in parallel.
- * Returns a stable `SearchResults` shape — partial failures never throw.
- */
-export async function globalSearch(
-  query: string,
-  scope: SearchScope = 'all',
-  signal?: AbortSignal,
-): Promise<SearchResults> {
-  const q = (query ?? '').trim();
-  if (!q) return { query: '', scopes: [], total: 0 };
+  const wanted = opts?.sources ?? SEARCH_SOURCE_ORDER;
+  const settled = await Promise.allSettled(
+    wanted.map((src) => FETCHERS[src](cleaned, opts?.signal)),
+  );
 
-  const scopes: Array<Exclude<SearchScope, 'all'>> = scope === 'all'
-    ? SCOPE_ORDER
-    : [scope];
+  const groups: SearchAggregate['groups'] = [];
+  const errored: SearchSource[] = [];
+  let total = 0;
+  settled.forEach((result, idx) => {
+    const src = wanted[idx];
+    if (result.status === 'fulfilled') {
+      if (result.value.length) {
+        groups.push({ source: src, hits: result.value });
+        total += result.value.length;
+      }
+    } else {
+      const reason = result.reason as { name?: string } | undefined;
+      if (reason?.name !== 'AbortError') errored.push(src);
+    }
+  });
 
-  const results = await Promise.all(scopes.map((s) => FETCHERS[s](q, signal)));
-  const total = results.reduce((a, r) => a + r.hits.length, 0);
-  return { query: q, scopes: results, total };
+  groups.sort(
+    (a, b) =>
+      SEARCH_SOURCE_ORDER.indexOf(a.source) - SEARCH_SOURCE_ORDER.indexOf(b.source),
+  );
+
+  return { q: cleaned, groups, total, errored };
 }
 
-/* ─────────────────────────────────────────────────────────────────────── */
-/*  Recent + trending — client-side helpers                                 */
-/* ─────────────────────────────────────────────────────────────────────── */
+/* ───────────────────────────────────────────────────────────────────────── */
+/*  Recent searches — client-side cache (localStorage)                        */
+/* ───────────────────────────────────────────────────────────────────────── */
 
-const RECENT_KEY = 'sj_recent_searches_v1';
-const RECENT_MAX = 6;
+const STORAGE_KEY = 'sj.recent-searches';
+const MAX_RECENT = 6;
 
-export function getRecentSearches(): string[] {
+export function loadRecent(): string[] {
   if (typeof window === 'undefined') return [];
   try {
-    const raw = window.localStorage.getItem(RECENT_KEY);
+    const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return [];
-    const list = JSON.parse(raw) as unknown;
-    return Array.isArray(list) ? list.filter((x): x is string => typeof x === 'string') : [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((x): x is string => typeof x === 'string').slice(0, MAX_RECENT);
   } catch {
     return [];
   }
 }
 
-export function pushRecentSearch(q: string): string[] {
+export function pushRecent(q: string): string[] {
   if (typeof window === 'undefined') return [];
   const cleaned = (q ?? '').trim();
-  if (!cleaned) return getRecentSearches();
-  const current = getRecentSearches().filter((x) => x !== cleaned);
-  current.unshift(cleaned);
-  const next = current.slice(0, RECENT_MAX);
-  try { window.localStorage.setItem(RECENT_KEY, JSON.stringify(next)); } catch { /* noop */ }
-  return next;
+  if (!cleaned) return loadRecent();
+  const list = [cleaned, ...loadRecent().filter((x) => x !== cleaned)].slice(0, MAX_RECENT);
+  try {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+  } catch {
+    /* localStorage may be disabled (private mode) — silently ignore */
+  }
+  return list;
 }
 
-export function clearRecentSearches(): void {
+export function clearRecent(): void {
   if (typeof window === 'undefined') return;
-  try { window.localStorage.removeItem(RECENT_KEY); } catch { /* noop */ }
+  try {
+    window.localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    /* no-op */
+  }
 }
 
-/** Curated trending queries — surface when the input is empty. */
-export const TRENDING_QUERIES: string[] = [
-  'پشتیبانی غزه',
-  'جانبازان',
-  'مهارت رسانه',
-  'پدافند سایبری',
-  'جنایت‌های جنگی',
-  'کمک‌های مردمی',
+/* ───────────────────────────────────────────────────────────────────────── */
+/*  Default suggestions — shown when the field is empty                        */
+/* ───────────────────────────────────────────────────────────────────────── */
+
+export const TRENDING_QUERIES: { label: string; q: string; source?: SearchSource }[] = [
+  { label: 'حرکت‌های فعال',     q: 'فعال',          source: 'madadkar' },
+  { label: 'دوره‌های امداد',    q: 'امداد',         source: 'lms' },
+  { label: 'پرونده‌های ویژه',   q: '',              source: 'r4j' },
+  { label: 'نیازمند کمک',       q: 'نیازمند',       source: 'kindness' },
+  { label: 'روایت‌های مردمی',   q: 'مردمی',         source: 'tabyin' },
+  { label: 'راهنمای ثبت‌نام',   q: 'ثبت‌نام',       source: 'knowledge' },
 ];
