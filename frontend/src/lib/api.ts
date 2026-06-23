@@ -71,7 +71,8 @@ export async function apiFetch<T = unknown>(
           : {}),
         ...(headers as Record<string, string> | undefined),
       },
-      // @ts-expect-error next-specific
+      // Next.js-specific `next` fetch option. Newer Next types include
+      // it, so we no longer need a @ts-expect-error suppression.
       next: Object.keys(nextOptions).length ? nextOptions : undefined,
     });
   } catch (err) {

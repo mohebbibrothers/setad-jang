@@ -838,7 +838,7 @@ function Dropzone({
   previews: Preview[];
   onAdd: (f: FileList | File[]) => void;
   onRemove: (i: number) => void;
-  fileInputRef: React.RefObject<HTMLInputElement | null>;
+  fileInputRef: React.RefObject<HTMLInputElement>;
   max: number;
 }) {
   const [hover, setHover] = useState(false);

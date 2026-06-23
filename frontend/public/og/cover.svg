@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" font-family="Vazirmatn, Tahoma, sans-serif">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#085C54"/>
+      <stop offset="55%" stop-color="#0A6E64"/>
+      <stop offset="100%" stop-color="#053832"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="78%" cy="22%" r="55%">
+      <stop offset="0%" stop-color="#25C5BA" stop-opacity=".55"/>
+      <stop offset="55%" stop-color="#0D8074" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="dots" width="22" height="22" patternUnits="userSpaceOnUse">
+      <circle cx="1.4" cy="1.4" r="1.4" fill="#FFFFFF" opacity=".05"/>
+    </pattern>
+  </defs>
+
+  <!-- Backdrop -->
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <rect width="1200" height="630" fill="url(#dots)"/>
+  <rect width="1200" height="630" fill="url(#glow)"/>
+
+  <!-- Mint accent strokes -->
+  <path d="M0 510 Q300 460 600 500 T1200 470" stroke="#25C5BA" stroke-opacity=".35" stroke-width="2" fill="none"/>
+  <path d="M0 560 Q300 520 600 555 T1200 520" stroke="#25C5BA" stroke-opacity=".22" stroke-width="2" fill="none"/>
+
+  <!-- Logo mark, top-right (RTL) -->
+  <g transform="translate(1000,80)">
+    <rect width="120" height="120" rx="26" fill="#1F8A7A"/>
+    <circle cx="74" cy="48" r="22" fill="#FFB033"/>
+    <path d="M14 104 L42 64 L56 80 L72 56 L110 104 Z" fill="#FFFFFF"/>
+    <line x1="78" y1="28" x2="78" y2="66" stroke="#0B3530" stroke-width="3" stroke-linecap="round"/>
+    <path d="M78 30 L102 33 L96 41 L102 49 L78 47 Z" fill="#0B3530"/>
+  </g>
+
+  <!-- Headline (RTL Persian, right-aligned for RTL reading) -->
+  <text x="1110" y="320" text-anchor="end" font-size="92" font-weight="900" fill="#FFFFFF">
+    بعثت مردم
+  </text>
+  <text x="1110" y="395" text-anchor="end" font-size="34" font-weight="700" fill="#25C5BA">
+    سامانه‌ی یکپارچه‌ی مردمی
+  </text>
+
+  <!-- Pillar chips -->
+  <g font-size="22" font-weight="800" fill="#053832">
+    <g transform="translate(1110,460)">
+      <rect x="-160" y="-30" width="160" height="46" rx="23" fill="#FFFFFF" opacity=".96"/>
+      <text x="-80" y="0" text-anchor="middle">جهاد تبیین</text>
+    </g>
+    <g transform="translate(930,460)">
+      <rect x="-185" y="-30" width="185" height="46" rx="23" fill="#FFFFFF" opacity=".96"/>
+      <text x="-92" y="0" text-anchor="middle">پشتیبانی مالی جنگ</text>
+    </g>
+    <g transform="translate(730,460)">
+      <rect x="-160" y="-30" width="160" height="46" rx="23" fill="#FFFFFF" opacity=".96"/>
+      <text x="-80" y="0" text-anchor="middle">دیوار مهربانی</text>
+    </g>
+    <g transform="translate(555,460)">
+      <rect x="-150" y="-30" width="150" height="46" rx="23" fill="#FFFFFF" opacity=".96"/>
+      <text x="-75" y="0" text-anchor="middle">قرارگاه آموزشی</text>
+    </g>
+    <g transform="translate(395,460)">
+      <rect x="-150" y="-30" width="150" height="46" rx="23" fill="#FFFFFF" opacity=".96"/>
+      <text x="-75" y="0" text-anchor="middle">جایزه‌ی عدالت</text>
+    </g>
+  </g>
+
+  <!-- URL strip -->
+  <text x="1110" y="585" text-anchor="end" font-size="24" font-weight="700" fill="#FFFFFF" opacity=".75">
+    setadjang.ir
+  </text>
+</svg>

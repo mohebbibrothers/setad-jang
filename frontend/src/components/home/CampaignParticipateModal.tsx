@@ -610,40 +610,9 @@ export function CampaignParticipateModal({ open, onClose, campaign }: Props) {
             </div>
           </motion.div>
 
-          {/* ── Custom slider thumb (works under Tailwind without plugin) ── */}
-          <style jsx global>{`
-            .participate-range {
-              -webkit-appearance: none;
-              appearance: none;
-              height: 6px;
-              border-radius: 9999px;
-              outline: none;
-            }
-            .participate-range::-webkit-slider-thumb {
-              -webkit-appearance: none;
-              appearance: none;
-              width: 26px; height: 26px;
-              border-radius: 9999px;
-              background: #fff;
-              border: 3px solid #0D8074;
-              box-shadow: 0 6px 14px -4px rgba(13,128,116,.55);
-              cursor: grab;
-              transition: transform .15s;
-            }
-            .participate-range::-webkit-slider-thumb:active { cursor: grabbing; transform: scale(1.08); }
-            .participate-range::-moz-range-thumb {
-              width: 26px; height: 26px;
-              border-radius: 9999px;
-              background: #fff;
-              border: 3px solid #0D8074;
-              box-shadow: 0 6px 14px -4px rgba(13,128,116,.55);
-              cursor: grab;
-            }
-            .participate-range:focus-visible::-webkit-slider-thumb {
-              outline: 3px solid rgba(13,128,116,.35);
-              outline-offset: 2px;
-            }
-          `}</style>
+          {/* Custom slider thumb styles live in globals.css under
+              `.participate-range` — kept out of the component to avoid
+              the styled-jsx dependency. */}
         </motion.div>
       )}
     </AnimatePresence>

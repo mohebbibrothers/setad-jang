@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils';
  * Use as: <Icon name="search" className="w-5 h-5" />
  */
 
-type IconName =
+export type IconName =
   | 'search' | 'menu' | 'close' | 'chevron-down' | 'chevron-left' | 'chevron-right'
   | 'login' | 'plus' | 'send' | 'paperclip' | 'attach' | 'check' | 'eye' | 'heart' | 'link'
   | 'instagram' | 'twitter' | 'linkedin' | 'telegram' | 'aparat'
