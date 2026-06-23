@@ -67,10 +67,12 @@ export function ActivitiesPanel() {
       {/* Soft ambient shadow ABOVE the green panel — a wide, low-opacity
           band that fades from brand-tinted bottom (where it touches the
           panel) to fully transparent at the top. Pure CSS gradient,
-          no images. Clean, soft, designer-faithful. */}
+          no images. Clean, soft, designer-faithful.
+          z-0: kept BELOW the hero's overlapping search dropdown (which
+          floats at z-[80] within its own section). */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 z-[2]
+        className="pointer-events-none absolute inset-x-0 z-0
                    -top-[60px] h-[80px]
                    md:-top-[80px] md:h-[110px]
                    lg:-top-[100px] lg:h-[140px]"

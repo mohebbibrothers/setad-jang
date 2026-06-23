@@ -380,9 +380,14 @@ export function GlobalSearch({
 
   /* ── Layout shells ─────────────────────────────────────────────────── */
 
+  // NOTE — z-index strategy:
+  //   The hero variant's wrapper deliberately uses a HIGH z-index so the
+  //   pill itself stays above ActivitiesPanel's ambient shadow (z-[2]),
+  //   and the dropdown panel beneath bumps even higher (z-[80]) so it
+  //   floats over any sibling section that scrolls into view below.
   const pillBaseClasses = variant === 'hero'
-    ? 'relative z-30 mx-auto -mt-[100px] md:-mt-[120px] lg:-mt-[140px] max-w-3xl'
-    : 'relative z-30 mx-auto max-w-3xl';
+    ? 'relative z-[60] mx-auto -mt-[100px] md:-mt-[120px] lg:-mt-[140px] max-w-3xl'
+    : 'relative z-[60] mx-auto max-w-3xl';
 
   return (
     <div ref={wrapRef} className={`${pillBaseClasses} ${className ?? ''}`}>
@@ -492,7 +497,7 @@ export function GlobalSearch({
             exit={{ opacity: 0, y: 4, scale: 0.98 }}
             transition={{ duration: 0.18, ease: 'easeOut' }}
             className="
-              absolute right-0 left-0 mt-3 z-40
+              absolute right-0 left-0 mt-3 z-[80]
               bg-white rounded-3xl ring-1 ring-ink-100
               shadow-[0_30px_70px_-20px_rgba(11,53,48,.30)]
               overflow-hidden
