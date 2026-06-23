@@ -28,8 +28,9 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
-  useCallback, useEffect, useId, useMemo, useRef, useState,
+  useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState,
 } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   searchAll,
@@ -195,6 +196,72 @@ const ACCENT_STYLE: Record<string, {
 /*  Hook — debounced live search                                              */
 /* ───────────────────────────────────────────────────────────────────────── */
 
+/* ───────────────────────────────────────────────────────────────────────── */
+/*  Hook — anchored dropdown geometry (Portal + auto-flip + viewport-aware)    */
+/*                                                                             */
+/*  Why a portal?                                                              */
+/*    Any ancestor with `overflow:hidden`, `transform`, `filter`, or `will-    */
+/*    change` traps absolutely-positioned descendants inside its own           */
+/*    stacking + clipping context. The dropdown that overflows downward into   */
+/*    the next section would inevitably get cropped sooner or later — so we    */
+/*    teleport it to <body> with createPortal and pin it to the anchor via     */
+/*    `position:fixed` + getBoundingClientRect(). This is bullet-proof: it     */
+/*    cannot be clipped, regardless of what the page above/below it does.     */
+/*                                                                             */
+/*  Auto-flip + viewport-aware height                                          */
+/*    The hook also computes whether enough room exists BELOW the pill; if    */
+/*    not (because the user scrolled the bar near the bottom of the viewport),*/
+/*    it flips the panel ABOVE the pill instead. Either way it caps the panel */
+/*    height so it never spills past the viewport edge.                        */
+/* ───────────────────────────────────────────────────────────────────────── */
+type DropdownGeom = {
+  top: number; left: number; width: number;
+  maxHeight: number; placement: 'below' | 'above';
+};
+
+function useDropdownPosition(
+  anchorRef: React.RefObject<HTMLElement | null>,
+  open: boolean,
+): DropdownGeom | null {
+  const [geom, setGeom] = useState<DropdownGeom | null>(null);
+
+  useLayoutEffect(() => {
+    if (!open || typeof window === 'undefined') return;
+    const measure = () => {
+      const el = anchorRef.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      const vh = window.innerHeight;
+      const gap = 12;       // distance between pill and dropdown
+      const safe = 16;      // viewport bottom safety margin
+      const desiredMax = Math.min(560, vh * 0.7);
+      const spaceBelow = vh - r.bottom - gap - safe;
+      const spaceAbove = r.top - gap - safe;
+      const placement: 'below' | 'above' =
+        spaceBelow < 220 && spaceAbove > spaceBelow ? 'above' : 'below';
+      const maxHeight = Math.max(
+        220,
+        Math.min(desiredMax, placement === 'below' ? spaceBelow : spaceAbove),
+      );
+      const top = placement === 'below' ? r.bottom + gap : Math.max(safe, r.top - gap - maxHeight);
+      setGeom({ top, left: r.left, width: r.width, maxHeight, placement });
+    };
+
+    measure();
+    window.addEventListener('resize', measure);
+    window.addEventListener('scroll', measure, true);
+    return () => {
+      window.removeEventListener('resize', measure);
+      window.removeEventListener('scroll', measure, true);
+    };
+  }, [anchorRef, open]);
+
+  // Reset when closed so we don't paint a stale geometry on next open
+  useEffect(() => { if (!open) setGeom(null); }, [open]);
+
+  return geom;
+}
+
 function useGlobalSearch(q: string, source: SearchSource | 'all', enabled: boolean) {
   const [data, setData] = useState<SearchAggregate | null>(null);
   const [loading, setLoading] = useState(false);
@@ -262,15 +329,24 @@ export function GlobalSearch({
   className,
 }: Props) {
   const router = useRouter();
-  const inputRef = useRef<HTMLInputElement | null>(null);
-  const wrapRef  = useRef<HTMLDivElement | null>(null);
+  const inputRef  = useRef<HTMLInputElement | null>(null);
+  const wrapRef   = useRef<HTMLDivElement | null>(null);
+  const formRef   = useRef<HTMLFormElement | null>(null);   // dropdown anchor
+  const panelRef  = useRef<HTMLDivElement | null>(null);    // portal-mounted panel
 
   const [q, setQ] = useState(initialQuery);
   const [open, setOpen] = useState(false);
   const [source, setSource] = useState<SearchSource | 'all'>('all');
   const [recents, setRecents] = useState<string[]>([]);
   const [active, setActive] = useState<number>(-1);
+  const [mounted, setMounted] = useState(false);
   const listboxId = useId();
+
+  // Portal target — only on the client; avoids SSR mismatch
+  useEffect(() => { setMounted(true); }, []);
+
+  // Anchored geometry for the portal-rendered dropdown
+  const geom = useDropdownPosition(formRef, open);
 
   // Load recents on mount (client only)
   useEffect(() => { setRecents(loadRecent()); }, []);
@@ -287,11 +363,15 @@ export function GlobalSearch({
   // Reset highlight whenever the result set changes
   useEffect(() => { setActive(-1); }, [data?.q, source]);
 
-  // Close on outside click
+  // Close on outside click — must also exempt the portal panel (which is
+  // teleported to <body> and is therefore NOT a descendant of wrapRef).
   useEffect(() => {
     if (!open) return;
     const onDocClick = (e: MouseEvent) => {
-      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      if (wrapRef.current?.contains(target)) return;
+      if (panelRef.current?.contains(target)) return;
+      setOpen(false);
     };
     document.addEventListener('mousedown', onDocClick);
     return () => document.removeEventListener('mousedown', onDocClick);
@@ -393,6 +473,7 @@ export function GlobalSearch({
     <div ref={wrapRef} className={`${pillBaseClasses} ${className ?? ''}`}>
       {/* ── Pill (input + actions) ───────────────────────────────────── */}
       <form
+        ref={formRef}
         role="search"
         onSubmit={submitForm}
         className="
@@ -488,109 +569,124 @@ export function GlobalSearch({
         </button>
       </form>
 
-      {/* ── Suggestions panel ─────────────────────────────────────────── */}
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            initial={{ opacity: 0, y: 8, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 4, scale: 0.98 }}
-            transition={{ duration: 0.18, ease: 'easeOut' }}
-            className="
-              absolute right-0 left-0 mt-3 z-[80]
-              bg-white rounded-3xl ring-1 ring-ink-100
-              shadow-[0_30px_70px_-20px_rgba(11,53,48,.30)]
-              overflow-hidden
-            "
-            // Live-region for SR users
-            role="region"
-            aria-label="پیشنهادهای جست‌وجو"
-          >
-            {/* Source-chip filter row */}
-            <div className="flex flex-wrap items-center gap-1.5 px-3 pt-3 pb-2 border-b border-ink-50">
-              <SourceChip
-                label="همه نتایج"
-                active={source === 'all'}
-                count={total}
-                onClick={() => setSource('all')}
-                accent="brand"
-                showAll
-              />
-              {SEARCH_SOURCE_ORDER.map((src) => {
-                const meta = SEARCH_SOURCES[src];
-                return (
-                  <SourceChip
-                    key={src}
-                    label={meta.shortLabel}
-                    glyph={meta.glyph}
-                    accent={meta.accent}
-                    count={counts[src]}
-                    active={source === src}
-                    onClick={() => setSource(src)}
-                  />
-                );
-              })}
-            </div>
-
-            {/* Listbox / state body */}
-            <div
-              id={listboxId}
-              role="listbox"
-              aria-label="نتایج جست‌وجو"
-              className="max-h-[58vh] overflow-y-auto custom-scroll"
+      {/* ── Suggestions panel ─────────────────────────────────────────────
+          Teleported to <body> via createPortal so it CANNOT be clipped by
+          any ancestor's overflow / transform / filter. Pinned to the pill
+          with `position:fixed` + measured geometry; auto-flips above the
+          pill when there isn't enough room below, and caps its own height
+          to the available viewport space. */}
+      {mounted && createPortal(
+        <AnimatePresence>
+          {open && geom && (
+            <motion.div
+              ref={panelRef}
+              initial={{ opacity: 0, y: geom.placement === 'above' ? -4 : 8, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: geom.placement === 'above' ? -2 : 4, scale: 0.98 }}
+              transition={{ duration: 0.18, ease: 'easeOut' }}
+              style={{
+                position: 'fixed',
+                top: geom.top,
+                left: geom.left,
+                width: geom.width,
+                maxHeight: geom.maxHeight,
+                zIndex: 1000,
+              }}
+              className="
+                bg-white rounded-3xl ring-1 ring-ink-100
+                shadow-[0_30px_80px_-20px_rgba(11,53,48,.45)]
+                overflow-hidden flex flex-col
+              "
+              role="region"
+              aria-label="پیشنهادهای جست‌وجو"
+              dir="rtl"
             >
-              {/* — Empty input → trending + recents — */}
-              {q.trim().length < 2 ? (
-                <EmptyInputBody
-                  recents={recents}
-                  onPickRecent={(r) => { setQ(r); inputRef.current?.focus(); }}
-                  onClearRecents={() => { clearRecent(); setRecents([]); }}
-                  onPickTrending={(t) => {
-                    if (t.source) setSource(t.source);
-                    setQ(t.q || t.label);
-                    inputRef.current?.focus();
-                  }}
+              {/* Source-chip filter row */}
+              <div className="flex flex-wrap items-center gap-1.5 px-3 pt-3 pb-2 border-b border-ink-50 shrink-0">
+                <SourceChip
+                  label="همه نتایج"
+                  active={source === 'all'}
+                  count={total}
+                  onClick={() => setSource('all')}
+                  accent="brand"
+                  showAll
                 />
-              ) : loading && !data ? (
-                <LoadingBody />
-              ) : error ? (
-                <ErrorBody message={error} />
-              ) : !data || data.total === 0 ? (
-                <NoResultsBody q={q} />
-              ) : (
-                <ResultsBody
-                  data={data}
-                  active={active}
-                  listboxId={listboxId}
-                  setActive={setActive}
-                  onPick={goToHit}
-                />
-              )}
-            </div>
+                {SEARCH_SOURCE_ORDER.map((src) => {
+                  const meta = SEARCH_SOURCES[src];
+                  return (
+                    <SourceChip
+                      key={src}
+                      label={meta.shortLabel}
+                      glyph={meta.glyph}
+                      accent={meta.accent}
+                      count={counts[src]}
+                      active={source === src}
+                      onClick={() => setSource(src)}
+                    />
+                  );
+                })}
+              </div>
 
-            {/* Footer — submit hint + see-all */}
-            <div className="flex items-center justify-between gap-3 px-4 py-2.5
-                            border-t border-ink-50 bg-ink-50/50 text-[11.5px] text-ink-500">
-              <span className="hidden sm:flex items-center gap-2">
-                <KbdPair items={['↑', '↓']} /> برای حرکت
-                <KbdPair items={['Enter']} /> برای انتخاب
-                <KbdPair items={['Esc']} /> برای بستن
-              </span>
-              {q.trim().length >= 2 && (
-                <button
-                  type="button"
-                  onClick={() => submitForm()}
-                  className="inline-flex items-center gap-1.5 text-brand-700
-                             font-extrabold hover:text-brand-800 transition-colors"
-                >
-                  مشاهده همه‌ی نتایج برای «{q.trim()}»
-                  <ArrowLeftIcon className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+              {/* Listbox / state body (the only scrolling layer) */}
+              <div
+                id={listboxId}
+                role="listbox"
+                aria-label="نتایج جست‌وجو"
+                className="flex-1 min-h-0 overflow-y-auto custom-scroll"
+              >
+                {q.trim().length < 2 ? (
+                  <EmptyInputBody
+                    recents={recents}
+                    onPickRecent={(r) => { setQ(r); inputRef.current?.focus(); }}
+                    onClearRecents={() => { clearRecent(); setRecents([]); }}
+                    onPickTrending={(t) => {
+                      if (t.source) setSource(t.source);
+                      setQ(t.q || t.label);
+                      inputRef.current?.focus();
+                    }}
+                  />
+                ) : loading && !data ? (
+                  <LoadingBody />
+                ) : error ? (
+                  <ErrorBody message={error} />
+                ) : !data || data.total === 0 ? (
+                  <NoResultsBody q={q} />
+                ) : (
+                  <ResultsBody
+                    data={data}
+                    active={active}
+                    listboxId={listboxId}
+                    setActive={setActive}
+                    onPick={goToHit}
+                  />
+                )}
+              </div>
+
+              {/* Footer — submit hint + see-all */}
+              <div className="flex items-center justify-between gap-3 px-4 py-2.5 shrink-0
+                              border-t border-ink-50 bg-ink-50/50 text-[11.5px] text-ink-500">
+                <span className="hidden sm:flex items-center gap-2">
+                  <KbdPair items={['↑', '↓']} /> برای حرکت
+                  <KbdPair items={['Enter']} /> برای انتخاب
+                  <KbdPair items={['Esc']} /> برای بستن
+                </span>
+                {q.trim().length >= 2 && (
+                  <button
+                    type="button"
+                    onClick={() => submitForm()}
+                    className="inline-flex items-center gap-1.5 text-brand-700
+                               font-extrabold hover:text-brand-800 transition-colors"
+                  >
+                    مشاهده همه‌ی نتایج برای «{q.trim()}»
+                    <ArrowLeftIcon className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>,
+        document.body,
+      )}
     </div>
   );
 }
