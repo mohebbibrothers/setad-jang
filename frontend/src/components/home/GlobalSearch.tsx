@@ -232,7 +232,7 @@ function useDropdownPosition(
       if (!el) return;
       const r = el.getBoundingClientRect();
       const vh = window.innerHeight;
-      const gap = 12;       // distance between pill and dropdown
+      const gap = 16;       // generous so pill glow can't tint the panel
       const safe = 16;      // viewport bottom safety margin
       const desiredMax = Math.min(560, vh * 0.7);
       const spaceBelow = vh - r.bottom - gap - safe;
@@ -476,16 +476,19 @@ export function GlobalSearch({
         ref={formRef}
         role="search"
         onSubmit={submitForm}
-        className="
+        // When the suggestions panel is open the pill drops its large
+        // glow shadow so its colour cannot bleed through the gap above
+        // the panel and tint the top edge of the chip row below.
+        className={`
           relative bg-white rounded-full
           ring-1 ring-ink-100
-          shadow-[0_18px_50px_-22px_rgba(11,53,48,.30)]
-          hover:shadow-[0_22px_56px_-22px_rgba(11,53,48,.36)]
+          ${open
+            ? 'shadow-[0_4px_14px_-4px_rgba(13,128,116,.18)]'
+            : 'shadow-[0_18px_50px_-22px_rgba(11,53,48,.30)] hover:shadow-[0_22px_56px_-22px_rgba(11,53,48,.36)] focus-within:shadow-[0_22px_60px_-18px_rgba(13,128,116,.45)]'}
           focus-within:ring-2 focus-within:ring-brand-500
-          focus-within:shadow-[0_22px_60px_-18px_rgba(13,128,116,.45)]
-          transition-all duration-300
+          transition-[box-shadow,outline] duration-300
           flex items-center pl-1.5 pr-3 md:pr-5 py-1.5 gap-2
-        "
+        `}
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={listboxId}
@@ -513,10 +516,12 @@ export function GlobalSearch({
           dir="rtl"
           autoComplete="off"
           spellCheck={false}
-          className="flex-1 h-10 md:h-11 bg-transparent outline-none
+          // The `appearance-none` + `gs-search-input` class suppresses
+          // EVERY browser-native search affordance (Webkit X, Edge X +
+          // reveal). Keeping the only X to our brand-styled button below.
+          className="gs-search-input flex-1 min-w-0 h-10 md:h-11 bg-transparent outline-none
                      text-[14px] md:text-[15px] text-ink-900
-                     placeholder:text-ink-400 text-right
-                     [&::-webkit-search-cancel-button]:appearance-none"
+                     placeholder:text-ink-400 text-right appearance-none"
         />
 
         {/* Clear button */}

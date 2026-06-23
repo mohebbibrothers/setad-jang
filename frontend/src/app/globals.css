@@ -217,3 +217,19 @@
 .custom-scroll::-webkit-scrollbar-thumb:hover {
   background: rgba(94, 104, 120, .45);
 }
+
+/* ── GlobalSearch — kill native <input type="search"> affordances ──── */
+.gs-search-input::-webkit-search-cancel-button,
+.gs-search-input::-webkit-search-decoration,
+.gs-search-input::-webkit-search-results-button,
+.gs-search-input::-webkit-search-results-decoration {
+  -webkit-appearance: none;
+  appearance: none;
+  display: none;
+}
+.gs-search-input::-ms-clear,
+.gs-search-input::-ms-reveal {
+  display: none;
+  width: 0;
+  height: 0;
+}
