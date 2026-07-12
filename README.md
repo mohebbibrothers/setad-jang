@@ -27,6 +27,7 @@
 - [4. Docker، Runtime و Orchestration محلی](#4-docker-runtime-و-orchestration-محلی)
 - [5. Makefile، CI و Quality Gates](#5-makefile-ci-و-quality-gates)
 - [6. OpenAPI، Swagger و قرارداد API](#6-openapi-swagger-و-قرارداد-api)
+- [6.1. راهنمای اتصال Frontend](#61-راهنمای-اتصال-frontend)
 - [7. تنظیمات Environment و Providerها](#7-تنظیمات-environment-و-providerها)
 
 ### معماری و زیرساخت مشترک
@@ -374,6 +375,31 @@ schema.yaml     → schema commit شده و قابل کنترل در CI
 
 ```bash
 make schema-update
+```
+
+### 6.1. راهنمای اتصال Frontend
+
+برای اینکه frontend developer بدون حدس‌زدن بتواند از Swagger، JWT، response envelope، pagination، upload و endpointهای اصلی استفاده کند، یک سند اختصاصی اضافه شده است:
+
+```text
+docs/FRONTEND_INTEGRATION_GUIDE.md
+```
+
+مسیرهای مهم برای اتصال frontend:
+
+```text
+/api/docs/      → Swagger UI
+/api/redoc/     → ReDoc
+/api/schema/    → OpenAPI schema
+/api/v1/health/ready/ → readiness check
+```
+
+قبل از اتصال frontend روی دامنه واقعی، حتماً envهای زیر با دامنه frontend هماهنگ شوند:
+
+```env
+ALLOWED_HOSTS=api.example.com
+CORS_ALLOWED_ORIGINS=https://example.com,https://www.example.com
+CSRF_TRUSTED_ORIGINS=https://example.com,https://www.example.com
 ```
 
 ---
