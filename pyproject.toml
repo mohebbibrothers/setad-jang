@@ -106,6 +106,11 @@ addopts = [
 
 filterwarnings = [
     "error",
+    # Python 3.14 emits this from drf-spectacular's type-hint plumbing while
+    # generating OpenAPI. Keep zero-warning discipline for project code, but do
+    # not fail CI on this upstream compatibility warning until the dependency
+    # removes its Python-internal _UnionGenericAlias check.
+    "ignore:'_UnionGenericAlias' is deprecated and slated for removal in Python 3.17:DeprecationWarning",
 ]
 
 markers = [
