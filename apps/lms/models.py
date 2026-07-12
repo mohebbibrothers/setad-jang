@@ -332,7 +332,7 @@ class LessonVideoProcessingJob(BaseModel):
         verbose_name_plural = "Jobهای پردازش ویدئوی LMS"
         ordering = ["-created_at"]
         indexes = [
-            models.Index(fields=["lesson", "status", "-created_at"], name="lms_video_job_lesson_status_idx"),
+            models.Index(fields=["lesson", "status", "-created_at"], name="lms_vjob_lesson_status_idx"),
             models.Index(fields=["status", "-created_at"], name="lms_video_job_status_time_idx"),
         ]
 

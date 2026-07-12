@@ -43,7 +43,7 @@ class Migration(migrations.Migration):
                 'verbose_name': 'تخصیص مالی مددکار',
                 'verbose_name_plural': 'تخصیص\u200cهای مالی مددکار',
                 'ordering': ['-created_at'],
-                'indexes': [models.Index(fields=['campaign', 'status', '-created_at'], name='madadkar_disb_campaign_status_idx'), models.Index(fields=['status', '-created_at'], name='madadkar_disb_status_time_idx')],
+                'indexes': [models.Index(fields=['campaign', 'status', '-created_at'], name='md_disb_camp_status_idx'), models.Index(fields=['status', '-created_at'], name='madadkar_disb_status_time_idx')],
                 'constraints': [models.CheckConstraint(condition=models.Q(('amount__gte', 1)), name='madadkar_disb_amount_min')],
             },
         ),

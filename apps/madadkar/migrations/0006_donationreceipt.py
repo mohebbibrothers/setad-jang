@@ -38,7 +38,7 @@ class Migration(migrations.Migration):
                 'verbose_name': 'رسید مشارکت مددکار',
                 'verbose_name_plural': 'رسیدهای مشارکت مددکار',
                 'ordering': ['-issued_at', '-created_at'],
-                'indexes': [models.Index(fields=['user', '-issued_at'], name='madadkar_receipt_user_time_idx'), models.Index(fields=['campaign', '-issued_at'], name='madadkar_receipt_campaign_time_idx')],
+                'indexes': [models.Index(fields=['user', '-issued_at'], name='madadkar_receipt_user_time_idx'), models.Index(fields=['campaign', '-issued_at'], name='md_receipt_camp_time_idx')],
                 'constraints': [models.CheckConstraint(condition=models.Q(('amount__gte', 1)), name='madadkar_receipt_amount_min')],
             },
         ),

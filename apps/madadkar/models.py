@@ -740,7 +740,7 @@ class PaymentRefund(BaseModel):
         verbose_name_plural = "بازپرداخت‌های مددکار"
         ordering = ["-created_at"]
         indexes = [
-            models.Index(fields=["payment", "status"], name="madadkar_ref_payment_status_idx"),
+            models.Index(fields=["payment", "status"], name="md_ref_pay_status_idx"),
             models.Index(fields=["status", "-created_at"], name="madadkar_ref_status_time_idx"),
         ]
         constraints = [
@@ -806,7 +806,7 @@ class CampaignFinancialAdjustment(BaseModel):
         verbose_name_plural = "اصلاحات مالی کمپین"
         ordering = ["-created_at"]
         indexes = [
-            models.Index(fields=["campaign", "status"], name="madadkar_adj_campaign_status_idx"),
+            models.Index(fields=["campaign", "status"], name="md_adj_camp_status_idx"),
             models.Index(fields=["status", "-created_at"], name="madadkar_adj_status_time_idx"),
         ]
         constraints = [
@@ -910,7 +910,7 @@ class CampaignDisbursement(BaseModel):
         verbose_name_plural = "تخصیص‌های مالی مددکار"
         ordering = ["-created_at"]
         indexes = [
-            models.Index(fields=["campaign", "status", "-created_at"], name="madadkar_disb_campaign_status_idx"),
+            models.Index(fields=["campaign", "status", "-created_at"], name="md_disb_camp_status_idx"),
             models.Index(fields=["status", "-created_at"], name="madadkar_disb_status_time_idx"),
         ]
         constraints = [
@@ -963,7 +963,7 @@ class DonationReceipt(BaseModel):
         ordering = ["-issued_at", "-created_at"]
         indexes = [
             models.Index(fields=["user", "-issued_at"], name="madadkar_receipt_user_time_idx"),
-            models.Index(fields=["campaign", "-issued_at"], name="madadkar_receipt_campaign_time_idx"),
+            models.Index(fields=["campaign", "-issued_at"], name="md_receipt_camp_time_idx"),
         ]
         constraints = [
             models.CheckConstraint(condition=models.Q(amount__gte=1), name="madadkar_receipt_amount_min"),
@@ -1082,7 +1082,7 @@ class MadadkarRiskSignal(BaseModel):
             models.Index(fields=["signal_type", "status", "-created_at"], name="madadkar_risk_type_status_idx"),
             models.Index(fields=["severity", "status", "-created_at"], name="madadkar_risk_sev_status_idx"),
             models.Index(fields=["user", "status", "-created_at"], name="madadkar_risk_user_status_idx"),
-            models.Index(fields=["campaign", "status", "-created_at"], name="madadkar_risk_campaign_status_idx"),
+            models.Index(fields=["campaign", "status", "-created_at"], name="md_risk_camp_status_idx"),
             models.Index(fields=["ip_address", "status", "-created_at"], name="madadkar_risk_ip_status_idx"),
         ]
 

@@ -39,7 +39,7 @@ class Migration(migrations.Migration):
                 'verbose_name': 'سیگنال ریسک مددکار',
                 'verbose_name_plural': 'سیگنال\u200cهای ریسک مددکار',
                 'ordering': ['-created_at'],
-                'indexes': [models.Index(fields=['signal_type', 'status', '-created_at'], name='madadkar_risk_type_status_idx'), models.Index(fields=['severity', 'status', '-created_at'], name='madadkar_risk_sev_status_idx'), models.Index(fields=['user', 'status', '-created_at'], name='madadkar_risk_user_status_idx'), models.Index(fields=['campaign', 'status', '-created_at'], name='madadkar_risk_campaign_status_idx'), models.Index(fields=['ip_address', 'status', '-created_at'], name='madadkar_risk_ip_status_idx')],
+                'indexes': [models.Index(fields=['signal_type', 'status', '-created_at'], name='madadkar_risk_type_status_idx'), models.Index(fields=['severity', 'status', '-created_at'], name='madadkar_risk_sev_status_idx'), models.Index(fields=['user', 'status', '-created_at'], name='madadkar_risk_user_status_idx'), models.Index(fields=['campaign', 'status', '-created_at'], name='md_risk_camp_status_idx'), models.Index(fields=['ip_address', 'status', '-created_at'], name='madadkar_risk_ip_status_idx')],
             },
         ),
     ]
