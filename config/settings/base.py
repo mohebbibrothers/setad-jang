@@ -163,6 +163,11 @@ USE_TZ = True
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_DIRS = [BASE_DIR / "static"]
+# In development/CI, WhiteNoise should use autorefresh mode so tests do not
+# fail when STATIC_ROOT has not been generated yet. Production overrides this
+# to False and serves files collected by collectstatic.
+WHITENOISE_AUTOREFRESH = config("WHITENOISE_AUTOREFRESH", default=True, cast=bool)
+WHITENOISE_USE_FINDERS = config("WHITENOISE_USE_FINDERS", default=True, cast=bool)
 
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"

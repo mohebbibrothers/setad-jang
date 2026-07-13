@@ -148,13 +148,17 @@ SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
 # Secure cookies
 # ============================================================
 
-SESSION_COOKIE_SECURE = True
+SESSION_COOKIE_SECURE = config("SESSION_COOKIE_SECURE", default=True, cast=bool)
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = "Lax"
 
-CSRF_COOKIE_SECURE = True
+CSRF_COOKIE_SECURE = config("CSRF_COOKIE_SECURE", default=True, cast=bool)
 CSRF_COOKIE_HTTPONLY = True
 CSRF_COOKIE_SAMESITE = "Lax"
+
+# WhiteNoise serves the collected STATIC_ROOT directory in production/demo.
+WHITENOISE_AUTOREFRESH = config("WHITENOISE_AUTOREFRESH", default=False, cast=bool)
+WHITENOISE_USE_FINDERS = config("WHITENOISE_USE_FINDERS", default=False, cast=bool)
 
 
 # ============================================================
