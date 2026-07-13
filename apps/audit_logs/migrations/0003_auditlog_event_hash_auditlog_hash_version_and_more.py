@@ -47,7 +47,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name="auditlog",
             name="event_hash",
-            field=models.CharField(blank=True, db_index=True, max_length=64, verbose_name="هش رویداد"),
+            field=models.CharField(blank=True, max_length=64, verbose_name="هش رویداد"),
         ),
         migrations.AddField(
             model_name="auditlog",
@@ -57,13 +57,13 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name="auditlog",
             name="previous_hash",
-            field=models.CharField(blank=True, db_index=True, max_length=64, verbose_name="هش قبلی"),
+            field=models.CharField(blank=True, max_length=64, verbose_name="هش قبلی"),
         ),
         migrations.RunPython(backfill_audit_hash_chain, migrations.RunPython.noop),
         migrations.AlterField(
             model_name="auditlog",
             name="event_hash",
-            field=models.CharField(blank=True, db_index=True, max_length=64, unique=True, verbose_name="هش رویداد"),
+            field=models.CharField(blank=True, max_length=64, unique=True, verbose_name="هش رویداد"),
         ),
         migrations.AddIndex(
             model_name="auditlog",

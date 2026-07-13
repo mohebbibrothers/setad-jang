@@ -91,8 +91,8 @@ class AuditLog(BaseModel):
 
     extra_data = models.JSONField(null=True, blank=True, verbose_name="داده اضافی")
 
-    previous_hash = models.CharField(max_length=64, blank=True, db_index=True, verbose_name="هش قبلی")
-    event_hash = models.CharField(max_length=64, blank=True, unique=True, db_index=True, verbose_name="هش رویداد")
+    previous_hash = models.CharField(max_length=64, blank=True, verbose_name="هش قبلی")
+    event_hash = models.CharField(max_length=64, blank=True, unique=True, verbose_name="هش رویداد")
     hash_version = models.PositiveSmallIntegerField(default=1, verbose_name="نسخه هش")
 
     objects = AuditLogManager()
