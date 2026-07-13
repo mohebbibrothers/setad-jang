@@ -82,6 +82,7 @@ MIDDLEWARE = [
     "apps.core.middleware.RequestIDMiddleware",
     "apps.core.middleware.PrometheusMetricsMiddleware",
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -197,14 +198,14 @@ if MEDIA_STORAGE_BACKEND == "s3":
         "default": {"BACKEND": "apps.core.storage.PrivateMediaStorage"},
         "public_media": {"BACKEND": "apps.core.storage.PublicMediaStorage"},
         "private_media": {"BACKEND": "apps.core.storage.PrivateMediaStorage"},
-        "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
+        "staticfiles": {"BACKEND": "whitenoise.storage.CompressedStaticFilesStorage"},
     }
 else:
     STORAGES = {
         "default": {"BACKEND": "apps.core.storage.LocalPublicMediaStorage"},
         "public_media": {"BACKEND": "apps.core.storage.LocalPublicMediaStorage"},
         "private_media": {"BACKEND": "apps.core.storage.LocalPrivateMediaStorage"},
-        "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
+        "staticfiles": {"BACKEND": "whitenoise.storage.CompressedStaticFilesStorage"},
     }
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
