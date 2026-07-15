@@ -27,6 +27,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.core.cache import cache_delete_namespace
+from apps.core.cache_invalidation import invalidate_public_domain
 from apps.tabyin.choices import SUBMISSION_REVIEWABLE_STATUSES, ContentOrigin, SubmissionStatus
 from apps.tabyin.models import TabyinAttachment, TabyinContent
 from apps.tabyin.providers import get_tabyin_provider
@@ -56,6 +57,7 @@ def _invalidate_public_caches() -> None:
     """
     cache_delete_namespace(PUBLIC_LIST_NAMESPACE)
     cache_delete_namespace(PUBLIC_DETAIL_NAMESPACE)
+    invalidate_public_domain("tabyin")
     logger.info("Public tabyin caches invalidated")
 
 

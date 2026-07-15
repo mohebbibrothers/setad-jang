@@ -10,3 +10,8 @@ class R4JConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
     name = "apps.r4j"
     verbose_name = "جایزه‌ای برای عدالت"
+
+    def ready(self) -> None:
+        # Register cache invalidation signal handlers.
+        from . import signals  # noqa: F401
+
