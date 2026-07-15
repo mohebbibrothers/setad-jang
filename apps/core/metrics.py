@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import time
 
-from prometheus_client import Counter, Histogram
+from prometheus_client import Counter, Gauge, Histogram
 
 HTTP_REQUESTS_TOTAL = Counter(
     "setadjang_http_requests_total",
@@ -68,6 +68,18 @@ FRONTEND_REVALIDATIONS_TOTAL = Counter(
     "setadjang_frontend_revalidations_total",
     "Frontend revalidation dispatch outcomes.",
     ["outcome"],
+)
+
+
+CACHE_INVALIDATION_OUTBOX_EVENTS = Gauge(
+    "setadjang_cache_invalidation_outbox_events",
+    "Cache invalidation outbox events by status.",
+    ["status"],
+)
+
+CACHE_INVALIDATION_OUTBOX_OLDEST_PENDING_SECONDS = Gauge(
+    "setadjang_cache_invalidation_outbox_oldest_pending_seconds",
+    "Age of the oldest pending/failed cache invalidation event in seconds.",
 )
 
 FRONTEND_REVALIDATION_DURATION_SECONDS = Histogram(

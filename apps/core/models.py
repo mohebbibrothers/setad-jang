@@ -45,12 +45,14 @@ class CacheInvalidationEvent(BaseModel):
     STATUS_PROCESSING = "processing"
     STATUS_SUCCEEDED = "succeeded"
     STATUS_FAILED = "failed"
+    STATUS_DEAD = "dead"
 
     STATUS_CHOICES = (
         (STATUS_PENDING, "Pending"),
         (STATUS_PROCESSING, "Processing"),
         (STATUS_SUCCEEDED, "Succeeded"),
         (STATUS_FAILED, "Failed"),
+        (STATUS_DEAD, "Dead"),
     )
 
     domain = models.CharField(max_length=80, db_index=True)

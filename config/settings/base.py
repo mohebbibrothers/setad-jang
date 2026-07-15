@@ -220,6 +220,8 @@ else:
 # ============================================================================
 
 CACHE_INVALIDATION_OUTBOX_ENABLED = config("CACHE_INVALIDATION_OUTBOX_ENABLED", default=True, cast=bool)
+CACHE_INVALIDATION_MAX_ATTEMPTS = config("CACHE_INVALIDATION_MAX_ATTEMPTS", default=10, cast=int)
+CACHE_INVALIDATION_BATCH_SIZE = config("CACHE_INVALIDATION_BATCH_SIZE", default=100, cast=int)
 FRONTEND_REVALIDATION_ENABLED = config("FRONTEND_REVALIDATION_ENABLED", default=False, cast=bool)
 FRONTEND_REVALIDATION_URL = config("FRONTEND_REVALIDATION_URL", default="")
 FRONTEND_REVALIDATION_SECRET = config("FRONTEND_REVALIDATION_SECRET", default="")
@@ -901,6 +903,10 @@ CELERY_TASK_ROUTES = {
 }
 
 CELERY_BEAT_SCHEDULE = {
+    "cache-invalidation-outbox-every-minute": {
+        "task": "apps.core.tasks.process_pending_cache_invalidation_events_task",
+        "schedule": crontab(minute="*"),
+    },
     "tabyin-incremental-sync-every-30-minutes": {
         "task": "apps.tabyin.tasks.sync_tabyin_incremental_task",
         "schedule": crontab(minute="*/30"),
