@@ -21,10 +21,13 @@ def test_serve_public_media_serves_file_under_public_root(tmp_path: Path) -> Non
     with override_settings(MEDIA_ROOT=media_root):
         response = serve_public_media(request, "r4j/photo.png")
 
-    assert isinstance(response, FileResponse)
-    assert response.status_code == 200
-    assert response["Content-Type"] == "image/png"
-    assert response["Cache-Control"] == "public, max-age=3600"
+    try:
+        assert isinstance(response, FileResponse)
+        assert response.status_code == 200
+        assert response["Content-Type"] == "image/png"
+        assert response["Cache-Control"] == "public, max-age=3600"
+    finally:
+        response.close()
 
 
 @pytest.mark.django_db
