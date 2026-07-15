@@ -23,6 +23,7 @@ from rest_framework.views import APIView
 from apps.audit_logs import actions as audit_actions
 from apps.audit_logs.helpers import extract_audit_metadata, get_client_ip
 from apps.audit_logs.services import log_action, log_action_async
+from apps.core.api_cache import cached_public_payload
 from apps.core.pagination import StandardPagination
 from apps.core.permissions import IsAdmin
 from apps.core.responses import (
@@ -141,10 +142,14 @@ class ReportSubjectListAPIView(APIView):
         },
     )
     def get(self, request: Request) -> SuccessResponse:
-        queryset = get_active_subjects()
-        serializer = ReportSubjectPublicSerializer(queryset, many=True)
+        payload = cached_public_payload(
+            domain="public_reports",
+            namespace="public_reports:subjects",
+            parts=("subjects",),
+            factory=lambda: ReportSubjectPublicSerializer(get_active_subjects(), many=True).data,
+        )
         return SuccessResponse(
-            data=serializer.data,
+            data=payload,
             message="لیست موضوعات با موفقیت دریافت شد.",
         )
 
