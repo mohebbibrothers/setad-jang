@@ -45,6 +45,7 @@ from rest_framework.views import APIView
 from apps.audit_logs import actions as audit_actions
 from apps.audit_logs.helpers import extract_audit_metadata
 from apps.audit_logs.services import log_action, log_action_async
+from apps.core.api_cache import build_query_signature, cached_public_payload
 from apps.core.pagination import StandardPagination
 from apps.core.responses import (
     CreatedResponse,
@@ -537,22 +538,29 @@ class MadadkarPublicSponsorListView(APIView):
     throttle_classes = [MadadkarBrowseAnonThrottle, MadadkarBrowseUserThrottle]
 
     def get(self, request: Request) -> Response:
-        queryset = selectors.get_public_sponsors_queryset()
-        paginator = StandardPagination()
-        page = paginator.paginate_queryset(queryset, request, view=self)
+        def build_payload() -> dict:
+            queryset = selectors.get_public_sponsors_queryset()
+            paginator = StandardPagination()
+            page = paginator.paginate_queryset(queryset, request, view=self)
 
-        if page is not None:
-            serializer = SponsorPublicSerializer(page, many=True)
-            return paginator.get_paginated_response(
-                serializer.data,
-                message="لیست مددکاران با موفقیت دریافت شد.",
-            )
+            if page is not None:
+                serializer = SponsorPublicSerializer(page, many=True)
+                response = paginator.get_paginated_response(
+                    serializer.data,
+                    message="لیست مددکاران با موفقیت دریافت شد.",
+                )
+                return response.data["data"]
 
-        serializer = SponsorPublicSerializer(queryset, many=True)
-        return SuccessResponse(
-            data=serializer.data,
-            message="لیست مددکاران با موفقیت دریافت شد.",
+            serializer = SponsorPublicSerializer(queryset, many=True)
+            return {"results": serializer.data}
+
+        payload = cached_public_payload(
+            domain="madadkar",
+            namespace="madadkar:public_list",
+            parts=("sponsors", request.query_params.get("page", "1"), request.query_params.get("page_size", str(StandardPagination.page_size))),
+            factory=build_payload,
         )
+        return SuccessResponse(data=payload, message="لیست مددکاران با موفقیت دریافت شد.")
 
 
 @extend_schema_view(
@@ -574,17 +582,24 @@ class MadadkarPublicSponsorDetailView(APIView):
     throttle_classes = [MadadkarBrowseAnonThrottle, MadadkarBrowseUserThrottle]
 
     def get(self, request: Request, slug: str) -> Response:
-        sponsor = selectors.get_sponsor_by_slug_public(slug=slug)
-        if sponsor is None:
+        def build_payload() -> dict | None:
+            sponsor = selectors.get_sponsor_by_slug_public(slug=slug)
+            if sponsor is None:
+                return None
+            return SponsorPublicSerializer(sponsor).data
+
+        payload = cached_public_payload(
+            domain="madadkar",
+            namespace="madadkar:public_detail",
+            parts=("sponsor", slug),
+            factory=build_payload,
+        )
+        if payload is None:
             return ErrorResponse(
                 message="مددکاری با این مشخصات یافت نشد.",
                 status_code=status.HTTP_404_NOT_FOUND,
             )
-        serializer = SponsorPublicSerializer(sponsor)
-        return SuccessResponse(
-            data=serializer.data,
-            message="جزئیات مددکار با موفقیت دریافت شد.",
-        )
+        return SuccessResponse(data=payload, message="جزئیات مددکار با موفقیت دریافت شد.")
 
 
 # ============================================================
@@ -613,30 +628,42 @@ class MadadkarPublicCampaignListView(APIView):
     throttle_classes = [MadadkarBrowseAnonThrottle, MadadkarBrowseUserThrottle]
 
     def get(self, request: Request) -> Response:
-        queryset = selectors.get_public_campaigns_queryset()
-        filterset = CampaignPublicFilter(request.query_params, queryset=queryset)
-        if filterset.is_valid():
-            queryset = filterset.qs
+        def build_payload() -> dict:
+            queryset = selectors.get_public_campaigns_queryset()
+            filterset = CampaignPublicFilter(request.query_params, queryset=queryset)
+            if filterset.is_valid():
+                queryset = filterset.qs
 
-        paginator = StandardPagination()
-        page = paginator.paginate_queryset(queryset, request, view=self)
+            paginator = StandardPagination()
+            page = paginator.paginate_queryset(queryset, request, view=self)
 
-        if page is not None:
+            if page is not None:
+                serializer = CampaignPublicListSerializer(
+                    page, many=True, context={"request": request},
+                )
+                response = paginator.get_paginated_response(
+                    serializer.data,
+                    message="لیست حرکت‌ها با موفقیت دریافت شد.",
+                )
+                return response.data["data"]
+
             serializer = CampaignPublicListSerializer(
-                page, many=True, context={"request": request},
+                queryset, many=True, context={"request": request},
             )
-            return paginator.get_paginated_response(
-                serializer.data,
-                message="لیست حرکت‌ها با موفقیت دریافت شد.",
-            )
+            return {"results": serializer.data}
 
-        serializer = CampaignPublicListSerializer(
-            queryset, many=True, context={"request": request},
+        payload = cached_public_payload(
+            domain="madadkar",
+            namespace="madadkar:public_list",
+            parts=(
+                "campaigns",
+                request.query_params.get("page", "1"),
+                request.query_params.get("page_size", str(StandardPagination.page_size)),
+                build_query_signature(request),
+            ),
+            factory=build_payload,
         )
-        return SuccessResponse(
-            data=serializer.data,
-            message="لیست حرکت‌ها با موفقیت دریافت شد.",
-        )
+        return SuccessResponse(data=payload, message="لیست حرکت‌ها با موفقیت دریافت شد.")
 
 
 @extend_schema_view(
@@ -661,19 +688,24 @@ class MadadkarPublicCampaignDetailView(APIView):
     throttle_classes = [MadadkarBrowseAnonThrottle, MadadkarBrowseUserThrottle]
 
     def get(self, request: Request, slug: str) -> Response:
-        campaign = selectors.get_public_campaign_by_slug(slug=slug)
-        if campaign is None:
+        def build_payload() -> dict | None:
+            campaign = selectors.get_public_campaign_by_slug(slug=slug)
+            if campaign is None:
+                return None
+            return CampaignPublicDetailSerializer(campaign, context={"request": request}).data
+
+        payload = cached_public_payload(
+            domain="madadkar",
+            namespace="madadkar:public_detail",
+            parts=("campaign", slug),
+            factory=build_payload,
+        )
+        if payload is None:
             return ErrorResponse(
                 message="حرکتی با این مشخصات یافت نشد.",
                 status_code=status.HTTP_404_NOT_FOUND,
             )
-        serializer = CampaignPublicDetailSerializer(
-            campaign, context={"request": request},
-        )
-        return SuccessResponse(
-            data=serializer.data,
-            message="جزئیات حرکت با موفقیت دریافت شد.",
-        )
+        return SuccessResponse(data=payload, message="جزئیات حرکت با موفقیت دریافت شد.")
 
 
 class MadadkarPublicCampaignTransparencyView(APIView):
