@@ -14,6 +14,7 @@ from rest_framework.views import APIView
 from apps.audit_logs import actions as audit_actions
 from apps.audit_logs.helpers import extract_audit_metadata
 from apps.audit_logs.services import log_action_async
+from apps.core.api_cache import build_query_signature, cached_public_payload
 from apps.core.pagination import StandardPagination
 from apps.core.responses import CreatedResponse, DeletedResponse, ErrorResponse, SuccessResponse
 from apps.core.schemas import (
@@ -141,8 +142,13 @@ class LMSCategoryPublicListView(APIView):
     @extend_schema(operation_id="lms_public_categories_list", tags=[TAG_LMS_PUBLIC], responses={200: CATEGORY_LIST_RESPONSE})
     def get(self, request: Request) -> SuccessResponse:
         """Return active categories."""
-        categories = selectors.get_public_categories()
-        return SuccessResponse(data=LMSCategorySerializer(categories, many=True).data)
+        payload = cached_public_payload(
+            domain="lms",
+            namespace="lms:categories",
+            parts=("categories",),
+            factory=lambda: LMSCategorySerializer(selectors.get_public_categories(), many=True).data,
+        )
+        return SuccessResponse(data=payload)
 
 
 class LMSCategoryPublicDetailView(APIView):
@@ -153,10 +159,21 @@ class LMSCategoryPublicDetailView(APIView):
     @extend_schema(operation_id="lms_public_categories_retrieve", tags=[TAG_LMS_PUBLIC], responses={200: CATEGORY_RESPONSE, 404: LMS_ERROR_RESPONSE})
     def get(self, request: Request, slug: str) -> SuccessResponse | ErrorResponse:
         """Return one public category."""
-        category = selectors.get_public_category_by_slug(slug)
-        if category is None:
+        def build_payload() -> dict | None:
+            category = selectors.get_public_category_by_slug(slug)
+            if category is None:
+                return None
+            return LMSCategorySerializer(category).data
+
+        payload = cached_public_payload(
+            domain="lms",
+            namespace="lms:public_detail",
+            parts=("category", slug),
+            factory=build_payload,
+        )
+        if payload is None:
             return ErrorResponse(message="دسته‌بندی یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
-        return SuccessResponse(data=LMSCategorySerializer(category).data)
+        return SuccessResponse(data=payload)
 
 
 class LMSCoursePublicListView(APIView):
@@ -167,14 +184,29 @@ class LMSCoursePublicListView(APIView):
     @extend_schema(operation_id="lms_public_courses_list", tags=[TAG_LMS_PUBLIC], responses={200: COURSE_LIST_RESPONSE})
     def get(self, request: Request) -> Response:
         """Return paginated public course catalog."""
-        queryset = selectors.get_public_courses()
-        filterset = CoursePublicFilter(request.query_params, queryset=queryset)
-        if filterset.is_valid():
-            queryset = filterset.qs
-        paginator = StandardPagination()
-        page = paginator.paginate_queryset(queryset, request, view=self)
-        serializer = CourseSummarySerializer(page, many=True)
-        return paginator.get_paginated_response(serializer.data, message="لیست کلاس‌ها با موفقیت دریافت شد.")
+        def build_payload() -> dict:
+            queryset = selectors.get_public_courses()
+            filterset = CoursePublicFilter(request.query_params, queryset=queryset)
+            if filterset.is_valid():
+                queryset = filterset.qs
+            paginator = StandardPagination()
+            page = paginator.paginate_queryset(queryset, request, view=self)
+            serializer = CourseSummarySerializer(page, many=True)
+            response = paginator.get_paginated_response(serializer.data, message="لیست کلاس‌ها با موفقیت دریافت شد.")
+            return response.data["data"]
+
+        payload = cached_public_payload(
+            domain="lms",
+            namespace="lms:public_list",
+            parts=(
+                "courses",
+                request.query_params.get("page", "1"),
+                request.query_params.get("page_size", str(StandardPagination.page_size)),
+                build_query_signature(request),
+            ),
+            factory=build_payload,
+        )
+        return SuccessResponse(data=payload, message="لیست کلاس‌ها با موفقیت دریافت شد.")
 
 
 class LMSCoursePublicDetailView(APIView):
@@ -185,10 +217,21 @@ class LMSCoursePublicDetailView(APIView):
     @extend_schema(operation_id="lms_public_courses_retrieve", tags=[TAG_LMS_PUBLIC], responses={200: COURSE_RESPONSE, 404: LMS_ERROR_RESPONSE})
     def get(self, request: Request, slug: str) -> SuccessResponse | ErrorResponse:
         """Return one published course."""
-        course = selectors.get_public_course_by_slug(slug)
-        if course is None:
+        def build_payload() -> dict | None:
+            course = selectors.get_public_course_by_slug(slug)
+            if course is None:
+                return None
+            return CourseDetailSerializer(course).data
+
+        payload = cached_public_payload(
+            domain="lms",
+            namespace="lms:public_detail",
+            parts=("course", slug),
+            factory=build_payload,
+        )
+        if payload is None:
             return ErrorResponse(message="کلاسی با این شناسه یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
-        return SuccessResponse(data=CourseDetailSerializer(course).data)
+        return SuccessResponse(data=payload)
 
 
 class LMSCourseLessonsPublicView(APIView):
@@ -199,11 +242,22 @@ class LMSCourseLessonsPublicView(APIView):
     @extend_schema(operation_id="lms_public_course_lessons_list", tags=[TAG_LMS_PUBLIC], responses={200: LESSON_LIST_RESPONSE, 404: LMS_ERROR_RESPONSE})
     def get(self, request: Request, slug: str) -> SuccessResponse | ErrorResponse:
         """Return public lessons for a course."""
-        course = selectors.get_public_course_by_slug(slug)
-        if course is None:
+        def build_payload() -> list | None:
+            course = selectors.get_public_course_by_slug(slug)
+            if course is None:
+                return None
+            lessons = selectors.get_course_lessons(course=course)
+            return LessonSummarySerializer(lessons, many=True).data
+
+        payload = cached_public_payload(
+            domain="lms",
+            namespace="lms:public_list",
+            parts=("lessons", slug),
+            factory=build_payload,
+        )
+        if payload is None:
             return ErrorResponse(message="کلاس یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
-        lessons = selectors.get_course_lessons(course=course)
-        return SuccessResponse(data=LessonSummarySerializer(lessons, many=True).data)
+        return SuccessResponse(data=payload)
 
 
 class LMSLessonPublicDetailView(APIView):
@@ -214,13 +268,24 @@ class LMSLessonPublicDetailView(APIView):
     @extend_schema(operation_id="lms_public_lessons_retrieve", tags=[TAG_LMS_PUBLIC], responses={200: LESSON_RESPONSE, 404: LMS_ERROR_RESPONSE})
     def get(self, request: Request, slug: str, lesson_slug: str) -> SuccessResponse | ErrorResponse:
         """Return one public lesson."""
-        course = selectors.get_public_course_by_slug(slug)
-        if course is None:
-            return ErrorResponse(message="کلاس یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
-        lesson = selectors.get_lesson_by_slug(course=course, lesson_slug=lesson_slug)
-        if lesson is None:
+        def build_payload() -> dict | None:
+            course = selectors.get_public_course_by_slug(slug)
+            if course is None:
+                return None
+            lesson = selectors.get_lesson_by_slug(course=course, lesson_slug=lesson_slug)
+            if lesson is None:
+                return None
+            return LessonSummarySerializer(lesson).data
+
+        payload = cached_public_payload(
+            domain="lms",
+            namespace="lms:public_detail",
+            parts=("lesson", slug, lesson_slug),
+            factory=build_payload,
+        )
+        if payload is None:
             return ErrorResponse(message="جلسه یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
-        return SuccessResponse(data=LessonSummarySerializer(lesson).data)
+        return SuccessResponse(data=payload)
 
 
 class LMSUserEnrollView(APIView):
