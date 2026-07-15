@@ -22,6 +22,7 @@ Views اپ R4J — Reward for Justice.
 from __future__ import annotations
 
 import hashlib
+
 from django.contrib.auth import get_user_model
 from drf_spectacular.utils import (
     OpenApiParameter,
