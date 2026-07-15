@@ -36,9 +36,8 @@ def test_serve_public_media_rejects_path_traversal(tmp_path: Path) -> None:
 
     request = RequestFactory().get("/media/public/../private/secret.txt")
 
-    with override_settings(MEDIA_ROOT=media_root):
-        with pytest.raises(Http404):
-            serve_public_media(request, "../private/secret.txt")
+    with override_settings(MEDIA_ROOT=media_root), pytest.raises(Http404):
+        serve_public_media(request, "../private/secret.txt")
 
 
 @pytest.mark.django_db
@@ -49,6 +48,5 @@ def test_serve_public_media_does_not_list_directories(tmp_path: Path) -> None:
 
     request = RequestFactory().get("/media/public/r4j/")
 
-    with override_settings(MEDIA_ROOT=media_root):
-        with pytest.raises(Http404):
-            serve_public_media(request, "r4j")
+    with override_settings(MEDIA_ROOT=media_root), pytest.raises(Http404):
+        serve_public_media(request, "r4j")

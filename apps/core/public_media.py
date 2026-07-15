@@ -35,13 +35,13 @@ def serve_public_media(request, path: str) -> FileResponse:
 
     try:
         candidate = Path(safe_join(public_root, path)).resolve()
-    except (ValueError, OSError):
-        raise Http404("Public media not found")
+    except (ValueError, OSError) as exc:
+        raise Http404("Public media not found") from exc
 
     try:
         candidate.relative_to(public_root)
-    except ValueError:
-        raise Http404("Public media not found")
+    except ValueError as exc:
+        raise Http404("Public media not found") from exc
 
     if not candidate.is_file():
         raise Http404("Public media not found")
