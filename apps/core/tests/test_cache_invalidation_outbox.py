@@ -2,16 +2,13 @@ from __future__ import annotations
 
 import pytest
 
-from apps.core.cache_invalidation import invalidate_public_domain
+from apps.core.cache_invalidation import enqueue_cache_invalidation_event, invalidate_public_domain
 from apps.core.models import CacheInvalidationEvent
 
 pytestmark = [pytest.mark.django_db]
 
 
-def test_invalidate_public_domain_creates_outbox_event(settings, monkeypatch) -> None:
-    settings.CACHE_INVALIDATION_OUTBOX_ENABLED = True
-    settings.FRONTEND_REVALIDATION_ENABLED = False
-
+def test_enqueue_cache_invalidation_event_persists_and_dispatches(monkeypatch) -> None:
     queued: list[int] = []
 
     class _FakeTask:
@@ -21,11 +18,15 @@ def test_invalidate_public_domain_creates_outbox_event(settings, monkeypatch) ->
 
     monkeypatch.setattr("apps.core.tasks.process_cache_invalidation_event_task", _FakeTask)
 
-    invalidate_public_domain("r4j")
+    enqueue_cache_invalidation_event(domain="r4j", tags=["homepage", "r4j"], paths=["/"])
 
     event = CacheInvalidationEvent.objects.get(domain="r4j")
     assert event.status == CacheInvalidationEvent.STATUS_PENDING
-    assert "r4j" in event.tags
-    assert "homepage" in event.tags
-    assert "/" in event.paths
+    assert event.tags == ["homepage", "r4j"]
+    assert event.paths == ["/"]
     assert queued == [event.pk]
+
+
+def test_invalidate_public_domain_validates_known_domains() -> None:
+    with pytest.raises(ValueError):
+        invalidate_public_domain("unknown-domain")
