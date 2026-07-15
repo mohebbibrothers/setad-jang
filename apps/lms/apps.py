@@ -15,3 +15,8 @@ class LMSConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
     name = "apps.lms"
     verbose_name = "سامانه آموزش بعثت مردم"
+
+    def ready(self) -> None:
+        """Register public cache invalidation signal handlers."""
+        from . import signals  # noqa: F401
+
