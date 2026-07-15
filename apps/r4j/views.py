@@ -21,6 +21,7 @@ Views اپ R4J — Reward for Justice.
 
 from __future__ import annotations
 
+import hashlib
 from django.contrib.auth import get_user_model
 from drf_spectacular.utils import (
     OpenApiParameter,
@@ -136,6 +137,18 @@ TAG_R4J_PUBLIC = "جایزه‌ای برای عدالت — عمومی"
 TAG_R4J_USER = "جایزه‌ای برای عدالت — کاربر"
 TAG_R4J_BOUNTY = "جایزه‌ای برای عدالت — تعیین جایزه"
 TAG_R4J_ADMIN = "جایزه‌ای برای عدالت — مدیریت"
+
+
+
+def _build_filters_signature(request: Request) -> str:
+    """Build a stable short signature for cacheable public list filters."""
+    relevant_keys = sorted(k for k in request.query_params.keys() if k not in {"page", "page_size"})
+    if not relevant_keys:
+        return "no_filters"
+
+    parts = [f"{key}={request.query_params.get(key, '')}" for key in relevant_keys]
+    raw = "|".join(parts)
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
 
 # ============================================================
 # Swagger Response Schemas
@@ -475,6 +488,20 @@ class R4JPublicCriminalListView(APIView):
     throttle_classes = [R4JBrowseAnonThrottle, R4JBrowseUserThrottle]
 
     def get(self, request: Request) -> Response:
+        filters_signature = _build_filters_signature(request)
+        page_number = request.query_params.get("page", "1")
+        page_size = request.query_params.get("page_size", str(StandardPagination.page_size))
+        ordering = request.query_params.get("ordering", "")
+
+        cached_payload = selectors.get_public_criminals_page_cached(
+            page=page_number,
+            page_size=page_size,
+            ordering=ordering,
+            filters_signature=filters_signature,
+        )
+        if cached_payload is not None:
+            return SuccessResponse(data=cached_payload)
+
         queryset = selectors.get_public_criminals_queryset()
         filterset = R4JCriminalPublicFilter(request.query_params, queryset=queryset)
         if filterset.is_valid():
@@ -489,10 +516,18 @@ class R4JPublicCriminalListView(APIView):
                 many=True,
                 context={"request": request},
             )
-            return paginator.get_paginated_response(
+            response = paginator.get_paginated_response(
                 serializer.data,
                 message="لیست مجرمین با موفقیت دریافت شد.",
             )
+            selectors.set_public_criminals_page_cache(
+                page=page_number,
+                page_size=page_size,
+                ordering=ordering,
+                filters_signature=filters_signature,
+                payload=response.data["data"],
+            )
+            return response
 
         serializer = R4JPublicCriminalListSerializer(
             queryset,
@@ -528,7 +563,7 @@ class R4JPublicCriminalDetailView(APIView):
     throttle_classes = [R4JBrowseAnonThrottle, R4JBrowseUserThrottle]
 
     def get(self, request: Request, lookup: str) -> Response:
-        criminal = selectors.get_public_criminal_detail(lookup=lookup)
+        criminal = selectors.get_public_criminal_detail_cached(lookup=lookup)
         if criminal is None:
             return ErrorResponse(
                 message="مجرمی با این مشخصات یافت نشد.",

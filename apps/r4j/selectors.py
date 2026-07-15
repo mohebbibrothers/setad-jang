@@ -25,9 +25,15 @@ Selectors اپ R4J — query layer.
 
 from __future__ import annotations
 
-from typing import Final
+from typing import Any, Final
 
 from django.db.models import Prefetch, QuerySet
+
+from apps.core.cache import (
+    cache_get_or_set,
+    get_namespace_version,
+    make_cache_key,
+)
 
 from .models import (
     R4JBounty,
@@ -45,6 +51,17 @@ from .models import (
     R4JReportAttachment,
     R4JReportFieldChange,
 )
+
+# ============================================================
+# Cache configuration
+# ============================================================
+
+PUBLIC_LIST_NAMESPACE = "r4j:public_list"
+PUBLIC_DETAIL_NAMESPACE = "r4j:public_detail"
+PUBLIC_LIST_CACHE_TTL = 60
+PUBLIC_DETAIL_CACHE_TTL = 300
+_DETAIL_NOT_FOUND_SENTINEL = "__not_found__"
+
 
 # ============================================================
 # Public visibility defaults
@@ -144,6 +161,81 @@ def get_public_criminal_detail(
     )
 
     return _lookup_criminal(queryset, lookup)
+
+
+
+def get_public_criminal_detail_cached(*, lookup: str | int) -> R4JCriminal | None:
+    """Return a public criminal detail using a lightweight marker cache."""
+    normalized_lookup = str(lookup)
+    version = get_namespace_version(PUBLIC_DETAIL_NAMESPACE)
+    key = make_cache_key(PUBLIC_DETAIL_NAMESPACE, version, normalized_lookup)
+
+    cached_marker: str = cache_get_or_set(
+        key=key,
+        factory=lambda: _build_public_detail_cache_marker(lookup=lookup),
+        timeout=PUBLIC_DETAIL_CACHE_TTL,
+    )
+
+    if cached_marker == _DETAIL_NOT_FOUND_SENTINEL:
+        return None
+
+    return get_public_criminal_detail(lookup=cached_marker)
+
+
+def _build_public_detail_cache_marker(*, lookup: str | int) -> str:
+    """Build the cache marker for one public R4J detail lookup."""
+    criminal = get_public_criminal_detail(lookup=lookup)
+    if criminal is None:
+        return _DETAIL_NOT_FOUND_SENTINEL
+    return str(criminal.pk)
+
+
+def get_public_criminals_page_cached(
+    *,
+    page: str,
+    page_size: str,
+    ordering: str,
+    filters_signature: str = "",
+) -> dict[str, Any] | None:
+    """Return a serialized public R4J list page payload from cache, if present."""
+    version = get_namespace_version(PUBLIC_LIST_NAMESPACE)
+    key = make_cache_key(
+        PUBLIC_LIST_NAMESPACE,
+        version,
+        page,
+        page_size,
+        ordering,
+        filters_signature,
+    )
+
+    from django.core.cache import cache
+
+    cached: dict[str, Any] | None = cache.get(key)
+    return cached
+
+
+def set_public_criminals_page_cache(
+    *,
+    page: str,
+    page_size: str,
+    ordering: str,
+    filters_signature: str,
+    payload: dict[str, Any],
+) -> None:
+    """Store a serialized public R4J list page payload in cache."""
+    version = get_namespace_version(PUBLIC_LIST_NAMESPACE)
+    key = make_cache_key(
+        PUBLIC_LIST_NAMESPACE,
+        version,
+        page,
+        page_size,
+        ordering,
+        filters_signature,
+    )
+
+    from django.core.cache import cache
+
+    cache.set(key, payload, timeout=PUBLIC_LIST_CACHE_TTL)
 
 
 # ============================================================
