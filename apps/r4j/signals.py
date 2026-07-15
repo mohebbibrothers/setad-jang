@@ -30,6 +30,7 @@ R4J_PUBLIC_INVALIDATION_MODELS = (
 
 
 def _invalidate_r4j_public_cache(sender_name: str, instance_pk: int | None) -> None:
+    """Invalidate public R4J and homepage caches for one model event."""
     try:
         invalidate_public_domain("r4j")
         logger.info("R4J public cache invalidation requested sender=%s pk=%s", sender_name, instance_pk)
@@ -39,11 +40,13 @@ def _invalidate_r4j_public_cache(sender_name: str, instance_pk: int | None) -> N
 
 @receiver(post_save)
 def invalidate_r4j_public_cache_on_save(sender, instance, **kwargs) -> None:
+    """Invalidate public R4J caches after relevant model saves."""
     if sender in R4J_PUBLIC_INVALIDATION_MODELS:
         _invalidate_r4j_public_cache(sender.__name__, getattr(instance, "pk", None))
 
 
 @receiver(post_delete)
 def invalidate_r4j_public_cache_on_delete(sender, instance, **kwargs) -> None:
+    """Invalidate public R4J caches after relevant model deletes."""
     if sender in R4J_PUBLIC_INVALIDATION_MODELS:
         _invalidate_r4j_public_cache(sender.__name__, getattr(instance, "pk", None))

@@ -17,6 +17,7 @@ logger = logging.getLogger("apps.core.frontend_revalidation")
 
 
 def normalize_tags(tags: Iterable[str] | None) -> list[str]:
+    """Return unique, non-empty frontend revalidation tags."""
     seen: set[str] = set()
     result: list[str] = []
     for tag in tags or []:
@@ -28,6 +29,7 @@ def normalize_tags(tags: Iterable[str] | None) -> list[str]:
 
 
 def normalize_paths(paths: Iterable[str] | None) -> list[str]:
+    """Return unique, safe absolute paths for frontend revalidation."""
     seen: set[str] = set()
     result: list[str] = []
     for path in paths or []:

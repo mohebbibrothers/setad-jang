@@ -15,6 +15,7 @@ import mimetypes
 from pathlib import Path
 
 from django.conf import settings
+from django.core.exceptions import SuspiciousFileOperation
 from django.http import FileResponse, Http404
 from django.utils._os import safe_join
 from django.views.decorators.http import require_safe
@@ -35,7 +36,7 @@ def serve_public_media(request, path: str) -> FileResponse:
 
     try:
         candidate = Path(safe_join(public_root, path)).resolve()
-    except (ValueError, OSError) as exc:
+    except (ValueError, OSError, SuspiciousFileOperation) as exc:
         raise Http404("Public media not found") from exc
 
     try:
