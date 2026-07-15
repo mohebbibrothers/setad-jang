@@ -134,3 +134,29 @@ def process_cache_invalidation_event_task(self, *, event_id: int) -> None:
     event.last_error = ""
     event.processed_at = timezone.now()
     event.save(update_fields=["status", "last_error", "processed_at", "updated_at"])
+
+@shared_task(
+    name="apps.core.tasks.process_pending_cache_invalidation_events_task",
+    ignore_result=True,
+)
+def process_pending_cache_invalidation_events_task(*, limit: int = 100) -> int:
+    """Dispatch due pending/failed cache invalidation outbox events in batches."""
+    from django.db.models import Q
+    from django.utils import timezone
+
+    from apps.core.models import CacheInvalidationEvent
+
+    now = timezone.now()
+    events = list(
+        CacheInvalidationEvent.all_objects.filter(
+            Q(status=CacheInvalidationEvent.STATUS_PENDING)
+            | Q(status=CacheInvalidationEvent.STATUS_FAILED, next_attempt_at__lte=now)
+            | Q(status=CacheInvalidationEvent.STATUS_FAILED, next_attempt_at__isnull=True),
+        ).order_by("created_at")[: max(1, min(limit, 500))]
+    )
+
+    for event in events:
+        process_cache_invalidation_event_task.delay(event_id=event.pk)
+
+    logger.info("Queued pending cache invalidation events count=%s", len(events))
+    return len(events)

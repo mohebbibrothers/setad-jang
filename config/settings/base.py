@@ -865,6 +865,9 @@ CELERY_TASK_ROUTES = {
     "apps.core.tasks.process_cache_invalidation_event_task": {
         "queue": "default",
     },
+    "apps.core.tasks.process_pending_cache_invalidation_events_task": {
+        "queue": "default",
+    },
     "apps.tabyin.tasks.sync_tabyin_incremental_task": {
         "queue": "tabyin_sync",
     },
