@@ -29,6 +29,7 @@ from drf_spectacular.views import (
 )
 
 from apps.core.metrics_views import PrometheusMetricsView
+from apps.core.public_media import serve_public_media
 
 # ============================================================
 # Root / Documentation URLs
@@ -161,6 +162,16 @@ urlpatterns = [
     *admin_urlpatterns,
     *api_v1_urlpatterns,
 ]
+
+
+# ============================================================
+# Public media files for isolated HTTP demo/local deployments
+# ============================================================
+
+if getattr(settings, "SERVE_PUBLIC_MEDIA", False):
+    urlpatterns += [
+        path("media/public/<path:path>", serve_public_media, name="public-media"),
+    ]
 
 # ============================================================
 # Static / Media files (development only)

@@ -21,8 +21,18 @@ from apps.tabyin.choices import MediaType
 
 logger = logging.getLogger("apps.tabyin.sync.parser")
 
-# Base URL برای ساخت URL کامل فایل‌ها
-_FILE_BASE_URL = "https://app-service.armansky.ir/"
+# Media URL برای ساخت URL کامل فایل‌ها.
+#
+# محتوانگار داخل JSON مقدار e22_attachment.url را به شکل نسبی برمی‌گرداند، مثلا:
+#   uploads/2026/07/14/1784011112jznwyCH.png
+# این مسیر روی app-service.armansky.ir عمومی نیست و 404 می‌دهد. فایل اصلی عمومی روی
+# media host و زیر prefix /org/ در دسترس است:
+#   https://app-media.armansky.ir/org/uploads/...
+_FILE_ORIGINAL_BASE_URL = "https://app-media.armansky.ir/org/"
+
+# نسخه schema برای URL رسانه‌ها. این مقدار در content_hash هم لحاظ می‌شود تا بعد
+# از تغییر host/prefix، اجرای sync_full پیوست‌های قبلی را هم بازسازی کند.
+MEDIA_URL_SCHEMA_VERSION = "armansky-media-org-v1"
 
 # پنل مشاهده محتوا
 _GALLERY_BASE_URL = "https://app.armansky.ir/panel/gallery/"
@@ -74,7 +84,7 @@ def _parse_attachments(raw_attachments: list[dict]) -> list[dict[str, Any]]:
         if not relative_url:
             continue
 
-        full_url = f"{_FILE_BASE_URL}{relative_url}"
+        full_url = _build_original_media_url(relative_url)
         media_type = _detect_media_type(relative_url)
 
         result.append(
@@ -91,6 +101,32 @@ def _parse_attachments(raw_attachments: list[dict]) -> list[dict[str, Any]]:
         )
 
     return result
+
+
+def _build_original_media_url(relative_url: str) -> str:
+    """ساخت URL عمومی فایل اصلی از مسیر نسبی محتوانگار.
+
+    ورودی معمولاً نسبی است: uploads/...
+    برای مقاومت بیشتر، اگر منبع در آینده URL کامل app-service.armansky.ir/uploads/...
+    برگرداند، آن را هم به media host اصلی تبدیل می‌کنیم.
+    """
+    cleaned = relative_url.strip()
+    if not cleaned:
+        return cleaned
+
+    service_prefixes = (
+        "https://app-service.armansky.ir/",
+        "http://app-service.armansky.ir/",
+    )
+    for prefix in service_prefixes:
+        if cleaned.startswith(prefix):
+            cleaned = cleaned[len(prefix) :]
+            break
+
+    if cleaned.startswith("https://") or cleaned.startswith("http://"):
+        return cleaned
+
+    return f"{_FILE_ORIGINAL_BASE_URL}{cleaned.lstrip('/')}"
 
 
 def _detect_media_type(url: str) -> str:

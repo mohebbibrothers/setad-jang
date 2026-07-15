@@ -171,6 +171,7 @@ WHITENOISE_USE_FINDERS = config("WHITENOISE_USE_FINDERS", default=True, cast=boo
 
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
+SERVE_PUBLIC_MEDIA = config("SERVE_PUBLIC_MEDIA", default=False, cast=bool)
 
 MEDIA_STORAGE_BACKEND = config("MEDIA_STORAGE_BACKEND", default="local").strip().lower()
 FILE_SCAN_PROVIDER = config("FILE_SCAN_PROVIDER", default="extension_blocklist").strip().lower()

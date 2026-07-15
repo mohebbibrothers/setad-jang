@@ -9,6 +9,8 @@ import hashlib
 import json
 from typing import Any
 
+from apps.tabyin.sync.parser import MEDIA_URL_SCHEMA_VERSION
+
 
 def compute_content_hash(data: dict[str, Any]) -> str:
     """
@@ -21,6 +23,10 @@ def compute_content_hash(data: dict[str, Any]) -> str:
     - تاریخ آخرین ویرایش
     """
     significant_fields = {
+        # تغییر host/prefix رسانه‌ها باید باعث update شدن رکوردهای موجود و
+        # بازسازی TabyinAttachmentها در sync_full شود، حتی اگر JSON خام منبع
+        # از نظر e22_attachment.url عوض نشده باشد.
+        "media_url_schema_version": MEDIA_URL_SCHEMA_VERSION,
         "title": data.get("e19_title", "") or data.get("name", ""),
         "description": data.get("e20_description", ""),
         "username": data.get("username", ""),
