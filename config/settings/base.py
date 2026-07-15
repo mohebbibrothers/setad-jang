@@ -219,6 +219,7 @@ else:
 # Frontend on-demand revalidation
 # ============================================================================
 
+CACHE_INVALIDATION_OUTBOX_ENABLED = config("CACHE_INVALIDATION_OUTBOX_ENABLED", default=True, cast=bool)
 FRONTEND_REVALIDATION_ENABLED = config("FRONTEND_REVALIDATION_ENABLED", default=False, cast=bool)
 FRONTEND_REVALIDATION_URL = config("FRONTEND_REVALIDATION_URL", default="")
 FRONTEND_REVALIDATION_SECRET = config("FRONTEND_REVALIDATION_SECRET", default="")
@@ -859,6 +860,9 @@ CELERY_WORKER_MAX_TASKS_PER_CHILD = 100
 CELERY_TASK_DEFAULT_QUEUE = "default"
 CELERY_TASK_ROUTES = {
     "apps.core.tasks.revalidate_frontend_task": {
+        "queue": "default",
+    },
+    "apps.core.tasks.process_cache_invalidation_event_task": {
         "queue": "default",
     },
     "apps.tabyin.tasks.sync_tabyin_incremental_task": {

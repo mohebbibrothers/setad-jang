@@ -90,3 +90,47 @@ def revalidate_frontend_task(self, *, tags: list[str] | None = None, paths: list
         clean_paths,
         body,
     )
+
+
+@shared_task(
+    name="apps.core.tasks.process_cache_invalidation_event_task",
+    bind=True,
+    autoretry_for=(requests.RequestException,),
+    retry_backoff=True,
+    retry_backoff_max=60,
+    retry_jitter=True,
+    max_retries=5,
+    ignore_result=True,
+)
+def process_cache_invalidation_event_task(self, *, event_id: int) -> None:
+    """Process one durable cache invalidation outbox event."""
+    from django.utils import timezone
+
+    from apps.core.models import CacheInvalidationEvent
+
+    event = CacheInvalidationEvent.all_objects.filter(pk=event_id).first()
+    if event is None:
+        logger.warning("Cache invalidation event not found id=%s", event_id)
+        return
+
+    if event.status == CacheInvalidationEvent.STATUS_SUCCEEDED:
+        logger.debug("Cache invalidation event already succeeded id=%s", event_id)
+        return
+
+    event.status = CacheInvalidationEvent.STATUS_PROCESSING
+    event.attempts += 1
+    event.save(update_fields=["status", "attempts", "updated_at"])
+
+    try:
+        revalidate_frontend_task.run(tags=event.tags, paths=event.paths)
+    except Exception as exc:
+        event.status = CacheInvalidationEvent.STATUS_FAILED
+        event.last_error = str(exc)[:4000]
+        event.next_attempt_at = timezone.now()
+        event.save(update_fields=["status", "last_error", "next_attempt_at", "updated_at"])
+        raise
+
+    event.status = CacheInvalidationEvent.STATUS_SUCCEEDED
+    event.last_error = ""
+    event.processed_at = timezone.now()
+    event.save(update_fields=["status", "last_error", "processed_at", "updated_at"])
