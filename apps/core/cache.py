@@ -14,14 +14,36 @@
 
 import hashlib
 import logging
+import time
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any, TypeVar
 
 from django.core.cache import cache
 
+from apps.core.metrics import CACHE_INVALIDATIONS_TOTAL, CACHE_OPERATIONS_TOTAL
+
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
+
+
+@dataclass(slots=True)
+class SwrCacheEnvelope:
+    """Serializable cache envelope for stale-while-revalidate reads."""
+
+    value: Any
+    created_at: float
+    soft_expires_at: float
+    hard_expires_at: float
+
+    def is_fresh(self, now: float) -> bool:
+        """Return True while the soft TTL is still valid."""
+        return now < self.soft_expires_at
+
+    def is_usable(self, now: float) -> bool:
+        """Return True while the hard TTL is still valid."""
+        return now < self.hard_expires_at
 
 # پیشوند تمام cache keyهای پروژه — جلوگیری از تداخل با اپلیکیشن‌های دیگر
 _CACHE_KEY_PREFIX = "setadjang"
@@ -82,19 +104,83 @@ def cache_get_or_set(
         ... )
     """
     cached = cache.get(key)
+    namespace = key.split(":", 2)[1] if ":" in key else "unknown"
     if cached is not None:
+        CACHE_OPERATIONS_TOTAL.labels(namespace=namespace, operation="get", outcome="hit").inc()
         logger.debug("Cache HIT: %s", key)
         return cached
 
+    CACHE_OPERATIONS_TOTAL.labels(namespace=namespace, operation="get", outcome="miss").inc()
     logger.debug("Cache MISS: %s — building...", key)
     value = factory()
     cache.set(key, value, timeout=timeout)
+    CACHE_OPERATIONS_TOTAL.labels(namespace=namespace, operation="set", outcome="success").inc()
     return value
 
+
+
+def cache_get_or_set_swr(
+    *,
+    key: str,
+    factory: Callable[[], T],
+    soft_ttl: int,
+    hard_ttl: int,
+    lock_ttl: int = 15,
+) -> T:
+    """Return cached data using stale-while-revalidate with dogpile protection.
+
+    On soft-expired values, one request refreshes synchronously while other
+    concurrent requests may serve the stale value until hard_ttl. If the refresh
+    fails and a usable stale value exists, stale data is returned (fail-open).
+    """
+    now = time.time()
+    namespace = key.split(":", 2)[1] if ":" in key else "unknown"
+    envelope = cache.get(key)
+
+    if isinstance(envelope, SwrCacheEnvelope):
+        if envelope.is_fresh(now):
+            CACHE_OPERATIONS_TOTAL.labels(namespace=namespace, operation="swr_get", outcome="fresh").inc()
+            return envelope.value
+        if envelope.is_usable(now):
+            lock_key = f"{key}:lock"
+            if cache.add(lock_key, "1", timeout=lock_ttl):
+                try:
+                    value = factory()
+                except Exception:
+                    CACHE_OPERATIONS_TOTAL.labels(namespace=namespace, operation="swr_refresh", outcome="error_stale").inc()
+                    logger.exception("SWR refresh failed for %s; serving stale value", key)
+                    return envelope.value
+                finally:
+                    cache.delete(lock_key)
+                refreshed = SwrCacheEnvelope(
+                    value=value,
+                    created_at=now,
+                    soft_expires_at=now + soft_ttl,
+                    hard_expires_at=now + hard_ttl,
+                )
+                cache.set(key, refreshed, timeout=hard_ttl)
+                CACHE_OPERATIONS_TOTAL.labels(namespace=namespace, operation="swr_refresh", outcome="success").inc()
+                return value
+            CACHE_OPERATIONS_TOTAL.labels(namespace=namespace, operation="swr_get", outcome="stale_locked").inc()
+            return envelope.value
+
+    CACHE_OPERATIONS_TOTAL.labels(namespace=namespace, operation="swr_get", outcome="miss").inc()
+    value = factory()
+    envelope = SwrCacheEnvelope(
+        value=value,
+        created_at=now,
+        soft_expires_at=now + soft_ttl,
+        hard_expires_at=now + hard_ttl,
+    )
+    cache.set(key, envelope, timeout=hard_ttl)
+    CACHE_OPERATIONS_TOTAL.labels(namespace=namespace, operation="swr_set", outcome="success").inc()
+    return value
 
 def cache_delete(key: str) -> None:
     """حذف یک کلید مشخص از cache."""
     cache.delete(key)
+    namespace = key.split(":", 2)[1] if ":" in key else "unknown"
+    CACHE_OPERATIONS_TOTAL.labels(namespace=namespace, operation="delete", outcome="success").inc()
     logger.debug("Cache DELETED: %s", key)
 
 
@@ -123,6 +209,7 @@ def cache_delete_namespace(namespace: str) -> None:
         new_version = 1
         cache.set(version_key, new_version, timeout=None)
 
+    CACHE_INVALIDATIONS_TOTAL.labels(namespace=namespace).inc()
     logger.info(
         "Cache namespace invalidated: %s (new version=%d)",
         namespace,

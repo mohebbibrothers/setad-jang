@@ -51,6 +51,32 @@ CELERY_TASKS_TOTAL = Counter(
     ["task", "state"],
 )
 
+
+CACHE_OPERATIONS_TOTAL = Counter(
+    "setadjang_cache_operations_total",
+    "Cache operations by namespace and outcome.",
+    ["namespace", "operation", "outcome"],
+)
+
+CACHE_INVALIDATIONS_TOTAL = Counter(
+    "setadjang_cache_invalidations_total",
+    "Cache namespace invalidations by namespace.",
+    ["namespace"],
+)
+
+FRONTEND_REVALIDATIONS_TOTAL = Counter(
+    "setadjang_frontend_revalidations_total",
+    "Frontend revalidation dispatch outcomes.",
+    ["outcome"],
+)
+
+FRONTEND_REVALIDATION_DURATION_SECONDS = Histogram(
+    "setadjang_frontend_revalidation_duration_seconds",
+    "Frontend revalidation HTTP request latency in seconds.",
+    ["outcome"],
+    buckets=(0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10),
+)
+
 CELERY_TASK_DURATION_SECONDS = Histogram(
     "setadjang_celery_task_duration_seconds",
     "Celery task runtime in seconds.",
