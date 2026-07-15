@@ -13,6 +13,7 @@ from rest_framework.views import APIView
 from apps.audit_logs import actions as audit_actions
 from apps.audit_logs.helpers import extract_audit_metadata
 from apps.audit_logs.services import log_action_async
+from apps.core.api_cache import build_query_signature, cached_public_payload
 from apps.core.pagination import StandardPagination
 from apps.core.responses import CreatedResponse, DeletedResponse, ErrorResponse, SuccessResponse
 from apps.core.schemas import (
@@ -94,7 +95,13 @@ class KindnessCategoryPublicListView(APIView):
     @extend_schema(operation_id="kindness_categories_list", tags=[TAG_PUBLIC], responses={200: CATEGORY_LIST_RESPONSE})
     def get(self, request: Request) -> SuccessResponse:
         """Return active categories."""
-        return SuccessResponse(data=KindnessCategorySerializer(selectors.get_public_categories(), many=True).data)
+        payload = cached_public_payload(
+            domain="kindness",
+            namespace="kindness:categories",
+            parts=("categories",),
+            factory=lambda: KindnessCategorySerializer(selectors.get_public_categories(), many=True).data,
+        )
+        return SuccessResponse(data=payload)
 
 
 class KindnessListingPublicListView(APIView):
@@ -106,14 +113,29 @@ class KindnessListingPublicListView(APIView):
     @extend_schema(operation_id="kindness_listings_list", tags=[TAG_PUBLIC], responses={200: LISTING_LIST_RESPONSE})
     def get(self, request: Request) -> Response:
         """Return filtered published listings without phone numbers."""
-        queryset = selectors.get_public_listings()
-        filterset = KindnessListingPublicFilter(request.query_params, queryset=queryset)
-        if filterset.is_valid():
-            queryset = filterset.qs
-        paginator = StandardPagination()
-        page = paginator.paginate_queryset(queryset, request, view=self)
-        serializer = KindnessListingListSerializer(page, many=True)
-        return paginator.get_paginated_response(serializer.data, message="لیست آگهی‌های دیوار مهربانی دریافت شد.")
+        def build_payload() -> dict:
+            queryset = selectors.get_public_listings()
+            filterset = KindnessListingPublicFilter(request.query_params, queryset=queryset)
+            if filterset.is_valid():
+                queryset = filterset.qs
+            paginator = StandardPagination()
+            page = paginator.paginate_queryset(queryset, request, view=self)
+            serializer = KindnessListingListSerializer(page, many=True)
+            response = paginator.get_paginated_response(serializer.data, message="لیست آگهی‌های دیوار مهربانی دریافت شد.")
+            return response.data["data"]
+
+        payload = cached_public_payload(
+            domain="kindness",
+            namespace="kindness:public_list",
+            parts=(
+                "listings",
+                request.query_params.get("page", "1"),
+                request.query_params.get("page_size", str(StandardPagination.page_size)),
+                build_query_signature(request),
+            ),
+            factory=build_payload,
+        )
+        return SuccessResponse(data=payload, message="لیست آگهی‌های دیوار مهربانی دریافت شد.")
 
 
 class KindnessListingPublicDetailView(APIView):
@@ -128,8 +150,23 @@ class KindnessListingPublicDetailView(APIView):
         listing = selectors.get_public_listing_by_slug(slug)
         if listing is None:
             return ErrorResponse(message="آگهی یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
-        listing = services.increment_listing_view_count(listing=listing)
-        return SuccessResponse(data=KindnessListingDetailSerializer(listing).data)
+        services.increment_listing_view_count(listing=listing)
+
+        def build_payload() -> dict | None:
+            refreshed = selectors.get_public_listing_by_slug(slug)
+            if refreshed is None:
+                return None
+            return KindnessListingDetailSerializer(refreshed).data
+
+        payload = cached_public_payload(
+            domain="kindness",
+            namespace="kindness:public_detail",
+            parts=("listing", slug),
+            factory=build_payload,
+        )
+        if payload is None:
+            return ErrorResponse(message="آگهی یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+        return SuccessResponse(data=payload)
 
 
 class KindnessListingPublicMatchesView(APIView):
