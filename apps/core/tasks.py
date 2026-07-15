@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-import json
 import logging
-import urllib.error
-import urllib.request
 
+import requests
 from celery import shared_task
 from django.conf import settings
 
@@ -18,7 +16,7 @@ logger = logging.getLogger("apps.core.tasks")
 @shared_task(
     name="apps.core.tasks.revalidate_frontend_task",
     bind=True,
-    autoretry_for=(urllib.error.URLError, TimeoutError),
+    autoretry_for=(requests.RequestException,),
     retry_backoff=True,
     retry_backoff_max=60,
     retry_jitter=True,
@@ -45,40 +43,50 @@ def revalidate_frontend_task(self, *, tags: list[str] | None = None, paths: list
         logger.debug("Frontend revalidation task skipped: empty payload")
         return
 
-    body = json.dumps({"tags": clean_tags, "paths": clean_paths}).encode("utf-8")
-    req = urllib.request.Request(
-        url,
-        data=body,
-        method="POST",
-        headers={
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-            "Authorization": f"Bearer {secret}",
-            "User-Agent": "setad-jang-backend-revalidator/1.0",
-        },
-    )
-
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as response:
-            status = response.status
-            payload = response.read(2048).decode("utf-8", errors="replace")
-    except urllib.error.HTTPError as exc:
-        payload = exc.read(2048).decode("utf-8", errors="replace")
-        logger.warning(
-            "Frontend revalidation HTTP error status=%s tags=%s paths=%s body=%s",
-            exc.code,
+        response = requests.post(
+            url,
+            json={"tags": clean_tags, "paths": clean_paths},
+            headers={
+                "Authorization": f"Bearer {secret}",
+                "Accept": "application/json",
+                "User-Agent": "setad-jang-backend-revalidator/1.0",
+            },
+            timeout=timeout,
+        )
+    except requests.RequestException:
+        logger.exception(
+            "Frontend revalidation request failed tags=%s paths=%s",
             clean_tags,
             clean_paths,
-            payload[:500],
         )
-        if exc.code >= 500:
-            raise
+        raise
+
+    body = response.text[:500]
+    if response.status_code >= 500:
+        logger.warning(
+            "Frontend revalidation server error status=%s tags=%s paths=%s body=%s",
+            response.status_code,
+            clean_tags,
+            clean_paths,
+            body,
+        )
+        response.raise_for_status()
+
+    if response.status_code >= 400:
+        logger.warning(
+            "Frontend revalidation rejected status=%s tags=%s paths=%s body=%s",
+            response.status_code,
+            clean_tags,
+            clean_paths,
+            body,
+        )
         return
 
     logger.info(
         "Frontend revalidation completed status=%s tags=%s paths=%s body=%s",
-        status,
+        response.status_code,
         clean_tags,
         clean_paths,
-        payload[:500],
+        body,
     )
