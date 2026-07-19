@@ -45,6 +45,45 @@ class SwrCacheEnvelope:
         """Return True while the hard TTL is still valid."""
         return now < self.hard_expires_at
 
+
+def _make_swr_envelope(*, value: Any, now: float, soft_ttl: int, hard_ttl: int) -> dict[str, Any]:
+    """Build a JSON-serializable SWR envelope for Redis JSON serializers."""
+    return {
+        "__swr_cache_envelope__": True,
+        "value": value,
+        "created_at": now,
+        "soft_expires_at": now + soft_ttl,
+        "hard_expires_at": now + hard_ttl,
+    }
+
+
+def _is_swr_envelope(value: Any) -> bool:
+    """Return whether a cached value is a supported SWR envelope."""
+    return isinstance(value, (dict, SwrCacheEnvelope)) and (
+        isinstance(value, SwrCacheEnvelope) or value.get("__swr_cache_envelope__") is True
+    )
+
+
+def _envelope_value(envelope: dict[str, Any] | SwrCacheEnvelope) -> Any:
+    """Extract payload from a supported SWR envelope."""
+    if isinstance(envelope, SwrCacheEnvelope):
+        return envelope.value
+    return envelope["value"]
+
+
+def _envelope_is_fresh(envelope: dict[str, Any] | SwrCacheEnvelope, now: float) -> bool:
+    """Return whether an SWR envelope is still within soft TTL."""
+    if isinstance(envelope, SwrCacheEnvelope):
+        return envelope.is_fresh(now)
+    return now < float(envelope["soft_expires_at"])
+
+
+def _envelope_is_usable(envelope: dict[str, Any] | SwrCacheEnvelope, now: float) -> bool:
+    """Return whether an SWR envelope is still within hard TTL."""
+    if isinstance(envelope, SwrCacheEnvelope):
+        return envelope.is_usable(now)
+    return now < float(envelope["hard_expires_at"])
+
 # پیشوند تمام cache keyهای پروژه — جلوگیری از تداخل با اپلیکیشن‌های دیگر
 _CACHE_KEY_PREFIX = "setadjang"
 
@@ -137,11 +176,11 @@ def cache_get_or_set_swr(
     namespace = key.split(":", 2)[1] if ":" in key else "unknown"
     envelope = cache.get(key)
 
-    if isinstance(envelope, SwrCacheEnvelope):
-        if envelope.is_fresh(now):
+    if _is_swr_envelope(envelope):
+        if _envelope_is_fresh(envelope, now):
             CACHE_OPERATIONS_TOTAL.labels(namespace=namespace, operation="swr_get", outcome="fresh").inc()
-            return envelope.value
-        if envelope.is_usable(now):
+            return _envelope_value(envelope)
+        if _envelope_is_usable(envelope, now):
             lock_key = f"{key}:lock"
             if cache.add(lock_key, "1", timeout=lock_ttl):
                 try:
@@ -149,29 +188,24 @@ def cache_get_or_set_swr(
                 except Exception:
                     CACHE_OPERATIONS_TOTAL.labels(namespace=namespace, operation="swr_refresh", outcome="error_stale").inc()
                     logger.exception("SWR refresh failed for %s; serving stale value", key)
-                    return envelope.value
+                    return _envelope_value(envelope)
                 finally:
                     cache.delete(lock_key)
-                refreshed = SwrCacheEnvelope(
+                refreshed = _make_swr_envelope(
                     value=value,
-                    created_at=now,
-                    soft_expires_at=now + soft_ttl,
-                    hard_expires_at=now + hard_ttl,
+                    now=now,
+                    soft_ttl=soft_ttl,
+                    hard_ttl=hard_ttl,
                 )
                 cache.set(key, refreshed, timeout=hard_ttl)
                 CACHE_OPERATIONS_TOTAL.labels(namespace=namespace, operation="swr_refresh", outcome="success").inc()
                 return value
             CACHE_OPERATIONS_TOTAL.labels(namespace=namespace, operation="swr_get", outcome="stale_locked").inc()
-            return envelope.value
+            return _envelope_value(envelope)
 
     CACHE_OPERATIONS_TOTAL.labels(namespace=namespace, operation="swr_get", outcome="miss").inc()
     value = factory()
-    envelope = SwrCacheEnvelope(
-        value=value,
-        created_at=now,
-        soft_expires_at=now + soft_ttl,
-        hard_expires_at=now + hard_ttl,
-    )
+    envelope = _make_swr_envelope(value=value, now=now, soft_ttl=soft_ttl, hard_ttl=hard_ttl)
     cache.set(key, envelope, timeout=hard_ttl)
     CACHE_OPERATIONS_TOTAL.labels(namespace=namespace, operation="swr_set", outcome="success").inc()
     return value
