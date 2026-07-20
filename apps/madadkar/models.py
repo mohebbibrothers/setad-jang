@@ -22,6 +22,7 @@ import hashlib
 import json
 
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils.text import slugify
 
@@ -308,15 +309,52 @@ class Campaign(BaseModel):
     def __str__(self) -> str:
         return self.title
 
+    def _build_unique_slug(self, *, source: str | None = None) -> str:
+        """Build a deterministic unique slug, adding a numeric suffix if needed."""
+        base = slugify(source or self.slug or self.title, allow_unicode=True) or "campaign"
+        max_length = self._meta.get_field("slug").max_length
+        candidate = base[:max_length]
+
+        existing = Campaign.all_objects.filter(slug=candidate)
+        if self.pk:
+            existing = existing.exclude(pk=self.pk)
+        if not existing.exists():
+            return candidate
+
+        for counter in range(2, 10_000):
+            suffix = f"-{counter}"
+            candidate = f"{base[: max_length - len(suffix)]}{suffix}"
+            existing = Campaign.all_objects.filter(slug=candidate)
+            if self.pk:
+                existing = existing.exclude(pk=self.pk)
+            if not existing.exists():
+                return candidate
+
+        raise ValidationError("امکان ساخت شناسه URL یکتا برای این حرکت وجود ندارد.")
+
+    def clean(self) -> None:
+        """Validate and normalize auto-generated slug before DB constraints run."""
+        super().clean()
+        if not self.slug:
+            self.slug = self._build_unique_slug(source=self.title)
+            return
+
+        duplicate = Campaign.all_objects.filter(slug=self.slug)
+        if self.pk:
+            duplicate = duplicate.exclude(pk=self.pk)
+        if duplicate.exists():
+            self.slug = self._build_unique_slug(source=self.slug)
+
     def save(self, *args, **kwargs) -> None:
         """
-        محاسبه خودکار share_price و تولید slug.
+        محاسبه خودکار share_price و تولید slug یکتا.
 
         نکته: divisibility در validator/service چک می‌شود — اینجا فقط محاسبه است.
         """
         if not self.slug:
-            base = slugify(self.title, allow_unicode=True) or "campaign"
-            self.slug = base[:320]
+            self.slug = self._build_unique_slug(source=self.title)
+        elif Campaign.all_objects.filter(slug=self.slug).exclude(pk=self.pk).exists():
+            self.slug = self._build_unique_slug(source=self.slug)
 
         if self.total_shares and self.total_amount:
             self.share_price = self.total_amount // self.total_shares

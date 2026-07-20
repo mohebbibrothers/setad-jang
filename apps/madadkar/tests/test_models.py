@@ -434,3 +434,14 @@ class TestPaymentModel:
         p = PaidParticipationFactory()
         assert p.status == ParticipationStatus.PAID
         assert p.paid_at is not None
+
+class TestCampaignSlugGeneration:
+    """Campaign slug generation should be admin-friendly and collision-safe."""
+
+    def test_duplicate_titles_generate_unique_slugs(self) -> None:
+        first = CampaignFactory(title="تست")
+        second = CampaignFactory(title="تست")
+
+        assert first.slug == "تست"
+        assert second.slug.startswith("تست-")
+        assert second.slug != first.slug
