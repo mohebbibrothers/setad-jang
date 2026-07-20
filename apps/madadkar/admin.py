@@ -128,9 +128,9 @@ class CampaignAdmin(admin.ModelAdmin):
         percent = obj.progress_percent
         color = "green" if percent >= 100 else "orange" if percent >= 50 else "red"
         return format_html(
-            '<strong style="color: {};">{:.1f}%</strong>',
+            '<strong style="color: {};">{}%</strong>',
             color,
-            percent,
+            f"{percent:.1f}",
         )
 
 
