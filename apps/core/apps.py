@@ -10,3 +10,9 @@ class CoreConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
     name = "apps.core"
     verbose_name = "هسته مرکزی"
+
+    def ready(self) -> None:
+        """Apply project-wide admin presentation customizations."""
+        from apps.core.admin_i18n import apply_persian_admin_labels
+
+        apply_persian_admin_labels()
