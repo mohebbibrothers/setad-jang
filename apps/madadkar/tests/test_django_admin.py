@@ -24,4 +24,4 @@ class TestCampaignDjangoAdmin:
         html = admin.progress_display(campaign)
 
         assert "33.3%" in str(html)
-        assert "orange" in str(html)
+        assert "red" in str(html)
