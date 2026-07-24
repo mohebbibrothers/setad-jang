@@ -17,6 +17,7 @@ from __future__ import annotations
 from django.contrib import admin, messages
 from django.http import HttpResponseRedirect
 from django.utils.html import format_html
+from django.utils.safestring import mark_safe
 
 from apps.audit_logs import actions as audit_actions
 from apps.audit_logs.helpers import extract_audit_metadata
@@ -335,8 +336,8 @@ class R4JReportAdmin(admin.ModelAdmin):
                 'با ثبت بررسی، گزارش از مسیر رسمی سرویس تأیید می‌شود.</p>'
                 '{}{}'
                 '</div>',
-                format_html(admin_note_input),
-                format_html(submit_button),
+                mark_safe(admin_note_input),
+                mark_safe(submit_button),
             )
 
         rows = []
@@ -353,7 +354,7 @@ class R4JReportAdmin(admin.ModelAdmin):
                 '<option value="{}">رد</option>'
                 '</select>'
                 '</td>'
-                '<td><input type="text" name="r4j_note_{}" style="width: 100%;" placeholder="یادداشت اختیاری برای این فیلد"></td>'
+                '<td><input type="text" name="r4j_note_{}" style="width: 100%;" title="یادداشت اختیاری برای این فیلد"></td>'
                 '</tr>',
                 fc.field_name,
                 fc.current_value_snapshot,
@@ -374,9 +375,9 @@ class R4JReportAdmin(admin.ModelAdmin):
             '</table>'
             '{}{}'
             '</div>',
-            format_html("".join(str(row) for row in rows)),
-            format_html(admin_note_input),
-            format_html(submit_button),
+            mark_safe("".join(str(row) for row in rows)),
+            mark_safe(admin_note_input),
+            mark_safe(submit_button),
         )
 
     def changeform_view(self, request, object_id=None, form_url="", extra_context=None):
