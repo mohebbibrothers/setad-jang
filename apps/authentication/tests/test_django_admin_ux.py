@@ -62,7 +62,11 @@ class TestAuthenticationDjangoAdminUX:
         admin_user = AdminUserFactory()
         client.force_login(admin_user)
         user = UserFactory(email="inline-user@test.local", is_email_verified=True, is_phone_verified=False)
-        Profile.objects.create(user=user, national_code="1234567890", province="تهران", city="تهران")
+        profile, _ = Profile.objects.get_or_create(user=user)
+        profile.national_code = "1234567890"
+        profile.province = "تهران"
+        profile.city = "تهران"
+        profile.save(update_fields=["national_code", "province", "city", "updated_at"])
         AuthSession.objects.create(
             user=user,
             refresh_jti="session-jti-1",
