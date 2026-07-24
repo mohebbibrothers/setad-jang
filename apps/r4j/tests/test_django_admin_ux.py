@@ -67,10 +67,8 @@ class TestR4JDjangoAdminUX:
             R4JCriminalSocialInline,
             R4JCriminalPhotoInline,
             R4JCriminalAttachmentInline,
-            R4JCriminalFieldVisibilityAdminForm,
-    R4JCriminalFieldVisibilityInline,
+            R4JCriminalFieldVisibilityInline,
         ]
-
 
     def test_field_visibility_admin_uses_persian_dropdown_instead_of_free_text(self):
         form = R4JCriminalFieldVisibilityAdminForm()
