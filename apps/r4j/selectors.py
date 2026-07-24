@@ -145,18 +145,6 @@ def get_public_criminal_detail(
                 ),
             ),
             Prefetch(
-                "alias_suggestions",
-                queryset=R4JReportAliasSuggestion.objects.order_by("id"),
-            ),
-            Prefetch(
-                "phone_suggestions",
-                queryset=R4JReportPhoneSuggestion.objects.order_by("id"),
-            ),
-            Prefetch(
-                "social_suggestions",
-                queryset=R4JReportSocialSuggestion.objects.order_by("id"),
-            ),
-            Prefetch(
                 "attachments",
                 queryset=R4JCriminalAttachment.objects.filter(
                     is_active=True, is_public=True,
@@ -452,6 +440,18 @@ def get_user_report_by_id(
                     queryset=R4JReportFieldChange.objects.order_by("field_name"),
                 ),
                 Prefetch(
+                    "alias_suggestions",
+                    queryset=R4JReportAliasSuggestion.objects.order_by("id"),
+                ),
+                Prefetch(
+                    "phone_suggestions",
+                    queryset=R4JReportPhoneSuggestion.objects.order_by("id"),
+                ),
+                Prefetch(
+                    "social_suggestions",
+                    queryset=R4JReportSocialSuggestion.objects.order_by("id"),
+                ),
+                Prefetch(
                     "attachments",
                     queryset=R4JReportAttachment.objects.order_by("-created_at"),
                 ),
@@ -512,6 +512,18 @@ def get_admin_report_by_id(*, report_id: int) -> R4JReport | None:
                 Prefetch(
                     "field_changes",
                     queryset=R4JReportFieldChange.objects.order_by("field_name"),
+                ),
+                Prefetch(
+                    "alias_suggestions",
+                    queryset=R4JReportAliasSuggestion.objects.order_by("id"),
+                ),
+                Prefetch(
+                    "phone_suggestions",
+                    queryset=R4JReportPhoneSuggestion.objects.order_by("id"),
+                ),
+                Prefetch(
+                    "social_suggestions",
+                    queryset=R4JReportSocialSuggestion.objects.order_by("id"),
                 ),
                 Prefetch(
                     "attachments",
