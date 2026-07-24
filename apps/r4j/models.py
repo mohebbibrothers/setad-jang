@@ -609,7 +609,7 @@ class R4JReportFieldChange(BaseModel):
         verbose_name = "پیشنهاد تغییر فیلد"
         verbose_name_plural = "پیشنهادات تغییر فیلد"
         ordering = ["report_id", "field_name"]
-        indexes = [models.Index(fields=["report", "status"])]
+        indexes = [models.Index(fields=["report", "status"], name="r4j_alias_sug_rep_stat_idx")]
 
     def __str__(self) -> str:
         return f"{self.field_name} -> {self.suggested_value!r} ({self.status})"
@@ -686,7 +686,10 @@ class R4JReportPhoneSuggestion(BaseModel):
         verbose_name = "پیشنهاد شماره تماس"
         verbose_name_plural = "پیشنهادهای شماره تماس"
         ordering = ["report_id", "id"]
-        indexes = [models.Index(fields=["report", "status"]), models.Index(fields=["number"])]
+        indexes = [
+            models.Index(fields=["report", "status"], name="r4j_phone_sug_rep_stat_idx"),
+            models.Index(fields=["number"], name="r4j_phone_sug_number_idx"),
+        ]
 
     def __str__(self) -> str:
         return f"phone:{self.number} ({self.status})"
@@ -724,7 +727,10 @@ class R4JReportSocialSuggestion(BaseModel):
         verbose_name = "پیشنهاد شبکه اجتماعی"
         verbose_name_plural = "پیشنهادهای شبکه اجتماعی"
         ordering = ["report_id", "id"]
-        indexes = [models.Index(fields=["report", "status"]), models.Index(fields=["platform"])]
+        indexes = [
+            models.Index(fields=["report", "status"], name="r4j_soc_sug_rep_stat_idx"),
+            models.Index(fields=["platform"], name="r4j_soc_sug_platform_idx"),
+        ]
 
     def __str__(self) -> str:
         return f"social:{self.platform}:{self.handle_or_url} ({self.status})"
