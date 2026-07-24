@@ -24,6 +24,7 @@ pytestmark = pytest.mark.django_db
 
 
 def _image(name: str = "evidence.png") -> SimpleUploadedFile:
+    """Return a minimal in-memory PNG-like upload for admin evidence tests."""
     return SimpleUploadedFile(name, b"\x89PNG\r\n\x1a\nminimal", content_type="image/png")
 
 
