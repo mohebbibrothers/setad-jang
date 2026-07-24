@@ -609,7 +609,7 @@ class R4JReportFieldChange(BaseModel):
         verbose_name = "پیشنهاد تغییر فیلد"
         verbose_name_plural = "پیشنهادات تغییر فیلد"
         ordering = ["report_id", "field_name"]
-        indexes = [models.Index(fields=["report", "status"], name="r4j_alias_sug_rep_stat_idx")]
+        indexes = [models.Index(fields=["report", "status"])]
 
     def __str__(self) -> str:
         return f"{self.field_name} -> {self.suggested_value!r} ({self.status})"
@@ -647,7 +647,7 @@ class R4JReportAliasSuggestion(BaseModel):
         verbose_name = "پیشنهاد نام مستعار"
         verbose_name_plural = "پیشنهادهای نام مستعار"
         ordering = ["report_id", "id"]
-        indexes = [models.Index(fields=["report", "status"])]
+        indexes = [models.Index(fields=["report", "status"], name="r4j_alias_sug_rep_stat_idx")]
 
     def __str__(self) -> str:
         return f"alias:{self.alias} ({self.status})"
