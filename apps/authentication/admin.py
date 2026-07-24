@@ -68,6 +68,7 @@ class AuthSessionInline(admin.TabularInline):
     """Read-only recent sessions/devices in the user workspace."""
 
     model = AuthSession
+    fk_name = "user"
     extra = 0
     can_delete = False
     fields = (
@@ -99,6 +100,7 @@ class AuthRiskSignalInline(admin.TabularInline):
     """Read-only auth risk signals in the user workspace."""
 
     model = AuthRiskSignal
+    fk_name = "user"
     extra = 0
     can_delete = False
     fields = (
