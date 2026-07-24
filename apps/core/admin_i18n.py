@@ -106,6 +106,7 @@ MODEL_VERBOSE_NAMES: dict[tuple[str, str], tuple[str, str]] = {
         "رویداد زنجیره نگهداری شواهد",
         "رویدادهای زنجیره نگهداری شواهد",
     ),
+    ("r4j", "r4jbounty"): ("جایزه عدالت", "جوایز عدالت"),
 
     # Tabyin
     ("tabyin", "tabyincontent"): ("محتوای تبیین", "محتواهای تبیین"),

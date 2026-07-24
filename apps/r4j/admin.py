@@ -1,15 +1,22 @@
 """
-Django admin اپ R4J.
+Django Admin اپ R4J.
 
-برای admin panel سبک و سریع، فقط list_display/filter/search تنظیم شده‌اند.
-عملیات business سنگین در admin انجام نمی‌شود — همه‌چیز از طریق سرویس‌ها
-و REST APIها کنترل می‌شود.
+طراحی UX:
+- «مجرمان» مرکز اصلی ورود/ویرایش اطلاعات پروفایل است.
+- داده‌های وابسته‌ی مستقیم به مجرم (alias/phone/social/photo/attachment/visibility)
+  به‌صورت inline داخل صفحه مجرم مدیریت می‌شوند تا ادمین برای ثبت یک پروفایل
+  بین چند صفحه پراکنده نچرخد.
+- مدل‌های وابسته همچنان جدا و relational باقی می‌مانند، اما بعضی از آن‌ها از
+  index اصلی ادمین مخفی می‌شوند تا هم معماری دیتابیس تمیز بماند، هم UX خلوت‌تر شود.
+- مدل‌های workflow مستقل مثل گزارش‌ها، جوایز و chain-of-custody در index باقی
+  می‌مانند چون queue/review/filter مستقل دارند.
 """
 
 from __future__ import annotations
 
 from django.contrib import admin
 
+from . import services
 from .models import (
     R4JBounty,
     R4JCriminal,
@@ -26,33 +33,82 @@ from .models import (
 )
 
 
+class HiddenFromAdminIndexMixin:
+    """Keep a ModelAdmin registered but hide it from the admin index/app list."""
+
+    def get_model_perms(self, request) -> dict[str, bool]:
+        """Return no perms so Django omits this model from the admin index."""
+        return {}
+
+
 class R4JCriminalAliasInline(admin.TabularInline):
-    """R4JCriminalAliasInline implementation for the r4j application."""
+    """Inline aliases inside the criminal edit page."""
+
     model = R4JCriminalAlias
     extra = 0
+    fields = ("alias", "is_active")
+    show_change_link = False
 
 
 class R4JCriminalPhoneInline(admin.TabularInline):
-    """R4JCriminalPhoneInline implementation for the r4j application."""
+    """Inline phone numbers inside the criminal edit page."""
+
     model = R4JCriminalPhone
     extra = 0
+    fields = ("label", "number", "is_public", "notes", "is_active")
+    show_change_link = False
 
 
 class R4JCriminalSocialInline(admin.TabularInline):
-    """R4JCriminalSocialInline implementation for the r4j application."""
+    """Inline social accounts inside the criminal edit page."""
+
     model = R4JCriminalSocial
     extra = 0
+    fields = ("platform", "handle_or_url", "is_public", "is_active")
+    show_change_link = False
 
 
 class R4JCriminalPhotoInline(admin.TabularInline):
-    """R4JCriminalPhotoInline implementation for the r4j application."""
+    """Inline criminal photos inside the criminal edit page."""
+
     model = R4JCriminalPhoto
     extra = 0
+    fields = ("image", "caption", "is_primary", "order", "is_active")
+    show_change_link = False
+
+
+class R4JCriminalAttachmentInline(admin.TabularInline):
+    """Inline profile evidence/documents while preserving forensic metadata."""
+
+    model = R4JCriminalAttachment
+    extra = 0
+    fields = (
+        "file",
+        "kind",
+        "title",
+        "description",
+        "is_public",
+        "file_sha256",
+        "file_size",
+        "is_active",
+    )
+    readonly_fields = ("file_sha256", "file_size")
+    show_change_link = True
+
+
+class R4JCriminalFieldVisibilityInline(admin.TabularInline):
+    """Inline per-criminal public visibility overrides."""
+
+    model = R4JCriminalFieldVisibility
+    extra = 0
+    fields = ("field_name", "is_public", "is_active")
+    show_change_link = False
 
 
 @admin.register(R4JCriminal)
 class R4JCriminalAdmin(admin.ModelAdmin):
-    """R4JCriminalAdmin implementation for the r4j application."""
+    """Main admin workspace for creating and maintaining R4J criminal profiles."""
+
     list_display = (
         "id",
         "first_name",
@@ -67,33 +123,101 @@ class R4JCriminalAdmin(admin.ModelAdmin):
     list_filter = ("is_published", "is_active", "gender", "country", "province")
     search_fields = ("first_name", "last_name", "slug", "national_code", "city")
     readonly_fields = ("slug", "total_bounty_toman", "bounties_count", "published_at")
+    fieldsets = (
+        ("هویت", {
+            "fields": ("first_name", "last_name", "slug", "national_code", "birth_date", "gender"),
+        }),
+        ("موقعیت", {
+            "fields": ("country", "province", "city"),
+        }),
+        ("توضیحات", {
+            "fields": ("description", "crimes_summary", "other_info"),
+        }),
+        ("انتشار و وضعیت", {
+            "fields": ("is_published", "published_at", "is_active"),
+        }),
+        ("خلاصه جوایز", {
+            "fields": ("total_bounty_toman", "bounties_count"),
+        }),
+    )
     inlines = [
         R4JCriminalAliasInline,
         R4JCriminalPhoneInline,
         R4JCriminalSocialInline,
         R4JCriminalPhotoInline,
+        R4JCriminalAttachmentInline,
+        R4JCriminalFieldVisibilityInline,
     ]
+
+    def save_formset(self, request, form, formset, change) -> None:
+        """Persist inline formsets with R4J-specific safety hooks.
+
+        Attachment inlines need the same forensic guarantees as API-created
+        evidence: file hash, size, and chain-of-custody events. Django admin's
+        default inline save would bypass the service layer, so we handle this
+        model explicitly.
+        """
+        if formset.model is not R4JCriminalAttachment:
+            return super().save_formset(request, form, formset, change)
+
+        deleted_forms = set(formset.deleted_forms)
+        for inline_form in formset.forms:
+            if inline_form in deleted_forms and inline_form.instance.pk:
+                inline_form.instance.delete()
+
+        parent = form.instance
+        for inline_form in formset.forms:
+            if inline_form in deleted_forms or not inline_form.has_changed():
+                continue
+
+            attachment = inline_form.save(commit=False)
+            attachment.criminal = parent
+            if not attachment.pk and not attachment.uploaded_by_id:
+                attachment.uploaded_by = request.user
+
+            file_changed = "file" in inline_form.changed_data
+            attachment.save()
+
+            if attachment.file and (file_changed or not attachment.file_sha256):
+                services._finalize_evidence_hash(attachment=attachment, actor=request.user)
+
+        formset.save_m2m()
 
 
 @admin.register(R4JCriminalAttachment)
-class R4JCriminalAttachmentAdmin(admin.ModelAdmin):
-    """R4JCriminalAttachmentAdmin implementation for the r4j application."""
-    list_display = ("id", "criminal", "kind", "title", "is_public", "uploaded_by")
-    list_filter = ("kind", "is_public")
-    search_fields = ("title", "criminal__first_name", "criminal__last_name")
+class R4JCriminalAttachmentAdmin(HiddenFromAdminIndexMixin, admin.ModelAdmin):
+    """Specialized attachment admin, hidden from index but accessible by direct links."""
+
+    list_display = ("id", "criminal", "kind", "title", "is_public", "uploaded_by", "file_size")
+    list_filter = ("kind", "is_public", "is_active")
+    search_fields = ("title", "description", "file_sha256", "criminal__first_name", "criminal__last_name")
+    readonly_fields = ("file_sha256", "file_size", "created_at", "updated_at")
+    raw_id_fields = ("criminal", "uploaded_by")
+
+    def save_model(self, request, obj, form, change) -> None:
+        """Keep direct attachment edits safe by recalculating forensic metadata."""
+        if not obj.uploaded_by_id:
+            obj.uploaded_by = request.user
+        file_changed = "file" in form.changed_data
+        super().save_model(request, obj, form, change)
+        if obj.file and (file_changed or not obj.file_sha256):
+            services._finalize_evidence_hash(attachment=obj, actor=request.user)
 
 
 @admin.register(R4JCriminalFieldVisibility)
-class R4JCriminalFieldVisibilityAdmin(admin.ModelAdmin):
-    """R4JCriminalFieldVisibilityAdmin implementation for the r4j application."""
-    list_display = ("id", "criminal", "field_name", "is_public")
-    list_filter = ("is_public", "field_name")
+class R4JCriminalFieldVisibilityAdmin(HiddenFromAdminIndexMixin, admin.ModelAdmin):
+    """Visibility override admin, hidden from index because it lives inline on Criminal."""
+
+    list_display = ("id", "criminal", "field_name", "is_public", "is_active")
+    list_filter = ("is_public", "field_name", "is_active")
     search_fields = ("criminal__first_name", "criminal__last_name", "field_name")
+    raw_id_fields = ("criminal",)
 
 
 @admin.register(R4JReport)
 class R4JReportAdmin(admin.ModelAdmin):
-    """R4JReportAdmin implementation for the r4j application."""
+    """Admin queue for user-submitted R4J reports."""
+
     list_display = (
         "id",
         "criminal",
@@ -104,27 +228,34 @@ class R4JReportAdmin(admin.ModelAdmin):
     )
     list_filter = ("status",)
     search_fields = ("criminal__first_name", "criminal__last_name", "submitted_by__email")
+    raw_id_fields = ("criminal", "submitted_by", "reviewed_by")
 
 
 @admin.register(R4JReportFieldChange)
 class R4JReportFieldChangeAdmin(admin.ModelAdmin):
-    """R4JReportFieldChangeAdmin implementation for the r4j application."""
+    """Admin visibility for per-field report decisions."""
+
     list_display = ("id", "report", "field_name", "status")
     list_filter = ("status", "field_name")
-    search_fields = ("field_name",)
+    search_fields = ("field_name", "suggested_value", "current_value_snapshot")
+    raw_id_fields = ("report",)
 
 
 @admin.register(R4JReportAttachment)
 class R4JReportAttachmentAdmin(admin.ModelAdmin):
-    """R4JReportAttachmentAdmin implementation for the r4j application."""
-    list_display = ("id", "report", "kind", "title")
+    """Admin queue for user-submitted report evidence."""
+
+    list_display = ("id", "report", "kind", "title", "file_size")
     list_filter = ("kind",)
-    search_fields = ("title",)
+    search_fields = ("title", "file_sha256")
+    readonly_fields = ("file_sha256", "file_size", "created_at", "updated_at")
+    raw_id_fields = ("report",)
 
 
 @admin.register(R4JBounty)
 class R4JBountyAdmin(admin.ModelAdmin):
-    """R4JBountyAdmin implementation for the r4j application."""
+    """Admin queue for user bounty commitments and cancel requests."""
+
     list_display = (
         "id",
         "criminal",
@@ -140,6 +271,7 @@ class R4JBountyAdmin(admin.ModelAdmin):
         "user__email",
         "user__phone_number",
     )
+    raw_id_fields = ("criminal", "user")
 
 
 @admin.register(R4JEvidenceCustodyEvent)
