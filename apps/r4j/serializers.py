@@ -32,14 +32,11 @@ from rest_framework import serializers
 from .choices import (
     CriminalAttachmentKind,
     Gender,
-    InvestigationCasePriority,
-    InvestigationCaseSeverity,
     ReportFieldChangeStatus,
     SocialPlatform,
 )
 from .models import (
     R4JBounty,
-    R4JCaseEvent,
     R4JCriminal,
     R4JCriminalAlias,
     R4JCriminalAttachment,
@@ -48,7 +45,6 @@ from .models import (
     R4JCriminalPhoto,
     R4JCriminalSocial,
     R4JEvidenceCustodyEvent,
-    R4JInvestigationCase,
     R4JReport,
     R4JReportAttachment,
     R4JReportFieldChange,
@@ -1023,135 +1019,3 @@ class R4JEvidenceCustodyReviewSerializer(serializers.Serializer):
 
     event_type = serializers.ChoiceField(choices=("reviewed", "transferred", "rejected"))
     note = serializers.CharField(required=False, allow_blank=True, default="")
-
-# ============================================================
-# Investigation Cases — Operational Workflow
-# ============================================================
-
-
-class R4JCaseEventSerializer(serializers.ModelSerializer):
-    """Read serializer for immutable R4J case timeline events."""
-
-    actor_email = serializers.EmailField(source="actor.email", read_only=True, allow_null=True)
-    event_type_display = serializers.CharField(source="get_event_type_display", read_only=True)
-
-    class Meta:
-        model = R4JCaseEvent
-        fields = (
-            "id",
-            "event_type",
-            "event_type_display",
-            "actor",
-            "actor_email",
-            "from_status",
-            "to_status",
-            "note",
-            "metadata",
-            "created_at",
-        )
-        read_only_fields = fields
-
-
-class R4JInvestigationCaseListSerializer(serializers.ModelSerializer):
-    """Admin list serializer for operational cases."""
-
-    criminal_name = serializers.SerializerMethodField()
-    assigned_to_email = serializers.EmailField(source="assigned_to.email", read_only=True, allow_null=True)
-
-    class Meta:
-        model = R4JInvestigationCase
-        fields = (
-            "id",
-            "case_number",
-            "report",
-            "criminal",
-            "criminal_name",
-            "status",
-            "priority",
-            "severity",
-            "evidence_completeness_score",
-            "assigned_to",
-            "assigned_to_email",
-            "first_response_due_at",
-            "resolution_due_at",
-            "created_at",
-        )
-        read_only_fields = fields
-
-    def get_criminal_name(self, obj: R4JInvestigationCase) -> str:
-        """Return display name without exposing additional report data."""
-        return str(obj.criminal)
-
-
-class R4JInvestigationCaseDetailSerializer(R4JInvestigationCaseListSerializer):
-    """Admin detail serializer for operational cases."""
-
-    events = R4JCaseEventSerializer(many=True, read_only=True)
-    triaged_by_email = serializers.EmailField(source="triaged_by.email", read_only=True, allow_null=True)
-    closed_by_email = serializers.EmailField(source="closed_by.email", read_only=True, allow_null=True)
-
-    class Meta(R4JInvestigationCaseListSerializer.Meta):
-        fields = (
-            *R4JInvestigationCaseListSerializer.Meta.fields,
-            "triaged_by",
-            "triaged_by_email",
-            "closed_by",
-            "closed_by_email",
-            "triaged_at",
-            "closed_at",
-            "closure_reason",
-            "metadata",
-            "events",
-        )
-        read_only_fields = fields
-
-
-class R4JCaseCreateFromReportSerializer(serializers.Serializer):
-    """Optional note for creating an operational case from a report."""
-
-    note = serializers.CharField(required=False, allow_blank=True, default="")
-
-
-class R4JCaseTriageSerializer(serializers.Serializer):
-    """Input serializer for case triage."""
-
-    priority = serializers.ChoiceField(choices=InvestigationCasePriority.choices)
-    severity = serializers.ChoiceField(choices=InvestigationCaseSeverity.choices)
-    note = serializers.CharField(required=False, allow_blank=True, default="")
-
-
-class R4JCaseAssignSerializer(serializers.Serializer):
-    """Input serializer for case assignment."""
-
-    assignee_id = serializers.IntegerField(min_value=1)
-    note = serializers.CharField(required=False, allow_blank=True, default="")
-
-
-class R4JCasePrioritySerializer(serializers.Serializer):
-    """Input serializer for priority change."""
-
-    priority = serializers.ChoiceField(choices=InvestigationCasePriority.choices)
-    note = serializers.CharField(required=False, allow_blank=True, default="")
-
-
-class R4JCaseNoteRequiredSerializer(serializers.Serializer):
-    """Input serializer for transitions that require a reason/note."""
-
-    reason = serializers.CharField(allow_blank=False, trim_whitespace=True)
-
-
-class R4JCaseEvidenceRequestSerializer(serializers.Serializer):
-    """Input serializer for requesting more evidence."""
-
-    note = serializers.CharField(allow_blank=False, trim_whitespace=True)
-
-
-class R4JCaseOperationsOverviewSerializer(serializers.Serializer):
-    """Serializer documenting R4J case operation overview payload."""
-
-    total_cases = serializers.IntegerField()
-    unassigned_cases = serializers.IntegerField()
-    overdue_first_response = serializers.IntegerField()
-    overdue_resolution = serializers.IntegerField()
-    by_status = serializers.DictField(child=serializers.IntegerField())
-    by_priority = serializers.DictField(child=serializers.IntegerField())

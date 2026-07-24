@@ -12,7 +12,6 @@ from django.contrib import admin
 
 from .models import (
     R4JBounty,
-    R4JCaseEvent,
     R4JCriminal,
     R4JCriminalAlias,
     R4JCriminalAttachment,
@@ -21,7 +20,6 @@ from .models import (
     R4JCriminalPhoto,
     R4JCriminalSocial,
     R4JEvidenceCustodyEvent,
-    R4JInvestigationCase,
     R4JReport,
     R4JReportAttachment,
     R4JReportFieldChange,
@@ -165,39 +163,4 @@ class R4JEvidenceCustodyEventAdmin(admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None) -> bool:
         """Custody events must remain available for forensic review."""
-        return False
-
-
-@admin.register(R4JInvestigationCase)
-class R4JInvestigationCaseAdmin(admin.ModelAdmin):
-    """Admin visibility for R4J operational investigation cases."""
-
-    list_display = ("id", "case_number", "criminal", "status", "priority", "severity", "assigned_to", "created_at")
-    list_filter = ("status", "priority", "severity")
-    search_fields = ("case_number", "criminal__first_name", "criminal__last_name", "assigned_to__email")
-    readonly_fields = ("case_number", "evidence_completeness_score", "created_at", "updated_at")
-    raw_id_fields = ("report", "criminal", "assigned_to", "triaged_by", "closed_by")
-
-
-@admin.register(R4JCaseEvent)
-class R4JCaseEventAdmin(admin.ModelAdmin):
-    """Read-only admin for immutable R4J case timeline events."""
-
-    list_display = ("id", "case", "event_type", "actor", "from_status", "to_status", "created_at")
-    list_filter = ("event_type", "from_status", "to_status")
-    search_fields = ("case__case_number", "actor__email", "note")
-    readonly_fields = [field.name for field in R4JCaseEvent._meta.fields]
-    raw_id_fields = ("case", "actor")
-    ordering = ("-created_at",)
-
-    def has_add_permission(self, request) -> bool:
-        """Case events are generated through audited services."""
-        return False
-
-    def has_change_permission(self, request, obj=None) -> bool:
-        """Case events are immutable."""
-        return False
-
-    def has_delete_permission(self, request, obj=None) -> bool:
-        """Case events must remain available for operational review."""
         return False

@@ -832,7 +832,7 @@ ticket می‌سازد
 ```text
 کاربران
 گزارش‌ها
-R4J cases
+R4J reports/evidence/bounties
 Madadkar finance
 Support queue
 LMS activity
@@ -1127,7 +1127,7 @@ GET /api/v1/tabyin/admin/sync/status/{task_id}/
 
 ## 17. R4J — Reward for Justice
 
-اپ `r4j` یک سیستم Reward for Justice برای پروفایل مجرم، گزارش جامعه، جایزه، evidence custody و پرونده عملیاتی است.
+اپ `r4j` یک سیستم Reward for Justice برای نمایش پروفایل مجرمان، دریافت گزارش‌های تکمیلی جامعه، نگه‌داری شواهد و ثبت تعهد جایزه کاربران است.
 
 ### 17.1 مفاهیم اصلی
 
@@ -1144,8 +1144,6 @@ R4JReportFieldChange         → پیشنهاد تغییر فیلد
 R4JReportAttachment          → ضمیمه گزارش
 R4JEvidenceCustodyEvent      → chain-of-custody مدارک
 R4JBounty                    → تعهد جایزه کاربر
-R4JInvestigationCase         → پرونده عملیاتی
-R4JCaseEvent                 → timeline پرونده
 ```
 
 ### 17.2 Public Criminal Browse
@@ -1271,74 +1269,19 @@ total_bounty_toman
 bounties_count
 ```
 
-### 17.7 Investigation Case Management
+### 17.7 محدوده محصول R4J
 
-بعد از report، ادمین می‌تواند پرونده عملیاتی بسازد:
-
-```text
-POST /api/v1/r4j/admin/reports/{report_id}/create-case/
-```
-
-پرونده دارای:
+R4J عمداً سیستم پرونده عملیاتی نیست. محدوده آن به این موارد محدود می‌شود:
 
 ```text
-case_number
-status
-priority
-severity
-assigned_to
-evidence_completeness_score
-first_response_due_at
-resolution_due_at
-closure_reason
+- نمایش پروفایل مجرمان منتشرشده
+- دریافت گزارش و شواهد تکمیلی از کاربران
+- بررسی و اعمال گزارش‌ها توسط ادمین
+- نگه‌داری chain-of-custody برای شواهد
+- ثبت و مدیریت تعهد جایزه کاربران
 ```
 
-Workflow:
-
-```text
-new
-triaged
-assigned
-investigating
-waiting_for_evidence
-escalated
-resolved
-rejected
-closed
-```
-
-هر تغییر مهم در `R4JCaseEvent` ثبت می‌شود:
-
-```text
-created
-triaged
-assigned
-priority_changed
-evidence_requested
-escalated
-resolved
-rejected
-closed
-reopened
-```
-
-Case APIها:
-
-```text
-GET  /api/v1/r4j/admin/cases/
-GET  /api/v1/r4j/admin/cases/{case_number}/
-POST /api/v1/r4j/admin/cases/{case_number}/triage/
-POST /api/v1/r4j/admin/cases/{case_number}/assign/
-POST /api/v1/r4j/admin/cases/{case_number}/priority/
-POST /api/v1/r4j/admin/cases/{case_number}/request-evidence/
-POST /api/v1/r4j/admin/cases/{case_number}/escalate/
-POST /api/v1/r4j/admin/cases/{case_number}/resolve/
-POST /api/v1/r4j/admin/cases/{case_number}/reject/
-POST /api/v1/r4j/admin/cases/{case_number}/close/
-POST /api/v1/r4j/admin/cases/{case_number}/reopen/
-GET  /api/v1/r4j/admin/cases/{case_number}/timeline/
-GET  /api/v1/r4j/admin/operations/overview/
-```
+بنابراین endpointها و مدل‌های مربوط به پرونده عملیاتی از این اپ حذف شده‌اند.
 
 ### 17.8 سناریوی end-to-end R4J
 
@@ -1350,12 +1293,10 @@ GET  /api/v1/r4j/admin/operations/overview/
 5. کاربر عمومی criminal را می‌بیند.
 6. کاربر report با field_changes و attachment ارسال می‌کند.
 7. report attachment hash و custody event می‌گیرد.
-8. ادمین report را review می‌کند.
-9. ادمین از report پرونده عملیاتی می‌سازد.
-10. پرونده triage و assign می‌شود.
-11. اگر نیاز باشد priority تغییر می‌کند یا evidence بیشتر درخواست می‌شود.
-12. پرونده resolve/reject/close می‌شود.
-13. همه اقدامات حساس audit/timeline دارند.
+8. ادمین report را review می‌کند و تغییرات تأییدشده روی پروفایل اعمال می‌شود.
+9. کاربر fully-verified برای criminal تعهد جایزه ثبت یا مبلغ آن را به‌روزرسانی می‌کند.
+10. در صورت درخواست لغو جایزه یا گزارش، ادمین درخواست را approve/reject می‌کند.
+11. همه اقدامات حساس audit و cache invalidation مناسب دارند.
 ```
 
 ---
@@ -2129,17 +2070,15 @@ GET /api/v1/metrics/
 9. financial control snapshot ساخته می‌شود.
 ```
 
-### 25.3 سناریوی R4J پرونده‌ای
+### 25.3 سناریوی R4J گزارش و جایزه
 
 ```text
 1. criminal ساخته و publish می‌شود.
 2. کاربر report و evidence ارسال می‌کند.
 3. evidence hash و custody chain می‌گیرد.
-4. ادمین report را review می‌کند.
-5. case از report ساخته می‌شود.
-6. case triage و assign می‌شود.
-7. timeline پرونده کامل می‌شود.
-8. case resolve/reject/close می‌شود.
+4. ادمین report را review می‌کند و تغییرات معتبر را اعمال می‌کند.
+5. کاربر fully-verified bounty declarative ثبت یا ویرایش می‌کند.
+6. درخواست‌های لغو report/bounty توسط ادمین approve یا reject می‌شوند.
 ```
 
 ### 25.4 سناریوی Support Desk
@@ -2321,7 +2260,7 @@ apps/authentication               → identity/auth/session/risk
 apps/public_reports               → public reports
 apps/tabyin                       → content sync/submissions
 apps/audit_logs                   → audit/forensics
-apps/r4j                          → reward for justice/cases/evidence
+apps/r4j                          → reward for justice criminal profiles/reports/bounties/evidence
 apps/madadkar                     → charitable finance platform
 apps/lms                          → learning platform
 apps/kindness_wall                → kindness listings/matching

@@ -37,7 +37,6 @@ from apps.core.cache import (
 
 from .models import (
     R4JBounty,
-    R4JCaseEvent,
     R4JCriminal,
     R4JCriminalAlias,
     R4JCriminalAttachment,
@@ -46,7 +45,6 @@ from .models import (
     R4JCriminalPhoto,
     R4JCriminalSocial,
     R4JEvidenceCustodyEvent,
-    R4JInvestigationCase,
     R4JReport,
     R4JReportAttachment,
     R4JReportFieldChange,
@@ -639,80 +637,3 @@ def get_admin_evidence_custody_events() -> QuerySet[R4JEvidenceCustodyEvent]:
 def get_admin_evidence_custody_event_by_id(*, event_id: int) -> R4JEvidenceCustodyEvent | None:
     """Return one custody event by id."""
     return get_admin_evidence_custody_events().filter(pk=event_id).first()
-
-# ============================================================
-# Investigation Cases — admin operational read side
-# ============================================================
-
-
-def get_admin_investigation_cases_queryset() -> QuerySet[R4JInvestigationCase]:
-    """Admin list queryset for operational R4J cases with stable joins."""
-    return (
-        R4JInvestigationCase.objects.select_related(
-            "report",
-            "criminal",
-            "assigned_to",
-            "triaged_by",
-            "closed_by",
-        )
-        .prefetch_related("events")
-        .order_by("-created_at")
-    )
-
-
-def get_admin_investigation_case_by_number(*, case_number: str) -> R4JInvestigationCase | None:
-    """Fetch an investigation case by human case number."""
-    try:
-        return get_admin_investigation_cases_queryset().get(case_number=case_number)
-    except R4JInvestigationCase.DoesNotExist:
-        return None
-
-
-def get_admin_investigation_case_by_id(*, case_id: int) -> R4JInvestigationCase | None:
-    """Fetch an investigation case by primary key."""
-    try:
-        return get_admin_investigation_cases_queryset().get(pk=case_id)
-    except R4JInvestigationCase.DoesNotExist:
-        return None
-
-
-def get_admin_investigation_case_timeline(*, case: R4JInvestigationCase) -> QuerySet[R4JCaseEvent]:
-    """Read immutable timeline for a case."""
-    return case.events.select_related("actor").order_by("created_at", "id")
-
-
-def get_r4j_case_operations_overview() -> dict[str, object]:
-    """Aggregate operational counters for the R4J admin command view."""
-    from django.db.models import Count
-    from django.utils import timezone
-
-    now = timezone.now()
-    queryset = R4JInvestigationCase.objects.all()
-    by_status = {row["status"]: row["count"] for row in queryset.values("status").annotate(count=Count("id"))}
-    by_priority = {row["priority"]: row["count"] for row in queryset.values("priority").annotate(count=Count("id"))}
-    return {
-        "total_cases": queryset.count(),
-        "unassigned_cases": queryset.filter(assigned_to__isnull=True).exclude(status__in=["resolved", "rejected", "closed"]).count(),
-        "overdue_first_response": queryset.filter(first_response_due_at__lt=now).exclude(status__in=["resolved", "rejected", "closed"]).count(),
-        "overdue_resolution": queryset.filter(resolution_due_at__lt=now).exclude(status__in=["resolved", "rejected", "closed"]).count(),
-        "by_status": by_status,
-        "by_priority": by_priority,
-    }
-
-
-def get_overdue_investigation_cases() -> QuerySet[R4JInvestigationCase]:
-    """Cases that breached first-response or resolution due dates."""
-    from django.db.models import Q
-    from django.utils import timezone
-
-    now = timezone.now()
-    return get_admin_investigation_cases_queryset().filter(
-        Q(first_response_due_at__lt=now) | Q(resolution_due_at__lt=now),
-    ).exclude(status__in=["resolved", "rejected", "closed"])
-
-
-def get_unassigned_investigation_cases() -> QuerySet[R4JInvestigationCase]:
-    """Mutable cases that have not been assigned yet."""
-    return get_admin_investigation_cases_queryset().filter(
-        assigned_to__isnull=True,
-    ).exclude(status__in=["resolved", "rejected", "closed"])

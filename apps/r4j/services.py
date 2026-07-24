@@ -33,7 +33,6 @@ from __future__ import annotations
 
 import hashlib
 import logging
-from datetime import timedelta
 from typing import Any
 
 from django.contrib.auth import get_user_model
@@ -44,15 +43,10 @@ from django.utils import timezone
 
 from .choices import (
     BOUNTY_ACTIVE_STATUSES,
-    INVESTIGATION_CASE_TERMINAL_STATUSES,
     BountyStatus,
     CriminalAttachmentKind,
     EvidenceCustodyEventType,
     Gender,
-    InvestigationCaseEventType,
-    InvestigationCasePriority,
-    InvestigationCaseSeverity,
-    InvestigationCaseStatus,
     ReportFieldChangeStatus,
     ReportStatus,
     SocialPlatform,
@@ -60,7 +54,6 @@ from .choices import (
 from .field_applicators import FieldApplicationError, apply_field_to_criminal
 from .models import (
     R4JBounty,
-    R4JCaseEvent,
     R4JCriminal,
     R4JCriminalAlias,
     R4JCriminalAttachment,
@@ -69,7 +62,6 @@ from .models import (
     R4JCriminalPhoto,
     R4JCriminalSocial,
     R4JEvidenceCustodyEvent,
-    R4JInvestigationCase,
     R4JReport,
     R4JReportAttachment,
     R4JReportFieldChange,
@@ -1319,301 +1311,3 @@ def record_evidence_custody_review(
         note=note,
         metadata={"source_event_id": event.pk},
     )
-
-# ============================================================
-# Investigation Cases — operational workflow
-# ============================================================
-
-class InvestigationCaseAlreadyExists(R4JServiceError):
-    """A report already has an investigation case."""
-
-
-class InvestigationCaseLocked(R4JServiceError):
-    """Terminal cases cannot be mutated before reopening."""
-
-
-class InvestigationCaseInvalidTransition(R4JServiceError):
-    """Requested case transition is not valid for the current state."""
-
-
-def _ensure_case_mutable(*, case: R4JInvestigationCase) -> None:
-    """Raise when a case is terminal and needs explicit reopening first."""
-    if case.status in INVESTIGATION_CASE_TERMINAL_STATUSES:
-        raise InvestigationCaseLocked("پرونده در وضعیت نهایی است و قبل از بازگشایی قابل تغییر نیست.")
-
-
-def _case_due_dates(*, priority: str, base_time):
-    """Resolve deterministic first-response and resolution due dates by priority."""
-    first_response_hours = {
-        InvestigationCasePriority.CRITICAL: 2,
-        InvestigationCasePriority.HIGH: 8,
-        InvestigationCasePriority.MEDIUM: 24,
-        InvestigationCasePriority.LOW: 48,
-    }[priority]
-    resolution_hours = {
-        InvestigationCasePriority.CRITICAL: 24,
-        InvestigationCasePriority.HIGH: 72,
-        InvestigationCasePriority.MEDIUM: 168,
-        InvestigationCasePriority.LOW: 336,
-    }[priority]
-    return base_time + timedelta(hours=first_response_hours), base_time + timedelta(hours=resolution_hours)
-
-
-def calculate_investigation_case_score(*, report: R4JReport) -> int:
-    """Calculate evidence completeness score from report structure and evidence hashes."""
-    score = 10
-    score += min(report.field_changes.count() * 15, 45)
-    hashed_attachments = report.attachments.exclude(file_sha256="").count()
-    score += min(hashed_attachments * 20, 40)
-    if report.notes.strip():
-        score += 5
-    return min(score, 100)
-
-
-def recommend_investigation_case_priority(*, score: int, attachment_count: int) -> str:
-    """Deterministic priority recommendation for operational queues."""
-    if score >= 80 and attachment_count >= 2:
-        return InvestigationCasePriority.CRITICAL
-    if score >= 60:
-        return InvestigationCasePriority.HIGH
-    if score >= 35:
-        return InvestigationCasePriority.MEDIUM
-    return InvestigationCasePriority.LOW
-
-
-def _create_case_event(
-    *,
-    case: R4JInvestigationCase,
-    event_type: str,
-    actor: User | None,
-    from_status: str = "",
-    to_status: str = "",
-    note: str = "",
-    metadata: dict[str, Any] | None = None,
-) -> R4JCaseEvent:
-    """Append an immutable case timeline event."""
-    return R4JCaseEvent.objects.create(
-        case=case,
-        event_type=event_type,
-        actor=actor,
-        from_status=from_status,
-        to_status=to_status,
-        note=note,
-        metadata=metadata or {},
-    )
-
-
-def _generate_case_number(*, case_id: int, created_at) -> str:
-    """Generate a stable human-readable R4J case number."""
-    return f"R4J-{created_at:%Y%m%d}-{case_id:06d}"
-
-
-@transaction.atomic
-def create_investigation_case_from_report(*, report: R4JReport, actor: User) -> R4JInvestigationCase:
-    """Create a single operational investigation case from an R4J community report."""
-    if hasattr(report, "investigation_case"):
-        raise InvestigationCaseAlreadyExists("برای این گزارش قبلاً پرونده عملیاتی ساخته شده است.")
-
-    report = R4JReport.objects.select_for_update().get(pk=report.pk)
-    if hasattr(report, "investigation_case"):
-        raise InvestigationCaseAlreadyExists("برای این گزارش قبلاً پرونده عملیاتی ساخته شده است.")
-
-    score = calculate_investigation_case_score(report=report)
-    priority = recommend_investigation_case_priority(
-        score=score,
-        attachment_count=report.attachments.count(),
-    )
-    now = timezone.now()
-    first_due, resolution_due = _case_due_dates(priority=priority, base_time=now)
-    case = R4JInvestigationCase.objects.create(
-        case_number=f"R4J-PENDING-{report.pk}",
-        report=report,
-        criminal=report.criminal,
-        status=InvestigationCaseStatus.NEW,
-        priority=priority,
-        severity=priority,
-        evidence_completeness_score=score,
-        first_response_due_at=first_due,
-        resolution_due_at=resolution_due,
-        metadata={"source": "report", "report_id": report.pk},
-    )
-    case.case_number = _generate_case_number(case_id=case.pk, created_at=case.created_at)
-    case.save(update_fields=["case_number", "updated_at"])
-    _create_case_event(
-        case=case,
-        event_type=InvestigationCaseEventType.CREATED,
-        actor=actor,
-        to_status=case.status,
-        note="پرونده از روی گزارش جامعه ایجاد شد.",
-        metadata={"report_id": report.pk, "score": score, "priority": priority},
-    )
-    return case
-
-
-@transaction.atomic
-def triage_investigation_case(
-    *,
-    case: R4JInvestigationCase,
-    actor: User,
-    priority: str,
-    severity: str,
-    note: str = "",
-) -> R4JInvestigationCase:
-    """Triage a case and refresh operational due dates."""
-    case = R4JInvestigationCase.objects.select_for_update().get(pk=case.pk)
-    _ensure_case_mutable(case=case)
-    old_status = case.status
-    now = timezone.now()
-    first_due, resolution_due = _case_due_dates(priority=priority, base_time=now)
-    case.status = InvestigationCaseStatus.TRIAGED
-    case.priority = priority
-    case.severity = severity
-    case.triaged_by = actor
-    case.triaged_at = now
-    case.first_response_due_at = first_due
-    case.resolution_due_at = resolution_due
-    case.save(update_fields=[
-        "status", "priority", "severity", "triaged_by", "triaged_at",
-        "first_response_due_at", "resolution_due_at", "updated_at",
-    ])
-    _create_case_event(
-        case=case,
-        event_type=InvestigationCaseEventType.TRIAGED,
-        actor=actor,
-        from_status=old_status,
-        to_status=case.status,
-        note=note,
-        metadata={"priority": priority, "severity": severity},
-    )
-    return case
-
-
-@transaction.atomic
-def assign_investigation_case(*, case: R4JInvestigationCase, actor: User, assignee: User, note: str = "") -> R4JInvestigationCase:
-    """Assign a mutable case to an investigator."""
-    case = R4JInvestigationCase.objects.select_for_update().get(pk=case.pk)
-    _ensure_case_mutable(case=case)
-    old_status = case.status
-    case.assigned_to = assignee
-    case.status = InvestigationCaseStatus.ASSIGNED
-    case.save(update_fields=["assigned_to", "status", "updated_at"])
-    _create_case_event(
-        case=case,
-        event_type=InvestigationCaseEventType.ASSIGNED,
-        actor=actor,
-        from_status=old_status,
-        to_status=case.status,
-        note=note,
-        metadata={"assignee_id": assignee.pk},
-    )
-    return case
-
-
-@transaction.atomic
-def change_investigation_case_priority(*, case: R4JInvestigationCase, actor: User, priority: str, note: str = "") -> R4JInvestigationCase:
-    """Change priority and recalculate due dates."""
-    case = R4JInvestigationCase.objects.select_for_update().get(pk=case.pk)
-    _ensure_case_mutable(case=case)
-    old_priority = case.priority
-    now = timezone.now()
-    first_due, resolution_due = _case_due_dates(priority=priority, base_time=now)
-    case.priority = priority
-    case.first_response_due_at = first_due
-    case.resolution_due_at = resolution_due
-    case.save(update_fields=["priority", "first_response_due_at", "resolution_due_at", "updated_at"])
-    _create_case_event(
-        case=case,
-        event_type=InvestigationCaseEventType.PRIORITY_CHANGED,
-        actor=actor,
-        from_status=case.status,
-        to_status=case.status,
-        note=note,
-        metadata={"old_priority": old_priority, "new_priority": priority},
-    )
-    return case
-
-
-@transaction.atomic
-def request_more_evidence(*, case: R4JInvestigationCase, actor: User, note: str) -> R4JInvestigationCase:
-    """Move a case to waiting-for-evidence state."""
-    if not note.strip():
-        raise InvestigationCaseInvalidTransition("برای درخواست مدرک بیشتر، توضیح الزامی است.")
-    case = R4JInvestigationCase.objects.select_for_update().get(pk=case.pk)
-    _ensure_case_mutable(case=case)
-    old_status = case.status
-    case.status = InvestigationCaseStatus.WAITING_FOR_EVIDENCE
-    case.save(update_fields=["status", "updated_at"])
-    _create_case_event(case=case, event_type=InvestigationCaseEventType.EVIDENCE_REQUESTED, actor=actor, from_status=old_status, to_status=case.status, note=note)
-    return case
-
-
-@transaction.atomic
-def escalate_investigation_case(*, case: R4JInvestigationCase, actor: User, reason: str) -> R4JInvestigationCase:
-    """Escalate a mutable case; a reason is mandatory."""
-    if not reason.strip():
-        raise InvestigationCaseInvalidTransition("برای ارجاع فوری، دلیل الزامی است.")
-    case = R4JInvestigationCase.objects.select_for_update().get(pk=case.pk)
-    _ensure_case_mutable(case=case)
-    old_status = case.status
-    case.status = InvestigationCaseStatus.ESCALATED
-    case.priority = InvestigationCasePriority.CRITICAL
-    case.severity = InvestigationCaseSeverity.CRITICAL
-    case.save(update_fields=["status", "priority", "severity", "updated_at"])
-    _create_case_event(case=case, event_type=InvestigationCaseEventType.ESCALATED, actor=actor, from_status=old_status, to_status=case.status, note=reason)
-    return case
-
-
-def _finish_case(*, case: R4JInvestigationCase, actor: User, status_value: str, event_type: str, reason: str) -> R4JInvestigationCase:
-    """Apply a terminal case transition and append its timeline event."""
-    if not reason.strip():
-        raise InvestigationCaseInvalidTransition("برای نهایی‌سازی پرونده، دلیل الزامی است.")
-    old_status = case.status
-    case.status = status_value
-    case.closed_by = actor
-    case.closed_at = timezone.now()
-    case.closure_reason = reason
-    case.save(update_fields=["status", "closed_by", "closed_at", "closure_reason", "updated_at"])
-    _create_case_event(case=case, event_type=event_type, actor=actor, from_status=old_status, to_status=case.status, note=reason)
-    return case
-
-
-@transaction.atomic
-def resolve_investigation_case(*, case: R4JInvestigationCase, actor: User, reason: str) -> R4JInvestigationCase:
-    """Resolve a mutable investigation case."""
-    case = R4JInvestigationCase.objects.select_for_update().get(pk=case.pk)
-    _ensure_case_mutable(case=case)
-    return _finish_case(case=case, actor=actor, status_value=InvestigationCaseStatus.RESOLVED, event_type=InvestigationCaseEventType.RESOLVED, reason=reason)
-
-
-@transaction.atomic
-def reject_investigation_case(*, case: R4JInvestigationCase, actor: User, reason: str) -> R4JInvestigationCase:
-    """Reject a mutable investigation case."""
-    case = R4JInvestigationCase.objects.select_for_update().get(pk=case.pk)
-    _ensure_case_mutable(case=case)
-    return _finish_case(case=case, actor=actor, status_value=InvestigationCaseStatus.REJECTED, event_type=InvestigationCaseEventType.REJECTED, reason=reason)
-
-
-@transaction.atomic
-def close_investigation_case(*, case: R4JInvestigationCase, actor: User, reason: str) -> R4JInvestigationCase:
-    """Close a mutable investigation case."""
-    case = R4JInvestigationCase.objects.select_for_update().get(pk=case.pk)
-    _ensure_case_mutable(case=case)
-    return _finish_case(case=case, actor=actor, status_value=InvestigationCaseStatus.CLOSED, event_type=InvestigationCaseEventType.CLOSED, reason=reason)
-
-
-@transaction.atomic
-def reopen_investigation_case(*, case: R4JInvestigationCase, actor: User, reason: str) -> R4JInvestigationCase:
-    """Reopen a terminal case into investigating state."""
-    if not reason.strip():
-        raise InvestigationCaseInvalidTransition("برای بازگشایی پرونده، دلیل الزامی است.")
-    case = R4JInvestigationCase.objects.select_for_update().get(pk=case.pk)
-    if case.status not in INVESTIGATION_CASE_TERMINAL_STATUSES:
-        raise InvestigationCaseInvalidTransition("فقط پرونده‌های نهایی قابل بازگشایی هستند.")
-    old_status = case.status
-    case.status = InvestigationCaseStatus.INVESTIGATING
-    case.closed_by = None
-    case.closed_at = None
-    case.closure_reason = ""
-    case.save(update_fields=["status", "closed_by", "closed_at", "closure_reason", "updated_at"])
-    _create_case_event(case=case, event_type=InvestigationCaseEventType.REOPENED, actor=actor, from_status=old_status, to_status=case.status, note=reason)
-    return case
