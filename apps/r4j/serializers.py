@@ -781,6 +781,30 @@ class R4JFlexibleTypedListField(serializers.Field):
         return value
 
 
+@extend_schema_field(R4JReportAliasSuggestionInputSerializer(many=True))
+class R4JFlexibleAliasSuggestionsField(R4JFlexibleTypedListField):
+    """Schema-aware flexible field for alias suggestions."""
+
+    def __init__(self, **kwargs):
+        super().__init__(child_serializer_class=R4JReportAliasSuggestionInputSerializer, **kwargs)
+
+
+@extend_schema_field(R4JReportPhoneSuggestionInputSerializer(many=True))
+class R4JFlexiblePhoneSuggestionsField(R4JFlexibleTypedListField):
+    """Schema-aware flexible field for phone suggestions."""
+
+    def __init__(self, **kwargs):
+        super().__init__(child_serializer_class=R4JReportPhoneSuggestionInputSerializer, **kwargs)
+
+
+@extend_schema_field(R4JReportSocialSuggestionInputSerializer(many=True))
+class R4JFlexibleSocialSuggestionsField(R4JFlexibleTypedListField):
+    """Schema-aware flexible field for social suggestions."""
+
+    def __init__(self, **kwargs):
+        super().__init__(child_serializer_class=R4JReportSocialSuggestionInputSerializer, **kwargs)
+
+
 @extend_schema_field(R4JReportFieldChangeInputSerializer(many=True))
 class R4JFlexibleReportFieldChangesField(serializers.Field):
     """
@@ -875,21 +899,9 @@ class R4JReportSubmitSerializer(serializers.Serializer):
     )
 
 
-    alias_suggestions = R4JFlexibleTypedListField(
-        child_serializer_class=R4JReportAliasSuggestionInputSerializer,
-        required=False,
-        default=list,
-    )
-    phone_suggestions = R4JFlexibleTypedListField(
-        child_serializer_class=R4JReportPhoneSuggestionInputSerializer,
-        required=False,
-        default=list,
-    )
-    social_suggestions = R4JFlexibleTypedListField(
-        child_serializer_class=R4JReportSocialSuggestionInputSerializer,
-        required=False,
-        default=list,
-    )
+    alias_suggestions = R4JFlexibleAliasSuggestionsField(required=False, default=list)
+    phone_suggestions = R4JFlexiblePhoneSuggestionsField(required=False, default=list)
+    social_suggestions = R4JFlexibleSocialSuggestionsField(required=False, default=list)
 
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
         """حداقل یک field_change یا یادداشت غیر خالی لازم است."""

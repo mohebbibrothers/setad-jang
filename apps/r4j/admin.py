@@ -536,7 +536,7 @@ class R4JReportAdmin(admin.ModelAdmin):
         if missing_decisions:
             messages.error(
                 request,
-                "برای همه پیشنهادهای گزارش باید تصمیم تأیید یا رد ثبت شود: "
+                "برای همه پیشنهادهای اصلاح باید تصمیم تأیید یا رد ثبت شود: "
                 + ", ".join(missing_decisions),
             )
             return HttpResponseRedirect(request.path)
