@@ -14,7 +14,14 @@ Django Admin اپ R4J.
 
 from __future__ import annotations
 
-from django.contrib import admin
+from django.contrib import admin, messages
+from django.http import HttpResponseRedirect
+from django.utils.html import format_html
+
+from apps.audit_logs import actions as audit_actions
+from apps.audit_logs.helpers import extract_audit_metadata
+from apps.audit_logs.services import log_action_async
+from apps.r4j.choices import ReportFieldChangeStatus, ReportStatus
 
 from . import services
 from .models import (
@@ -214,9 +221,39 @@ class R4JCriminalFieldVisibilityAdmin(HiddenFromAdminIndexMixin, admin.ModelAdmi
     raw_id_fields = ("criminal",)
 
 
+class R4JReportFieldChangeInline(admin.TabularInline):
+    """Read-only field-change context plus service-backed review panel on report."""
+
+    model = R4JReportFieldChange
+    extra = 0
+    can_delete = False
+    fields = ("field_name", "current_value_snapshot", "suggested_value", "status", "admin_note")
+    readonly_fields = fields
+    show_change_link = False
+
+    def has_add_permission(self, request, obj=None) -> bool:
+        """Field changes are created through user reports, not manually in admin."""
+        return False
+
+
+class R4JReportAttachmentInline(admin.TabularInline):
+    """Read-only report evidence visible inside the report review workspace."""
+
+    model = R4JReportAttachment
+    extra = 0
+    can_delete = False
+    fields = ("file", "title", "kind", "file_sha256", "file_size", "created_at")
+    readonly_fields = fields
+    show_change_link = True
+
+    def has_add_permission(self, request, obj=None) -> bool:
+        """Report attachments are submitted by users and preserved for review."""
+        return False
+
+
 @admin.register(R4JReport)
 class R4JReportAdmin(admin.ModelAdmin):
-    """Admin queue for user-submitted R4J reports."""
+    """Service-backed admin workspace for reviewing one user report in context."""
 
     list_display = (
         "id",
@@ -227,29 +264,215 @@ class R4JReportAdmin(admin.ModelAdmin):
         "created_at",
     )
     list_filter = ("status",)
-    search_fields = ("criminal__first_name", "criminal__last_name", "submitted_by__email")
+    search_fields = ("criminal__first_name", "criminal__last_name", "submitted_by__email", "notes")
     raw_id_fields = ("criminal", "submitted_by", "reviewed_by")
+    readonly_fields = (
+        "criminal",
+        "submitted_by",
+        "notes",
+        "status",
+        "admin_note",
+        "reviewed_by",
+        "reviewed_at",
+        "cancel_requested_at",
+        "canceled_at",
+        "created_at",
+        "updated_at",
+        "review_decision_panel",
+    )
+    fieldsets = (
+        ("اطلاعات گزارش", {
+            "fields": ("criminal", "submitted_by", "status", "notes"),
+        }),
+        ("بررسی رسمی", {
+            "fields": ("review_decision_panel",),
+        }),
+        ("نتیجه بررسی", {
+            "fields": ("admin_note", "reviewed_by", "reviewed_at", "cancel_requested_at", "canceled_at"),
+        }),
+        ("زمان‌ها", {
+            "fields": ("created_at", "updated_at"),
+        }),
+    )
+    inlines = [R4JReportFieldChangeInline, R4JReportAttachmentInline]
+
+    def has_add_permission(self, request) -> bool:
+        """Reports are submitted by users through the R4J public workflow."""
+        return False
+
+    @admin.display(description="تصمیم‌گیری و ثبت بررسی")
+    def review_decision_panel(self, obj: R4JReport) -> str:
+        """Render a compact decision matrix submitted through services.review_report."""
+        if not obj or not obj.pk:
+            return "پس از ذخیره گزارش قابل بررسی است."
+
+        if obj.status != ReportStatus.PENDING:
+            return format_html(
+                '<div class="help">این گزارش قبلاً تعیین تکلیف شده است. وضعیت فعلی: <strong>{}</strong></div>',
+                obj.get_status_display(),
+            )
+
+        field_changes = list(obj.field_changes.all().order_by("id"))
+        admin_note_input = (
+            '<div style="margin-top: 1rem;">'
+            '<label for="id_r4j_report_admin_note"><strong>یادداشت کلی ادمین</strong></label><br>'
+            '<textarea id="id_r4j_report_admin_note" name="r4j_report_admin_note" rows="3" '
+            'style="width: min(100%, 980px);"></textarea>'
+            '</div>'
+        )
+        submit_button = (
+            '<div style="margin-top: 1rem;">'
+            '<button type="submit" class="default" name="_r4j_review_report" value="1">'
+            'ثبت بررسی از مسیر امن سرویس'
+            '</button>'
+            '</div>'
+        )
+
+        if not field_changes:
+            return format_html(
+                '<div class="module aligned">'
+                '<p>این گزارش پیشنهاد اصلاح فیلد ندارد و فقط شامل یادداشت/ضمیمه است. '
+                'با ثبت بررسی، گزارش از مسیر رسمی سرویس تأیید می‌شود.</p>'
+                '{}{}'
+                '</div>',
+                format_html(admin_note_input),
+                format_html(submit_button),
+            )
+
+        rows = []
+        for fc in field_changes:
+            rows.append(format_html(
+                '<tr>'
+                '<td><code>{}</code></td>'
+                '<td style="white-space: pre-wrap; max-width: 280px;">{}</td>'
+                '<td style="white-space: pre-wrap; max-width: 320px;">{}</td>'
+                '<td>'
+                '<select name="r4j_decision_{}" required>'
+                '<option value="">انتخاب کنید</option>'
+                '<option value="{}">تأیید و اعمال</option>'
+                '<option value="{}">رد</option>'
+                '</select>'
+                '</td>'
+                '<td><input type="text" name="r4j_note_{}" style="width: 100%;" placeholder="یادداشت اختیاری برای این فیلد"></td>'
+                '</tr>',
+                fc.field_name,
+                fc.current_value_snapshot,
+                fc.suggested_value,
+                fc.pk,
+                ReportFieldChangeStatus.APPROVED,
+                ReportFieldChangeStatus.REJECTED,
+                fc.pk,
+            ))
+
+        return format_html(
+            '<div class="module">'
+            '<p class="help">هر پیشنهاد اصلاح را تأیید یا رد کنید. تأییدها فقط از مسیر '
+            '<code>services.review_report</code> اعمال می‌شوند تا state machine، تبدیل نوع، audit و cache درست بمانند.</p>'
+            '<table style="width: 100%;">'
+            '<thead><tr><th>فیلد</th><th>مقدار فعلی هنگام گزارش</th><th>مقدار پیشنهادی</th><th>تصمیم</th><th>یادداشت فیلد</th></tr></thead>'
+            '<tbody>{}</tbody>'
+            '</table>'
+            '{}{}'
+            '</div>',
+            format_html("".join(str(row) for row in rows)),
+            format_html(admin_note_input),
+            format_html(submit_button),
+        )
+
+    def changeform_view(self, request, object_id=None, form_url="", extra_context=None):
+        """Route review submissions before default admin formset validation.
+
+        The review panel uses custom POST fields, not editable inline formsets.
+        Intercepting here prevents unrelated readonly inline management forms from
+        blocking the service-backed review action.
+        """
+        if request.method == "POST" and "_r4j_review_report" in request.POST:
+            obj = self.get_object(request, object_id)
+            if obj is None:
+                messages.error(request, "گزارش یافت نشد.")
+                return HttpResponseRedirect(request.path)
+            return self._handle_review_request(request, obj)
+        return super().changeform_view(request, object_id, form_url, extra_context)
+
+    def _handle_review_request(self, request, obj: R4JReport):
+        """Run the official review service from the Django admin workspace."""
+        obj = R4JReport.objects.prefetch_related("field_changes").get(pk=obj.pk)
+        if obj.status != ReportStatus.PENDING:
+            messages.error(request, "فقط گزارش‌های در انتظار بررسی قابل بررسی هستند.")
+            return HttpResponseRedirect(request.path)
+
+        decisions = []
+        missing_decisions: list[str] = []
+        for field_change in obj.field_changes.all().order_by("id"):
+            decision = request.POST.get(f"r4j_decision_{field_change.pk}", "")
+            if decision not in {ReportFieldChangeStatus.APPROVED, ReportFieldChangeStatus.REJECTED}:
+                missing_decisions.append(field_change.field_name)
+                continue
+            decisions.append({
+                "field_change_id": field_change.pk,
+                "status": decision,
+                "admin_note": request.POST.get(f"r4j_note_{field_change.pk}", ""),
+            })
+
+        if missing_decisions:
+            messages.error(
+                request,
+                "برای همه پیشنهادهای اصلاح باید تصمیم تأیید یا رد ثبت شود: "
+                + ", ".join(missing_decisions),
+            )
+            return HttpResponseRedirect(request.path)
+
+        try:
+            reviewed_report = services.review_report(
+                report=obj,
+                reviewed_by=request.user,
+                field_decisions=decisions,
+                admin_note=request.POST.get("r4j_report_admin_note", ""),
+            )
+        except services.ReportNotReviewable as exc:
+            messages.error(request, str(exc))
+            return HttpResponseRedirect(request.path)
+
+        log_action_async(
+            user_id=request.user.pk,
+            action=audit_actions.R4J_REPORT_REVIEWED,
+            resource_type="r4j_report",
+            resource_id=str(reviewed_report.pk),
+            extra_data={"final_status": reviewed_report.status, "source": "django_admin"},
+            **extract_audit_metadata(request),
+        )
+        messages.success(request, "گزارش با موفقیت از مسیر رسمی سرویس بررسی شد.")
+        return HttpResponseRedirect(request.path)
 
 
 @admin.register(R4JReportFieldChange)
-class R4JReportFieldChangeAdmin(admin.ModelAdmin):
-    """Admin visibility for per-field report decisions."""
+class R4JReportFieldChangeAdmin(HiddenFromAdminIndexMixin, admin.ModelAdmin):
+    """Direct field-change admin, hidden from index because review happens on Report."""
 
     list_display = ("id", "report", "field_name", "status")
     list_filter = ("status", "field_name")
     search_fields = ("field_name", "suggested_value", "current_value_snapshot")
+    readonly_fields = ("report", "field_name", "suggested_value", "current_value_snapshot", "status", "admin_note")
     raw_id_fields = ("report",)
+
+    def has_add_permission(self, request) -> bool:
+        """Field changes are created by report submission."""
+        return False
 
 
 @admin.register(R4JReportAttachment)
-class R4JReportAttachmentAdmin(admin.ModelAdmin):
-    """Admin queue for user-submitted report evidence."""
+class R4JReportAttachmentAdmin(HiddenFromAdminIndexMixin, admin.ModelAdmin):
+    """Direct report evidence admin, hidden from index because it lives on Report."""
 
     list_display = ("id", "report", "kind", "title", "file_size")
     list_filter = ("kind",)
     search_fields = ("title", "file_sha256")
-    readonly_fields = ("file_sha256", "file_size", "created_at", "updated_at")
+    readonly_fields = ("report", "file", "title", "kind", "file_sha256", "file_size", "created_at", "updated_at")
     raw_id_fields = ("report",)
+
+    def has_add_permission(self, request) -> bool:
+        """Report attachments are submitted by users and preserved for review."""
+        return False
 
 
 @admin.register(R4JBounty)

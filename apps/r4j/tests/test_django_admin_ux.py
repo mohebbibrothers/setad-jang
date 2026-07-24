@@ -1,11 +1,14 @@
 """Django admin UX tests for R4J.
 
-The data model stays normalized, but the daily admin workflow should be centered
-on the Criminal edit page. Directly dependent profile resources are inlines and
-hidden from the top-level admin index, while independent queues remain visible.
+The data model stays normalized, but daily admin workflows are consolidated:
+- Criminal edit page owns direct profile resources.
+- Report edit page owns report review, field-change decisions, and attachments.
+- Top-level admin index stays focused on true queues/workspaces.
 """
 
 from __future__ import annotations
+
+from unittest.mock import MagicMock, patch
 
 import pytest
 from django.contrib import admin
@@ -18,7 +21,10 @@ from apps.r4j.admin import (
     R4JCriminalPhoneInline,
     R4JCriminalPhotoInline,
     R4JCriminalSocialInline,
+    R4JReportAttachmentInline,
+    R4JReportFieldChangeInline,
 )
+from apps.r4j.choices import ReportFieldChangeStatus, ReportStatus
 from apps.r4j.models import (
     R4JBounty,
     R4JCriminal,
@@ -30,12 +36,15 @@ from apps.r4j.models import (
     R4JReportFieldChange,
 )
 from tests.factories.auth import AdminUserFactory
+from tests.factories.r4j import R4JCriminalFactory, R4JReportFactory, R4JReportFieldChangeFactory
 
 pytestmark = pytest.mark.django_db
 
+_TASK_PATCH_PATH = "apps.audit_logs.tasks.create_audit_log_task"
+
 
 class TestR4JDjangoAdminUX:
-    """Admin index should be clean, while profile resources stay editable inline."""
+    """Admin index should be clean, while domain workspaces stay complete."""
 
     def test_criminal_admin_is_the_single_profile_workspace(self):
         criminal_admin = admin.site._registry[R4JCriminal]
@@ -49,24 +58,36 @@ class TestR4JDjangoAdminUX:
             R4JCriminalFieldVisibilityInline,
         ]
 
-    def test_dependent_profile_models_are_registered_but_hidden_from_admin_index(self, rf):
+    def test_report_admin_is_the_single_report_review_workspace(self):
+        report_admin = admin.site._registry[R4JReport]
+
+        assert report_admin.inlines == [
+            R4JReportFieldChangeInline,
+            R4JReportAttachmentInline,
+        ]
+        assert "review_decision_panel" in report_admin.readonly_fields
+
+    def test_dependent_models_are_registered_but_hidden_from_admin_index(self, rf):
         request = rf.get("/admin/")
         request.user = AdminUserFactory()
 
-        hidden_models = [R4JCriminalAttachment, R4JCriminalFieldVisibility]
+        hidden_models = [
+            R4JCriminalAttachment,
+            R4JCriminalFieldVisibility,
+            R4JReportFieldChange,
+            R4JReportAttachment,
+        ]
         for model in hidden_models:
             model_admin = admin.site._registry[model]
             assert model_admin.get_model_perms(request) == {}
 
-    def test_independent_r4j_review_queues_remain_visible_in_admin_index(self, rf):
+    def test_independent_r4j_queues_remain_visible_in_admin_index(self, rf):
         request = rf.get("/admin/")
         request.user = AdminUserFactory()
 
         visible_models = [
             R4JCriminal,
             R4JReport,
-            R4JReportFieldChange,
-            R4JReportAttachment,
             R4JBounty,
             R4JEvidenceCustodyEvent,
         ]
@@ -74,7 +95,7 @@ class TestR4JDjangoAdminUX:
             model_admin = admin.site._registry[model]
             assert model_admin.get_model_perms(request)
 
-    def test_admin_index_hides_profile_submodels_but_keeps_core_r4j_queues(self, client):
+    def test_admin_index_hides_dependent_submodels_but_keeps_core_r4j_queues(self, client):
         admin_user = AdminUserFactory()
         client.force_login(admin_user)
 
@@ -85,10 +106,85 @@ class TestR4JDjangoAdminUX:
 
         assert "اسناد مجرمان" not in html
         assert "تنظیمات نمایش فیلدهای مجرمان" not in html
+        assert "پیشنهادهای اصلاح فیلدهای گزارش" not in html
+        assert "ضمائم گزارش‌های عدالت" not in html
 
         assert "مجرمان" in html
         assert "گزارش‌های عدالت" in html
-        assert "پیشنهادهای اصلاح فیلدهای گزارش" in html
-        assert "ضمائم گزارش‌های عدالت" in html
         assert "جوایز عدالت" in html
         assert "رویدادهای زنجیره نگهداری شواهد" in html
+
+    def test_report_review_panel_is_rendered_on_report_change_page(self, client):
+        admin_user = AdminUserFactory()
+        client.force_login(admin_user)
+        report = R4JReportFactory(status=ReportStatus.PENDING)
+        R4JReportFieldChangeFactory(
+            report=report,
+            field_name="city",
+            current_value_snapshot="تهران",
+            suggested_value="قم",
+        )
+
+        response = client.get(reverse("admin:r4j_r4jreport_change", args=[report.pk]))
+
+        assert response.status_code == 200
+        html = response.content.decode("utf-8")
+        assert "ثبت بررسی از مسیر امن سرویس" in html
+        assert "r4j_decision_" in html
+        assert "services.review_report" in html
+
+    def test_report_review_submit_uses_service_and_updates_criminal(self, client):
+        admin_user = AdminUserFactory()
+        client.force_login(admin_user)
+        criminal = R4JCriminalFactory(city="تهران")
+        report = R4JReportFactory(criminal=criminal, status=ReportStatus.PENDING)
+        field_change = R4JReportFieldChangeFactory(
+            report=report,
+            field_name="city",
+            current_value_snapshot="تهران",
+            suggested_value="قم",
+        )
+
+        with patch(_TASK_PATCH_PATH) as mock_task:
+            mock_task.delay = MagicMock()
+            response = client.post(
+                reverse("admin:r4j_r4jreport_change", args=[report.pk]),
+                data={
+                    "_r4j_review_report": "1",
+                    f"r4j_decision_{field_change.pk}": ReportFieldChangeStatus.APPROVED,
+                    f"r4j_note_{field_change.pk}": "مدرک کافی است.",
+                    "r4j_report_admin_note": "بررسی شد.",
+                },
+                follow=True,
+            )
+
+        assert response.status_code == 200
+        criminal.refresh_from_db()
+        report.refresh_from_db()
+        field_change.refresh_from_db()
+
+        assert criminal.city == "قم"
+        assert report.status == ReportStatus.APPROVED
+        assert report.reviewed_by_id == admin_user.pk
+        assert field_change.status == ReportFieldChangeStatus.APPROVED
+        assert field_change.admin_note == "مدرک کافی است."
+        mock_task.delay.assert_called_once()
+
+    def test_report_review_requires_decision_for_every_field_change(self, client):
+        admin_user = AdminUserFactory()
+        client.force_login(admin_user)
+        report = R4JReportFactory(status=ReportStatus.PENDING)
+        field_change = R4JReportFieldChangeFactory(report=report, field_name="city")
+
+        response = client.post(
+            reverse("admin:r4j_r4jreport_change", args=[report.pk]),
+            data={"_r4j_review_report": "1"},
+            follow=True,
+        )
+
+        assert response.status_code == 200
+        report.refresh_from_db()
+        field_change.refresh_from_db()
+        assert report.status == ReportStatus.PENDING
+        assert field_change.status == ReportFieldChangeStatus.PENDING
+        assert "برای همه پیشنهادهای اصلاح باید تصمیم" in response.content.decode("utf-8")
