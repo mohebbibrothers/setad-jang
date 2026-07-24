@@ -35,8 +35,11 @@ from .models import (
     R4JCriminalSocial,
     R4JEvidenceCustodyEvent,
     R4JReport,
+    R4JReportAliasSuggestion,
     R4JReportAttachment,
     R4JReportFieldChange,
+    R4JReportPhoneSuggestion,
+    R4JReportSocialSuggestion,
 )
 
 
@@ -236,13 +239,49 @@ class R4JReportFieldChangeInline(admin.TabularInline):
         return False
 
 
+class R4JReportAliasSuggestionInline(admin.TabularInline):
+    """Read-only alias suggestions visible inside the report review workspace."""
+
+    model = R4JReportAliasSuggestion
+    extra = 0
+    can_delete = False
+    fields = ("alias", "status", "admin_note", "applied_alias")
+    readonly_fields = fields
+
+    def has_add_permission(self, request, obj=None) -> bool: return False
+
+
+class R4JReportPhoneSuggestionInline(admin.TabularInline):
+    """Read-only phone suggestions visible inside the report review workspace."""
+
+    model = R4JReportPhoneSuggestion
+    extra = 0
+    can_delete = False
+    fields = ("label", "number", "is_public", "notes", "status", "admin_note", "applied_phone")
+    readonly_fields = fields
+
+    def has_add_permission(self, request, obj=None) -> bool: return False
+
+
+class R4JReportSocialSuggestionInline(admin.TabularInline):
+    """Read-only social suggestions visible inside the report review workspace."""
+
+    model = R4JReportSocialSuggestion
+    extra = 0
+    can_delete = False
+    fields = ("platform", "handle_or_url", "is_public", "status", "admin_note", "applied_social")
+    readonly_fields = fields
+
+    def has_add_permission(self, request, obj=None) -> bool: return False
+
+
 class R4JReportAttachmentInline(admin.TabularInline):
     """Read-only report evidence visible inside the report review workspace."""
 
     model = R4JReportAttachment
     extra = 0
     can_delete = False
-    fields = ("file", "title", "kind", "file_sha256", "file_size", "created_at")
+    fields = ("file", "title", "kind", "status", "admin_note", "file_sha256", "file_size", "promoted_criminal_attachment", "created_at")
     readonly_fields = fields
     show_change_link = True
 
@@ -294,7 +333,13 @@ class R4JReportAdmin(admin.ModelAdmin):
             "fields": ("created_at", "updated_at"),
         }),
     )
-    inlines = [R4JReportFieldChangeInline, R4JReportAttachmentInline]
+    inlines = [
+        R4JReportFieldChangeInline,
+        R4JReportAliasSuggestionInline,
+        R4JReportPhoneSuggestionInline,
+        R4JReportSocialSuggestionInline,
+        R4JReportAttachmentInline,
+    ]
 
     def has_add_permission(self, request) -> bool:
         """Reports are submitted by users through the R4J public workflow."""
@@ -313,6 +358,11 @@ class R4JReportAdmin(admin.ModelAdmin):
             )
 
         field_changes = list(obj.field_changes.all().order_by("id"))
+        alias_suggestions = list(obj.alias_suggestions.all().order_by("id"))
+        phone_suggestions = list(obj.phone_suggestions.all().order_by("id"))
+        social_suggestions = list(obj.social_suggestions.all().order_by("id"))
+        attachments = list(obj.attachments.all().order_by("id"))
+        has_decision_items = any([field_changes, alias_suggestions, phone_suggestions, social_suggestions, attachments])
         admin_note_input = format_html(
             '<div style="margin-top: 1rem;">'
             '<label for="id_r4j_report_admin_note"><strong>یادداشت کلی ادمین</strong></label><br>'
@@ -330,11 +380,10 @@ class R4JReportAdmin(admin.ModelAdmin):
             "",
         )
 
-        if not field_changes:
+        if not has_decision_items:
             return format_html(
                 '<div class="module aligned">'
-                '<p>این گزارش پیشنهاد اصلاح فیلد ندارد و فقط شامل یادداشت/ضمیمه است. '
-                'با ثبت بررسی، گزارش از مسیر رسمی سرویس تأیید می‌شود.</p>'
+                '<p>این گزارش فقط شامل یادداشت آزاد است. با ثبت بررسی، گزارش از مسیر رسمی سرویس تأیید می‌شود.</p>'
                 '{}{}'
                 '</div>',
                 admin_note_input,
@@ -342,29 +391,49 @@ class R4JReportAdmin(admin.ModelAdmin):
             )
 
         rows = []
-        for fc in field_changes:
+
+        def append_decision_row(kind: str, label: str, current: str, suggested: str, input_name: str, note_name: str) -> None:
             rows.append(format_html(
                 '<tr>'
-                '<td><code>{}</code></td>'
+                '<td><strong>{}</strong><br><code>{}</code></td>'
                 '<td style="white-space: pre-wrap; max-width: 280px;">{}</td>'
                 '<td style="white-space: pre-wrap; max-width: 320px;">{}</td>'
                 '<td>'
-                '<select name="r4j_decision_{}" required>'
+                '<select name="{}" required>'
                 '<option value="">انتخاب کنید</option>'
                 '<option value="{}">تأیید و اعمال</option>'
                 '<option value="{}">رد</option>'
                 '</select>'
                 '</td>'
-                '<td><input type="text" name="r4j_note_{}" style="width: 100%;" title="یادداشت اختیاری برای این فیلد"></td>'
+                '<td><input type="text" name="{}" style="width: 100%;" title="یادداشت اختیاری برای این مورد"></td>'
                 '</tr>',
+                kind,
+                label,
+                current,
+                suggested,
+                input_name,
+                ReportFieldChangeStatus.APPROVED,
+                ReportFieldChangeStatus.REJECTED,
+                note_name,
+            ))
+
+        for fc in field_changes:
+            append_decision_row(
+                "اصلاح فیلد",
                 fc.field_name,
                 fc.current_value_snapshot,
                 fc.suggested_value,
-                fc.pk,
-                ReportFieldChangeStatus.APPROVED,
-                ReportFieldChangeStatus.REJECTED,
-                fc.pk,
-            ))
+                f"r4j_decision_{fc.pk}",
+                f"r4j_note_{fc.pk}",
+            )
+        for item in alias_suggestions:
+            append_decision_row("نام مستعار", f"alias#{item.pk}", "—", item.alias, f"r4j_alias_decision_{item.pk}", f"r4j_alias_note_{item.pk}")
+        for item in phone_suggestions:
+            append_decision_row("شماره تماس", f"phone#{item.pk}", item.label or "—", item.number, f"r4j_phone_decision_{item.pk}", f"r4j_phone_note_{item.pk}")
+        for item in social_suggestions:
+            append_decision_row("شبکه اجتماعی", f"social#{item.pk}", item.platform, item.handle_or_url, f"r4j_social_decision_{item.pk}", f"r4j_social_note_{item.pk}")
+        for item in attachments:
+            append_decision_row("ضمیمه/مدرک", f"attachment#{item.pk}", item.kind, item.title or item.file.name, f"r4j_attachment_decision_{item.pk}", f"r4j_attachment_note_{item.pk}")
 
         return format_html(
             '<div class="module">'
@@ -396,9 +465,24 @@ class R4JReportAdmin(admin.ModelAdmin):
             return self._handle_review_request(request, obj)
         return super().changeform_view(request, object_id, form_url, extra_context)
 
+    def _collect_report_decisions(self, *, request, items, post_prefix: str, id_key: str, missing_decisions: list[str], label_getter) -> list[dict[str, str | int]]:
+        """Collect approve/reject decisions for non-field report suggestions."""
+        collected = []
+        for item in items:
+            decision = request.POST.get(f"{post_prefix}_decision_{item.pk}", "")
+            if decision not in {ReportFieldChangeStatus.APPROVED, ReportFieldChangeStatus.REJECTED}:
+                missing_decisions.append(label_getter(item))
+                continue
+            collected.append({
+                id_key: item.pk,
+                "status": decision,
+                "admin_note": request.POST.get(f"{post_prefix}_note_{item.pk}", ""),
+            })
+        return collected
+
     def _handle_review_request(self, request, obj: R4JReport):
         """Run the official review service from the Django admin workspace."""
-        obj = R4JReport.objects.prefetch_related("field_changes").get(pk=obj.pk)
+        obj = R4JReport.objects.prefetch_related("field_changes", "alias_suggestions", "phone_suggestions", "social_suggestions", "attachments").get(pk=obj.pk)
         if obj.status != ReportStatus.PENDING:
             messages.error(request, "فقط گزارش‌های در انتظار بررسی قابل بررسی هستند.")
             return HttpResponseRedirect(request.path)
@@ -416,10 +500,43 @@ class R4JReportAdmin(admin.ModelAdmin):
                 "admin_note": request.POST.get(f"r4j_note_{field_change.pk}", ""),
             })
 
+        alias_decisions = self._collect_report_decisions(
+            request=request,
+            items=obj.alias_suggestions.all().order_by("id"),
+            post_prefix="r4j_alias",
+            id_key="alias_suggestion_id",
+            missing_decisions=missing_decisions,
+            label_getter=lambda item: f"alias:{item.alias}",
+        )
+        phone_decisions = self._collect_report_decisions(
+            request=request,
+            items=obj.phone_suggestions.all().order_by("id"),
+            post_prefix="r4j_phone",
+            id_key="phone_suggestion_id",
+            missing_decisions=missing_decisions,
+            label_getter=lambda item: f"phone:{item.number}",
+        )
+        social_decisions = self._collect_report_decisions(
+            request=request,
+            items=obj.social_suggestions.all().order_by("id"),
+            post_prefix="r4j_social",
+            id_key="social_suggestion_id",
+            missing_decisions=missing_decisions,
+            label_getter=lambda item: f"social:{item.handle_or_url}",
+        )
+        attachment_decisions = self._collect_report_decisions(
+            request=request,
+            items=obj.attachments.all().order_by("id"),
+            post_prefix="r4j_attachment",
+            id_key="attachment_id",
+            missing_decisions=missing_decisions,
+            label_getter=lambda item: f"attachment:{item.pk}",
+        )
+
         if missing_decisions:
             messages.error(
                 request,
-                "برای همه پیشنهادهای اصلاح باید تصمیم تأیید یا رد ثبت شود: "
+                "برای همه پیشنهادهای گزارش باید تصمیم تأیید یا رد ثبت شود: "
                 + ", ".join(missing_decisions),
             )
             return HttpResponseRedirect(request.path)
@@ -429,6 +546,10 @@ class R4JReportAdmin(admin.ModelAdmin):
                 report=obj,
                 reviewed_by=request.user,
                 field_decisions=decisions,
+                alias_decisions=alias_decisions,
+                phone_decisions=phone_decisions,
+                social_decisions=social_decisions,
+                attachment_decisions=attachment_decisions,
                 admin_note=request.POST.get("r4j_report_admin_note", ""),
             )
         except services.ReportNotReviewable as exc:

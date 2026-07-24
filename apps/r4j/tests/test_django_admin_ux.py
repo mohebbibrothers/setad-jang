@@ -21,10 +21,13 @@ from apps.r4j.admin import (
     R4JCriminalPhoneInline,
     R4JCriminalPhotoInline,
     R4JCriminalSocialInline,
+    R4JReportAliasSuggestionInline,
     R4JReportAttachmentInline,
     R4JReportFieldChangeInline,
+    R4JReportPhoneSuggestionInline,
+    R4JReportSocialSuggestionInline,
 )
-from apps.r4j.choices import ReportFieldChangeStatus, ReportStatus
+from apps.r4j.choices import ReportFieldChangeStatus, ReportStatus, SocialPlatform
 from apps.r4j.models import (
     R4JBounty,
     R4JCriminal,
@@ -32,8 +35,11 @@ from apps.r4j.models import (
     R4JCriminalFieldVisibility,
     R4JEvidenceCustodyEvent,
     R4JReport,
+    R4JReportAliasSuggestion,
     R4JReportAttachment,
     R4JReportFieldChange,
+    R4JReportPhoneSuggestion,
+    R4JReportSocialSuggestion,
 )
 from tests.factories.auth import AdminUserFactory
 from tests.factories.r4j import R4JCriminalFactory, R4JReportFactory, R4JReportFieldChangeFactory
@@ -63,6 +69,9 @@ class TestR4JDjangoAdminUX:
 
         assert report_admin.inlines == [
             R4JReportFieldChangeInline,
+            R4JReportAliasSuggestionInline,
+            R4JReportPhoneSuggestionInline,
+            R4JReportSocialSuggestionInline,
             R4JReportAttachmentInline,
         ]
         assert "review_decision_panel" in report_admin.readonly_fields
@@ -188,3 +197,46 @@ class TestR4JDjangoAdminUX:
         assert report.status == ReportStatus.PENDING
         assert field_change.status == ReportFieldChangeStatus.PENDING
         assert "برای همه پیشنهادهای اصلاح باید تصمیم" in response.content.decode("utf-8")
+
+
+    def test_report_review_submit_applies_resource_suggestions(self, client):
+        admin_user = AdminUserFactory()
+        client.force_login(admin_user)
+        criminal = R4JCriminalFactory(city="تهران")
+        report = R4JReportFactory(criminal=criminal, status=ReportStatus.PENDING)
+        alias = R4JReportAliasSuggestion.objects.create(report=report, alias="حاج علی")
+        phone = R4JReportPhoneSuggestion.objects.create(report=report, label="واتساپ", number="+989121234567")
+        social = R4JReportSocialSuggestion.objects.create(
+            report=report,
+            platform=SocialPlatform.TELEGRAM,
+            handle_or_url="@hajali",
+        )
+
+        with patch(_TASK_PATCH_PATH) as mock_task:
+            mock_task.delay = MagicMock()
+            response = client.post(
+                reverse("admin:r4j_r4jreport_change", args=[report.pk]),
+                data={
+                    "_r4j_review_report": "1",
+                    f"r4j_alias_decision_{alias.pk}": ReportFieldChangeStatus.APPROVED,
+                    f"r4j_phone_decision_{phone.pk}": ReportFieldChangeStatus.APPROVED,
+                    f"r4j_social_decision_{social.pk}": ReportFieldChangeStatus.REJECTED,
+                    "r4j_report_admin_note": "بررسی شد.",
+                },
+                follow=True,
+            )
+
+        assert response.status_code == 200
+        report.refresh_from_db()
+        alias.refresh_from_db()
+        phone.refresh_from_db()
+        social.refresh_from_db()
+
+        assert report.status == ReportStatus.PARTIALLY_APPROVED
+        assert alias.status == ReportFieldChangeStatus.APPROVED
+        assert alias.applied_alias_id is not None
+        assert phone.status == ReportFieldChangeStatus.APPROVED
+        assert phone.applied_phone_id is not None
+        assert social.status == ReportFieldChangeStatus.REJECTED
+        assert social.applied_social_id is None
+        mock_task.delay.assert_called_once()

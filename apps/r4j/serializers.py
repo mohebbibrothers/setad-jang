@@ -46,8 +46,11 @@ from .models import (
     R4JCriminalSocial,
     R4JEvidenceCustodyEvent,
     R4JReport,
+    R4JReportAliasSuggestion,
     R4JReportAttachment,
     R4JReportFieldChange,
+    R4JReportPhoneSuggestion,
+    R4JReportSocialSuggestion,
 )
 from .selectors import compute_visibility_map
 from .services import REPORTABLE_CRIMINAL_FIELDS
@@ -506,12 +509,39 @@ class R4JReportFieldChangeSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
+class R4JReportAliasSuggestionSerializer(serializers.ModelSerializer):
+    """نمایش پیشنهاد نام مستعار در گزارش."""
+
+    class Meta:
+        model = R4JReportAliasSuggestion
+        fields = ("id", "alias", "status", "admin_note", "applied_alias")
+        read_only_fields = fields
+
+
+class R4JReportPhoneSuggestionSerializer(serializers.ModelSerializer):
+    """نمایش پیشنهاد شماره تماس در گزارش."""
+
+    class Meta:
+        model = R4JReportPhoneSuggestion
+        fields = ("id", "label", "number", "is_public", "notes", "status", "admin_note", "applied_phone")
+        read_only_fields = fields
+
+
+class R4JReportSocialSuggestionSerializer(serializers.ModelSerializer):
+    """نمایش پیشنهاد شبکه اجتماعی در گزارش."""
+
+    class Meta:
+        model = R4JReportSocialSuggestion
+        fields = ("id", "platform", "handle_or_url", "is_public", "status", "admin_note", "applied_social")
+        read_only_fields = fields
+
+
 class R4JReportAttachmentSerializer(serializers.ModelSerializer):
     """نمایش ضمیمه گزارش."""
 
     class Meta:
         model = R4JReportAttachment
-        fields = ("id", "file", "title", "kind")
+        fields = ("id", "file", "title", "kind", "status", "admin_note", "promoted_criminal_attachment")
         read_only_fields = fields
 
 
@@ -552,6 +582,9 @@ class R4JUserReportDetailSerializer(serializers.ModelSerializer):
 
     criminal_name = serializers.SerializerMethodField()
     field_changes = R4JReportFieldChangeSerializer(many=True, read_only=True)
+    alias_suggestions = R4JReportAliasSuggestionSerializer(many=True, read_only=True)
+    phone_suggestions = R4JReportPhoneSuggestionSerializer(many=True, read_only=True)
+    social_suggestions = R4JReportSocialSuggestionSerializer(many=True, read_only=True)
     attachments = R4JReportAttachmentSerializer(many=True, read_only=True)
 
     class Meta:
@@ -564,6 +597,9 @@ class R4JUserReportDetailSerializer(serializers.ModelSerializer):
             "status",
             "admin_note",
             "field_changes",
+            "alias_suggestions",
+            "phone_suggestions",
+            "social_suggestions",
             "attachments",
             "cancel_requested_at",
             "canceled_at",
@@ -618,6 +654,9 @@ class R4JAdminReportDetailSerializer(serializers.ModelSerializer):
     submitted_by_email = serializers.SerializerMethodField()
     reviewed_by_email = serializers.SerializerMethodField()
     field_changes = R4JReportFieldChangeSerializer(many=True, read_only=True)
+    alias_suggestions = R4JReportAliasSuggestionSerializer(many=True, read_only=True)
+    phone_suggestions = R4JReportPhoneSuggestionSerializer(many=True, read_only=True)
+    social_suggestions = R4JReportSocialSuggestionSerializer(many=True, read_only=True)
     attachments = R4JReportAttachmentSerializer(many=True, read_only=True)
 
     class Meta:
@@ -635,6 +674,9 @@ class R4JAdminReportDetailSerializer(serializers.ModelSerializer):
             "reviewed_by_email",
             "reviewed_at",
             "field_changes",
+            "alias_suggestions",
+            "phone_suggestions",
+            "social_suggestions",
             "attachments",
             "cancel_requested_at",
             "canceled_at",
@@ -679,6 +721,63 @@ class R4JReportFieldChangeInputSerializer(serializers.Serializer):
                 f"فیلد '{value}' از طریق گزارش قابل تغییر نیست. "
                 f"فیلدهای مجاز: {', '.join(sorted(REPORTABLE_CRIMINAL_FIELDS))}",
             )
+        return value
+
+
+class R4JReportAliasSuggestionInputSerializer(serializers.Serializer):
+    """ورودی پیشنهاد نام مستعار در گزارش کاربر."""
+
+    alias = serializers.CharField(max_length=200, trim_whitespace=True)
+
+
+class R4JReportPhoneSuggestionInputSerializer(serializers.Serializer):
+    """ورودی پیشنهاد شماره تماس در گزارش کاربر."""
+
+    label = serializers.CharField(max_length=50, required=False, allow_blank=True, default="")
+    number = serializers.CharField(max_length=30, trim_whitespace=True)
+    is_public = serializers.BooleanField(required=False, default=False)
+    notes = serializers.CharField(required=False, allow_blank=True, default="")
+
+
+class R4JReportSocialSuggestionInputSerializer(serializers.Serializer):
+    """ورودی پیشنهاد شبکه اجتماعی در گزارش کاربر."""
+
+    platform = serializers.ChoiceField(choices=SocialPlatform.choices)
+    handle_or_url = serializers.CharField(max_length=255, trim_whitespace=True)
+    is_public = serializers.BooleanField(required=False, default=True)
+
+
+class R4JFlexibleTypedListField(serializers.Field):
+    """JSON-or-list input field for typed report suggestion arrays."""
+
+    default_error_messages = {
+        "invalid_json": "این فیلد باید یک JSON string معتبر باشد.",
+        "invalid_type": "این فیلد باید یک آرایه باشد.",
+    }
+
+    def __init__(self, *, child_serializer_class: type[serializers.Serializer], **kwargs):
+        self.child_serializer_class = child_serializer_class
+        super().__init__(**kwargs)
+
+    def to_internal_value(self, data: Any) -> list[dict[str, Any]]:
+        if data in (None, "", [], ()):
+            return []
+        parsed = data
+        if isinstance(data, str):
+            stripped = data.strip()
+            if not stripped or stripped == "[]":
+                return []
+            try:
+                parsed = json.loads(stripped)
+            except (json.JSONDecodeError, ValueError):
+                raise serializers.ValidationError(self.error_messages["invalid_json"]) from None
+        if not isinstance(parsed, list):
+            raise serializers.ValidationError(self.error_messages["invalid_type"])
+        nested = self.child_serializer_class(data=parsed, many=True)
+        nested.is_valid(raise_exception=True)
+        return nested.validated_data
+
+    def to_representation(self, value: Any) -> Any:
         return value
 
 
@@ -775,14 +874,34 @@ class R4JReportSubmitSerializer(serializers.Serializer):
         ),
     )
 
+
+    alias_suggestions = R4JFlexibleTypedListField(
+        child_serializer_class=R4JReportAliasSuggestionInputSerializer,
+        required=False,
+        default=list,
+    )
+    phone_suggestions = R4JFlexibleTypedListField(
+        child_serializer_class=R4JReportPhoneSuggestionInputSerializer,
+        required=False,
+        default=list,
+    )
+    social_suggestions = R4JFlexibleTypedListField(
+        child_serializer_class=R4JReportSocialSuggestionInputSerializer,
+        required=False,
+        default=list,
+    )
+
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
         """حداقل یک field_change یا یادداشت غیر خالی لازم است."""
         notes = attrs.get("notes", "").strip()
         field_changes = attrs.get("field_changes", [])
+        alias_suggestions = attrs.get("alias_suggestions", [])
+        phone_suggestions = attrs.get("phone_suggestions", [])
+        social_suggestions = attrs.get("social_suggestions", [])
 
-        if not notes and not field_changes:
+        if not any([notes, field_changes, alias_suggestions, phone_suggestions, social_suggestions]):
             raise serializers.ValidationError(
-                "گزارش باید حداقل یک پیشنهاد تغییر فیلد یا یادداشت داشته باشد.",
+                "گزارش باید حداقل یک یادداشت، پیشنهاد اصلاح فیلد، نام مستعار، شماره تماس یا شبکه اجتماعی داشته باشد.",
             )
 
         return attrs
@@ -823,6 +942,10 @@ class R4JReportReviewSerializer(serializers.Serializer):
     """
 
     field_decisions = R4JFieldDecisionSerializer(many=True, required=False)
+    alias_decisions = serializers.ListField(child=serializers.DictField(), required=False)
+    phone_decisions = serializers.ListField(child=serializers.DictField(), required=False)
+    social_decisions = serializers.ListField(child=serializers.DictField(), required=False)
+    attachment_decisions = serializers.ListField(child=serializers.DictField(), required=False)
     admin_note = serializers.CharField(
         required=False,
         allow_blank=True,

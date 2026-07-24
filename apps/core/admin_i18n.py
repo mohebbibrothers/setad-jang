@@ -101,6 +101,9 @@ MODEL_VERBOSE_NAMES: dict[tuple[str, str], tuple[str, str]] = {
         "پیشنهاد اصلاح فیلد گزارش",
         "پیشنهادهای اصلاح فیلدهای گزارش",
     ),
+    ("r4j", "r4jreportaliassuggestion"): ("پیشنهاد نام مستعار", "پیشنهادهای نام مستعار"),
+    ("r4j", "r4jreportphonesuggestion"): ("پیشنهاد شماره تماس", "پیشنهادهای شماره تماس"),
+    ("r4j", "r4jreportsocialsuggestion"): ("پیشنهاد شبکه اجتماعی", "پیشنهادهای شبکه اجتماعی"),
     ("r4j", "r4jreportattachment"): ("ضمیمه گزارش عدالت", "ضمائم گزارش‌های عدالت"),
     ("r4j", "r4jevidencecustodyevent"): (
         "رویداد زنجیره نگهداری شواهد",

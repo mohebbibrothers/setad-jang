@@ -47,6 +47,7 @@ from .validators import (
     R4J_BOUNTY_MIN_TOMAN,
     validate_attachment_size,
     validate_iranian_national_code,
+    validate_phone_number,
     validate_photo_extension,
     validate_photo_size,
 )
@@ -614,6 +615,121 @@ class R4JReportFieldChange(BaseModel):
         return f"{self.field_name} -> {self.suggested_value!r} ({self.status})"
 
 
+
+
+class R4JReportAliasSuggestion(BaseModel):
+    """User-suggested alias to be reviewed and applied to a criminal profile."""
+
+    report = models.ForeignKey(
+        R4JReport,
+        on_delete=models.CASCADE,
+        related_name="alias_suggestions",
+        verbose_name="گزارش",
+    )
+    alias = models.CharField(max_length=200, verbose_name="نام مستعار پیشنهادی")
+    status = models.CharField(
+        max_length=20,
+        choices=ReportFieldChangeStatus.choices,
+        default=ReportFieldChangeStatus.PENDING,
+        verbose_name="وضعیت",
+    )
+    admin_note = models.TextField(blank=True, verbose_name="یادداشت ادمین")
+    applied_alias = models.ForeignKey(
+        R4JCriminalAlias,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="source_report_suggestions",
+        verbose_name="نام مستعار اعمال‌شده",
+    )
+
+    class Meta:
+        verbose_name = "پیشنهاد نام مستعار"
+        verbose_name_plural = "پیشنهادهای نام مستعار"
+        ordering = ["report_id", "id"]
+        indexes = [models.Index(fields=["report", "status"])]
+
+    def __str__(self) -> str:
+        return f"alias:{self.alias} ({self.status})"
+
+
+class R4JReportPhoneSuggestion(BaseModel):
+    """User-suggested phone/contact number for a criminal profile."""
+
+    report = models.ForeignKey(
+        R4JReport,
+        on_delete=models.CASCADE,
+        related_name="phone_suggestions",
+        verbose_name="گزارش",
+    )
+    label = models.CharField(max_length=50, blank=True, verbose_name="برچسب")
+    number = models.CharField(max_length=30, validators=[validate_phone_number], verbose_name="شماره پیشنهادی")
+    is_public = models.BooleanField(default=False, verbose_name="پیشنهاد نمایش عمومی")
+    notes = models.TextField(blank=True, verbose_name="توضیحات")
+    status = models.CharField(
+        max_length=20,
+        choices=ReportFieldChangeStatus.choices,
+        default=ReportFieldChangeStatus.PENDING,
+        verbose_name="وضعیت",
+    )
+    admin_note = models.TextField(blank=True, verbose_name="یادداشت ادمین")
+    applied_phone = models.ForeignKey(
+        R4JCriminalPhone,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="source_report_suggestions",
+        verbose_name="شماره اعمال‌شده",
+    )
+
+    class Meta:
+        verbose_name = "پیشنهاد شماره تماس"
+        verbose_name_plural = "پیشنهادهای شماره تماس"
+        ordering = ["report_id", "id"]
+        indexes = [models.Index(fields=["report", "status"]), models.Index(fields=["number"])]
+
+    def __str__(self) -> str:
+        return f"phone:{self.number} ({self.status})"
+
+
+class R4JReportSocialSuggestion(BaseModel):
+    """User-suggested social/contact address for a criminal profile."""
+
+    report = models.ForeignKey(
+        R4JReport,
+        on_delete=models.CASCADE,
+        related_name="social_suggestions",
+        verbose_name="گزارش",
+    )
+    platform = models.CharField(max_length=20, choices=SocialPlatform.choices, verbose_name="پلتفرم")
+    handle_or_url = models.CharField(max_length=255, verbose_name="هندل یا URL پیشنهادی")
+    is_public = models.BooleanField(default=True, verbose_name="پیشنهاد نمایش عمومی")
+    status = models.CharField(
+        max_length=20,
+        choices=ReportFieldChangeStatus.choices,
+        default=ReportFieldChangeStatus.PENDING,
+        verbose_name="وضعیت",
+    )
+    admin_note = models.TextField(blank=True, verbose_name="یادداشت ادمین")
+    applied_social = models.ForeignKey(
+        R4JCriminalSocial,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="source_report_suggestions",
+        verbose_name="شبکه اجتماعی اعمال‌شده",
+    )
+
+    class Meta:
+        verbose_name = "پیشنهاد شبکه اجتماعی"
+        verbose_name_plural = "پیشنهادهای شبکه اجتماعی"
+        ordering = ["report_id", "id"]
+        indexes = [models.Index(fields=["report", "status"]), models.Index(fields=["platform"])]
+
+    def __str__(self) -> str:
+        return f"social:{self.platform}:{self.handle_or_url} ({self.status})"
+
+
 # ============================================================
 # R4JReportAttachment
 # ============================================================
@@ -642,6 +758,21 @@ class R4JReportAttachment(BaseModel):
     )
     file_sha256 = models.CharField(max_length=64, blank=True, db_index=True, verbose_name="SHA-256")
     file_size = models.PositiveBigIntegerField(default=0, verbose_name="حجم فایل")
+    status = models.CharField(
+        max_length=20,
+        choices=ReportFieldChangeStatus.choices,
+        default=ReportFieldChangeStatus.PENDING,
+        verbose_name="وضعیت بررسی",
+    )
+    admin_note = models.TextField(blank=True, verbose_name="یادداشت ادمین")
+    promoted_criminal_attachment = models.ForeignKey(
+        R4JCriminalAttachment,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="source_report_attachments",
+        verbose_name="سند رسمی ساخته‌شده",
+    )
 
     class Meta:
         verbose_name = "ضمیمه گزارش"

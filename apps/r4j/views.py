@@ -1575,6 +1575,9 @@ class R4JUserReportSubmitView(APIView):
                 notes=serializer.validated_data.get("notes", ""),
                 field_changes=serializer.validated_data.get("field_changes", []),
                 attachments=attachments,
+                alias_suggestions=serializer.validated_data.get("alias_suggestions", []),
+                phone_suggestions=serializer.validated_data.get("phone_suggestions", []),
+                social_suggestions=serializer.validated_data.get("social_suggestions", []),
             )
         except InvalidReportableField as exc:
             return ErrorResponse(message=str(exc))
@@ -1859,6 +1862,10 @@ class R4JAdminReportReviewView(APIView):
                 report=report,
                 reviewed_by=request.user,
                 field_decisions=serializer.validated_data.get("field_decisions", []),
+                alias_decisions=serializer.validated_data.get("alias_decisions", []),
+                phone_decisions=serializer.validated_data.get("phone_decisions", []),
+                social_decisions=serializer.validated_data.get("social_decisions", []),
+                attachment_decisions=serializer.validated_data.get("attachment_decisions", []),
                 admin_note=serializer.validated_data.get("admin_note", ""),
             )
         except ReportNotReviewable as exc:

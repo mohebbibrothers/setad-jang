@@ -63,8 +63,11 @@ from .models import (
     R4JCriminalSocial,
     R4JEvidenceCustodyEvent,
     R4JReport,
+    R4JReportAliasSuggestion,
     R4JReportAttachment,
     R4JReportFieldChange,
+    R4JReportPhoneSuggestion,
+    R4JReportSocialSuggestion,
 )
 from .validators import validate_bounty_amount
 
@@ -603,6 +606,9 @@ def submit_report(
     notes: str = "",
     field_changes: list[dict[str, str]],
     attachments: list[Any] | None = None,
+    alias_suggestions: list[dict[str, Any]] | None = None,
+    phone_suggestions: list[dict[str, Any]] | None = None,
+    social_suggestions: list[dict[str, Any]] | None = None,
 ) -> R4JReport:
     """
     ثبت گزارش community برای تکمیل/اصلاح اطلاعات یک مجرم.
@@ -616,6 +622,9 @@ def submit_report(
         notes: یادداشت آزاد گزارش‌دهنده.
         field_changes: لیست dict با کلیدهای field_name و suggested_value.
         attachments: لیست فایل‌های ضمیمه (اختیاری).
+        alias_suggestions: نام‌های مستعار پیشنهادی.
+        phone_suggestions: شماره‌های تماس پیشنهادی.
+        social_suggestions: آدرس‌های ارتباطی/شبکه اجتماعی پیشنهادی.
 
     Raises:
         InvalidReportableField: اگر field_name غیر مجاز ارسال شود.
@@ -641,6 +650,32 @@ def submit_report(
             field_name=field_name,
             suggested_value=fc["suggested_value"],
             current_value_snapshot=current_value,
+            status=ReportFieldChangeStatus.PENDING,
+        )
+
+    for suggestion in alias_suggestions or []:
+        R4JReportAliasSuggestion.objects.create(
+            report=report,
+            alias=suggestion["alias"],
+            status=ReportFieldChangeStatus.PENDING,
+        )
+
+    for suggestion in phone_suggestions or []:
+        R4JReportPhoneSuggestion.objects.create(
+            report=report,
+            label=suggestion.get("label", ""),
+            number=suggestion["number"],
+            is_public=suggestion.get("is_public", False),
+            notes=suggestion.get("notes", ""),
+            status=ReportFieldChangeStatus.PENDING,
+        )
+
+    for suggestion in social_suggestions or []:
+        R4JReportSocialSuggestion.objects.create(
+            report=report,
+            platform=suggestion["platform"],
+            handle_or_url=suggestion["handle_or_url"],
+            is_public=suggestion.get("is_public", True),
             status=ReportFieldChangeStatus.PENDING,
         )
 
@@ -707,6 +742,91 @@ def request_report_cancel(*, report: R4JReport, user: User) -> R4JReport:
 # Reports — review (توسط admin)
 # ============================================================
 
+def _decision_map(decisions: list[dict[str, Any]] | None, id_key: str) -> dict[int, dict[str, Any]]:
+    """Build an id-indexed decision map for report review resources."""
+    return {int(item[id_key]): item for item in decisions or [] if id_key in item}
+
+
+def _apply_alias_suggestion(*, suggestion: R4JReportAliasSuggestion) -> None:
+    """Apply an approved alias suggestion idempotently."""
+    alias, _ = R4JCriminalAlias.objects.get_or_create(
+        criminal=suggestion.report.criminal,
+        alias=suggestion.alias.strip(),
+    )
+    suggestion.applied_alias = alias
+
+
+def _apply_phone_suggestion(*, suggestion: R4JReportPhoneSuggestion) -> None:
+    """Apply an approved phone suggestion by creating a profile phone record."""
+    phone = R4JCriminalPhone.objects.create(
+        criminal=suggestion.report.criminal,
+        label=suggestion.label,
+        number=suggestion.number,
+        is_public=suggestion.is_public,
+        notes=suggestion.notes,
+    )
+    suggestion.applied_phone = phone
+
+
+def _apply_social_suggestion(*, suggestion: R4JReportSocialSuggestion) -> None:
+    """Apply an approved social suggestion idempotently."""
+    social, _ = R4JCriminalSocial.objects.get_or_create(
+        criminal=suggestion.report.criminal,
+        platform=suggestion.platform,
+        handle_or_url=suggestion.handle_or_url,
+        defaults={"is_public": suggestion.is_public},
+    )
+    suggestion.applied_social = social
+
+
+def _promote_report_attachment(*, attachment: R4JReportAttachment, actor: User) -> None:
+    """Promote report evidence into an official criminal attachment without losing custody."""
+    criminal_attachment = R4JCriminalAttachment.objects.create(
+        criminal=attachment.report.criminal,
+        file=attachment.file.name,
+        kind=attachment.kind,
+        title=attachment.title or f"report-attachment-{attachment.pk}",
+        description=f"Promoted from R4J report #{attachment.report_id}",
+        is_public=False,
+        uploaded_by=actor,
+        file_sha256=attachment.file_sha256,
+        file_size=attachment.file_size,
+    )
+    attachment.promoted_criminal_attachment = criminal_attachment
+    _create_custody_event(
+        criminal_attachment=criminal_attachment,
+        event_type=EvidenceCustodyEventType.TRANSFERRED,
+        actor=actor,
+        metadata={"source_report_attachment_id": attachment.pk, "source_report_id": attachment.report_id},
+    )
+
+
+def _apply_suggestion_decisions(
+    *,
+    queryset,
+    decisions: list[dict[str, Any]] | None,
+    id_key: str,
+    apply_callback,
+    actor: User,
+) -> list[str]:
+    """Apply approve/reject decisions for typed suggestion querysets."""
+    decisions_map = _decision_map(decisions, id_key)
+    final_statuses: list[str] = []
+    for suggestion in queryset:
+        decision = decisions_map.get(suggestion.pk)
+        if decision is None:
+            final_statuses.append(suggestion.status)
+            continue
+        new_status = decision.get("status", ReportFieldChangeStatus.PENDING)
+        suggestion.status = new_status
+        suggestion.admin_note = decision.get("admin_note", "")
+        if new_status == ReportFieldChangeStatus.APPROVED:
+            apply_callback(suggestion=suggestion) if id_key != "attachment_id" else apply_callback(attachment=suggestion, actor=actor)
+        suggestion.save()
+        final_statuses.append(suggestion.status)
+    return final_statuses
+
+
 
 @transaction.atomic
 def review_report(
@@ -714,6 +834,10 @@ def review_report(
     report: R4JReport,
     reviewed_by: User,
     field_decisions: list[dict[str, Any]],
+    alias_decisions: list[dict[str, Any]] | None = None,
+    phone_decisions: list[dict[str, Any]] | None = None,
+    social_decisions: list[dict[str, Any]] | None = None,
+    attachment_decisions: list[dict[str, Any]] | None = None,
     admin_note: str = "",
 ) -> R4JReport:
     """
@@ -775,11 +899,38 @@ def review_report(
             approved_changes=approved_changes,
         )
 
-    final_statuses = set(
-        R4JReportFieldChange.objects.filter(report=report).values_list(
-            "status", flat=True,
-        ),
+    all_statuses = list(
+        R4JReportFieldChange.objects.filter(report=report).values_list("status", flat=True),
     )
+    all_statuses += _apply_suggestion_decisions(
+        queryset=list(report.alias_suggestions.all()),
+        decisions=alias_decisions,
+        id_key="alias_suggestion_id",
+        apply_callback=_apply_alias_suggestion,
+        actor=reviewed_by,
+    )
+    all_statuses += _apply_suggestion_decisions(
+        queryset=list(report.phone_suggestions.all()),
+        decisions=phone_decisions,
+        id_key="phone_suggestion_id",
+        apply_callback=_apply_phone_suggestion,
+        actor=reviewed_by,
+    )
+    all_statuses += _apply_suggestion_decisions(
+        queryset=list(report.social_suggestions.all()),
+        decisions=social_decisions,
+        id_key="social_suggestion_id",
+        apply_callback=_apply_social_suggestion,
+        actor=reviewed_by,
+    )
+    all_statuses += _apply_suggestion_decisions(
+        queryset=list(report.attachments.all()),
+        decisions=attachment_decisions,
+        id_key="attachment_id",
+        apply_callback=_promote_report_attachment,
+        actor=reviewed_by,
+    )
+    final_statuses = set(all_statuses)
 
     if (
         not final_statuses
