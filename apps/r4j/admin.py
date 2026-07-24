@@ -16,8 +16,7 @@ from __future__ import annotations
 
 from django.contrib import admin, messages
 from django.http import HttpResponseRedirect
-from django.utils.html import format_html
-from django.utils.safestring import mark_safe
+from django.utils.html import format_html, format_html_join
 
 from apps.audit_logs import actions as audit_actions
 from apps.audit_logs.helpers import extract_audit_metadata
@@ -314,19 +313,21 @@ class R4JReportAdmin(admin.ModelAdmin):
             )
 
         field_changes = list(obj.field_changes.all().order_by("id"))
-        admin_note_input = (
+        admin_note_input = format_html(
             '<div style="margin-top: 1rem;">'
             '<label for="id_r4j_report_admin_note"><strong>یادداشت کلی ادمین</strong></label><br>'
             '<textarea id="id_r4j_report_admin_note" name="r4j_report_admin_note" rows="3" '
             'style="width: min(100%, 980px);"></textarea>'
-            '</div>'
+            '</div>{}',
+            "",
         )
-        submit_button = (
+        submit_button = format_html(
             '<div style="margin-top: 1rem;">'
             '<button type="submit" class="default" name="_r4j_review_report" value="1">'
             'ثبت بررسی از مسیر امن سرویس'
             '</button>'
-            '</div>'
+            '</div>{}',
+            "",
         )
 
         if not field_changes:
@@ -336,8 +337,8 @@ class R4JReportAdmin(admin.ModelAdmin):
                 'با ثبت بررسی، گزارش از مسیر رسمی سرویس تأیید می‌شود.</p>'
                 '{}{}'
                 '</div>',
-                mark_safe(admin_note_input),
-                mark_safe(submit_button),
+                admin_note_input,
+                submit_button,
             )
 
         rows = []
@@ -375,9 +376,9 @@ class R4JReportAdmin(admin.ModelAdmin):
             '</table>'
             '{}{}'
             '</div>',
-            mark_safe("".join(str(row) for row in rows)),
-            mark_safe(admin_note_input),
-            mark_safe(submit_button),
+            format_html_join("", "{}", ((row,) for row in rows)),
+            admin_note_input,
+            submit_button,
         )
 
     def changeform_view(self, request, object_id=None, form_url="", extra_context=None):
