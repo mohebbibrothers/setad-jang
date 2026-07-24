@@ -76,5 +76,5 @@ class TestMadadkarDjangoAdminUX:
         assert "پرداخت‌ها" in html
         assert "دسته‌های تطبیق پرداخت" in html
         assert "بازپرداخت‌های مددکار" in html
-        assert "تخصیص‌های مالی مددکار" in html
+        assert "تخصیص‌های مالی حرکت‌ها" in html
         assert "سیگنال‌های ریسک مددکار" in html
