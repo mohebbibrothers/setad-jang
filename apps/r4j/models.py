@@ -38,6 +38,7 @@ from .choices import (
     CriminalAttachmentKind,
     EvidenceCustodyEventType,
     Gender,
+    PublicVisibilityField,
     ReportFieldChangeStatus,
     ReportStatus,
     SocialPlatform,
@@ -470,8 +471,17 @@ class R4JCriminalFieldVisibility(BaseModel):
         related_name="field_visibility",
         verbose_name="مجرم",
     )
-    field_name = models.CharField(max_length=50, verbose_name="نام فیلد")
-    is_public = models.BooleanField(default=True, verbose_name="نمایش عمومی")
+    field_name = models.CharField(
+        max_length=50,
+        choices=PublicVisibilityField.choices,
+        verbose_name="فیلد اطلاعاتی",
+        help_text="فیلدی از پروفایل مجرم که نمایش عمومی آن برای همین مجرم override می‌شود.",
+    )
+    is_public = models.BooleanField(
+        default=True,
+        verbose_name="در سایت نمایش داده شود؟",
+        help_text="اگر خاموش باشد، این فیلد در خروجی عمومی برای این مجرم مخفی می‌شود.",
+    )
 
     class Meta:
         verbose_name = "تنظیمات نمایش فیلد"

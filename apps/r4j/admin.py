@@ -14,6 +14,7 @@ Django Admin اپ R4J.
 
 from __future__ import annotations
 
+from django import forms
 from django.contrib import admin, messages
 from django.http import HttpResponseRedirect
 from django.utils.html import format_html, format_html_join
@@ -21,7 +22,7 @@ from django.utils.html import format_html, format_html_join
 from apps.audit_logs import actions as audit_actions
 from apps.audit_logs.helpers import extract_audit_metadata
 from apps.audit_logs.services import log_action_async
-from apps.r4j.choices import ReportFieldChangeStatus, ReportStatus
+from apps.r4j.choices import PublicVisibilityField, ReportFieldChangeStatus, ReportStatus
 
 from . import services
 from .models import (
@@ -49,6 +50,29 @@ class HiddenFromAdminIndexMixin:
     def get_model_perms(self, request) -> dict[str, bool]:
         """Return no perms so Django omits this model from the admin index."""
         return {}
+
+
+
+
+class R4JCriminalFieldVisibilityAdminForm(forms.ModelForm):
+    """Persian, dropdown-based form for per-criminal public field visibility rules."""
+
+    class Meta:
+        model = R4JCriminalFieldVisibility
+        fields = ("criminal", "field_name", "is_public", "is_active")
+        labels = {
+            "field_name": "فیلد اطلاعاتی",
+            "is_public": "در سایت نمایش داده شود؟",
+            "is_active": "این قانون فعال باشد؟",
+        }
+        help_texts = {
+            "field_name": "به‌جای تایپ فنی، فیلدی را انتخاب کنید که نمایش عمومی‌اش برای این مجرم تغییر کند.",
+            "is_public": "اگر خاموش باشد، این فیلد در صفحه عمومی این مجرم مخفی می‌شود.",
+            "is_active": "اگر خاموش باشد، این قانون نادیده گرفته می‌شود و پیش‌فرض سیستم اعمال می‌شود.",
+        }
+        widgets = {
+            "field_name": forms.Select(choices=PublicVisibilityField.choices),
+        }
 
 
 class R4JCriminalAliasInline(admin.TabularInline):
@@ -107,9 +131,10 @@ class R4JCriminalAttachmentInline(admin.TabularInline):
 
 
 class R4JCriminalFieldVisibilityInline(admin.TabularInline):
-    """Inline per-criminal public visibility overrides."""
+    """Inline, dropdown-based public visibility overrides for one criminal."""
 
     model = R4JCriminalFieldVisibility
+    form = R4JCriminalFieldVisibilityAdminForm
     extra = 0
     fields = ("field_name", "is_public", "is_active")
     show_change_link = False
@@ -218,6 +243,7 @@ class R4JCriminalAttachmentAdmin(HiddenFromAdminIndexMixin, admin.ModelAdmin):
 class R4JCriminalFieldVisibilityAdmin(HiddenFromAdminIndexMixin, admin.ModelAdmin):
     """Visibility override admin, hidden from index because it lives inline on Criminal."""
 
+    form = R4JCriminalFieldVisibilityAdminForm
     list_display = ("id", "criminal", "field_name", "is_public", "is_active")
     list_filter = ("is_public", "field_name", "is_active")
     search_fields = ("criminal__first_name", "criminal__last_name", "field_name")

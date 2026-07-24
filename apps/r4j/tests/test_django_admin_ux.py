@@ -17,6 +17,7 @@ from django.urls import reverse
 from apps.r4j.admin import (
     R4JCriminalAliasInline,
     R4JCriminalAttachmentInline,
+    R4JCriminalFieldVisibilityAdminForm,
     R4JCriminalFieldVisibilityInline,
     R4JCriminalPhoneInline,
     R4JCriminalPhotoInline,
@@ -27,7 +28,12 @@ from apps.r4j.admin import (
     R4JReportPhoneSuggestionInline,
     R4JReportSocialSuggestionInline,
 )
-from apps.r4j.choices import ReportFieldChangeStatus, ReportStatus, SocialPlatform
+from apps.r4j.choices import (
+    PublicVisibilityField,
+    ReportFieldChangeStatus,
+    ReportStatus,
+    SocialPlatform,
+)
 from apps.r4j.models import (
     R4JBounty,
     R4JCriminal,
@@ -61,8 +67,37 @@ class TestR4JDjangoAdminUX:
             R4JCriminalSocialInline,
             R4JCriminalPhotoInline,
             R4JCriminalAttachmentInline,
-            R4JCriminalFieldVisibilityInline,
+            R4JCriminalFieldVisibilityAdminForm,
+    R4JCriminalFieldVisibilityInline,
         ]
+
+
+    def test_field_visibility_admin_uses_persian_dropdown_instead_of_free_text(self):
+        form = R4JCriminalFieldVisibilityAdminForm()
+
+        field = form.fields["field_name"]
+        choices = dict(field.choices)
+
+        assert choices[PublicVisibilityField.NATIONAL_CODE] == "کد ملی"
+        assert choices[PublicVisibilityField.BIRTH_DATE] == "تاریخ تولد"
+        assert choices[PublicVisibilityField.CRIMES_SUMMARY] == "خلاصه جرائم"
+        assert form.fields["is_public"].label == "در سایت نمایش داده شود؟"
+        assert form.fields["is_active"].label == "این قانون فعال باشد؟"
+        assert "تایپ فنی" in form.fields["field_name"].help_text
+
+    def test_criminal_change_page_renders_field_visibility_dropdown_labels(self, client):
+        admin_user = AdminUserFactory()
+        client.force_login(admin_user)
+        criminal = R4JCriminalFactory()
+
+        response = client.get(reverse("admin:r4j_r4jcriminal_change", args=[criminal.pk]))
+
+        assert response.status_code == 200
+        html = response.content.decode("utf-8")
+        assert "فیلد اطلاعاتی" in html
+        assert "در سایت نمایش داده شود؟" in html
+        assert "کد ملی" in html
+        assert "خلاصه جرائم" in html
 
     def test_report_admin_is_the_single_report_review_workspace(self):
         report_admin = admin.site._registry[R4JReport]

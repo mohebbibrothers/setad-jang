@@ -43,6 +43,22 @@ class SocialPlatform(models.TextChoices):
     OTHER = "other", "سایر"
 
 
+
+
+class PublicVisibilityField(models.TextChoices):
+    """Criminal profile fields whose public visibility can be overridden per criminal."""
+
+    NATIONAL_CODE = "national_code", "کد ملی"
+    BIRTH_DATE = "birth_date", "تاریخ تولد"
+    GENDER = "gender", "جنسیت"
+    COUNTRY = "country", "کشور"
+    PROVINCE = "province", "استان"
+    CITY = "city", "شهر"
+    DESCRIPTION = "description", "توضیحات"
+    CRIMES_SUMMARY = "crimes_summary", "خلاصه جرائم"
+    OTHER_INFO = "other_info", "سایر اطلاعات"
+
+
 # ============================================================
 # Criminal — Attachment kinds
 # ============================================================
