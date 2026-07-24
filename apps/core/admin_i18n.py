@@ -113,6 +113,7 @@ MODEL_VERBOSE_NAMES: dict[tuple[str, str], tuple[str, str]] = {
 
     # Tabyin
     ("tabyin", "tabyincontent"): ("محتوای تبیین", "محتواهای تبیین"),
+    ("tabyin", "tabyinusersubmission"): ("ارسال کاربر تبیین", "ارسال‌های کاربران تبیین"),
     ("tabyin", "tabyinattachment"): ("پیوست تبیین", "پیوست‌های تبیین"),
 
     # Kindness wall

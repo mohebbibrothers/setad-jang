@@ -266,3 +266,12 @@ class TabyinAttachment(BaseModel):
 
     def __str__(self) -> str:
         return f"{self.get_media_type_display()} — {self.content.title[:30]}"
+
+
+class TabyinUserSubmission(TabyinContent):
+    """Proxy model exposing user-submitted Tabyin content as a dedicated admin queue."""
+
+    class Meta:
+        proxy = True
+        verbose_name = "ارسال کاربر تبیین"
+        verbose_name_plural = "ارسال‌های کاربران تبیین"
