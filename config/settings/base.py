@@ -536,8 +536,11 @@ SPECTACULAR_SETTINGS = {
     ],
     "SERVERS": [
         {
-            "url": "http://127.0.0.1:8000",
-            "description": "محیط توسعه (Local Development)",
+            "url": config("OPENAPI_SERVER_URL", default="http://127.0.0.1:8000"),
+            "description": config(
+                "OPENAPI_SERVER_DESCRIPTION",
+                default="محیط توسعه (Local Development)",
+            ),
         },
     ],
     "SWAGGER_UI_SETTINGS": {
