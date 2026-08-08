@@ -37,6 +37,9 @@ def test_dual_calendar_javascript_has_jalali_and_gregorian_support_without_exter
     assert "triggerControllers" in script
     assert "repairAndToggleTrigger" in script
     assert "removeCalendarController" in script
+    assert "wrapperBelongsToInput" in script
+    assert "fieldContainer" in script
+    assert "sjDateInput" in script
     assert "sjTogglePopover" in script
     assert "Setad Jang admin calendar trigger is not bound" in script
     assert "Setad Jang admin calendar trigger repair failed" in script
