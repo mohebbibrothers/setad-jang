@@ -40,12 +40,9 @@
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.22);
   color: var(--body-fg, #333);
   direction: rtl;
-  inset-inline-start: 50%;
   max-height: min(86vh, 620px);
   overflow: auto;
   padding: 12px;
-  top: 50%;
-  transform: translate(-50%, -50%);
 }
 
 .sj-date-popover[hidden] {

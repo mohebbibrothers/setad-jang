@@ -276,10 +276,30 @@
     }
 
     function positionPopover() {
-      // Popover is a fixed, centered admin modal. This avoids clipping and
-      // stacking issues inside Django StackedInline/TabularInline containers.
-      popover.style.top = "50%";
-      popover.style.left = "50%";
+      // The popover is appended to body, then positioned near the trigger with
+      // viewport clamping. This keeps the previous contextual UX while avoiding
+      // clipping inside Django StackedInline/TabularInline containers.
+      const rect = button.getBoundingClientRect();
+      const margin = 8;
+      const width = popover.offsetWidth || 440;
+      const height = popover.offsetHeight || 360;
+      const viewportWidth = document.documentElement.clientWidth;
+      const viewportHeight = document.documentElement.clientHeight;
+
+      let left = rect.left;
+      if (document.documentElement.dir === "rtl") {
+        left = rect.right - width;
+      }
+      left = Math.max(margin, Math.min(left, viewportWidth - width - margin));
+
+      let top = rect.bottom + margin;
+      if (top + height > viewportHeight - margin) {
+        top = rect.top - height - margin;
+      }
+      top = Math.max(margin, Math.min(top, viewportHeight - height - margin));
+
+      popover.style.left = `${left}px`;
+      popover.style.top = `${top}px`;
     }
 
     function openPopover() {

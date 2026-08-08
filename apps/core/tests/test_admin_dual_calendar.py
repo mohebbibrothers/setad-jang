@@ -26,6 +26,8 @@ def test_dual_calendar_javascript_has_jalali_and_gregorian_support_without_exter
     assert "jalaliToGregorian" in script
     assert "useInlinePopover" in script
     assert ".inline-group, .inline-related" in script
+    assert "viewport clamping" in script
+    assert "getBoundingClientRect" in script
     assert "شمسی" in script
     assert "میلادی" in script
     assert "تقویم پیشرفته" in script
@@ -41,7 +43,7 @@ def test_dual_calendar_css_is_available_and_scoped():
     assert ".sj-date-popover-inline" in css
     assert ".sj-date-trigger" in css
     assert "position: fixed" in css
-    assert "transform: translate(-50%, -50%)" in css
+    assert "max-height: min(86vh, 620px)" in css
 
 
 def test_admin_base_site_template_renders_without_context_errors():
