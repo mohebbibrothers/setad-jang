@@ -1,0 +1,117 @@
+.sj-date-enhanced {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-inline-start: 6px;
+  vertical-align: middle;
+}
+
+.sj-date-trigger {
+  border: 1px solid var(--border-color, #c8c8c8);
+  border-radius: 4px;
+  background: var(--body-bg, #fff);
+  color: var(--body-fg, #333);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1.4;
+  padding: 5px 8px;
+  white-space: nowrap;
+}
+
+.sj-date-trigger:hover,
+.sj-date-trigger:focus {
+  border-color: var(--link-fg, #447e9b);
+  outline: 2px solid transparent;
+}
+
+.sj-date-summary {
+  color: var(--body-quiet-color, #666);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.sj-date-popover {
+  position: absolute;
+  z-index: 10000;
+  width: min(440px, calc(100vw - 28px));
+  border: 1px solid var(--border-color, #c8c8c8);
+  border-radius: 8px;
+  background: var(--body-bg, #fff);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.22);
+  color: var(--body-fg, #333);
+  direction: rtl;
+  padding: 12px;
+}
+
+.sj-date-popover[hidden] {
+  display: none;
+}
+
+.sj-date-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.sj-date-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sj-date-field label {
+  color: var(--body-quiet-color, #666);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.sj-date-field select,
+.sj-date-field input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 32px;
+}
+
+.sj-date-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-start;
+  margin-top: 12px;
+}
+
+.sj-date-actions button {
+  border-radius: 4px;
+  cursor: pointer;
+  padding: 6px 10px;
+}
+
+.sj-date-primary {
+  background: var(--button-bg, #79aec8);
+  border: 1px solid var(--button-bg, #79aec8);
+  color: var(--button-fg, #fff);
+}
+
+.sj-date-secondary {
+  background: var(--darkened-bg, #f8f8f8);
+  border: 1px solid var(--border-color, #c8c8c8);
+  color: var(--body-fg, #333);
+}
+
+.sj-date-help {
+  color: var(--body-quiet-color, #666);
+  font-size: 11px;
+  line-height: 1.7;
+  margin-top: 10px;
+}
+
+@media (max-width: 640px) {
+  .sj-date-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .sj-date-summary {
+    display: block;
+    margin-top: 4px;
+  }
+}
