@@ -15,6 +15,7 @@ from django.contrib import admin
 from django.urls import reverse
 
 from apps.r4j.admin import (
+    R4JCriminalAdmin,
     R4JCriminalAliasInline,
     R4JCriminalAttachmentInline,
     R4JCriminalFieldVisibilityAdminForm,
@@ -96,6 +97,29 @@ class TestR4JDjangoAdminUX:
         assert "در سایت نمایش داده شود؟" in html
         assert "کد ملی" in html
         assert "خلاصه جرائم" in html
+
+
+    def test_criminal_attachment_inline_save_does_not_require_formset_save_m2m(self, rf):
+        """Attachment inline save must not 500 when Django's formset has no save_m2m hook."""
+        admin_user = AdminUserFactory()
+        request = rf.post("/admin/r4j/r4jcriminal/add/")
+        request.user = admin_user
+        criminal = R4JCriminalFactory()
+
+        class AttachmentFormSetWithoutSaveM2M:
+            model = R4JCriminalAttachment
+            deleted_forms = []
+            forms = []
+
+        model_admin = R4JCriminalAdmin(R4JCriminal, admin.site)
+        form = MagicMock(instance=criminal)
+
+        model_admin.save_formset(
+            request=request,
+            form=form,
+            formset=AttachmentFormSetWithoutSaveM2M(),
+            change=False,
+        )
 
     def test_report_admin_is_the_single_report_review_workspace(self):
         report_admin = admin.site._registry[R4JReport]

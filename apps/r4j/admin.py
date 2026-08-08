@@ -216,7 +216,14 @@ class R4JCriminalAdmin(admin.ModelAdmin):
             if attachment.file and (file_changed or not attachment.file_sha256):
                 services._finalize_evidence_hash(attachment=attachment, actor=request.user)
 
-        formset.save_m2m()
+        # Inline formsets do not always expose ``save_m2m``. Django only adds
+        # that hook for formsets saved with ``commit=False`` when their forms
+        # actually need deferred many-to-many persistence. R4J attachments have
+        # no M2M fields, so calling it unconditionally raises AttributeError in
+        # production after the parent object is saved. Keep the service-backed
+        # attachment flow, but only run the hook when Django provides it.
+        if hasattr(formset, "save_m2m"):
+            formset.save_m2m()
 
 
 @admin.register(R4JCriminalAttachment)
