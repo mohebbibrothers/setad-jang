@@ -114,12 +114,18 @@ class TestR4JDjangoAdminUX:
         model_admin = R4JCriminalAdmin(R4JCriminal, admin.site)
         form = MagicMock(instance=criminal)
 
+        formset = AttachmentFormSetWithoutSaveM2M()
+
         model_admin.save_formset(
             request=request,
             form=form,
-            formset=AttachmentFormSetWithoutSaveM2M(),
+            formset=formset,
             change=False,
         )
+
+        assert formset.new_objects == []
+        assert formset.changed_objects == []
+        assert formset.deleted_objects == []
 
     def test_report_admin_is_the_single_report_review_workspace(self):
         report_admin = admin.site._registry[R4JReport]

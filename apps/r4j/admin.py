@@ -195,9 +195,19 @@ class R4JCriminalAdmin(admin.ModelAdmin):
         if formset.model is not R4JCriminalAttachment:
             return super().save_formset(request, form, formset, change)
 
+        # Django admin builds the success/change message after ``save_formset``
+        # from these formset bookkeeping attributes. The default formset.save()
+        # populates them, but this service-backed path intentionally bypasses
+        # default saving for attachment forensics, so we must keep the same
+        # contract ourselves.
+        formset.new_objects = []
+        formset.changed_objects = []
+        formset.deleted_objects = []
+
         deleted_forms = set(formset.deleted_forms)
         for inline_form in formset.forms:
             if inline_form in deleted_forms and inline_form.instance.pk:
+                formset.deleted_objects.append(inline_form.instance)
                 inline_form.instance.delete()
 
         parent = form.instance
@@ -207,11 +217,17 @@ class R4JCriminalAdmin(admin.ModelAdmin):
 
             attachment = inline_form.save(commit=False)
             attachment.criminal = parent
-            if not attachment.pk and not attachment.uploaded_by_id:
+            is_new = attachment.pk is None
+            if is_new and not attachment.uploaded_by_id:
                 attachment.uploaded_by = request.user
 
             file_changed = "file" in inline_form.changed_data
             attachment.save()
+
+            if is_new:
+                formset.new_objects.append(attachment)
+            else:
+                formset.changed_objects.append((attachment, inline_form.changed_data))
 
             if attachment.file and (file_changed or not attachment.file_sha256):
                 services._finalize_evidence_hash(attachment=attachment, actor=request.user)
