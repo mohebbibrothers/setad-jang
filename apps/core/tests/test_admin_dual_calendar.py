@@ -40,8 +40,8 @@ def test_dual_calendar_css_is_available_and_scoped():
     assert ".sj-date-popover" in css
     assert ".sj-date-popover-inline" in css
     assert ".sj-date-trigger" in css
-    assert "position: absolute" in css
-    assert "position: static" in css
+    assert "position: fixed" in css
+    assert "transform: translate(-50%, -50%)" in css
 
 
 def test_admin_base_site_template_renders_without_context_errors():

@@ -196,11 +196,7 @@
     const useInlinePopover = Boolean(input.closest(".inline-group, .inline-related"));
     popover.className = useInlinePopover ? "sj-date-popover sj-date-popover-inline" : "sj-date-popover";
     popover.hidden = true;
-    if (useInlinePopover) {
-      wrapper.insertAdjacentElement("afterend", popover);
-    } else {
-      document.body.appendChild(popover);
-    }
+    document.body.appendChild(popover);
 
     const calendarType = document.createElement("select");
     const year = document.createElement("select");
@@ -280,16 +276,10 @@
     }
 
     function positionPopover() {
-      if (useInlinePopover) {
-        popover.style.top = "";
-        popover.style.left = "";
-        return;
-      }
-      const rect = button.getBoundingClientRect();
-      const top = window.scrollY + rect.bottom + 6;
-      const left = Math.min(window.scrollX + rect.left, window.scrollX + document.documentElement.clientWidth - popover.offsetWidth - 14);
-      popover.style.top = `${top}px`;
-      popover.style.left = `${Math.max(8, left)}px`;
+      // Popover is a fixed, centered admin modal. This avoids clipping and
+      // stacking issues inside Django StackedInline/TabularInline containers.
+      popover.style.top = "50%";
+      popover.style.left = "50%";
     }
 
     function openPopover() {
