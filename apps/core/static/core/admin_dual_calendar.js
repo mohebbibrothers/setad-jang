@@ -302,12 +302,16 @@
       popover.style.top = `${top}px`;
     }
 
+    let lastToggleAt = 0;
+    let suppressDocumentCloseUntil = 0;
+
     function openPopover() {
       try {
         populateFromInput(selectedType());
         popover.hidden = false;
         popover.style.display = "block";
         button.setAttribute("aria-expanded", "true");
+        suppressDocumentCloseUntil = Date.now() + 350;
         // Wait one frame so browsers compute dimensions even inside complex
         // Django admin inline/form layouts before viewport clamping.
         window.requestAnimationFrame(positionPopover);
@@ -327,6 +331,10 @@
     function togglePopover(event) {
       event.preventDefault();
       event.stopPropagation();
+      event.stopImmediatePropagation?.();
+      const now = Date.now();
+      if (now - lastToggleAt < 250) return;
+      lastToggleAt = now;
       if (popover.hidden) openPopover();
       else closePopover();
     }
@@ -336,13 +344,9 @@
     month.addEventListener("change", refreshDays);
     button.setAttribute("aria-haspopup", "dialog");
     button.setAttribute("aria-expanded", "false");
-    button.addEventListener("pointerdown", togglePopover);
-    button.addEventListener("click", (event) => {
-      // pointerdown already toggles in modern browsers; this prevents Django
-      // admin inline handlers from treating the button as a submit/control link.
-      event.preventDefault();
-      event.stopPropagation();
-    });
+    button.addEventListener("pointerdown", togglePopover, { capture: true });
+    button.addEventListener("mousedown", togglePopover, { capture: true });
+    button.addEventListener("click", togglePopover, { capture: true });
     close.addEventListener("click", (event) => {
       event.preventDefault();
       closePopover();
@@ -374,6 +378,7 @@
     window.addEventListener("resize", () => { if (!popover.hidden) positionPopover(); });
     document.addEventListener("pointerdown", (event) => {
       if (popover.hidden) return;
+      if (Date.now() < suppressDocumentCloseUntil) return;
       if (popover.contains(event.target) || wrapper.contains(event.target)) return;
       closePopover();
     });
