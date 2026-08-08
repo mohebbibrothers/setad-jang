@@ -14,11 +14,60 @@
   const MAX_GREGORIAN_YEAR = 2100;
   const MIN_JALALI_YEAR = 1278;
   const MAX_JALALI_YEAR = 1479;
+  const inputControllers = new WeakMap();
+  const triggerControllers = new WeakMap();
 
   function triggerFromEvent(event) {
     const target = event.target;
     if (!target || !target.closest) return null;
     return target.closest(".sj-date-trigger");
+  }
+
+  function findInputForTrigger(trigger) {
+    const wrapper = trigger.closest(".sj-date-enhanced");
+    if (!wrapper) return null;
+
+    const previous = wrapper.previousElementSibling;
+    if (previous && previous.matches && previous.matches("input.vDateField")) return previous;
+
+    const formRow = wrapper.closest(".form-row, .fieldBox, td, .inline-related");
+    if (!formRow || !formRow.querySelector) return null;
+    return formRow.querySelector("input.vDateField");
+  }
+
+  function removeCalendarController(input) {
+    const controller = inputControllers.get(input);
+    if (controller && controller.popover && controller.popover.remove) controller.popover.remove();
+    inputControllers.delete(input);
+    delete input.dataset.sjDualCalendar;
+
+    const next = input.nextElementSibling;
+    if (next && next.classList && next.classList.contains("sj-date-enhanced")) next.remove();
+  }
+
+  function repairAndToggleTrigger(trigger, event) {
+    const input = findInputForTrigger(trigger);
+    if (!input) {
+      console.error("Setad Jang admin calendar trigger is not bound", trigger);
+      return;
+    }
+
+    // Some Django admin inline operations clone or re-parent inline row controls.
+    // Browser event listeners and expando properties are not preserved on cloned
+    // buttons, so the visible trigger may be disconnected from its calendar
+    // controller. Rebuild only this input's tiny enhancement instead of relying
+    // on global reinitialisation or brittle timing delays.
+    removeCalendarController(input);
+    enhanceDateInput(input);
+
+    const repairedTrigger = input.nextElementSibling?.querySelector?.(".sj-date-trigger");
+    const repairedController = repairedTrigger ? triggerControllers.get(repairedTrigger) : null;
+    if (repairedController && typeof repairedController.toggle === "function") {
+      repairedController.toggle(event);
+      return;
+    }
+
+    console.error("Setad Jang admin calendar trigger repair failed", trigger);
   }
 
   function installDelegatedTriggerHandlers() {
@@ -28,16 +77,17 @@
     const delegatedToggle = (event) => {
       const trigger = triggerFromEvent(event);
       if (!trigger) return;
-      if (typeof trigger.sjTogglePopover !== "function") {
-        console.error("Setad Jang admin calendar trigger is not bound", trigger);
+      const controller = triggerControllers.get(trigger);
+      if (controller && typeof controller.toggle === "function") {
+        // Django admin inlines and related-object shortcuts may register their
+        // own handlers around inline rows. Capturing the event at document level
+        // makes our trigger independent from inline bubbling/click-order quirks
+        // while still handling only our scoped .sj-date-trigger buttons.
+        controller.toggle(event);
         return;
       }
 
-      // Django admin inlines and related-object shortcuts may register their own
-      // handlers around inline rows. Capturing the event at document level makes
-      // our trigger independent from inline bubbling/click-order quirks while
-      // still handling only our scoped .sj-date-trigger buttons.
-      trigger.sjTogglePopover(event);
+      repairAndToggleTrigger(trigger, event);
     };
 
     document.addEventListener("pointerdown", delegatedToggle, { capture: true });
@@ -206,7 +256,10 @@
   }
 
   function enhanceDateInput(input) {
-    if (!input || input.dataset.sjDualCalendar === "1") return;
+    if (!input) return;
+    const existingController = inputControllers.get(input);
+    if (existingController && existingController.button && existingController.button.isConnected) return;
+    if (input.dataset.sjDualCalendar === "1" && !existingController) removeCalendarController(input);
     input.dataset.sjDualCalendar = "1";
     input.setAttribute("autocomplete", "off");
 
@@ -374,6 +427,9 @@
     month.addEventListener("change", refreshDays);
     button.setAttribute("aria-haspopup", "dialog");
     button.setAttribute("aria-expanded", "false");
+    const controller = { button, input, popover, toggle: togglePopover };
+    inputControllers.set(input, controller);
+    triggerControllers.set(button, controller);
     button.sjTogglePopover = togglePopover;
     button.addEventListener("pointerdown", togglePopover, { capture: true });
     button.addEventListener("mousedown", togglePopover, { capture: true });

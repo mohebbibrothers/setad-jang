@@ -33,8 +33,13 @@ def test_dual_calendar_javascript_has_jalali_and_gregorian_support_without_exter
     assert "stopImmediatePropagation" in script
     assert "suppressDocumentCloseUntil" in script
     assert "installDelegatedTriggerHandlers" in script
+    assert "inputControllers" in script
+    assert "triggerControllers" in script
+    assert "repairAndToggleTrigger" in script
+    assert "removeCalendarController" in script
     assert "sjTogglePopover" in script
     assert "Setad Jang admin calendar trigger is not bound" in script
+    assert "Setad Jang admin calendar trigger repair failed" in script
     assert "requestAnimationFrame" in script
     assert "Setad Jang admin calendar failed to open" in script
     assert "شمسی" in script
