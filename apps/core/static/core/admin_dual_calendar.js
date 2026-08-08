@@ -15,6 +15,36 @@
   const MIN_JALALI_YEAR = 1278;
   const MAX_JALALI_YEAR = 1479;
 
+  function triggerFromEvent(event) {
+    const target = event.target;
+    if (!target || !target.closest) return null;
+    return target.closest(".sj-date-trigger");
+  }
+
+  function installDelegatedTriggerHandlers() {
+    if (document.documentElement.dataset.sjDualCalendarDelegated === "1") return;
+    document.documentElement.dataset.sjDualCalendarDelegated = "1";
+
+    const delegatedToggle = (event) => {
+      const trigger = triggerFromEvent(event);
+      if (!trigger) return;
+      if (typeof trigger.sjTogglePopover !== "function") {
+        console.error("Setad Jang admin calendar trigger is not bound", trigger);
+        return;
+      }
+
+      // Django admin inlines and related-object shortcuts may register their own
+      // handlers around inline rows. Capturing the event at document level makes
+      // our trigger independent from inline bubbling/click-order quirks while
+      // still handling only our scoped .sj-date-trigger buttons.
+      trigger.sjTogglePopover(event);
+    };
+
+    document.addEventListener("pointerdown", delegatedToggle, { capture: true });
+    document.addEventListener("mousedown", delegatedToggle, { capture: true });
+    document.addEventListener("click", delegatedToggle, { capture: true });
+  }
+
   function div(a, b) {
     return ~~(a / b);
   }
@@ -344,6 +374,7 @@
     month.addEventListener("change", refreshDays);
     button.setAttribute("aria-haspopup", "dialog");
     button.setAttribute("aria-expanded", "false");
+    button.sjTogglePopover = togglePopover;
     button.addEventListener("pointerdown", togglePopover, { capture: true });
     button.addEventListener("mousedown", togglePopover, { capture: true });
     button.addEventListener("click", togglePopover, { capture: true });
@@ -389,6 +420,7 @@
   }
 
   function enhanceAll() {
+    installDelegatedTriggerHandlers();
     document.querySelectorAll("input.vDateField").forEach(enhanceDateInput);
   }
 
