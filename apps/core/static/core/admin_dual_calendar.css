@@ -47,6 +47,19 @@
   display: none;
 }
 
+.sj-date-popover-inline {
+  box-sizing: border-box;
+  display: block;
+  margin: 8px 0 12px;
+  max-width: 640px;
+  position: static;
+  width: min(640px, 100%);
+}
+
+.sj-date-popover-inline[hidden] {
+  display: none;
+}
+
 .sj-date-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

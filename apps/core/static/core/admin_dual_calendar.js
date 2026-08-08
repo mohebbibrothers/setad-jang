@@ -193,9 +193,14 @@
     input.insertAdjacentElement("afterend", wrapper);
 
     const popover = document.createElement("div");
-    popover.className = "sj-date-popover";
+    const useInlinePopover = Boolean(input.closest(".inline-group, .inline-related"));
+    popover.className = useInlinePopover ? "sj-date-popover sj-date-popover-inline" : "sj-date-popover";
     popover.hidden = true;
-    document.body.appendChild(popover);
+    if (useInlinePopover) {
+      wrapper.insertAdjacentElement("afterend", popover);
+    } else {
+      document.body.appendChild(popover);
+    }
 
     const calendarType = document.createElement("select");
     const year = document.createElement("select");
@@ -275,6 +280,11 @@
     }
 
     function positionPopover() {
+      if (useInlinePopover) {
+        popover.style.top = "";
+        popover.style.left = "";
+        return;
+      }
       const rect = button.getBoundingClientRect();
       const top = window.scrollY + rect.bottom + 6;
       const left = Math.min(window.scrollX + rect.left, window.scrollX + document.documentElement.clientWidth - popover.offsetWidth - 14);
@@ -295,7 +305,12 @@
     calendarType.addEventListener("change", () => populateFromInput(selectedType()));
     year.addEventListener("change", refreshDays);
     month.addEventListener("change", refreshDays);
-    button.addEventListener("click", () => (popover.hidden ? openPopover() : closePopover()));
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (popover.hidden) openPopover();
+      else closePopover();
+    });
     close.addEventListener("click", closePopover);
     clear.addEventListener("click", () => {
       input.value = "";
