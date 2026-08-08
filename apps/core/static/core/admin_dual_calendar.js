@@ -303,25 +303,50 @@
     }
 
     function openPopover() {
-      populateFromInput(selectedType());
-      popover.hidden = false;
-      positionPopover();
+      try {
+        populateFromInput(selectedType());
+        popover.hidden = false;
+        popover.style.display = "block";
+        button.setAttribute("aria-expanded", "true");
+        // Wait one frame so browsers compute dimensions even inside complex
+        // Django admin inline/form layouts before viewport clamping.
+        window.requestAnimationFrame(positionPopover);
+      } catch (error) {
+        // Do not fail silently for admin users; surface a compact diagnostic in
+        // DevTools while keeping the original date input usable.
+        console.error("Setad Jang admin calendar failed to open", error);
+      }
     }
 
     function closePopover() {
       popover.hidden = true;
+      popover.style.display = "";
+      button.setAttribute("aria-expanded", "false");
+    }
+
+    function togglePopover(event) {
+      event.preventDefault();
+      event.stopPropagation();
+      if (popover.hidden) openPopover();
+      else closePopover();
     }
 
     calendarType.addEventListener("change", () => populateFromInput(selectedType()));
     year.addEventListener("change", refreshDays);
     month.addEventListener("change", refreshDays);
+    button.setAttribute("aria-haspopup", "dialog");
+    button.setAttribute("aria-expanded", "false");
+    button.addEventListener("pointerdown", togglePopover);
     button.addEventListener("click", (event) => {
+      // pointerdown already toggles in modern browsers; this prevents Django
+      // admin inline handlers from treating the button as a submit/control link.
       event.preventDefault();
       event.stopPropagation();
-      if (popover.hidden) openPopover();
-      else closePopover();
     });
-    close.addEventListener("click", closePopover);
+    close.addEventListener("click", (event) => {
+      event.preventDefault();
+      closePopover();
+    });
     clear.addEventListener("click", () => {
       input.value = "";
       input.dispatchEvent(new Event("change", { bubbles: true }));
@@ -347,10 +372,13 @@
     });
     input.addEventListener("change", syncSummary);
     window.addEventListener("resize", () => { if (!popover.hidden) positionPopover(); });
-    document.addEventListener("click", (event) => {
+    document.addEventListener("pointerdown", (event) => {
       if (popover.hidden) return;
       if (popover.contains(event.target) || wrapper.contains(event.target)) return;
       closePopover();
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !popover.hidden) closePopover();
     });
     syncSummary();
   }

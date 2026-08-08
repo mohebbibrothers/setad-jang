@@ -28,6 +28,9 @@ def test_dual_calendar_javascript_has_jalali_and_gregorian_support_without_exter
     assert ".inline-group, .inline-related" in script
     assert "viewport clamping" in script
     assert "getBoundingClientRect" in script
+    assert "pointerdown" in script
+    assert "requestAnimationFrame" in script
+    assert "Setad Jang admin calendar failed to open" in script
     assert "شمسی" in script
     assert "میلادی" in script
     assert "تقویم پیشرفته" in script
