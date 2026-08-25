@@ -24,7 +24,7 @@ set -Eeuo pipefail
 shopt -s inherit_errexit 2>/dev/null || true
 umask 022
 
-readonly SCRIPT_VERSION="1.0.0"
+readonly SCRIPT_VERSION="1.0.1"
 readonly SCRIPT_PATH="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)/$(basename -- "${BASH_SOURCE[0]}")"
 readonly SCRIPT_DIR="$(dirname -- "$SCRIPT_PATH")"
 readonly SCRIPT_NAME="$(basename -- "$SCRIPT_PATH")"
@@ -125,6 +125,7 @@ ROLLBACK_ARMED=0
 PREV_COMMIT=""
 
 do_rollback() {
+  ROLLBACK_ARMED=0  # جلوگیری از ورود مجدد — خطا در حین rollback نباید rollbackِ تازه‌ای تریگر کند
   warn "شروع rollback…"
   if docker image inspect "$ROLLBACK_TAG" >/dev/null 2>&1; then
     run docker tag "$ROLLBACK_TAG" "$IMAGE_NAME"
@@ -194,7 +195,7 @@ if [[ -z "${UPDATE_BACK_LOCKED:-}" ]]; then
 fi
 
 # فقط ۲۰ لاگ آخر نگه‌داری می‌شود
-ls -1t "$LOCK_DIR"/logs/deploy-*.log 2>/dev/null | tail -n +$((KEEP_LOGS + 1)) | xargs -r rm -f
+{ ls -1t "$LOCK_DIR"/logs/deploy-*.log 2>/dev/null || true; } | tail -n +$((KEEP_LOGS + 1)) | xargs -r rm -f || true
 
 printf '%s%s≡ %s — %s%s\n' "$B" "$CYN" "Backend updater v$SCRIPT_VERSION" "$(date '+%Y-%m-%d %H:%M:%S')" "$R"
 log "APP_DIR=$APP_DIR · IMAGE=$IMAGE_NAME · BRANCH=$BRANCH"
