@@ -19,7 +19,7 @@ coverage==7.14.0
 cyclonedx-python-lib==9.1.0
 defusedxml==0.7.1
 detect-secrets==1.5.0
-Django==6.0.7
+Django==6.0.8
 django-cors-headers==4.9.0
 django-filter==25.2
 django-redis==6.0.0
@@ -80,7 +80,7 @@ s3transfer==0.18.0
 sentry-sdk==2.48.0
 six==1.17.0
 sortedcontainers==2.4.0
-sqlparse==0.5.5
+sqlparse==0.6.0
 stevedore==5.8.0
 toml==0.10.2
 tomli==2.4.1

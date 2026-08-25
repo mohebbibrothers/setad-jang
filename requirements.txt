@@ -3,7 +3,7 @@ attrs==26.1.0
 celery==5.5.3
 certifi==2026.4.22
 charset-normalizer==3.4.7
-Django==6.0.7
+Django==6.0.8
 django-cors-headers==4.9.0
 django-filter==25.2
 django-redis==6.0.0
@@ -32,7 +32,7 @@ referencing==0.37.0
 requests==2.34.0
 rpds-py==0.30.0
 sentry-sdk==2.48.0
-sqlparse==0.5.5
+sqlparse==0.6.0
 tzdata==2026.2
 uritemplate==4.2.0
 urllib3==2.7.0
