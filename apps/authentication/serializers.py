@@ -8,9 +8,14 @@ from typing import Final
 
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.utils import timezone
 from rest_framework import serializers
+from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
+from rest_framework_simplejwt.serializers import TokenRefreshSerializer
+from rest_framework_simplejwt.tokens import RefreshToken
 
 from .choices import AuthRiskStatus, Gender, UserRole
+from .constants import SESSION_ID_CLAIM, SESSION_REVOKED_MESSAGE
 from .models import AuthRiskSignal, AuthSession, PrimaryIdentifierKind, Profile, User
 from .normalizers import normalize_email, normalize_identifier, normalize_phone
 from .validators import validate_email_for_signup, validate_phone_format
@@ -625,6 +630,7 @@ class AuthSessionSerializer(serializers.ModelSerializer):
     """Read serializer for tracked user auth sessions/devices."""
 
     revoked_by_email = serializers.EmailField(source="revoked_by.email", read_only=True, allow_null=True)
+    is_current = serializers.SerializerMethodField()
 
     class Meta:
         model = AuthSession
@@ -640,9 +646,84 @@ class AuthSessionSerializer(serializers.ModelSerializer):
             "last_seen_at",
             "expires_at",
             "created_at",
+            "is_current",
         )
         read_only_fields = fields
 
+    def get_is_current(self, obj: AuthSession) -> bool:
+        """آیا این نشست، همان نشستِ درخواستِ فعلی است؟ (از claimِ sid توکن)"""
+        request = self.context.get("request")
+        token = getattr(request, "auth", None)
+        sid = token.get(SESSION_ID_CLAIM) if token is not None else None
+        return sid is not None and str(sid) == str(obj.pk)
+
+
+class SessionAwareTokenRefreshSerializer(TokenRefreshSerializer):
+    """
+    رفرشِ JWT با اعمالِ پیوندِ نشست (sid).
+
+    پیش از هر چرخه‌ای، نشستِ متناظر با claimِ sid چک می‌شود: نشستِ لغوشده
+    یا پاک‌شده → InvalidToken (۴۰۱) — در نتیجه دستگاهِ لغوشده نه با access
+    زنده می‌ماند (اخراجِ فوری توسط SessionAwareJWTAuthentication) و نه با
+    refresh جدید. نشستِ سالم: عبور + لمسِ last_seen_at (رفرش هم «فعالیت» است)
+    و همان claimِ sid یک‌به‌یک در توکنِ چرخیده حفظ می‌شود.
+
+    چرا rotation این‌جا خودمان انجام می‌شود (به‌جای super().validate):
+        TokenRefreshSerializer برای خواندنِ ROTATE_REFRESH_TOKENS به یک
+        api_settingsِ import-time تکیه دارد که در تست‌رانرهای بزرگ — با
+        تعویضِ settings توسط فیکسچرها — ممکن است به نمونه‌ی کهنه بچسبد.
+        خواندنِ تازه‌ی api_settings در همین متد، رفتار را در هر محیط
+        قطعی می‌کند؛ منطق دقیقاً همان الگوی SimpleJWT است.
+    """
+
+    def validate(self, attrs: dict) -> dict:
+        from rest_framework_simplejwt.settings import api_settings
+
+        try:
+            refresh = RefreshToken(attrs["refresh"])
+        except TokenError as exc:
+            raise InvalidToken(exc.args[0]) from exc
+
+        # اعتبارسنجیِ کاربر — همان قاعده‌ی استانداردِ SimpleJWT
+        user_id = refresh.payload.get(api_settings.USER_ID_CLAIM, None)
+        if user_id is not None:
+            user = User.objects.filter(pk=user_id).first()
+            if user is None or not api_settings.USER_AUTHENTICATION_RULE(user):
+                raise InvalidToken("کاربر فعال برای این توکن یافت نشد.")
+
+        # قفلِ نشست: رفرشِ نشستِ لغوشده/ناموجود ممنوع (راهِ فرارِ rotation بسته)
+        sid = refresh.get(SESSION_ID_CLAIM)
+        session = None
+        if sid is not None:
+            session = (
+                AuthSession.objects.only("is_revoked")
+                .filter(pk=sid, user_id=user_id)
+                .first()
+            )
+            if session is None or session.is_revoked:
+                raise InvalidToken(SESSION_REVOKED_MESSAGE)
+
+        data = {"access": str(refresh.access_token)}
+
+        if api_settings.ROTATE_REFRESH_TOKENS:
+            if api_settings.BLACKLIST_AFTER_ROTATION:
+                # موجودیتِ blacklist دفاعی چک می‌شود (اگر app نصب نباشد)
+                blacklist = getattr(refresh, "blacklist", None)
+                if callable(blacklist):
+                    blacklist()
+            refresh.set_jti()
+            refresh.set_exp()
+            refresh.set_iat()
+            outstand = getattr(refresh, "outstand", None)
+            if callable(outstand):
+                outstand()
+            data["refresh"] = str(refresh)
+
+        if session is not None:
+            AuthSession.objects.filter(pk=session.pk, is_revoked=False).update(
+                last_seen_at=timezone.now()
+            )
+        return data
 
 class AuthRiskSignalSerializer(serializers.ModelSerializer):
     """Read serializer for authentication risk signals."""

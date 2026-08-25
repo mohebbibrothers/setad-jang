@@ -5,6 +5,8 @@ Business services for registration, login, OTP, and identifier management.
 from __future__ import annotations
 
 import logging
+from collections.abc import Mapping
+from datetime import timedelta
 from typing import Any, Final
 
 from django.contrib.auth import authenticate
@@ -17,6 +19,7 @@ from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, Ou
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from .choices import AuthRiskSeverity, AuthRiskSignalType, AuthRiskStatus, OTPPurpose, UserRole
+from .constants import LAST_SEEN_TOUCH_SECONDS, SESSION_ID_CLAIM
 from .logging_utils import mask_identifier
 from .models import AuthRiskSignal, AuthSession, OTPCode, PrimaryIdentifierKind, Profile, User
 from .normalizers import normalize_email, normalize_phone
@@ -358,15 +361,23 @@ def _build_login_result(*, user: User, request: HttpRequest) -> dict[str, Any]:
         user.last_login_ip = ip
         user.save(update_fields=["last_login_ip"])
 
-    tokens = _issue_tokens(user=user)
-    session = _create_auth_session(user=user, refresh_token=tokens["refresh"], request=request)
+    # نشست پیش از امضای توکن ساخته می‌شود تا شناسه‌اش (sid) داخلِ هر دو
+    # توکن حک شود. SimpleJWT تمام claimهای غیررزرو را از refresh به access
+    # کپی می‌کند و هنگام rotation هم حفظشان می‌کند — پیوندی پایدار که
+    # لغوِ فوریِ نشست و «آخرین فعالیتِ واقعی» را ممکن می‌سازد.
+    refresh = RefreshToken.for_user(user)
+    session = _create_auth_session(user=user, refresh_token=str(refresh), request=request)
+    refresh[SESSION_ID_CLAIM] = session.pk
+    tokens = {
+        "refresh": str(refresh),
+        "access": str(refresh.access_token),
+    }
     evaluate_auth_session_risk(session=session)
     return {
         "user": user,
         "tokens": tokens,
         "session": session,
     }
-
 
 def create_auth_risk_signal(
     *,
@@ -745,6 +756,37 @@ def revoke_auth_session(*, session: AuthSession, revoked_by: User | None = None)
     if outstanding is not None:
         BlacklistedToken.objects.get_or_create(token=outstanding)
     return locked
+
+
+def validate_and_touch_session(*, user: User, token_claims: Mapping[str, Any]) -> bool:
+    """
+    Enforce the token↔session binding on an authenticated request.
+
+    قرارداد:
+        • توکنِ بدون claimای به نام sid (صادرشده پیش از این فیچر) → عبور
+          بدون اعمال نشست (سازگاری با نشست‌های تاریخی).
+        • نشستِ پاک‌شده یا لغوشده → False (مصرف‌کننده باید 401 بیندازد).
+          همین چکِ ساده است که «لغو نشست» را لحظه‌ای اثرگذار می‌کند —
+          حتی برای access tokenهایی که هنوز ساعت‌ها عمر دارند.
+        • نشستِ سالم → True و last_seen_at با آستانه‌ی LAST_SEEN_TOUCH_SECONDS
+          لمس می‌شود (حداکثر یک UPDATE در دقیفه برای هر نشست؛ بدون فشار بر DB).
+
+    عمداً DRF-فری است تا لایه‌ی services به فریم‌ورک وابسته نشود.
+    """
+    sid = token_claims.get(SESSION_ID_CLAIM)
+    if sid is None:
+        return True
+    now = timezone.now()
+    session = (
+        AuthSession.objects.only("is_revoked", "last_seen_at")
+        .filter(pk=sid, user_id=user.pk)
+        .first()
+    )
+    if session is None or session.is_revoked:
+        return False
+    if now - session.last_seen_at >= timedelta(seconds=LAST_SEEN_TOUCH_SECONDS):
+        AuthSession.objects.filter(pk=session.pk, is_revoked=False).update(last_seen_at=now)
+    return True
 
 
 def revoke_auth_session_by_jti(*, refresh_jti: str, revoked_by: User | None = None) -> AuthSession | None:

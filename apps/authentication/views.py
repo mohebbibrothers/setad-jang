@@ -17,7 +17,6 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework_simplejwt.serializers import TokenRefreshSerializer
 from rest_framework_simplejwt.views import TokenRefreshView
 
 from apps.audit_logs import actions as audit_actions
@@ -75,6 +74,7 @@ from .serializers import (
     RegisterSerializer,
     ResendVerificationSerializer,
     ResetPasswordSerializer,
+    SessionAwareTokenRefreshSerializer,
     SignupRequestSerializer,
     SignupVerifySerializer,
     UpdateMeSerializer,
@@ -1276,7 +1276,7 @@ class LoginAPIView(APIView):
 class CustomTokenRefreshView(TokenRefreshView):
     """CustomTokenRefreshView implementation for the authentication application."""
     permission_classes = [AllowAny]
-    serializer_class = TokenRefreshSerializer
+    serializer_class = SessionAwareTokenRefreshSerializer
 
     @extend_schema(
         operation_id="auth_token_refresh",
@@ -1560,9 +1560,9 @@ class AuthSessionListAPIView(APIView):
         paginator = self.pagination_class()
         page = paginator.paginate_queryset(queryset, request, view=self)
         if page is not None:
-            serializer = AuthSessionSerializer(page, many=True)
+            serializer = AuthSessionSerializer(page, many=True, context={"request": request})
             return paginator.get_paginated_response(serializer.data, message="لیست نشست‌ها با موفقیت دریافت شد.")
-        return SuccessResponse(data=AuthSessionSerializer(queryset, many=True).data, message="لیست نشست‌ها با موفقیت دریافت شد.")
+        return SuccessResponse(data=AuthSessionSerializer(queryset, many=True, context={"request": request}).data, message="لیست نشست‌ها با موفقیت دریافت شد.")
 
 
 class AuthSessionRevokeAPIView(APIView):
@@ -1578,7 +1578,7 @@ class AuthSessionRevokeAPIView(APIView):
         session = revoke_auth_session(session=session, revoked_by=request.user)
         metadata = extract_audit_metadata(request)
         log_action_async(user_id=request.user.pk, action=audit_actions.AUTH_SESSION_REVOKED, resource_type="auth_session", resource_id=str(session.pk), extra_data={"self_revoke": True}, **metadata)
-        return SuccessResponse(data=AuthSessionSerializer(session).data, message="نشست با موفقیت لغو شد.")
+        return SuccessResponse(data=AuthSessionSerializer(session, context={"request": request}).data, message="نشست با موفقیت لغو شد.")
 
 
 class AdminUserSessionsListAPIView(APIView):
@@ -1596,9 +1596,9 @@ class AdminUserSessionsListAPIView(APIView):
         paginator = self.pagination_class()
         page = paginator.paginate_queryset(queryset, request, view=self)
         if page is not None:
-            serializer = AuthSessionSerializer(page, many=True)
+            serializer = AuthSessionSerializer(page, many=True, context={"request": request})
             return paginator.get_paginated_response(serializer.data, message="لیست نشست‌های کاربر دریافت شد.")
-        return SuccessResponse(data=AuthSessionSerializer(queryset, many=True).data, message="لیست نشست‌های کاربر دریافت شد.")
+        return SuccessResponse(data=AuthSessionSerializer(queryset, many=True, context={"request": request}).data, message="لیست نشست‌های کاربر دریافت شد.")
 
 
 class AdminUserSessionsRevokeAPIView(APIView):
