@@ -7840,378 +7840,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/R4JGenericErrorResponse'
           description: ''
-  /api/v1/r4j/admin/cases/:
-    get:
-      operationId: r4j_admin_case_list
-      description: Admin endpoint for listing operational investigation cases.
-      summary: لیست پرونده‌های عملیاتی R4J
-      parameters:
-      - in: query
-        name: page
-        schema:
-          type: integer
-        description: شماره صفحه
-      - in: query
-        name: page_size
-        schema:
-          type: integer
-        description: تعداد آیتم در هر صفحه (حداکثر ۱۰۰)
-      tags:
-      - جایزه‌ای برای عدالت — مدیریت
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/R4JCaseListResponse'
-          description: ''
-  /api/v1/r4j/admin/cases/{case_number}/:
-    get:
-      operationId: r4j_admin_case_detail
-      description: Admin endpoint for case detail.
-      parameters:
-      - in: path
-        name: case_number
-        schema:
-          type: string
-        required: true
-      tags:
-      - جایزه‌ای برای عدالت — مدیریت
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/R4JCaseDetailResponse'
-          description: ''
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/R4JGenericErrorResponse'
-          description: ''
-  /api/v1/r4j/admin/cases/{case_number}/assign/:
-    post:
-      operationId: r4j_admin_case_assign
-      description: Admin endpoint for assigning a case.
-      parameters:
-      - in: path
-        name: case_number
-        schema:
-          type: string
-        required: true
-      tags:
-      - جایزه‌ای برای عدالت — مدیریت
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/R4JCaseAssign'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/R4JCaseAssign'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/R4JCaseAssign'
-        required: true
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/R4JCaseDetailResponse'
-          description: ''
-  /api/v1/r4j/admin/cases/{case_number}/close/:
-    post:
-      operationId: r4j_admin_case_close
-      description: Admin endpoint for closing a case.
-      parameters:
-      - in: path
-        name: case_number
-        schema:
-          type: string
-        required: true
-      tags:
-      - جایزه‌ای برای عدالت — مدیریت
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/R4JCaseNoteRequired'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/R4JCaseNoteRequired'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/R4JCaseNoteRequired'
-        required: true
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/R4JCaseDetailResponse'
-          description: ''
-  /api/v1/r4j/admin/cases/{case_number}/escalate/:
-    post:
-      operationId: r4j_admin_case_escalate
-      description: Admin endpoint for escalating a case.
-      parameters:
-      - in: path
-        name: case_number
-        schema:
-          type: string
-        required: true
-      tags:
-      - جایزه‌ای برای عدالت — مدیریت
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/R4JCaseNoteRequired'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/R4JCaseNoteRequired'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/R4JCaseNoteRequired'
-        required: true
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/R4JCaseDetailResponse'
-          description: ''
-  /api/v1/r4j/admin/cases/{case_number}/priority/:
-    post:
-      operationId: r4j_admin_case_priority
-      description: Admin endpoint for changing case priority.
-      parameters:
-      - in: path
-        name: case_number
-        schema:
-          type: string
-        required: true
-      tags:
-      - جایزه‌ای برای عدالت — مدیریت
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/R4JCasePriority'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/R4JCasePriority'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/R4JCasePriority'
-        required: true
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/R4JCaseDetailResponse'
-          description: ''
-  /api/v1/r4j/admin/cases/{case_number}/reject/:
-    post:
-      operationId: r4j_admin_case_reject
-      description: Admin endpoint for rejecting a case.
-      parameters:
-      - in: path
-        name: case_number
-        schema:
-          type: string
-        required: true
-      tags:
-      - جایزه‌ای برای عدالت — مدیریت
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/R4JCaseNoteRequired'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/R4JCaseNoteRequired'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/R4JCaseNoteRequired'
-        required: true
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/R4JCaseDetailResponse'
-          description: ''
-  /api/v1/r4j/admin/cases/{case_number}/reopen/:
-    post:
-      operationId: r4j_admin_case_reopen
-      description: Admin endpoint for reopening a terminal case.
-      parameters:
-      - in: path
-        name: case_number
-        schema:
-          type: string
-        required: true
-      tags:
-      - جایزه‌ای برای عدالت — مدیریت
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/R4JCaseNoteRequired'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/R4JCaseNoteRequired'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/R4JCaseNoteRequired'
-        required: true
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/R4JCaseDetailResponse'
-          description: ''
-  /api/v1/r4j/admin/cases/{case_number}/request-evidence/:
-    post:
-      operationId: r4j_admin_case_evidence_request
-      description: Admin endpoint for requesting more evidence.
-      parameters:
-      - in: path
-        name: case_number
-        schema:
-          type: string
-        required: true
-      tags:
-      - جایزه‌ای برای عدالت — مدیریت
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/R4JCaseEvidenceRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/R4JCaseEvidenceRequest'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/R4JCaseEvidenceRequest'
-        required: true
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/R4JCaseDetailResponse'
-          description: ''
-  /api/v1/r4j/admin/cases/{case_number}/resolve/:
-    post:
-      operationId: r4j_admin_case_resolve
-      description: Admin endpoint for resolving a case.
-      parameters:
-      - in: path
-        name: case_number
-        schema:
-          type: string
-        required: true
-      tags:
-      - جایزه‌ای برای عدالت — مدیریت
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/R4JCaseNoteRequired'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/R4JCaseNoteRequired'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/R4JCaseNoteRequired'
-        required: true
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/R4JCaseDetailResponse'
-          description: ''
-  /api/v1/r4j/admin/cases/{case_number}/timeline/:
-    get:
-      operationId: r4j_admin_case_timeline
-      description: Admin endpoint for immutable case timeline.
-      parameters:
-      - in: path
-        name: case_number
-        schema:
-          type: string
-        required: true
-      tags:
-      - جایزه‌ای برای عدالت — مدیریت
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/R4JCaseEventListResponse'
-          description: ''
-  /api/v1/r4j/admin/cases/{case_number}/triage/:
-    post:
-      operationId: r4j_admin_case_triage
-      description: Admin endpoint for case triage.
-      parameters:
-      - in: path
-        name: case_number
-        schema:
-          type: string
-        required: true
-      tags:
-      - جایزه‌ای برای عدالت — مدیریت
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/R4JCaseTriage'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/R4JCaseTriage'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/R4JCaseTriage'
-        required: true
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/R4JCaseDetailResponse'
-          description: ''
   /api/v1/r4j/admin/criminals/:
     get:
       operationId: r4j_admin_criminals_list
@@ -9309,21 +8937,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/R4JGenericErrorResponse'
           description: ''
-  /api/v1/r4j/admin/operations/overview/:
-    get:
-      operationId: r4j_admin_case_operations_overview
-      description: Admin operational overview for R4J cases.
-      tags:
-      - جایزه‌ای برای عدالت — مدیریت
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/R4JCaseOperationsOverviewResponse'
-          description: ''
   /api/v1/r4j/admin/reports/:
     get:
       operationId: r4j_admin_reports_list
@@ -9519,44 +9132,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/R4JGenericErrorResponse'
-          description: ''
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/R4JGenericErrorResponse'
-          description: ''
-  /api/v1/r4j/admin/reports/{report_id}/create-case/:
-    post:
-      operationId: r4j_admin_case_create_from_report
-      description: Admin endpoint to create an operational case from a report.
-      parameters:
-      - in: path
-        name: report_id
-        schema:
-          type: integer
-        required: true
-      tags:
-      - جایزه‌ای برای عدالت — مدیریت
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/R4JCaseCreateFromReport'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/R4JCaseCreateFromReport'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/R4JCaseCreateFromReport'
-      security:
-      - jwtAuth: []
-      responses:
-        '201':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/R4JCaseDetailResponse'
           description: ''
         '404':
           content:
@@ -13847,12 +13422,18 @@ components:
           format: date-time
           readOnly: true
           title: تاریخ ایجاد
+        is_current:
+          type: boolean
+          description: آیا این نشست، همان نشستِ درخواستِ فعلی است؟ (از claimِ sid
+            توکن)
+          readOnly: true
       required:
       - created_at
       - device_label
       - expires_at
       - id
       - ip_address
+      - is_current
       - is_revoked
       - last_seen_at
       - request_id
@@ -15945,6 +15526,28 @@ components:
       - status
       - total_seconds_snapshot
       - watched_seconds
+    FieldNameEnum:
+      enum:
+      - national_code
+      - birth_date
+      - gender
+      - country
+      - province
+      - city
+      - description
+      - crimes_summary
+      - other_info
+      type: string
+      description: |-
+        * `national_code` - کد ملی
+        * `birth_date` - تاریخ تولد
+        * `gender` - جنسیت
+        * `country` - کشور
+        * `province` - استان
+        * `city` - شهر
+        * `description` - توضیحات
+        * `crimes_summary` - خلاصه جرائم
+        * `other_info` - سایر اطلاعات
     FinancialAdjustment:
       type: object
       description: Read serializer for campaign financial adjustment workflow rows.
@@ -23425,12 +23028,26 @@ components:
           type: integer
           readOnly: true
         field_name:
-          type: string
-          title: نام فیلد
-          maxLength: 50
+          allOf:
+          - $ref: '#/components/schemas/FieldNameEnum'
+          title: فیلد اطلاعاتی
+          description: |-
+            فیلدی از پروفایل مجرم که نمایش عمومی آن برای همین مجرم override می‌شود.
+
+            * `national_code` - کد ملی
+            * `birth_date` - تاریخ تولد
+            * `gender` - جنسیت
+            * `country` - کشور
+            * `province` - استان
+            * `city` - شهر
+            * `description` - توضیحات
+            * `crimes_summary` - خلاصه جرائم
+            * `other_info` - سایر اطلاعات
         is_public:
           type: boolean
-          title: نمایش عمومی
+          title: در سایت نمایش داده شود؟
+          description: اگر خاموش باشد، این فیلد در خروجی عمومی برای این مجرم مخفی
+            می‌شود.
       required:
       - field_name
       - id
@@ -23624,6 +23241,21 @@ components:
           items:
             $ref: '#/components/schemas/R4JReportFieldChange'
           readOnly: true
+        alias_suggestions:
+          type: array
+          items:
+            $ref: '#/components/schemas/R4JReportAliasSuggestion'
+          readOnly: true
+        phone_suggestions:
+          type: array
+          items:
+            $ref: '#/components/schemas/R4JReportPhoneSuggestion'
+          readOnly: true
+        social_suggestions:
+          type: array
+          items:
+            $ref: '#/components/schemas/R4JReportSocialSuggestion'
+          readOnly: true
         attachments:
           type: array
           items:
@@ -23653,6 +23285,7 @@ components:
           title: تاریخ بروزرسانی
       required:
       - admin_note
+      - alias_suggestions
       - attachments
       - cancel_requested_at
       - canceled_at
@@ -23662,9 +23295,11 @@ components:
       - field_changes
       - id
       - notes
+      - phone_suggestions
       - reviewed_at
       - reviewed_by_email
       - reviewed_by_id
+      - social_suggestions
       - status
       - submitted_by_email
       - submitted_by_id
@@ -23943,230 +23578,6 @@ components:
         * `active` - فعال
         * `cancel_requested` - درخواست لغو
         * `canceled` - لغو شده
-    R4JCaseAssign:
-      type: object
-      description: Input serializer for case assignment.
-      properties:
-        assignee_id:
-          type: integer
-          minimum: 1
-        note:
-          type: string
-          default: ''
-      required:
-      - assignee_id
-    R4JCaseCreateFromReport:
-      type: object
-      description: Optional note for creating an operational case from a report.
-      properties:
-        note:
-          type: string
-          default: ''
-    R4JCaseDetailResponse:
-      type: object
-      properties:
-        success:
-          type: boolean
-          default: true
-        status_code:
-          type: integer
-          default: 200
-        message:
-          type: string
-        data:
-          $ref: '#/components/schemas/R4JInvestigationCaseDetail'
-      required:
-      - data
-      - message
-    R4JCaseEvent:
-      type: object
-      description: Read serializer for immutable R4J case timeline events.
-      properties:
-        id:
-          type: integer
-          readOnly: true
-        event_type:
-          allOf:
-          - $ref: '#/components/schemas/R4JInvestigationCaseEventTypeEnum'
-          readOnly: true
-        event_type_display:
-          type: string
-          readOnly: true
-        actor:
-          type: integer
-          readOnly: true
-          nullable: true
-          title: عامل
-        actor_email:
-          type: string
-          format: email
-          readOnly: true
-          nullable: true
-        from_status:
-          type: string
-          readOnly: true
-        to_status:
-          type: string
-          readOnly: true
-        note:
-          type: string
-          readOnly: true
-        metadata:
-          readOnly: true
-        created_at:
-          type: string
-          format: date-time
-          readOnly: true
-          title: تاریخ ایجاد
-      required:
-      - actor
-      - actor_email
-      - created_at
-      - event_type
-      - event_type_display
-      - from_status
-      - id
-      - metadata
-      - note
-      - to_status
-    R4JCaseEventListResponse:
-      type: object
-      properties:
-        success:
-          type: boolean
-          default: true
-        status_code:
-          type: integer
-          default: 200
-        message:
-          type: string
-        data:
-          type: array
-          items:
-            $ref: '#/components/schemas/R4JCaseEvent'
-      required:
-      - data
-      - message
-    R4JCaseEvidenceRequest:
-      type: object
-      description: Input serializer for requesting more evidence.
-      properties:
-        note:
-          type: string
-      required:
-      - note
-    R4JCaseListResponse:
-      type: object
-      properties:
-        data:
-          $ref: '#/components/schemas/R4JCaseListResponseData'
-        success:
-          type: boolean
-          default: true
-        status_code:
-          type: integer
-          default: 200
-        message:
-          type: string
-      required:
-      - data
-      - message
-    R4JCaseListResponseData:
-      type: object
-      properties:
-        count:
-          type: integer
-        next:
-          type: string
-          format: uri
-          nullable: true
-        previous:
-          type: string
-          format: uri
-          nullable: true
-        results:
-          type: array
-          items:
-            $ref: '#/components/schemas/R4JInvestigationCaseList'
-      required:
-      - count
-      - results
-    R4JCaseNoteRequired:
-      type: object
-      description: Input serializer for transitions that require a reason/note.
-      properties:
-        reason:
-          type: string
-      required:
-      - reason
-    R4JCaseOperationsOverview:
-      type: object
-      description: Serializer documenting R4J case operation overview payload.
-      properties:
-        total_cases:
-          type: integer
-        unassigned_cases:
-          type: integer
-        overdue_first_response:
-          type: integer
-        overdue_resolution:
-          type: integer
-        by_status:
-          type: object
-          additionalProperties:
-            type: integer
-        by_priority:
-          type: object
-          additionalProperties:
-            type: integer
-      required:
-      - by_priority
-      - by_status
-      - overdue_first_response
-      - overdue_resolution
-      - total_cases
-      - unassigned_cases
-    R4JCaseOperationsOverviewResponse:
-      type: object
-      properties:
-        success:
-          type: boolean
-          default: true
-        status_code:
-          type: integer
-          default: 200
-        message:
-          type: string
-        data:
-          $ref: '#/components/schemas/R4JCaseOperationsOverview'
-      required:
-      - data
-      - message
-    R4JCasePriority:
-      type: object
-      description: Input serializer for priority change.
-      properties:
-        priority:
-          $ref: '#/components/schemas/MadadkarRiskSeverityEnum'
-        note:
-          type: string
-          default: ''
-      required:
-      - priority
-    R4JCaseTriage:
-      type: object
-      description: Input serializer for case triage.
-      properties:
-        priority:
-          $ref: '#/components/schemas/MadadkarRiskSeverityEnum'
-        severity:
-          $ref: '#/components/schemas/MadadkarRiskSeverityEnum'
-        note:
-          type: string
-          default: ''
-      required:
-      - priority
-      - severity
     R4JCriminalAttachmentKindEnum:
       enum:
       - image
@@ -24379,273 +23790,6 @@ components:
       required:
       - message
       - status_code
-    R4JInvestigationCaseDetail:
-      type: object
-      description: Admin detail serializer for operational cases.
-      properties:
-        id:
-          type: integer
-          readOnly: true
-        case_number:
-          type: string
-          readOnly: true
-          title: شماره پرونده
-        report:
-          type: integer
-          readOnly: true
-          title: گزارش
-        criminal:
-          type: integer
-          readOnly: true
-          title: مجرم
-        criminal_name:
-          type: string
-          description: Return display name without exposing additional report data.
-          readOnly: true
-        status:
-          allOf:
-          - $ref: '#/components/schemas/R4JInvestigationCaseStatusEnum'
-          readOnly: true
-          title: وضعیت
-        priority:
-          allOf:
-          - $ref: '#/components/schemas/MadadkarRiskSeverityEnum'
-          readOnly: true
-          title: اولویت
-        severity:
-          allOf:
-          - $ref: '#/components/schemas/MadadkarRiskSeverityEnum'
-          readOnly: true
-          title: شدت
-        evidence_completeness_score:
-          type: integer
-          readOnly: true
-          title: امتیاز تکمیل مدارک
-        assigned_to:
-          type: integer
-          readOnly: true
-          nullable: true
-          title: مسئول پرونده
-        assigned_to_email:
-          type: string
-          format: email
-          readOnly: true
-          nullable: true
-        first_response_due_at:
-          type: string
-          format: date-time
-          readOnly: true
-          nullable: true
-          title: مهلت پاسخ اولیه
-        resolution_due_at:
-          type: string
-          format: date-time
-          readOnly: true
-          nullable: true
-          title: مهلت حل پرونده
-        created_at:
-          type: string
-          format: date-time
-          readOnly: true
-          title: تاریخ ایجاد
-        triaged_by:
-          type: integer
-          readOnly: true
-          nullable: true
-          title: تریاژکننده
-        triaged_by_email:
-          type: string
-          format: email
-          readOnly: true
-          nullable: true
-        closed_by:
-          type: integer
-          readOnly: true
-          nullable: true
-          title: بسته‌کننده
-        closed_by_email:
-          type: string
-          format: email
-          readOnly: true
-          nullable: true
-        triaged_at:
-          type: string
-          format: date-time
-          readOnly: true
-          nullable: true
-          title: زمان تریاژ
-        closed_at:
-          type: string
-          format: date-time
-          readOnly: true
-          nullable: true
-          title: زمان بستن
-        closure_reason:
-          type: string
-          readOnly: true
-          title: دلیل بستن / رد / حل
-        metadata:
-          readOnly: true
-          title: متادیتا
-        events:
-          type: array
-          items:
-            $ref: '#/components/schemas/R4JCaseEvent'
-          readOnly: true
-      required:
-      - assigned_to
-      - assigned_to_email
-      - case_number
-      - closed_at
-      - closed_by
-      - closed_by_email
-      - closure_reason
-      - created_at
-      - criminal
-      - criminal_name
-      - events
-      - evidence_completeness_score
-      - first_response_due_at
-      - id
-      - metadata
-      - priority
-      - report
-      - resolution_due_at
-      - severity
-      - status
-      - triaged_at
-      - triaged_by
-      - triaged_by_email
-    R4JInvestigationCaseEventTypeEnum:
-      enum:
-      - created
-      - triaged
-      - assigned
-      - priority_changed
-      - evidence_requested
-      - escalated
-      - resolved
-      - rejected
-      - closed
-      - reopened
-      type: string
-      description: |-
-        * `created` - ایجاد شد
-        * `triaged` - تریاژ شد
-        * `assigned` - ارجاع شد
-        * `priority_changed` - اولویت تغییر کرد
-        * `evidence_requested` - مدرک بیشتر درخواست شد
-        * `escalated` - ارجاع فوری شد
-        * `resolved` - حل شد
-        * `rejected` - رد شد
-        * `closed` - بسته شد
-        * `reopened` - بازگشایی شد
-    R4JInvestigationCaseList:
-      type: object
-      description: Admin list serializer for operational cases.
-      properties:
-        id:
-          type: integer
-          readOnly: true
-        case_number:
-          type: string
-          readOnly: true
-          title: شماره پرونده
-        report:
-          type: integer
-          readOnly: true
-          title: گزارش
-        criminal:
-          type: integer
-          readOnly: true
-          title: مجرم
-        criminal_name:
-          type: string
-          description: Return display name without exposing additional report data.
-          readOnly: true
-        status:
-          allOf:
-          - $ref: '#/components/schemas/R4JInvestigationCaseStatusEnum'
-          readOnly: true
-          title: وضعیت
-        priority:
-          allOf:
-          - $ref: '#/components/schemas/MadadkarRiskSeverityEnum'
-          readOnly: true
-          title: اولویت
-        severity:
-          allOf:
-          - $ref: '#/components/schemas/MadadkarRiskSeverityEnum'
-          readOnly: true
-          title: شدت
-        evidence_completeness_score:
-          type: integer
-          readOnly: true
-          title: امتیاز تکمیل مدارک
-        assigned_to:
-          type: integer
-          readOnly: true
-          nullable: true
-          title: مسئول پرونده
-        assigned_to_email:
-          type: string
-          format: email
-          readOnly: true
-          nullable: true
-        first_response_due_at:
-          type: string
-          format: date-time
-          readOnly: true
-          nullable: true
-          title: مهلت پاسخ اولیه
-        resolution_due_at:
-          type: string
-          format: date-time
-          readOnly: true
-          nullable: true
-          title: مهلت حل پرونده
-        created_at:
-          type: string
-          format: date-time
-          readOnly: true
-          title: تاریخ ایجاد
-      required:
-      - assigned_to
-      - assigned_to_email
-      - case_number
-      - created_at
-      - criminal
-      - criminal_name
-      - evidence_completeness_score
-      - first_response_due_at
-      - id
-      - priority
-      - report
-      - resolution_due_at
-      - severity
-      - status
-    R4JInvestigationCaseStatusEnum:
-      enum:
-      - new
-      - triaged
-      - assigned
-      - investigating
-      - waiting_for_evidence
-      - escalated
-      - resolved
-      - rejected
-      - closed
-      type: string
-      description: |-
-        * `new` - جدید
-        * `triaged` - تریاژ شده
-        * `assigned` - ارجاع شده
-        * `investigating` - در حال بررسی
-        * `waiting_for_evidence` - در انتظار مدرک
-        * `escalated` - ارجاع فوری
-        * `resolved` - حل شده
-        * `rejected` - رد شده
-        * `closed` - بسته شده
     R4JPhoneCreate:
       type: object
       description: ورودی افزودن شماره تماس.
@@ -25019,6 +24163,46 @@ components:
       - handle_or_url
       - id
       - platform
+    R4JReportAliasSuggestion:
+      type: object
+      description: نمایش پیشنهاد نام مستعار در گزارش.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        alias:
+          type: string
+          readOnly: true
+          title: نام مستعار پیشنهادی
+        status:
+          allOf:
+          - $ref: '#/components/schemas/R4JReportFieldChangeStatusEnum'
+          readOnly: true
+          title: وضعیت
+        admin_note:
+          type: string
+          readOnly: true
+          title: یادداشت ادمین
+        applied_alias:
+          type: integer
+          readOnly: true
+          nullable: true
+          title: نام مستعار اعمال‌شده
+      required:
+      - admin_note
+      - alias
+      - applied_alias
+      - id
+      - status
+    R4JReportAliasSuggestionInput:
+      type: object
+      description: ورودی پیشنهاد نام مستعار در گزارش کاربر.
+      properties:
+        alias:
+          type: string
+          maxLength: 200
+      required:
+      - alias
     R4JReportAttachment:
       type: object
       description: نمایش ضمیمه گزارش.
@@ -25040,10 +24224,27 @@ components:
           - $ref: '#/components/schemas/R4JCriminalAttachmentKindEnum'
           readOnly: true
           title: نوع
+        status:
+          allOf:
+          - $ref: '#/components/schemas/R4JReportFieldChangeStatusEnum'
+          readOnly: true
+          title: وضعیت بررسی
+        admin_note:
+          type: string
+          readOnly: true
+          title: یادداشت ادمین
+        promoted_criminal_attachment:
+          type: integer
+          readOnly: true
+          nullable: true
+          title: سند رسمی ساخته‌شده
       required:
+      - admin_note
       - file
       - id
       - kind
+      - promoted_criminal_attachment
+      - status
       - title
     R4JReportCancelAction:
       type: object
@@ -25113,6 +24314,71 @@ components:
         * `pending` - در انتظار بررسی
         * `approved` - تأیید شده
         * `rejected` - رد شده
+    R4JReportPhoneSuggestion:
+      type: object
+      description: نمایش پیشنهاد شماره تماس در گزارش.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        label:
+          type: string
+          readOnly: true
+          title: برچسب
+        number:
+          type: string
+          readOnly: true
+          title: شماره پیشنهادی
+        is_public:
+          type: boolean
+          readOnly: true
+          title: پیشنهاد نمایش عمومی
+        notes:
+          type: string
+          readOnly: true
+          title: توضیحات
+        status:
+          allOf:
+          - $ref: '#/components/schemas/R4JReportFieldChangeStatusEnum'
+          readOnly: true
+          title: وضعیت
+        admin_note:
+          type: string
+          readOnly: true
+          title: یادداشت ادمین
+        applied_phone:
+          type: integer
+          readOnly: true
+          nullable: true
+          title: شماره اعمال‌شده
+      required:
+      - admin_note
+      - applied_phone
+      - id
+      - is_public
+      - label
+      - notes
+      - number
+      - status
+    R4JReportPhoneSuggestionInput:
+      type: object
+      description: ورودی پیشنهاد شماره تماس در گزارش کاربر.
+      properties:
+        label:
+          type: string
+          default: ''
+          maxLength: 50
+        number:
+          type: string
+          maxLength: 30
+        is_public:
+          type: boolean
+          default: false
+        notes:
+          type: string
+          default: ''
+      required:
+      - number
     R4JReportReview:
       type: object
       description: |-
@@ -25124,9 +24390,86 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/R4JFieldDecision'
+        alias_decisions:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+        phone_decisions:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+        social_decisions:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+        attachment_decisions:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
         admin_note:
           type: string
           default: ''
+    R4JReportSocialSuggestion:
+      type: object
+      description: نمایش پیشنهاد شبکه اجتماعی در گزارش.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        platform:
+          allOf:
+          - $ref: '#/components/schemas/R4JSocialPlatformEnum'
+          readOnly: true
+          title: پلتفرم
+        handle_or_url:
+          type: string
+          readOnly: true
+          title: هندل یا URL پیشنهادی
+        is_public:
+          type: boolean
+          readOnly: true
+          title: پیشنهاد نمایش عمومی
+        status:
+          allOf:
+          - $ref: '#/components/schemas/R4JReportFieldChangeStatusEnum'
+          readOnly: true
+          title: وضعیت
+        admin_note:
+          type: string
+          readOnly: true
+          title: یادداشت ادمین
+        applied_social:
+          type: integer
+          readOnly: true
+          nullable: true
+          title: شبکه اجتماعی اعمال‌شده
+      required:
+      - admin_note
+      - applied_social
+      - handle_or_url
+      - id
+      - is_public
+      - platform
+      - status
+    R4JReportSocialSuggestionInput:
+      type: object
+      description: ورودی پیشنهاد شبکه اجتماعی در گزارش کاربر.
+      properties:
+        platform:
+          $ref: '#/components/schemas/R4JSocialPlatformEnum'
+        handle_or_url:
+          type: string
+          maxLength: 255
+        is_public:
+          type: boolean
+          default: true
+      required:
+      - handle_or_url
+      - platform
     R4JReportStatusEnum:
       enum:
       - pending
@@ -25169,6 +24512,18 @@ components:
             در JSON: لیست مستقیم field changeها.
             در multipart: JSON string از همان لیست.
             مثال: [{"field_name": "city", "suggested_value": "Tehran"}]
+        alias_suggestions:
+          type: array
+          items:
+            $ref: '#/components/schemas/R4JReportAliasSuggestionInput'
+        phone_suggestions:
+          type: array
+          items:
+            $ref: '#/components/schemas/R4JReportPhoneSuggestionInput'
+        social_suggestions:
+          type: array
+          items:
+            $ref: '#/components/schemas/R4JReportSocialSuggestionInput'
     R4JSocialCreate:
       type: object
       description: ورودی افزودن شبکه اجتماعی.
@@ -25359,6 +24714,21 @@ components:
           items:
             $ref: '#/components/schemas/R4JReportFieldChange'
           readOnly: true
+        alias_suggestions:
+          type: array
+          items:
+            $ref: '#/components/schemas/R4JReportAliasSuggestion'
+          readOnly: true
+        phone_suggestions:
+          type: array
+          items:
+            $ref: '#/components/schemas/R4JReportPhoneSuggestion'
+          readOnly: true
+        social_suggestions:
+          type: array
+          items:
+            $ref: '#/components/schemas/R4JReportSocialSuggestion'
+          readOnly: true
         attachments:
           type: array
           items:
@@ -25388,6 +24758,7 @@ components:
           title: تاریخ بروزرسانی
       required:
       - admin_note
+      - alias_suggestions
       - attachments
       - cancel_requested_at
       - canceled_at
@@ -25397,6 +24768,8 @@ components:
       - field_changes
       - id
       - notes
+      - phone_suggestions
+      - social_suggestions
       - status
       - updated_at
     R4JUserReportDetailResponse:
