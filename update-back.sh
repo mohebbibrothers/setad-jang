@@ -24,7 +24,7 @@ set -Eeuo pipefail
 shopt -s inherit_errexit 2>/dev/null || true
 umask 022
 
-readonly SCRIPT_VERSION="1.1.0"
+readonly SCRIPT_VERSION="1.1.1"
 readonly SCRIPT_PATH="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)/$(basename -- "${BASH_SOURCE[0]}")"
 readonly SCRIPT_DIR="$(dirname -- "$SCRIPT_PATH")"
 readonly SCRIPT_NAME="$(basename -- "$SCRIPT_PATH")"
@@ -189,9 +189,16 @@ docker compose version >/dev/null 2>&1 || die "پلاگین «docker compose» �
 #   پروژه، فایلِ compose، ایمیج و پورتِ وبِ درحال‌اجرا از روی کانتینرهای همین
 #   APP_DIR خوانده می‌شود؛ دیگر به نام/فایلِ پیش‌فرض hard-code تکیه نمی‌کنیم.)
 # ──────────────────────────────────────────────────────────────────────────────
-# ترجیح با کانتینرِ در حال اجرا؛ اگر هیچ‌کدام Up نبودند، به کانتینرهای متوقف‌شده نگاه کن
-_det_cid="$(docker ps -q --filter "label=com.docker.compose.project.working_dir=$APP_DIR" 2>/dev/null | head -1 || true)"
-[[ -z "$_det_cid" ]] && _det_cid="$(docker ps -aq --filter "label=com.docker.compose.project.working_dir=$APP_DIR" 2>/dev/null | head -1 || true)"
+# ترتیب تشخیص (web-first): سرویسِ «وب»ِ RUNNING پروداکشن واقعی است — ممکن است
+# پروژه‌های زامبی/موازی هم روی همین مسیر باقی مانده باشند (پستگرس/ردیسِ آن‌ها
+# هم RUNNING است) و نباید جلوی besat گرفته شوند:
+#   ۱) وبِ RUNNING  ۲) وبِ stopped  ۳) هر کانتینرِ RUNNING  ۴) هر کانتینر
+_wf="label=com.docker.compose.project.working_dir=$APP_DIR"
+_ws="label=com.docker.compose.service=$WEB_SERVICE"
+_det_cid="$(docker ps  -q --filter "$_wf" --filter "$_ws" 2>/dev/null | head -1 || true)"
+[[ -z "$_det_cid" ]] && _det_cid="$(docker ps -aq --filter "$_wf" --filter "$_ws" 2>/dev/null | head -1 || true)"
+[[ -z "$_det_cid" ]] && _det_cid="$(docker ps  -q --filter "$_wf" 2>/dev/null | head -1 || true)"
+[[ -z "$_det_cid" ]] && _det_cid="$(docker ps -aq --filter "$_wf" 2>/dev/null | head -1 || true)"
 _det_proj=""; _det_file=""
 if [[ -n "$_det_cid" ]]; then
   _det_proj="$(docker inspect -f '{{index .Config.Labels "com.docker.compose.project"}}' "$_det_cid" 2>/dev/null || true)"
