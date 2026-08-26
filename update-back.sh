@@ -24,7 +24,7 @@ set -Eeuo pipefail
 shopt -s inherit_errexit 2>/dev/null || true
 umask 022
 
-readonly SCRIPT_VERSION="1.0.1"
+readonly SCRIPT_VERSION="1.1.0"
 readonly SCRIPT_PATH="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)/$(basename -- "${BASH_SOURCE[0]}")"
 readonly SCRIPT_DIR="$(dirname -- "$SCRIPT_PATH")"
 readonly SCRIPT_NAME="$(basename -- "$SCRIPT_PATH")"
@@ -38,12 +38,19 @@ APP_DIR="${APP_DIR:-}"                          # خالی = پوشه‌ی خو�
 BRANCH="${BRANCH:-main}"
 REMOTE="${REMOTE:-origin}"
 
-IMAGE_NAME="${IMAGE_NAME:-setadjang:latest}"    # تگِ بیلدشده‌ی compose
+IMAGE_NAME="${IMAGE_NAME:-}"                    # خالی = از Config.Imageِ کانتینرِ وبِ live خوانده می‌شود
 ROLLBACK_TAG="${ROLLBACK_TAG:-setadjang:rollback}"
-COMPOSE_PROJECT="${COMPOSE_PROJECT:-setadjang}" # name: در docker-compose.yml
 WEB_SERVICE="${WEB_SERVICE:-web}"
 
-LOCAL_HEALTH_URL="${LOCAL_HEALTH_URL:-http://127.0.0.1:8000/api/v1/health/}"
+# ورودی‌های کاربر (خالی = تشخیص خودکار از برچسب‌های docker در APP_DIR)
+OUTER_COMPOSE_PROJECT="${COMPOSE_PROJECT:-}"
+OUTER_COMPOSE_FILE="${COMPOSE_FILE:-}"
+OUTER_LOCAL_HEALTH="${LOCAL_HEALTH_URL:-}"
+
+COMPOSE_PROJECT="$OUTER_COMPOSE_PROJECT"
+COMPOSE_FILE="$OUTER_COMPOSE_FILE"
+LOCAL_HEALTH_URL="${OUTER_LOCAL_HEALTH:-http://127.0.0.1:8000/api/v1/health/}"  # پیش‌فرض — بعداً از پورتِ واقعی وب دقیق می‌شود
+
 PUBLIC_HEALTH_URL="${PUBLIC_HEALTH_URL:-https://besat.me/api/v1/health/}"
 
 HEALTH_RETRIES="${HEALTH_RETRIES:-40}"          # 40 × 3s → تا ۱۲۰ ثانیه صبر
@@ -88,7 +95,8 @@ ${B}$SCRIPT_NAME${R} — آپدیت یک‌دستوریِ بک‌اند besat.me
 
 متغیرهای کلیدی:
   LOCAL_HEALTH_URL=…  PUBLIC_HEALTH_URL=…  PUBLIC_HEALTH_REQUIRED=1
-  IMAGE_NAME=…  ROLLBACK_TAG=…  COMPOSE_PROJECT=…  BRANCH=…
+  IMAGE_NAME=…  ROLLBACK_TAG=…  COMPOSE_PROJECT=…  COMPOSE_FILE=…  BRANCH=…
+  (پیش‌فرض: پروژه/فایل/ایمیج/پورت از برچسب‌های docker کانتینرهای live تشخیص داده می‌شود)
 EOF
 }
 
@@ -102,7 +110,7 @@ run() {
 }
 
 compose() {
-  docker compose -p "$COMPOSE_PROJECT" -f "$APP_DIR/docker-compose.yml" "$@"
+  docker compose --project-directory "$APP_DIR" -p "$COMPOSE_PROJECT" -f "$COMPOSE_FILE" "$@"
 }
 
 wait_healthy() {
@@ -171,11 +179,45 @@ done
 
 # غیرمکفی: APP_DIR پیش‌فرض = پوشه‌ی اسکریپت
 APP_DIR="${APP_DIR:-$SCRIPT_DIR}"
-[[ -f "$APP_DIR/docker-compose.yml" ]] || die "docker-compose.yml در $APP_DIR یافت نشد."
-[[ -f "$APP_DIR/.env" ]] || warn "فایل .env در $APP_DIR دیده نمی‌شود — compose ممکن است خطا دهد (POSTGRES_PASSWORD)."
 
 need git; need docker; need curl
 docker compose version >/dev/null 2>&1 || die "پلاگین «docker compose» در دسترس نیست."
+
+# ──────────────────────────────────────────────────────────────────────────────
+#  تشخیص خودکارِ پروژهٔ live از برچسب‌های docker
+#  (هوشمندسازی v1.1.0 — روی سرورهای چندسایته با چند compose project امن است:
+#   پروژه، فایلِ compose، ایمیج و پورتِ وبِ درحال‌اجرا از روی کانتینرهای همین
+#   APP_DIR خوانده می‌شود؛ دیگر به نام/فایلِ پیش‌فرض hard-code تکیه نمی‌کنیم.)
+# ──────────────────────────────────────────────────────────────────────────────
+# ترجیح با کانتینرِ در حال اجرا؛ اگر هیچ‌کدام Up نبودند، به کانتینرهای متوقف‌شده نگاه کن
+_det_cid="$(docker ps -q --filter "label=com.docker.compose.project.working_dir=$APP_DIR" 2>/dev/null | head -1 || true)"
+[[ -z "$_det_cid" ]] && _det_cid="$(docker ps -aq --filter "label=com.docker.compose.project.working_dir=$APP_DIR" 2>/dev/null | head -1 || true)"
+_det_proj=""; _det_file=""
+if [[ -n "$_det_cid" ]]; then
+  _det_proj="$(docker inspect -f '{{index .Config.Labels "com.docker.compose.project"}}' "$_det_cid" 2>/dev/null || true)"
+  _det_file="$(docker inspect -f '{{index .Config.Labels "com.docker.compose.project.config_files"}}' "$_det_cid" 2>/dev/null | cut -d, -f1 || true)"
+fi
+[[ -z "$COMPOSE_PROJECT" ]] && COMPOSE_PROJECT="${_det_proj:-setadjang}"
+if [[ -z "$COMPOSE_FILE" ]]; then
+  COMPOSE_FILE="${_det_file:-}"
+  [[ -n "$COMPOSE_FILE" && -f "$COMPOSE_FILE" ]] || COMPOSE_FILE="$APP_DIR/docker-compose.yml"
+fi
+
+# وبِ live همین پروژه → ایمیج + پورتِ واقعیِ منتشرشده (برای health و rollback)
+_det_img=""; _det_port=""
+_web_cid="$(docker ps -q --filter "label=com.docker.compose.project=$COMPOSE_PROJECT" --filter "label=com.docker.compose.service=$WEB_SERVICE" 2>/dev/null | head -1 || true)"
+[[ -z "$_web_cid" ]] && _web_cid="$(docker ps -aq --filter "label=com.docker.compose.project=$COMPOSE_PROJECT" --filter "label=com.docker.compose.service=$WEB_SERVICE" 2>/dev/null | head -1 || true)"
+if [[ -n "$_web_cid" ]]; then
+  _det_img="$(docker inspect -f '{{.Config.Image}}' "$_web_cid" 2>/dev/null || true)"
+  _det_port="$(docker inspect -f '{{range $p, $c := .HostConfig.PortBindings}}{{if eq $p "8000/tcp"}}{{(index $c 0).HostPort}}{{end}}{{end}}' "$_web_cid" 2>/dev/null || true)"
+fi
+IMAGE_NAME="${IMAGE_NAME:-${_det_img:-setadjang:latest}}"
+if [[ -z "$OUTER_LOCAL_HEALTH" && -n "$_det_port" ]]; then
+  LOCAL_HEALTH_URL="http://127.0.0.1:${_det_port}/api/v1/health/"
+fi
+
+[[ -f "$COMPOSE_FILE" ]] || die "فایل compose یافت نشد: $COMPOSE_FILE"
+[[ -f "$APP_DIR/.env" ]] || warn "فایل .env در $APP_DIR دیده نمی‌شود — compose ممکن است خطا دهد (POSTGRES_PASSWORD)."
 
 # ──────────────────────────────────────────────────────────────────────────────
 #  قفلِ تک‌نسخه‌ای (flock) — دو دیپلوی همزمان غیرممکن
@@ -198,7 +240,8 @@ fi
 { ls -1t "$LOCK_DIR"/logs/deploy-*.log 2>/dev/null || true; } | tail -n +$((KEEP_LOGS + 1)) | xargs -r rm -f || true
 
 printf '%s%s≡ %s — %s%s\n' "$B" "$CYN" "Backend updater v$SCRIPT_VERSION" "$(date '+%Y-%m-%d %H:%M:%S')" "$R"
-log "APP_DIR=$APP_DIR · IMAGE=$IMAGE_NAME · BRANCH=$BRANCH"
+log "APP_DIR=$APP_DIR · PROJECT=$COMPOSE_PROJECT · FILE=${COMPOSE_FILE##*/} · IMAGE=$IMAGE_NAME · BRANCH=$BRANCH"
+log "HEALTH(local)=$LOCAL_HEALTH_URL"
 
 # ──────────────────────────────────────────────────────────────────────────────
 #  مسیرهای کوتاه: --status / --rollback
@@ -237,9 +280,18 @@ git log -1 --format='      %h · %s · %cr' "$TARGET_COMMIT" || true
 #  قدم ۲ — snapshot ایمیجِ فعلی (سپرِ rollback)
 # ──────────────────────────────────────────────────────────────────────────────
 step "اسنپ‌شات ایمیجِ فعلی برای rollback"
-if docker image inspect "$IMAGE_NAME" >/dev/null 2>&1; then
+# دقیق‌ترین مرجع: ایمیجی که کانتینرِ وبِ live با آن بالا آمده (sha256) —
+# نه یک تگِ اسمی که ممکن است بیلدهای قبلی آن را بازنویسی کرده باشند.
+_live_web="$(docker ps -q --filter "label=com.docker.compose.project=$COMPOSE_PROJECT" --filter "label=com.docker.compose.service=$WEB_SERVICE" 2>/dev/null | head -1 || true)"
+_live_img=""
+[[ -n "$_live_web" ]] && _live_img="$(docker inspect -f '{{.Image}}' "$_live_web" 2>/dev/null || true)"
+if [[ -n "$_live_img" ]]; then
+  run docker tag "$_live_img" "$ROLLBACK_TAG"
+  ok "ایمیجِ در‌حال‌اجرای وب (${_live_img:7:12}) با تگ $ROLLBACK_TAG ذخیره شد."
+  ROLLBACK_ARMED=1
+elif docker image inspect "$IMAGE_NAME" >/dev/null 2>&1; then
   run docker tag "$IMAGE_NAME" "$ROLLBACK_TAG"
-  ok "ایمیج فعلی با تگ $ROLLBACK_TAG ذخیره شد."
+  ok "ایمیج $IMAGE_NAME با تگ $ROLLBACK_TAG ذخیره شد."
   ROLLBACK_ARMED=1
 else
   warn "ایمیج فعلی‌ای برای snapshot نیست (نخستین دیپلوی؟) — rollback غیرفعال."
