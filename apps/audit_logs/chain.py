@@ -7,9 +7,7 @@ from typing import Any
 
 from django.utils import timezone
 
-from .models import AuditLog
-
-GENESIS_HASH = "0" * 64
+from .models import GENESIS_HASH, AuditLog
 
 
 class AuditChainVerificationError(RuntimeError):
@@ -58,12 +56,17 @@ def verify_audit_chain_integrity() -> AuditChainVerificationResult:
     The verification is intentionally full-chain, not filtered, because forensic
     exports must prove the complete trail was intact before packaging any slice
     of records for incident response, legal hold, or compliance review.
+
+    ترتیب پیمایش روی `chain_index` است، نه `created_at`. دلیل: `created_at`
+    یک برچسب زمانی است و می‌تواند برای دو رکورد یکسان باشد یا با انحراف ساعت
+    جابه‌جا شود؛ ولی `chain_index` همان ترتیبی است که هش‌ها بر اساس آن بسته
+    شده‌اند و در سطح دیتابیس یکتاست. علاوه بر آن، این ستون ایندکس دارد.
     """
     previous_hash = GENESIS_HASH
     checked = 0
     hash_version = 1
 
-    for audit in AuditLog.all_objects.order_by("created_at", "id"):
+    for audit in AuditLog.all_objects.order_by("chain_index", "id").iterator(chunk_size=2000):
         if audit.previous_hash != previous_hash:
             raise AuditChainVerificationError(
                 audit_log_id=audit.pk,

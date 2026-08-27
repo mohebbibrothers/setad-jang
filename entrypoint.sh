@@ -41,22 +41,56 @@ has_gosu() {
 # ------------------------------------------------------------
 # Helper: اجرای دستور به‌عنوان app اگر root هستیم،
 # و در غیر این صورت با همان user فعلی.
+#
+# نکتهٔ حیاتی: این helper برای مراحل bootstrap است و باید **برگردد**،
+# پس نباید exec کند. برای تحویل نهایی کنترل به CMD از
+# `exec_as_app_or_fail` استفاده می‌شود که فرآیند را جایگزین می‌کند.
 # ------------------------------------------------------------
 as_app() {
   if is_root; then
-    exec_gosu_or_fail "$@"
+    run_gosu_or_fail "$@"
   else
     "$@"
   fi
 }
 
-exec_gosu_or_fail() {
+require_gosu() {
   if ! has_gosu; then
     log "ERROR: gosu is required for root-mode privilege dropping but was not found."
     exit 1
   fi
+}
 
+# اجرای یک مرحلهٔ bootstrap با کاربر app و بازگشت به entrypoint.
+run_gosu_or_fail() {
+  require_gosu
   gosu "${APP_USER}:${APP_GROUP}" "$@"
+}
+
+# ------------------------------------------------------------
+# تحویل نهایی کنترل به CMD با drop کردن سطح دسترسی.
+#
+# چرا `exec` اینجا حیاتی است:
+#   بدون exec، درخت پروسه به این شکل در می‌آمد:
+#
+#       PID 1  tini
+#         └─ PID 7  bash (entrypoint.sh)
+#              └─ PID 12 gosu
+#                   └─ PID 13 gunicorn
+#
+#   tini سیگنال SIGTERM را فقط به فرزند مستقیمش (bash) می‌دهد و bash در
+#   حالت non-interactive سیگنال را به فرزند foreground خود forward
+#   نمی‌کند. نتیجه: gunicorn هرگز SIGTERM نمی‌گرفت، بعد از پایان مهلت
+#   داکر با SIGKILL کشته می‌شد و تمام requestهای در حال پردازش — از جمله
+#   callback تأیید پرداخت — وسط کار قطع می‌شدند. یعنی هر deploy ریسک
+#   تراکنش نیمه‌کاره داشت.
+#
+#   با exec، دیگر bash و gosu در مسیر سیگنال نیستند و PID فرآیند نهایی
+#   مستقیماً فرزند tini است، پس graceful shutdown درست کار می‌کند.
+# ------------------------------------------------------------
+exec_as_app_or_fail() {
+  require_gosu
+  exec gosu "${APP_USER}:${APP_GROUP}" "$@"
 }
 
 # ------------------------------------------------------------
@@ -164,7 +198,7 @@ run_collectstatic
 
 if is_root; then
   log "Bootstrap finished. Dropping privileges to ${APP_USER} and handing over control to CMD..."
-  exec_gosu_or_fail "$@"
+  exec_as_app_or_fail "$@"
 else
   log "Bootstrap finished. Running CMD as current non-root user: $(id -un)"
   exec "$@"

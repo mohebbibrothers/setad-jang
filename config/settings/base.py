@@ -287,6 +287,10 @@ REST_FRAMEWORK = {
         "auth_otp_request": "3/min",
         "auth_otp_verify": "10/min",
         "auth_otp_ip": "10/min",
+        # سقف per-recipient: مهاجم می‌تواند IP و اکانت عوض کند ولی شمارهٔ
+        # قربانی ثابت است. این تنها لایه‌ای است که هزینهٔ پنل پیامک را در
+        # برابر SMS-bombing توزیع‌شده محدود می‌کند.
+        "auth_otp_target": "12/hour",
         "auth_password_reset": "3/min",
         # ── Tabyin ────────────────────────────────────────
         "tabyin_sync": "5/hour",

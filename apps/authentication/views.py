@@ -124,6 +124,7 @@ from .throttles import (
     LoginThrottle,
     OTPGlobalIPThrottle,
     OTPRequestThrottle,
+    OTPTargetThrottle,
     OTPVerifyThrottle,
     PasswordResetThrottle,
     RegisterThrottle,
@@ -359,7 +360,7 @@ def _mark_legacy_response(
 class SignupRequestAPIView(APIView):
     """SignupRequestAPIView implementation for the authentication application."""
     permission_classes = [AllowAny]
-    throttle_classes = [OTPRequestThrottle, OTPGlobalIPThrottle]
+    throttle_classes = [OTPRequestThrottle, OTPGlobalIPThrottle, OTPTargetThrottle]
 
     @extend_schema(
         operation_id="auth_signup_request",
@@ -574,7 +575,7 @@ class LoginPasswordAPIView(APIView):
 class LoginOTPRequestAPIView(APIView):
     """LoginOTPRequestAPIView implementation for the authentication application."""
     permission_classes = [AllowAny]
-    throttle_classes = [OTPRequestThrottle, OTPGlobalIPThrottle]
+    throttle_classes = [OTPRequestThrottle, OTPGlobalIPThrottle, OTPTargetThrottle]
 
     @extend_schema(
         operation_id="auth_login_otp_request",
@@ -741,7 +742,7 @@ class LoginOTPVerifyAPIView(APIView):
 class IdentifierForgotPasswordRequestAPIView(APIView):
     """IdentifierForgotPasswordRequestAPIView implementation for the authentication application."""
     permission_classes = [AllowAny]
-    throttle_classes = [PasswordResetThrottle, OTPGlobalIPThrottle]
+    throttle_classes = [PasswordResetThrottle, OTPGlobalIPThrottle, OTPTargetThrottle]
 
     @extend_schema(
         operation_id="auth_password_forgot_request_identifier",
@@ -844,7 +845,7 @@ class IdentifierForgotPasswordConfirmAPIView(APIView):
 class IdentifierAddRequestAPIView(APIView):
     """IdentifierAddRequestAPIView implementation for the authentication application."""
     permission_classes = [IsAuthenticated]
-    throttle_classes = [OTPRequestThrottle, OTPGlobalIPThrottle]
+    throttle_classes = [OTPRequestThrottle, OTPGlobalIPThrottle, OTPTargetThrottle]
 
     @extend_schema(
         operation_id="auth_identifier_add_request",
@@ -1056,7 +1057,7 @@ class RegisterAPIView(APIView):
 class VerifyEmailAPIView(APIView):
     """VerifyEmailAPIView implementation for the authentication application."""
     permission_classes = [AllowAny]
-    throttle_classes = [OTPRequestThrottle]
+    throttle_classes = [OTPRequestThrottle, OTPGlobalIPThrottle]
 
     @extend_schema(
         operation_id="auth_verify_email",
@@ -1113,7 +1114,7 @@ class VerifyEmailAPIView(APIView):
 class ResendVerificationAPIView(APIView):
     """ResendVerificationAPIView implementation for the authentication application."""
     permission_classes = [AllowAny]
-    throttle_classes = [OTPRequestThrottle]
+    throttle_classes = [OTPRequestThrottle, OTPGlobalIPThrottle, OTPTargetThrottle]
 
     @extend_schema(
         operation_id="auth_resend_verification",
@@ -1309,7 +1310,7 @@ class CustomTokenRefreshView(TokenRefreshView):
 class ForgotPasswordAPIView(APIView):
     """ForgotPasswordAPIView implementation for the authentication application."""
     permission_classes = [AllowAny]
-    throttle_classes = [PasswordResetThrottle]
+    throttle_classes = [PasswordResetThrottle, OTPGlobalIPThrottle, OTPTargetThrottle]
 
     @extend_schema(
         operation_id="auth_password_forgot",
@@ -1349,7 +1350,7 @@ class ForgotPasswordAPIView(APIView):
 class ResetPasswordAPIView(APIView):
     """ResetPasswordAPIView implementation for the authentication application."""
     permission_classes = [AllowAny]
-    throttle_classes = [PasswordResetThrottle]
+    throttle_classes = [PasswordResetThrottle, OTPGlobalIPThrottle]
 
     @extend_schema(
         operation_id="auth_password_reset",

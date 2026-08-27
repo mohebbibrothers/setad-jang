@@ -691,6 +691,111 @@ def delete_campaign_image(*, image: CampaignImage) -> None:
 # ===========================================================================
 
 @transaction.atomic
+def _reserve_participation_shares(
+    *,
+    campaign: Campaign,
+    user: Any,
+    share_count: int,
+) -> Participation:
+    """
+    فاز رزرو: قفل کمپین، بررسی موجودی سهم و ساخت Participation در وضعیت انتظار.
+
+    این تابع عمداً کوتاه است. تنها کاری که با قفل ردیف کمپین انجام می‌شود
+    خواندن/نوشتن دیتابیس است — هیچ I/O شبکه‌ای در این محدوده وجود ندارد،
+    بنابراین قفل در حد چند میلی‌ثانیه نگه داشته می‌شود.
+    """
+    locked_campaign = Campaign.objects.select_for_update().get(pk=campaign.pk)
+
+    is_open, reason = _is_campaign_open_for_participation(locked_campaign)
+    if not is_open:
+        raise CampaignNotAcceptingSharesError(reason)
+
+    if share_count > locked_campaign.remaining_shares:
+        msg = (
+            f"تعداد سهم درخواستی ({share_count:,}) بیشتر از سهم باقی‌مانده "
+            f"({locked_campaign.remaining_shares:,}) است."
+        )
+        raise InsufficientSharesError(msg)
+
+    share_price_snapshot = locked_campaign.share_price
+    participation = Participation.objects.create(
+        campaign=locked_campaign,
+        user=user,
+        share_count=share_count,
+        share_price_snapshot=share_price_snapshot,
+        total_amount=share_count * share_price_snapshot,
+        status=ParticipationStatus.PENDING_PAYMENT,
+    )
+
+    # PENDING_PAYMENT هم شمرده می‌شود تا سهم رزرو بماند و oversell رخ ندهد.
+    _sync_campaign_counters(campaign=locked_campaign)
+    return participation
+
+
+@transaction.atomic
+def _release_reserved_participation(*, participation: Participation, reason: str) -> None:
+    """
+    فاز جبران: آزادسازی سهم رزروشده وقتی درگاه پاسخ موفق نداد.
+
+    رکورد Participation حذف نمی‌شود بلکه به FAILED می‌رود. دلیل: تلاش
+    ناموفق پرداخت یک واقعیت کسب‌وکاری است و برای تحلیل تقلب، پشتیبانی و
+    گزارش‌های مالی باید ردش بماند. چون FAILED در شمارش رزرو نمی‌آید، سهم
+    بلافاصله آزاد می‌شود.
+    """
+    locked_participation = Participation.objects.select_for_update().get(pk=participation.pk)
+    if locked_participation.status != ParticipationStatus.PENDING_PAYMENT:
+        return
+
+    locked_campaign = Campaign.objects.select_for_update().get(pk=locked_participation.campaign_id)
+    locked_participation.status = ParticipationStatus.FAILED
+    locked_participation.save(update_fields=["status", "updated_at"])
+    _sync_campaign_counters(campaign=locked_campaign)
+
+    participation.status = ParticipationStatus.FAILED
+    logger.warning(
+        "Madadkar reserved shares released participation_id=%s campaign_id=%s reason=%s",
+        locked_participation.pk,
+        locked_participation.campaign_id,
+        reason,
+    )
+
+
+@transaction.atomic
+def _persist_initiated_payment(
+    *,
+    participation: Participation,
+    user: Any,
+    amount: int,
+    provider_name: str,
+    request_result: Any,
+    ip_address: str | None,
+    user_agent: str,
+) -> Payment:
+    """فاز ثبت: ذخیره‌ی Payment و رویداد آن پس از پاسخ موفق درگاه."""
+    payment = Payment.objects.create(
+        participation=participation,
+        user=user,
+        amount=amount,
+        gateway_name=provider_name,
+        authority=request_result.authority,
+        gateway_status=request_result.gateway_status,
+        status=PaymentStatus.PENDING,
+        ip_address=ip_address,
+        user_agent=user_agent[:500] if user_agent else "",
+    )
+    _record_payment_event(
+        payment=payment,
+        event_kind=PaymentEventKind.CREATED,
+        previous_status="",
+        new_status=PaymentStatus.PENDING,
+        metadata={
+            "campaign_id": participation.campaign_id,
+            "participation_id": participation.pk,
+        },
+    )
+    return payment
+
+
 def initiate_participation(
     *,
     campaign: Campaign,
@@ -703,21 +808,26 @@ def initiate_participation(
     email: str = "",
 ) -> tuple[Participation, Payment, str]:
     """
-    شروع فرآیند مشارکت: رزرو سهم + ساخت Payment + درخواست به درگاه.
+    شروع فرآیند مشارکت: رزرو سهم + درخواست به درگاه + ساخت Payment.
 
     این تابع حیاتی‌ترین قسمت اپ از نظر concurrency است.
 
-    گام‌ها:
-    1. اعتبارسنجی share_count
-    2. select_for_update روی Campaign (lock کردن row برای جلوگیری از race)
-    3. بررسی اینکه حرکت قابل دریافت سهم است (status, deadline, fully_funded)
-    4. بررسی اینکه share_count <= remaining_shares
-    5. ساخت Participation (PENDING_PAYMENT) — این به‌طور خودکار counter را
-       می‌برد بالا چون _sync_campaign_counters فراخوانی می‌شود.
-    6. درخواست به provider برای authority + gateway URL
-    7. ساخت Payment (PENDING) با authority برگشتی
-    8. sync counters
-    9. برگشت (participation, payment, gateway_url)
+    معماری transaction (سه فاز مجزا):
+        این تابع عمداً با @transaction.atomic decorate **نشده** است.
+        پیش‌تر کل بدنه در یک atomic بود و فراخوانی HTTP به درگاه (تا ۱۰
+        ثانیه timeout) در حالی انجام می‌شد که قفل `select_for_update`
+        روی ردیف کمپین نگه داشته شده بود. نتیجه: روی یک کمپین پرترافیک،
+        مشارکت‌ها کاملاً سریال می‌شدند و هر کندی درگاه به‌صورت آبشاری
+        connectionهای دیتابیس و workerهای gunicorn را مصرف می‌کرد.
+
+        حالا:
+          فاز ۱ — رزرو سهم در یک atomic کوتاه با قفل کمپین (بدون I/O).
+          فاز ۲ — تماس با درگاه، کاملاً خارج از هر transaction و قفلی.
+          فاز ۳ — ثبت Payment در یک atomic کوتاه.
+        اگر فاز ۲ شکست بخورد، فاز جبران سهم رزروشده را آزاد می‌کند.
+
+        همین الگو در `verify_payment` از قبل رعایت شده بود؛ این تابع تنها
+        جای باقی‌مانده بود که I/O خارجی را زیر قفل نگه می‌داشت.
 
     Args:
         campaign: حرکت مقصد.
@@ -736,7 +846,7 @@ def initiate_participation(
         InvalidShareCountError: تعداد سهم نامعتبر.
         CampaignNotAcceptingSharesError: حرکت قابل دریافت سهم نیست.
         InsufficientSharesError: سهم درخواستی بیشتر از باقی‌مانده.
-        PaymentGatewayError: درگاه پاسخ نامناسب داد.
+        PaymentGatewayError: درگاه پاسخ نامناسب داد یا در دسترس نبود.
     """
     try:
         validate_share_count(share_count)
@@ -745,97 +855,83 @@ def initiate_participation(
             _extract_django_validation_message(exc),
         ) from exc
 
-    # ── lock کردن row کمپین تا انتهای transaction
-    locked_campaign = (
-        Campaign.objects.select_for_update().get(pk=campaign.pk)
-    )
-
-    is_open, reason = _is_campaign_open_for_participation(locked_campaign)
-    if not is_open:
-        raise CampaignNotAcceptingSharesError(reason)
-
-    if share_count > locked_campaign.remaining_shares:
-        msg = (
-            f"تعداد سهم درخواستی ({share_count:,}) بیشتر از سهم باقی‌مانده "
-            f"({locked_campaign.remaining_shares:,}) است."
-        )
-        raise InsufficientSharesError(msg)
-
-    # ── ساخت Participation با snapshot قیمت
-    share_price_snapshot = locked_campaign.share_price
-    total_amount = share_count * share_price_snapshot
-
-    participation = Participation.objects.create(
-        campaign=locked_campaign,
+    # ── فاز ۱: رزرو سهم (atomic کوتاه، قفل کمپین، بدون I/O)
+    participation = _reserve_participation_shares(
+        campaign=campaign,
         user=user,
         share_count=share_count,
-        share_price_snapshot=share_price_snapshot,
-        total_amount=total_amount,
-        status=ParticipationStatus.PENDING_PAYMENT,
     )
+    total_amount = participation.total_amount
 
-    # ── درخواست به provider
+    # ── فاز ۲: تماس با درگاه — خارج از transaction و بدون هیچ قفلی
     provider = get_payment_provider()
-    description = f"مشارکت در حرکت «{locked_campaign.title}»"
+    description = f"مشارکت در حرکت «{campaign.title}»"
 
-    request_result = provider.request_payment(
-        amount=total_amount,
-        description=description,
-        callback_url=callback_url,
-        mobile=mobile,
-        email=email,
-        metadata={
-            "participation_id": str(participation.pk),
-            "campaign_id": str(locked_campaign.pk),
-            "user_id": str(user.pk),
-        },
-    )
+    try:
+        request_result = provider.request_payment(
+            amount=total_amount,
+            description=description,
+            callback_url=callback_url,
+            mobile=mobile,
+            email=email,
+            metadata={
+                "participation_id": str(participation.pk),
+                "campaign_id": str(campaign.pk),
+                "user_id": str(user.pk),
+            },
+        )
+    except Exception as exc:
+        _release_reserved_participation(
+            participation=participation,
+            reason=f"gateway_exception:{type(exc).__name__}",
+        )
+        logger.error(
+            "Madadkar payment request raised campaign_id=%s user_id=%s amount=%s error=%s",
+            campaign.pk,
+            user.pk,
+            total_amount,
+            exc,
+            exc_info=True,
+        )
+        msg = "ارتباط با درگاه پرداخت برقرار نشد. لطفاً مجدداً تلاش کنید."
+        raise PaymentGatewayError(msg) from exc
 
     if not request_result.success or not request_result.authority:
+        _release_reserved_participation(
+            participation=participation,
+            reason="gateway_rejected",
+        )
         logger.warning(
             "Madadkar payment request failed campaign_id=%s user_id=%s "
             "amount=%s error=%s",
-            locked_campaign.pk,
+            campaign.pk,
             user.pk,
             total_amount,
             request_result.error_message,
         )
-        # rollback خودکار با raise شدن exception داخل atomic
         msg = (
             f"ارتباط با درگاه پرداخت برقرار نشد. "
             f"{request_result.error_message or 'لطفاً مجدداً تلاش کنید.'}"
         )
         raise PaymentGatewayError(msg)
 
-    # ── ساخت Payment
-    payment = Payment.objects.create(
+    # ── فاز ۳: ثبت Payment (atomic کوتاه)
+    payment = _persist_initiated_payment(
         participation=participation,
         user=user,
         amount=total_amount,
-        gateway_name=provider.name,
-        authority=request_result.authority,
-        gateway_status=request_result.gateway_status,
-        status=PaymentStatus.PENDING,
+        provider_name=provider.name,
+        request_result=request_result,
         ip_address=ip_address,
-        user_agent=user_agent[:500] if user_agent else "",
+        user_agent=user_agent,
     )
-    _record_payment_event(
-        payment=payment,
-        event_kind=PaymentEventKind.CREATED,
-        previous_status="",
-        new_status=PaymentStatus.PENDING,
-        metadata={"campaign_id": locked_campaign.pk, "participation_id": participation.pk},
-    )
-
-    # ── sync counters (PENDING_PAYMENt هم شمارش می‌شود → سهم رزرو می‌ماند)
-    _sync_campaign_counters(campaign=locked_campaign)
 
     logger.info(
         "Madadkar participation initiated participation_id=%s payment_id=%s "
         "campaign_id=%s user_id=%s share_count=%s amount=%s authority=%s",
         participation.pk,
         payment.pk,
-        locked_campaign.pk,
+        campaign.pk,
         user.pk,
         share_count,
         total_amount,

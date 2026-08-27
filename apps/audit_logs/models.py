@@ -14,9 +14,26 @@ import json
 from typing import Any
 
 from django.conf import settings
-from django.db import models
+from django.db import IntegrityError, models, router, transaction
 
 from apps.core.models import BaseModel
+
+# ============================================================
+# Chain constants
+# ============================================================
+
+#: previous_hash of the very first record in the chain.
+GENESIS_HASH = "0" * 64
+
+#: chain_index of the very first record. Positions are 1-based so that a
+#: falsy value can never be mistaken for a valid position.
+GENESIS_CHAIN_INDEX = 1
+
+#: How many times an insert may re-read the chain head after losing a race.
+#: Each retry costs one indexed single-row lookup, so this is cheap even at
+#: the tail of a very hot chain.
+CHAIN_INSERT_MAX_ATTEMPTS = 8
+
 
 # ============================================================
 # Exceptions
@@ -25,6 +42,10 @@ from apps.core.models import BaseModel
 
 class AuditLogImmutableError(PermissionError):
     """Raised when code attempts to mutate or delete an existing audit log."""
+
+
+class AuditLogChainContentionError(RuntimeError):
+    """Raised when an audit insert loses the chain-position race repeatedly."""
 
 
 # ============================================================
@@ -95,6 +116,27 @@ class AuditLog(BaseModel):
     event_hash = models.CharField(max_length=64, blank=True, unique=True, verbose_name="هش رویداد")
     hash_version = models.PositiveSmallIntegerField(default=1, verbose_name="نسخه هش")
 
+    # موقعیت قطعی رکورد در زنجیره.
+    #
+    # این ستون دو مسئله‌ی حیاتی را همزمان حل می‌کند:
+    #
+    # ۱. یکتایی آن در سطح دیتابیس، «انشعاب زنجیره» را از نظر ساختاری
+    #    غیرممکن می‌کند. پیش‌تر دو insert همزمان می‌توانستند هر دو یک
+    #    previous_hash را بخوانند و زنجیره را دو شاخه کنند؛ چون هر دو
+    #    event_hash متفاوتی داشتند، constraint موجود جلوی آن را نمی‌گرفت
+    #    و tamper-evidence بی‌صدا از بین می‌رفت.
+    # ۲. ایندکس یکتای آن، پیدا کردن سر زنجیره را از یک sort روی کل جدول
+    #    به یک index scan تک‌ردیفی تبدیل می‌کند.
+    #
+    # null=True فقط به‌عنوان escape hatch برای restore/replication سطح پایین
+    # نگه داشته شده؛ مسیر اپلیکیشن همیشه آن را پر می‌کند.
+    chain_index = models.BigIntegerField(
+        null=True,
+        blank=True,
+        unique=True,
+        verbose_name="موقعیت در زنجیره",
+    )
+
     objects = AuditLogManager()
     all_objects = AuditLogManager()
 
@@ -109,21 +151,87 @@ class AuditLog(BaseModel):
             models.Index(fields=["ip_address", "-created_at"]),
             models.Index(fields=["method", "path"]),
             models.Index(fields=["previous_hash"]),
+            # ordering پیش‌فرض مدل روی -created_at است؛ بدون این ایندکس هر
+            # لیست بدون فیلتری روی جدول audit به sort کامل تبدیل می‌شود.
+            models.Index(fields=["-created_at"], name="audit_created_at_desc_idx"),
         ]
 
     def __str__(self) -> str:
         return f"{self.action} by {self.user or 'Anonymous'} at {self.created_at}"
 
+    @classmethod
+    def _read_chain_head(cls, *, using: str) -> dict[str, Any] | None:
+        """
+        خواندن آخرین حلقه‌ی زنجیره با یک index scan تک‌ردیفی.
+
+        فیلتر `chain_index__isnull=False` صرفاً دفاعی نیست: در PostgreSQL
+        مرتب‌سازی نزولی به‌صورت پیش‌فرض NULLها را اول می‌آورد، پس بدون این
+        فیلتر یک ردیف بدون chain_index می‌توانست به‌اشتباه سر زنجیره تلقی شود.
+        """
+        return (
+            cls.all_objects.using(using)
+            .filter(chain_index__isnull=False)
+            .order_by("-chain_index")
+            .values("chain_index", "event_hash")
+            .first()
+        )
+
+    def _link_to_chain_head(self, *, using: str) -> None:
+        """محاسبه‌ی chain_index/previous_hash/event_hash بر اساس سر فعلی زنجیره."""
+        head = self._read_chain_head(using=using)
+        if head is None:
+            self.chain_index = GENESIS_CHAIN_INDEX
+            self.previous_hash = GENESIS_HASH
+        else:
+            self.chain_index = int(head["chain_index"]) + 1
+            self.previous_hash = head["event_hash"]
+        self.event_hash = self.compute_event_hash(previous_hash=self.previous_hash)
+
     def save(self, *args: Any, **kwargs: Any) -> None:
-        """Allow initial insert but reject updates to preserve append-only records."""
+        """
+        Allow initial insert but reject updates to preserve append-only records.
+
+        استراتژی همزمانی: optimistic concurrency control.
+
+        به‌جای گرفتن قفل (که در یک تراکنش کسب‌وکاری طولانی، تمام نوشتن‌های
+        audit را سریال می‌کرد) رکورد را خوش‌بینانه با موقعیت بعدی زنجیره
+        می‌نویسیم. اگر نویسنده‌ی دیگری همان موقعیت را گرفته باشد، constraint
+        یکتای `chain_index` خطا می‌دهد و ما سر زنجیره را دوباره می‌خوانیم.
+
+        این روش:
+        - هیچ قفلی را در طول I/O یا تراکنش بیرونی نگه نمی‌دارد.
+        - انشعاب زنجیره را از نظر ساختاری غیرممکن می‌کند، نه صرفاً بعید.
+        - در حالت بدون رقابت دقیقاً یک SELECT سبک و یک INSERT هزینه دارد.
+        - روی PostgreSQL و SQLite یکسان کار می‌کند.
+        """
         if self.pk and not self._state.adding:
             raise AuditLogImmutableError("ویرایش لاگ‌های فعالیت مجاز نیست.")
-        if not self.previous_hash:
-            previous = AuditLog.all_objects.order_by("-created_at", "-id").first()
-            self.previous_hash = previous.event_hash if previous else "0" * 64
-        if not self.event_hash:
-            self.event_hash = self.compute_event_hash(previous_hash=self.previous_hash)
-        super().save(*args, **kwargs)
+
+        # رکورد از پیش مهرشده (restore/replication): همان‌طور که هست درج می‌شود.
+        if self.chain_index is not None and self.previous_hash and self.event_hash:
+            super().save(*args, **kwargs)
+            return
+
+        using = kwargs.get("using") or self._state.db or router.db_for_write(type(self), instance=self)
+        last_error: Exception | None = None
+
+        for _attempt in range(CHAIN_INSERT_MAX_ATTEMPTS):
+            self._link_to_chain_head(using=using)
+            try:
+                # savepoint اختصاصی: اگر رقابت رخ دهد فقط همین insert برمی‌گردد
+                # و تراکنش کسب‌وکاری بیرونی سالم می‌ماند.
+                with transaction.atomic(using=using):
+                    super().save(*args, **kwargs)
+            except IntegrityError as exc:
+                last_error = exc
+                self.pk = None
+                self._state.adding = True
+                continue
+            return
+
+        raise AuditLogChainContentionError(
+            "ثبت لاگ فعالیت به دلیل رقابت مداوم روی موقعیت زنجیره ممکن نشد.",
+        ) from last_error
 
     def compute_event_hash(self, *, previous_hash: str | None = None) -> str:
         """Compute deterministic hash for tamper-evident audit chain."""

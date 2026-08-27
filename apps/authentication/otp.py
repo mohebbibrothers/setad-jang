@@ -28,7 +28,7 @@ import hmac
 import logging
 import secrets
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
@@ -169,21 +169,6 @@ def _get_latest_active_otp(
     )
 
 
-def _invalidate_old_otps(
-    *,
-    identifier_kind: str,
-    identifier_value: str,
-    purpose: str,
-) -> None:
-    """تمام OTPهای قبلی همان (identifier, purpose) را invalidate کن."""
-    OTPCode.objects.filter(
-        identifier_kind=identifier_kind,
-        identifier_value=identifier_value,
-        purpose=purpose,
-        is_used=False,
-    ).update(is_used=True, updated_at=timezone.now())
-
-
 def _mark_otp_used(otp: OTPCode) -> bool:
     """
     OTP را با conditional update اتمیک استفاده‌شده کن.
@@ -226,6 +211,55 @@ def _increment_otp_attempts(otp: OTPCode) -> int:
 
 
 @transaction.atomic
+def _persist_new_otp(
+    *,
+    identifier_kind: str,
+    identifier_value: str,
+    purpose: str,
+    code_hash: str,
+    expires_at: datetime,
+) -> OTPCode:
+    """ساخت رکورد OTP جدید در یک transaction کوتاه و بدون I/O خارجی."""
+    return OTPCode.objects.create(
+        identifier_kind=identifier_kind,
+        identifier_value=identifier_value,
+        purpose=purpose,
+        code_hash=code_hash,
+        expires_at=expires_at,
+        attempts=0,
+        is_used=False,
+    )
+
+
+@transaction.atomic
+def _commit_otp_delivery(*, otp: OTPCode) -> None:
+    """
+    نهایی‌سازی پس از ارسال موفق: باطل کردن OTPهای قبلیِ همان هدف.
+
+    این کار عمداً *بعد* از ارسال انجام می‌شود. اگر قبل از ارسال انجام
+    می‌شد و ارسال شکست می‌خورد، کاربر هم کد قبلی‌اش را از دست می‌داد و هم
+    کد جدیدی دریافت نمی‌کرد.
+    """
+    OTPCode.objects.filter(
+        identifier_kind=otp.identifier_kind,
+        identifier_value=otp.identifier_value,
+        purpose=otp.purpose,
+        is_used=False,
+    ).exclude(pk=otp.pk).update(is_used=True, updated_at=timezone.now())
+
+
+@transaction.atomic
+def _discard_undelivered_otp(*, otp: OTPCode) -> None:
+    """
+    جبران شکست ارسال: حذف رکورد OTPی که هرگز به دست کاربر نرسید.
+
+    نتیجه‌ی نهایی دقیقاً همان چیزی است که rollback قبلی تولید می‌کرد —
+    نه کد جدیدی می‌ماند و نه کد قبلی باطل شده است — ولی این بار بدون
+    نگه‌داشتن یک transaction باز در طول تماس شبکه‌ای با provider.
+    """
+    OTPCode.objects.filter(pk=otp.pk).delete()
+
+
 def generate_and_send_otp(
     *,
     identifier_kind: str,
@@ -233,7 +267,7 @@ def generate_and_send_otp(
     purpose: str,
 ) -> OTPGenerationResult:
     """
-    تولید یک OTP جدید، invalidate کردن قبلی‌ها، و ارسال از طریق Provider.
+    تولید یک OTP جدید، ارسال از طریق Provider و باطل کردن کدهای قبلی.
 
     Args:
         identifier_kind: "email" یا "phone".
@@ -246,11 +280,21 @@ def generate_and_send_otp(
     Raises:
         ValidationError: اگر identifier_kind یا purpose نامعتبر باشد.
         OTPCooldownActive: اگر هنوز در cooldown باشد.
-        OTPDeliveryError: اگر سرویس ارسال قطع باشد (باعث Rollback کل تراکنش می‌شود).
+        OTPDeliveryError: اگر سرویس ارسال قطع باشد.
 
-    Note:
-        atomic در سطح بیرونی است. اگر ارسال fail شود، ساختِ OTP هم در DB
-        ذخیره نمی‌شود و سیستم clean می‌ماند.
+    معماری transaction:
+        این تابع عمداً در سطح بیرونی atomic **نیست**. پیش‌تر بود، و این
+        یعنی یک تماس HTTP با پنل پیامک (تا ۱۰ ثانیه timeout) در حالی
+        انجام می‌شد که یک transaction باز PostgreSQL نگه داشته شده بود.
+        زیر بار، این الگو connectionها را می‌بلعد و به کل سرویس سرایت می‌کند.
+
+        الگوی فعلی:
+          فاز ۱ — بررسی cooldown و ساخت رکورد OTP (atomic کوتاه).
+          فاز ۲ — ارسال از طریق provider (بدون هیچ transaction بازی).
+          فاز ۳ — در موفقیت: باطل کردن کدهای قبلی (atomic کوتاه).
+                  در شکست: حذف رکورد ارسال‌نشده (atomic کوتاه).
+
+        وضعیت نهایی دیتابیس در هر دو مسیر با رفتار قبلی یکسان است.
     """
     identifier_kind = _normalize_identifier_kind(identifier_kind)
     purpose = _normalize_purpose(purpose)
@@ -273,30 +317,22 @@ def generate_and_send_otp(
             )
             raise OTPCooldownActive(seconds_remaining=remaining)
 
-    # 2) Invalidate previous OTPs (one active per purpose policy)
-    _invalidate_old_otps(
-        identifier_kind=identifier_kind,
-        identifier_value=identifier_value,
-        purpose=purpose,
-    )
-
-    # 3) Generate new code + hash
+    # 2) Generate new code + hash
     code_plain = _generate_code()
     code_hash = _hash_code(code_plain)
     expires_at = timezone.now() + timedelta(seconds=_OTP_TTL_SECONDS)
 
-    # 4) Save to DB
-    otp = OTPCode.objects.create(
+    # 3) Persist (atomic کوتاه). رکورد جدید بلافاصله جدیدترین OTP فعال
+    #    می‌شود، پس درخواست‌های موازی روی همین هدف در cooldown می‌افتند.
+    otp = _persist_new_otp(
         identifier_kind=identifier_kind,
         identifier_value=identifier_value,
         purpose=purpose,
         code_hash=code_hash,
         expires_at=expires_at,
-        attempts=0,
-        is_used=False,
     )
 
-    # 5) Delivery via Provider Pattern
+    # 4) Delivery via Provider Pattern — خارج از هر transaction
     try:
         provider = get_otp_provider(channel=identifier_kind)
         provider.send(
@@ -305,6 +341,7 @@ def generate_and_send_otp(
             purpose=purpose,
         )
     except OTPDeliveryProviderError as exc:
+        _discard_undelivered_otp(otp=otp)
         logger.error(
             "Provider delivery failed identifier=%s purpose=%s error=%s",
             mask_identifier(identifier_value, identifier_kind=identifier_kind),
@@ -314,6 +351,12 @@ def generate_and_send_otp(
         raise OTPDeliveryError(
             "متأسفانه در ارسال کد خطایی رخ داد. لطفاً چند دقیقه دیگر تلاش کنید.",
         ) from exc
+    except Exception:
+        _discard_undelivered_otp(otp=otp)
+        raise
+
+    # 5) کد رسید → حالا کدهای قبلی همان هدف باطل می‌شوند
+    _commit_otp_delivery(otp=otp)
 
     logger.info(
         "OTP generated and handed to provider identifier=%s purpose=%s expires_at=%s",

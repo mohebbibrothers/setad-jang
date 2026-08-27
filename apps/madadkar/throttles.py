@@ -16,6 +16,8 @@ from __future__ import annotations
 
 from rest_framework.throttling import AnonRateThrottle, UserRateThrottle
 
+from apps.core.throttling import ClientIPRateThrottle
+
 
 class MadadkarBrowseAnonThrottle(AnonRateThrottle):
     """Throttle برای کاربران ناشناس در endpointهای عمومی browse."""
@@ -41,12 +43,17 @@ class MadadkarParticipateThrottle(UserRateThrottle):
     scope = "madadkar_participate"
 
 
-class MadadkarPaymentVerifyThrottle(AnonRateThrottle):
+class MadadkarPaymentVerifyThrottle(ClientIPRateThrottle):
     """
     Throttle برای endpoint callback verify درگاه پرداخت.
 
-    نکته: AnonRateThrottle استفاده می‌شود چون callback از طرف درگاه
+    نکته: کلید همیشه روی IP ساخته می‌شود چون callback از طرف درگاه
     می‌آید و ممکن است session احراز هویت کاربر در آن لحظه active نباشد.
+
+    چرا ClientIPRateThrottle و نه AnonRateThrottle:
+        AnonRateThrottle برای کاربر لاگین‌کرده کلید None برمی‌گرداند و
+        throttle کاملاً skip می‌شود. چون کاربر پس از پرداخت با session
+        فعال به callback برمی‌گردد، آن مسیر عملاً بدون محدودیت بود.
     """
 
     scope = "madadkar_payment_verify"
