@@ -27,14 +27,17 @@ import hashlib
 import hmac
 import logging
 import secrets
+import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 from django.conf import settings
+from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import F
 from django.utils import timezone
+from django.utils.crypto import salted_hmac
 
 from .choices import OTPPurpose
 from .logging_utils import mask_identifier
@@ -48,10 +51,23 @@ logger = logging.getLogger("apps.authentication")
 # Configuration (with sane defaults)
 # ============================================================
 
-_OTP_CODE_LENGTH = 5
-_OTP_TTL_SECONDS = 5 * 60  # 5 دقیقه
-_OTP_MAX_ATTEMPTS = 5
-_OTP_COOLDOWN_SECONDS = 60
+# این مقادیر عمداً از طریق تابع خوانده می‌شوند و نه به‌صورت ثابتِ سطح ماژول.
+# ثابت سطح ماژول در زمان import مقدار می‌گیرد، یعنی نه با override_settings در
+# تست قابل تغییر است و نه با تنظیمات محیطی در production.
+_OTP_DEFAULTS = {
+    # طول ۶ رقم استاندارد صنعتی است. با ۵ رقم فضای جستجو فقط ۱۰۰٬۰۰۰ حالت
+    # است که هم brute-force آنلاین را ارزان‌تر می‌کند و هم در صورت افشای
+    # SECRET_KEY، شکستن offline کل جدول را به چند ثانیه کاهش می‌دهد.
+    "AUTH_OTP_CODE_LENGTH": 6,
+    "AUTH_OTP_TTL_SECONDS": 5 * 60,
+    "AUTH_OTP_MAX_ATTEMPTS": 5,
+    "AUTH_OTP_COOLDOWN_SECONDS": 60,
+}
+
+
+def _otp_setting(name: str) -> int:
+    """Read an OTP tunable from settings at call time, with a safe default."""
+    return int(getattr(settings, name, _OTP_DEFAULTS[name]))
 
 
 # ============================================================
@@ -111,22 +127,139 @@ class OTPGenerationResult:
 
 
 def _generate_code() -> str:
-    """تولید یک کد عددی random با طول _OTP_CODE_LENGTH."""
-    max_value = 10**_OTP_CODE_LENGTH
-    code_int = secrets.randbelow(max_value)
-    return str(code_int).zfill(_OTP_CODE_LENGTH)
+    """تولید یک کد عددی تصادفی با طول تنظیم‌شده (پیش‌فرض ۶ رقم)."""
+    length = _otp_setting("AUTH_OTP_CODE_LENGTH")
+    code_int = secrets.randbelow(10**length)
+    return str(code_int).zfill(length)
 
 
-def _hash_code(code: str) -> str:
-    """
-    تولید SHA-256 hash از (SECRET_KEY + code).
+def _generate_salt() -> str:
+    """نمک تصادفی مخصوص یک رکورد OTP (۱۶ بایت → ۳۲ کاراکتر hex)."""
+    return secrets.token_hex(16)
 
-    استفاده از SECRET_KEY به‌عنوان salt یعنی حتی اگر DB لو رفت،
-    مهاجم نمی‌تواند بدون دسترسی به SECRET_KEY یک code را reverse engineer کند.
+
+def _hash_code(
+    code: str,
+    *,
+    salt: str,
+    identifier_kind: str,
+    identifier_value: str,
+    purpose: str,
+) -> str:
+    """HMAC-SHA256 روی کد، مقید به نمک اختصاصی رکورد و کانتکست آن.
+
+    پیاده‌سازی قبلی فقط ``HMAC(SECRET_KEY, code)`` بود. دو ضعف داشت:
+
+    1. **بدون نمک اختصاصی.** کد ``12345`` همیشه دقیقاً همان هش را تولید
+       می‌کرد. کسی که فقط دسترسی *خواندن* به دیتابیس دارد (بکاپ، replica،
+       اپراتور) می‌توانست بدون دانستن SECRET_KEY، تمام رکوردهایی که کد
+       یکسان داشتند را به هم مرتبط کند و روی فراوانی‌شان تحلیل آماری
+       انجام دهد. حالا هر رکورد نمک ۱۶ بایتی خودش را دارد.
+    2. **بدون مقیدسازی به کانتکست.** هش یک OTP از purpose «ورود» با هش
+       همان کد برای purpose «تغییر شماره» یکسان بود. حالا کانتکست داخل
+       payload می‌آید تا هش هر رکورد فقط در جای خودش معنا داشته باشد.
+
+    جداکنندهٔ ``|`` امن است چون هیچ‌کدام از اجزا نمی‌توانند آن را در خود
+    داشته باشند (نمک hex، کد رقمی، purpose و kind از choices ثابت).
     """
     secret = settings.SECRET_KEY.encode("utf-8")
-    payload = code.encode("utf-8")
+    payload = f"{salt}|{identifier_kind}|{identifier_value}|{purpose}|{code}".encode()
     return hmac.new(secret, payload, hashlib.sha256).hexdigest()
+
+
+def _hash_code_legacy(code: str) -> str:
+    """طرح هش قدیمی — فقط برای تأیید OTPهایی که پیش از این تغییر صادر شده‌اند.
+
+    رکوردهای قدیمی ``code_salt`` خالی دارند. چون TTL هر OTP پنج دقیقه است،
+    این مسیر حداکثر برای یک بازهٔ کوتاه پس از deploy فعال می‌ماند و پس از
+    آن می‌توان حذفش کرد (به همراه شاخهٔ فراخوانی‌اش در ``verify_otp``).
+    """
+    return hmac.new(
+        settings.SECRET_KEY.encode("utf-8"),
+        code.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+
+
+def _expected_hash_for(otp: OTPCode, code: str) -> str:
+    """هش مورد انتظار برای یک رکورد، با احترام به طرح هش همان رکورد."""
+    if not otp.code_salt:
+        return _hash_code_legacy(code)
+    return _hash_code(
+        code,
+        salt=otp.code_salt,
+        identifier_kind=otp.identifier_kind,
+        identifier_value=otp.identifier_value,
+        purpose=otp.purpose,
+    )
+
+
+def _cooldown_key(*, identifier_kind: str, identifier_value: str, purpose: str) -> str:
+    """کلید cooldown، با شناسهٔ هش‌شده تا مقدار خام وارد کش نشود."""
+    digest = salted_hmac(
+        "apps.authentication.otp.cooldown",
+        f"{identifier_kind}|{identifier_value}|{purpose}",
+    ).hexdigest()
+    return f"auth:otp:cooldown:{digest}"
+
+
+def _reserve_cooldown_slot(
+    *,
+    identifier_kind: str,
+    identifier_value: str,
+    purpose: str,
+    cooldown_seconds: int,
+) -> int | None:
+    """Atomically claim the cooldown window; return remaining seconds if taken.
+
+    بررسی cooldown قبلاً فقط با خواندن آخرین OTP از دیتابیس انجام می‌شد و
+    بلافاصله بعدش رکورد جدید ساخته می‌شد. این یک الگوی کلاسیک
+    read-then-write است: دو درخواست همزمان هر دو «هیچ OTP فعالی نیست» را
+    می‌بینند و هر دو کد می‌سازند و می‌فرستند. یعنی cooldown که تنها سد
+    مقابل اسپم پیامک (و هزینهٔ مستقیم ریالی) است، دقیقاً زیر همان باری که
+    برایش ساخته شده بی‌اثر می‌شود.
+
+    ``cache.add`` روی ردیس اتمیک است (``SET NX``) و همین اتمی بودن، پنجرهٔ
+    مسابقه را می‌بندد. بررسی دیتابیس هم سر جایش می‌ماند: کش مرجع نیست، فقط
+    سد اول است. اگر کش پاک شود بدترین حالت این است که به رفتار قبلی
+    برگردیم، نه اینکه cooldown کاملاً از بین برود.
+
+    Returns:
+        ``None`` اگر نوبت گرفته شد؛ در غیر این صورت ثانیه‌های باقی‌مانده.
+    """
+    key = _cooldown_key(
+        identifier_kind=identifier_kind,
+        identifier_value=identifier_value,
+        purpose=purpose,
+    )
+    claimed_at = time.time()
+    if cache.add(key, claimed_at, timeout=cooldown_seconds):
+        return None
+
+    started_at = cache.get(key)
+    if started_at is None:
+        # درست بین add و get منقضی شد؛ یک تلاش دیگر.
+        if cache.add(key, claimed_at, timeout=cooldown_seconds):
+            return None
+        return cooldown_seconds
+
+    remaining = int(cooldown_seconds - (time.time() - float(started_at)))
+    return max(remaining, 1)
+
+
+def _release_cooldown_slot(*, identifier_kind: str, identifier_value: str, purpose: str) -> None:
+    """آزادسازی نوبت cooldown وقتی ساخت/ارسال OTP به نتیجه نرسید.
+
+    بدون این، یک شکست گذرای provider کاربر را یک دورهٔ کامل cooldown
+    قفل می‌کرد در حالی که هیچ کدی دریافت نکرده بود.
+    """
+    cache.delete(
+        _cooldown_key(
+            identifier_kind=identifier_kind,
+            identifier_value=identifier_value,
+            purpose=purpose,
+        )
+    )
 
 
 def _normalize_identifier_kind(value: str) -> str:
@@ -217,6 +350,7 @@ def _persist_new_otp(
     identifier_value: str,
     purpose: str,
     code_hash: str,
+    code_salt: str,
     expires_at: datetime,
 ) -> OTPCode:
     """ساخت رکورد OTP جدید در یک transaction کوتاه و بدون I/O خارجی."""
@@ -225,6 +359,7 @@ def _persist_new_otp(
         identifier_value=identifier_value,
         purpose=purpose,
         code_hash=code_hash,
+        code_salt=code_salt,
         expires_at=expires_at,
         attempts=0,
         is_used=False,
@@ -299,7 +434,25 @@ def generate_and_send_otp(
     identifier_kind = _normalize_identifier_kind(identifier_kind)
     purpose = _normalize_purpose(purpose)
 
-    # 1) Cooldown check
+    cooldown_seconds = _otp_setting("AUTH_OTP_COOLDOWN_SECONDS")
+    ttl_seconds = _otp_setting("AUTH_OTP_TTL_SECONDS")
+
+    # 1) Cooldown — ابتدا رزرو اتمیک، سپس بررسی حالت پایدار دیتابیس.
+    remaining = _reserve_cooldown_slot(
+        identifier_kind=identifier_kind,
+        identifier_value=identifier_value,
+        purpose=purpose,
+        cooldown_seconds=cooldown_seconds,
+    )
+    if remaining is not None:
+        logger.info(
+            "OTP cooldown active (reservation) for identifier=%s purpose=%s remaining=%ds",
+            mask_identifier(identifier_value, identifier_kind=identifier_kind),
+            purpose,
+            remaining,
+        )
+        raise OTPCooldownActive(seconds_remaining=remaining)
+
     latest = _get_latest_active_otp(
         identifier_kind=identifier_kind,
         identifier_value=identifier_value,
@@ -307,8 +460,13 @@ def generate_and_send_otp(
     )
     if latest is not None:
         elapsed = (timezone.now() - latest.created_at).total_seconds()
-        if elapsed < _OTP_COOLDOWN_SECONDS:
-            remaining = int(_OTP_COOLDOWN_SECONDS - elapsed)
+        if elapsed < cooldown_seconds:
+            _release_cooldown_slot(
+                identifier_kind=identifier_kind,
+                identifier_value=identifier_value,
+                purpose=purpose,
+            )
+            remaining = int(cooldown_seconds - elapsed)
             logger.info(
                 "OTP cooldown active for identifier=%s purpose=%s remaining=%ds",
                 mask_identifier(identifier_value, identifier_kind=identifier_kind),
@@ -317,10 +475,17 @@ def generate_and_send_otp(
             )
             raise OTPCooldownActive(seconds_remaining=remaining)
 
-    # 2) Generate new code + hash
+    # 2) Generate new code + per-record salt + hash
     code_plain = _generate_code()
-    code_hash = _hash_code(code_plain)
-    expires_at = timezone.now() + timedelta(seconds=_OTP_TTL_SECONDS)
+    code_salt = _generate_salt()
+    code_hash = _hash_code(
+        code_plain,
+        salt=code_salt,
+        identifier_kind=identifier_kind,
+        identifier_value=identifier_value,
+        purpose=purpose,
+    )
+    expires_at = timezone.now() + timedelta(seconds=ttl_seconds)
 
     # 3) Persist (atomic کوتاه). رکورد جدید بلافاصله جدیدترین OTP فعال
     #    می‌شود، پس درخواست‌های موازی روی همین هدف در cooldown می‌افتند.
@@ -329,6 +494,7 @@ def generate_and_send_otp(
         identifier_value=identifier_value,
         purpose=purpose,
         code_hash=code_hash,
+        code_salt=code_salt,
         expires_at=expires_at,
     )
 
@@ -342,6 +508,11 @@ def generate_and_send_otp(
         )
     except OTPDeliveryProviderError as exc:
         _discard_undelivered_otp(otp=otp)
+        _release_cooldown_slot(
+            identifier_kind=identifier_kind,
+            identifier_value=identifier_value,
+            purpose=purpose,
+        )
         logger.error(
             "Provider delivery failed identifier=%s purpose=%s error=%s",
             mask_identifier(identifier_value, identifier_kind=identifier_kind),
@@ -353,6 +524,11 @@ def generate_and_send_otp(
         ) from exc
     except Exception:
         _discard_undelivered_otp(otp=otp)
+        _release_cooldown_slot(
+            identifier_kind=identifier_kind,
+            identifier_value=identifier_value,
+            purpose=purpose,
+        )
         raise
 
     # 5) کد رسید → حالا کدهای قبلی همان هدف باطل می‌شوند
@@ -368,7 +544,7 @@ def generate_and_send_otp(
     return OTPGenerationResult(
         otp=otp,
         code_plain=code_plain,
-        expires_in_seconds=_OTP_TTL_SECONDS,
+        expires_in_seconds=ttl_seconds,
     )
 
 
@@ -441,7 +617,8 @@ def verify_otp(
         raise OTPExpired("کد منقضی شده است. لطفاً درخواست جدید بدهید.")
 
     # Check attempts before any work
-    if otp.attempts >= _OTP_MAX_ATTEMPTS:
+    max_attempts = _otp_setting("AUTH_OTP_MAX_ATTEMPTS")
+    if otp.attempts >= max_attempts:
         if not _mark_otp_used(otp):
             raise OTPNotFound("کدی برای این درخواست یافت نشد. لطفاً درخواست جدید بدهید.")
         logger.warning(
@@ -454,14 +631,14 @@ def verify_otp(
         )
 
     # Compare hashes (constant-time)
-    expected_hash = _hash_code(code)
+    expected_hash = _expected_hash_for(otp, code)
     if not hmac.compare_digest(otp.code_hash, expected_hash):
         # افزایش attempts با F-expression انجام می‌شود تا concurrent wrong attempts
         # هم lost-update ایجاد نکنند. اگر این attempt حد نهایی را رد کند، OTP با یک
         # conditional update جدا invalidate می‌شود.
         next_attempt_count = _increment_otp_attempts(otp)
 
-        if next_attempt_count >= _OTP_MAX_ATTEMPTS:
+        if next_attempt_count >= max_attempts:
             _mark_otp_used(otp)
             logger.warning(
                 "OTP invalidated on attempt %d for identifier=%s purpose=%s",

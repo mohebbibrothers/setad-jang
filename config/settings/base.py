@@ -174,20 +174,37 @@ MEDIA_ROOT = BASE_DIR / "media"
 SERVE_PUBLIC_MEDIA = config("SERVE_PUBLIC_MEDIA", default=False, cast=bool)
 
 MEDIA_STORAGE_BACKEND = config("MEDIA_STORAGE_BACKEND", default="local").strip().lower()
-FILE_SCAN_PROVIDER = config("FILE_SCAN_PROVIDER", default="extension_blocklist").strip().lower()
+# پیش‌فرض "default" یعنی زنجیرهٔ کامل: blocklist پسوند + بررسی امضای محتوا.
+# مقدار "extension_blocklist" فقط لایهٔ اول را فعال می‌کند (سازگاری با رفتار
+# قبلی) و "noop" همه‌چیز را خاموش می‌کند.
+FILE_SCAN_PROVIDER = config("FILE_SCAN_PROVIDER", default="default").strip().lower()
 
 AUDIT_LOG_ARCHIVE_ROOT = config("AUDIT_LOG_ARCHIVE_ROOT", default=str(BASE_DIR / "audit_exports"))
 AUDIT_LOG_RETENTION_DAYS = config("AUDIT_LOG_RETENTION_DAYS", default=2555, cast=int)
 AUDIT_LOG_LEGAL_HOLD_ENABLED = config("AUDIT_LOG_LEGAL_HOLD_ENABLED", default=True, cast=bool)
-AUDIT_LOG_RETENTION_DELETE_ENABLED = config("AUDIT_LOG_RETENTION_DELETE_ENABLED", default=False, cast=bool)
+AUDIT_LOG_RETENTION_DELETE_ENABLED = config(
+    "AUDIT_LOG_RETENTION_DELETE_ENABLED", default=False, cast=bool
+)
 AUDIT_LOG_EXPORT_MAX_RECORDS = config("AUDIT_LOG_EXPORT_MAX_RECORDS", default=100000, cast=int)
 
-MADADKAR_RISK_HIGH_AMOUNT_NEW_USER_THRESHOLD = config("MADADKAR_RISK_HIGH_AMOUNT_NEW_USER_THRESHOLD", default=50_000_000, cast=int)
-MADADKAR_RISK_PAYMENT_FAILURE_SPIKE_THRESHOLD = config("MADADKAR_RISK_PAYMENT_FAILURE_SPIKE_THRESHOLD", default=3, cast=int)
-MADADKAR_RISK_IP_DISTINCT_USERS_THRESHOLD = config("MADADKAR_RISK_IP_DISTINCT_USERS_THRESHOLD", default=3, cast=int)
-MADADKAR_RISK_REFUND_VELOCITY_THRESHOLD = config("MADADKAR_RISK_REFUND_VELOCITY_THRESHOLD", default=3, cast=int)
-MADADKAR_RISK_CAMPAIGN_REFUND_SPIKE_THRESHOLD = config("MADADKAR_RISK_CAMPAIGN_REFUND_SPIKE_THRESHOLD", default=5, cast=int)
-MADADKAR_RISK_ADJUSTMENT_RATIO_THRESHOLD = config("MADADKAR_RISK_ADJUSTMENT_RATIO_THRESHOLD", default=0.25, cast=float)
+MADADKAR_RISK_HIGH_AMOUNT_NEW_USER_THRESHOLD = config(
+    "MADADKAR_RISK_HIGH_AMOUNT_NEW_USER_THRESHOLD", default=50_000_000, cast=int
+)
+MADADKAR_RISK_PAYMENT_FAILURE_SPIKE_THRESHOLD = config(
+    "MADADKAR_RISK_PAYMENT_FAILURE_SPIKE_THRESHOLD", default=3, cast=int
+)
+MADADKAR_RISK_IP_DISTINCT_USERS_THRESHOLD = config(
+    "MADADKAR_RISK_IP_DISTINCT_USERS_THRESHOLD", default=3, cast=int
+)
+MADADKAR_RISK_REFUND_VELOCITY_THRESHOLD = config(
+    "MADADKAR_RISK_REFUND_VELOCITY_THRESHOLD", default=3, cast=int
+)
+MADADKAR_RISK_CAMPAIGN_REFUND_SPIKE_THRESHOLD = config(
+    "MADADKAR_RISK_CAMPAIGN_REFUND_SPIKE_THRESHOLD", default=5, cast=int
+)
+MADADKAR_RISK_ADJUSTMENT_RATIO_THRESHOLD = config(
+    "MADADKAR_RISK_ADJUSTMENT_RATIO_THRESHOLD", default=0.25, cast=float
+)
 
 AWS_ACCESS_KEY_ID = config("AWS_ACCESS_KEY_ID", default="")
 AWS_SECRET_ACCESS_KEY = config("AWS_SECRET_ACCESS_KEY", default="")
@@ -219,7 +236,9 @@ else:
 # Frontend on-demand revalidation
 # ============================================================================
 
-CACHE_INVALIDATION_OUTBOX_ENABLED = config("CACHE_INVALIDATION_OUTBOX_ENABLED", default=True, cast=bool)
+CACHE_INVALIDATION_OUTBOX_ENABLED = config(
+    "CACHE_INVALIDATION_OUTBOX_ENABLED", default=True, cast=bool
+)
 CACHE_INVALIDATION_MAX_ATTEMPTS = config("CACHE_INVALIDATION_MAX_ATTEMPTS", default=10, cast=int)
 CACHE_INVALIDATION_BATCH_SIZE = config("CACHE_INVALIDATION_BATCH_SIZE", default=100, cast=int)
 FRONTEND_REVALIDATION_ENABLED = config("FRONTEND_REVALIDATION_ENABLED", default=False, cast=bool)
@@ -255,9 +274,7 @@ REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
         "apps.authentication.jwt_auth.SessionAwareJWTAuthentication",
     ),
-    "DEFAULT_PERMISSION_CLASSES": (
-        "rest_framework.permissions.IsAuthenticated",
-    ),
+    "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
     "DEFAULT_FILTER_BACKENDS": (
         "django_filters.rest_framework.DjangoFilterBackend",
         "rest_framework.filters.SearchFilter",
@@ -266,9 +283,7 @@ REST_FRAMEWORK = {
     "DEFAULT_PAGINATION_CLASS": "apps.core.pagination.StandardPagination",
     "PAGE_SIZE": 20,
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
-    "DEFAULT_RENDERER_CLASSES": (
-        "rest_framework.renderers.JSONRenderer",
-    ),
+    "DEFAULT_RENDERER_CLASSES": ("rest_framework.renderers.JSONRenderer",),
     "EXCEPTION_HANDLER": "apps.core.exceptions.custom_exception_handler",
     "DEFAULT_THROTTLE_CLASSES": (
         "rest_framework.throttling.AnonRateThrottle",
@@ -330,8 +345,20 @@ REST_FRAMEWORK = {
 # ============================================================================
 
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(days=1),
-    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
+    # عمر access token از یک روز به ۳۰ دقیقه کاهش یافت.
+    #
+    # یک روز برای توکنی که قابل ابطال مستقیم نیست خیلی طولانی است: توکنِ
+    # لو رفته (از لاگ، از دستگاه مشترک، از یک XSS) تا ۲۴ ساعت معتبر می‌ماند.
+    # SessionAwareJWTAuthentication تا حد زیادی این را جبران می‌کرد، ولی
+    # اتکای کامل به آن یعنی تمام امنیت نشست به یک بررسی در سطح اپلیکیشن
+    # وابسته است؛ کوتاه کردن عمر توکن همان دفاع را در سطح خود پروتکل هم
+    # می‌گذارد (defense in depth).
+    #
+    # هزینهٔ این تغییر، refresh مکرر‌تر است. با ROTATE_REFRESH_TOKENS و
+    # BLACKLIST_AFTER_ROTATION هر refresh دو ردیف در جدول توکن می‌سازد،
+    # که تسک ساعتی پاک‌سازی (یافتهٔ ۴.۶) آن را جمع می‌کند.
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=config("JWT_ACCESS_MINUTES", default=30, cast=int)),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=config("JWT_REFRESH_DAYS", default=7, cast=int)),
     "ROTATE_REFRESH_TOKENS": True,
     "BLACKLIST_AFTER_ROTATION": True,
     "AUTH_HEADER_TYPES": ("Bearer",),
@@ -457,9 +484,7 @@ SPECTACULAR_SETTINGS = {
         },
         {
             "name": "گزارشات مردمی — گزارشات (مدیریت)",
-            "description": (
-                "مدیریت گزارش‌های دریافتی و تغییر وضعیت آن‌ها (فقط ادمین)"
-            ),
+            "description": ("مدیریت گزارش‌های دریافتی و تغییر وضعیت آن‌ها (فقط ادمین)"),
         },
         {
             "name": "تبیین — عمومی",
@@ -467,29 +492,21 @@ SPECTACULAR_SETTINGS = {
         },
         {
             "name": "تبیین — مدیریت",
-            "description": (
-                "مدیریت محتواها و اجرای دستی همگام‌سازی (فقط ادمین)"
-            ),
+            "description": ("مدیریت محتواها و اجرای دستی همگام‌سازی (فقط ادمین)"),
         },
         {
             "name": "لاگ فعالیت — مدیریت",
-            "description": (
-                "مشاهده و جستجوی لاگ‌های فعالیت سیستم (فقط ادمین)"
-            ),
+            "description": ("مشاهده و جستجوی لاگ‌های فعالیت سیستم (فقط ادمین)"),
         },
         {
             "name": "جایزه‌ای برای عدالت — عمومی",
             "description": (
-                "نمایش پروفایل مجرمین منتشرشده به همراه جوایز اعلامی "
-                "(بدون نیاز به لاگین)"
+                "نمایش پروفایل مجرمین منتشرشده به همراه جوایز اعلامی (بدون نیاز به لاگین)"
             ),
         },
         {
             "name": "جایزه‌ای برای عدالت — کاربر",
-            "description": (
-                "ارسال گزارش تکمیلی برای پروفایل مجرمین "
-                "(نیازمند احراز هویت پایه)"
-            ),
+            "description": ("ارسال گزارش تکمیلی برای پروفایل مجرمین (نیازمند احراز هویت پایه)"),
         },
         {
             "name": "جایزه‌ای برای عدالت — تعیین جایزه",
@@ -501,23 +518,16 @@ SPECTACULAR_SETTINGS = {
         {
             "name": "جایزه‌ای برای عدالت — مدیریت",
             "description": (
-                "مدیریت کامل پروفایل مجرمین، بررسی گزارشات و "
-                "تأیید درخواست‌های لغو (فقط ادمین)"
+                "مدیریت کامل پروفایل مجرمین، بررسی گزارشات و تأیید درخواست‌های لغو (فقط ادمین)"
             ),
         },
         {
             "name": "مددکار — عمومی",
-            "description": (
-                "نمایش حرکت‌های خیریه و مددکاران به صورت عمومی "
-                "(بدون نیاز به لاگین)"
-            ),
+            "description": ("نمایش حرکت‌های خیریه و مددکاران به صورت عمومی (بدون نیاز به لاگین)"),
         },
         {
             "name": "مددکار — کاربر",
-            "description": (
-                "مشارکت در حرکت‌ها از طریق خرید سهم و پرداخت "
-                "(نیازمند لاگین معمولی)"
-            ),
+            "description": ("مشارکت در حرکت‌ها از طریق خرید سهم و پرداخت (نیازمند لاگین معمولی)"),
         },
         {
             "name": "مددکار — مدیریت (مددکاران)",
@@ -526,8 +536,7 @@ SPECTACULAR_SETTINGS = {
         {
             "name": "مددکار — مدیریت (حرکت‌ها)",
             "description": (
-                "ایجاد، انتشار، بستن و مدیریت کامل حرکت‌های خیریه "
-                "و گالری تصاویر آن‌ها (فقط ادمین)"
+                "ایجاد، انتشار، بستن و مدیریت کامل حرکت‌های خیریه و گالری تصاویر آن‌ها (فقط ادمین)"
             ),
         },
         {
@@ -668,11 +677,33 @@ DEFAULT_FROM_EMAIL = config(
 NOTIFICATIONS_ASYNC_DISPATCH = config("NOTIFICATIONS_ASYNC_DISPATCH", default=True, cast=bool)
 NOTIFICATIONS_EMAIL_ENABLED = config("NOTIFICATIONS_EMAIL_ENABLED", default=False, cast=bool)
 NOTIFICATIONS_SMS_ENABLED = config("NOTIFICATIONS_SMS_ENABLED", default=False, cast=bool)
-KINDNESS_MATCH_NOTIFICATION_THRESHOLD = config("KINDNESS_MATCH_NOTIFICATION_THRESHOLD", default=80, cast=int)
+KINDNESS_MATCH_NOTIFICATION_THRESHOLD = config(
+    "KINDNESS_MATCH_NOTIFICATION_THRESHOLD", default=80, cast=int
+)
 
 OTP_PROVIDER = config("OTP_PROVIDER", default="email")
 OTP_EMAIL_PROVIDER = config("OTP_EMAIL_PROVIDER", default="django_email")
 OTP_SMS_PROVIDER = config("OTP_SMS_PROVIDER", default="console")
+
+# --- OTP tunables -----------------------------------------------------------
+# این مقادیر قبلاً ثابت‌های سطح ماژول در `apps/authentication/otp.py` و
+# `anti_abuse.py` بودند. نتیجه‌اش این بود که نه از settings قابل تنظیم بودند و
+# نه در تست قابل override — و بدتر، `AUTH_OTP_GLOBAL_THRESHOLD` که فقط در
+# production.py تعریف شده بود هرگز خوانده نمی‌شد. حالا تنها مرجع همین‌جاست.
+
+# طول کد OTP. ۶ رقم استاندارد صنعتی است؛ ۵ رقم یعنی فضای جستجوی ۱۰۰٬۰۰۰
+# حالته که هم brute-force آنلاین را ارزان می‌کند و هم شکستن offline را.
+AUTH_OTP_CODE_LENGTH = config("AUTH_OTP_CODE_LENGTH", default=6, cast=int)
+AUTH_OTP_TTL_SECONDS = config("AUTH_OTP_TTL_SECONDS", default=300, cast=int)
+AUTH_OTP_MAX_ATTEMPTS = config("AUTH_OTP_MAX_ATTEMPTS", default=5, cast=int)
+AUTH_OTP_COOLDOWN_SECONDS = config("AUTH_OTP_COOLDOWN_SECONDS", default=60, cast=int)
+
+# گارد ناهنجاری سراسری: اگر نرخ کل صدور OTP در پنجرهٔ زمانی از آستانه بگذرد،
+# صدور موقتاً متوقف می‌شود. پیش‌فرض عمداً با production.py یکسان است تا دوباره
+# اختلاف پیش‌فرض‌ها (۵۰۰ در برابر ۱۰۰۰) پیش نیاید.
+AUTH_OTP_GLOBAL_THRESHOLD = config("AUTH_OTP_GLOBAL_THRESHOLD", default=500, cast=int)
+AUTH_OTP_GLOBAL_WINDOW_SECONDS = config("AUTH_OTP_GLOBAL_WINDOW_SECONDS", default=60, cast=int)
+
 SMS_API_URL = config("SMS_API_URL", default="")
 SMS_API_KEY = config("SMS_API_KEY", default="")
 SMS_SENDER = config("SMS_SENDER", default="")
@@ -940,6 +971,12 @@ CELERY_TASK_ROUTES = {
     "apps.authentication.tasks.flush_expired_jwt_tokens_task": {
         "queue": "default",
     },
+    "apps.kindness_wall.tasks.expire_old_listings_task": {
+        "queue": "default",
+    },
+    "apps.audit_logs.tasks.enforce_audit_retention_task": {
+        "queue": "default",
+    },
 }
 
 CELERY_BEAT_SCHEDULE = {
@@ -988,6 +1025,19 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.authentication.tasks.flush_expired_jwt_tokens_task",
         "schedule": crontab(minute=15),
     },
+    # آگهی‌های دیوار مهربانی. تسک این کار از قبل وجود داشت ولی یک stub خالی
+    # بود و هیچ زمان‌بندی‌ای هم نداشت، پس عملاً هیچ آگهی‌ای منقضی نمی‌شد و
+    # آگهی‌های تاریخ‌گذشته برای همیشه در فهرست عمومی می‌ماندند.
+    "kindness-expire-due-listings-hourly": {
+        "task": "apps.kindness_wall.tasks.expire_old_listings_task",
+        "schedule": crontab(minute=5),
+    },
+    # سیاست نگهداشت audit تعریف شده بود ولی مجری نداشت. این اجرا غیرمخرب
+    # است و فقط بدهی نگهداشت را مرئی می‌کند.
+    "audit-enforce-retention-daily": {
+        "task": "apps.audit_logs.tasks.enforce_audit_retention_task",
+        "schedule": crontab(minute=45, hour=4),
+    },
 }
 
 # ============================================================================
@@ -998,6 +1048,41 @@ CELERY_BEAT_SCHEDULE = {
 # بی‌کران فایلی می‌سازد که نه دانلود می‌شود و نه در اکسل باز می‌شود، و در
 # همان مدت یک worker را اشغال می‌کند. عبور از این سقف خطای روشن می‌دهد.
 EXPORT_MAX_ROWS = config("EXPORT_MAX_ROWS", default=200_000, cast=int)
+
+
+# ============================================================================
+# Upload limits — enforced by Django before application code runs
+# ============================================================================
+
+# سقف حجم پیوست فقط در validator سریالایزر بررسی می‌شد. مشکل اینجاست که آن
+# validator تازه *بعد از* کامل شدن آپلود اجرا می‌شود: تا آن لحظه جنگو کل بدنهٔ
+# درخواست را خوانده و روی دیسک (یا در حافظه) نوشته است. یعنی یک مهاجم
+# می‌توانست فایل ۵۰۰ مگابایتی بفرستد، منابع سرور را مصرف کند و در نهایت فقط
+# یک پاسخ ۴۰۰ بگیرد — که برای او هزینه‌ای ندارد و برای ما دارد.
+#
+# این تنظیمات همان سقف را به لایهٔ پارس درخواست جنگو منتقل می‌کنند، جایی که
+# با RequestDataTooBig رد می‌شود و خواندن بدنه همان‌جا متوقف می‌شود.
+
+# ۲۵ مگابایت: کمی بالاتر از سقف ۲۰ مگابایتی پیوست، تا فضای سربار multipart
+# (مرزها، هدرها، فیلدهای همراه) باعث رد شدن یک آپلود *معتبر* نشود.
+DATA_UPLOAD_MAX_MEMORY_SIZE = config(
+    "DATA_UPLOAD_MAX_MEMORY_SIZE", default=25 * 1024 * 1024, cast=int
+)
+
+# بالاتر از این حجم، فایل به‌جای حافظه در فایل موقت دیسک بافر می‌شود.
+# ۲.۵ مگابایت پیش‌فرض خود جنگوست و برای این پروژه منطقی است.
+FILE_UPLOAD_MAX_MEMORY_SIZE = config("FILE_UPLOAD_MAX_MEMORY_SIZE", default=2621440, cast=int)
+
+# سد در برابر حملهٔ hash-collision/parse با فرم‌های دارای هزاران فیلد.
+DATA_UPLOAD_MAX_NUMBER_FIELDS = config("DATA_UPLOAD_MAX_NUMBER_FIELDS", default=1000, cast=int)
+
+# هیچ endpointی در این پروژه آپلود دسته‌ای انبوه ندارد.
+DATA_UPLOAD_MAX_NUMBER_FILES = config("DATA_UPLOAD_MAX_NUMBER_FILES", default=20, cast=int)
+
+# مجوز دسترسی فایل‌های آپلودی. بدون این، فایل‌های بزرگ (که از مسیر فایل
+# موقت می‌آیند) ممکن است با مجوز 0o600 ذخیره شوند و فایل‌های کوچک با
+# مجوزی دیگر — یعنی رفتار غیرقابل‌پیش‌بینی بسته به حجم آپلود.
+FILE_UPLOAD_PERMISSIONS = 0o644
 
 
 # ============================================================================

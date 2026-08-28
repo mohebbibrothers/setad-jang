@@ -23134,6 +23134,8 @@ components:
           type: string
           format: uri
           title: تصویر
+          description: متادیتای تصویر (از جمله مختصات GPS در EXIF) هنگام ذخیره حذف
+            می‌شود.
         caption:
           type: string
           title: توضیح کوتاه
@@ -24133,6 +24135,8 @@ components:
           format: uri
           readOnly: true
           title: تصویر
+          description: متادیتای تصویر (از جمله مختصات GPS در EXIF) هنگام ذخیره حذف
+            می‌شود.
         caption:
           type: string
           readOnly: true

@@ -123,10 +123,13 @@ class TestPaymentEventLedger:
             gateway_status="100",
         )
 
-        with patch(
-            "apps.madadkar.payment_providers.sandbox.SandboxProvider.verify_payment",
-            return_value=fake_verify,
-        ), pytest.raises(PaymentAmountMismatchError):
+        with (
+            patch(
+                "apps.madadkar.payment_providers.sandbox.SandboxProvider.verify_payment",
+                return_value=fake_verify,
+            ),
+            pytest.raises(PaymentAmountMismatchError),
+        ):
             verify_payment(authority=payment.authority)
 
         payment.refresh_from_db()

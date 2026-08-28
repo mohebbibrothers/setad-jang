@@ -474,7 +474,9 @@ def test_cache_invalidation_is_coalesced_per_transaction(monkeypatch) -> None:
 
     expected_namespaces = list(get_cache_policy("madadkar").backend_namespaces)
 
-    assert sorted(calls) == sorted(expected_namespaces), "۱۰ فراخوانی باید به یک invalidate تبدیل شود"
+    assert sorted(calls) == sorted(expected_namespaces), (
+        "۱۰ فراخوانی باید به یک invalidate تبدیل شود"
+    )
     assert CacheInvalidationEvent.objects.filter(domain="madadkar").count() == 1
 
 

@@ -93,7 +93,9 @@ class User(AbstractBaseUser, PermissionsMixin):
     is_staff = models.BooleanField(default=False, verbose_name="عضو ستاد")
 
     date_joined = models.DateTimeField(default=timezone.now, verbose_name="تاریخ عضویت")
-    last_login_ip = models.GenericIPAddressField(blank=True, null=True, verbose_name="آخرین IP ورود")
+    last_login_ip = models.GenericIPAddressField(
+        blank=True, null=True, verbose_name="آخرین IP ورود"
+    )
 
     objects = UserManager()
     all_objects = UserAllManager()
@@ -176,7 +178,9 @@ class AuthSession(BaseModel):
     request_id = models.CharField(max_length=80, blank=True)
     is_revoked = models.BooleanField(default=False, db_index=True)
     revoked_at = models.DateTimeField(null=True, blank=True)
-    revoked_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="revoked_auth_sessions")
+    revoked_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name="revoked_auth_sessions"
+    )
     last_seen_at = models.DateTimeField(default=timezone.now, db_index=True)
     expires_at = models.DateTimeField(null=True, blank=True, db_index=True)
     fingerprint_hash = models.CharField(max_length=64, db_index=True, blank=True)
@@ -204,14 +208,29 @@ class AuthRiskSignal(BaseModel):
     """Authentication/session risk signal for admin security review."""
 
     signal_type = models.CharField(max_length=40, choices=AuthRiskSignalType.choices, db_index=True)
-    severity = models.CharField(max_length=20, choices=AuthRiskSeverity.choices, default=AuthRiskSeverity.MEDIUM, db_index=True)
-    status = models.CharField(max_length=20, choices=AuthRiskStatus.choices, default=AuthRiskStatus.OPEN, db_index=True)
+    severity = models.CharField(
+        max_length=20,
+        choices=AuthRiskSeverity.choices,
+        default=AuthRiskSeverity.MEDIUM,
+        db_index=True,
+    )
+    status = models.CharField(
+        max_length=20, choices=AuthRiskStatus.choices, default=AuthRiskStatus.OPEN, db_index=True
+    )
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="auth_risk_signals")
-    session = models.ForeignKey(AuthSession, on_delete=models.SET_NULL, null=True, blank=True, related_name="risk_signals")
+    session = models.ForeignKey(
+        AuthSession, on_delete=models.SET_NULL, null=True, blank=True, related_name="risk_signals"
+    )
     ip_address = models.GenericIPAddressField(null=True, blank=True)
     description = models.TextField(blank=True)
     metadata = models.JSONField(default=dict, blank=True)
-    reviewed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="reviewed_auth_risk_signals")
+    reviewed_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="reviewed_auth_risk_signals",
+    )
     reviewed_at = models.DateTimeField(null=True, blank=True)
     review_note = models.TextField(blank=True)
 
@@ -332,7 +351,18 @@ class OTPCode(BaseModel):
         max_length=64,
         default="",
         verbose_name="هش کد",
-        help_text="SHA-256 از (secret_salt + code) — کد plain هرگز ذخیره نمی‌شود.",
+        help_text="HMAC-SHA256 روی (SECRET_KEY, salt|context|code) — کد plain هرگز ذخیره نمی‌شود.",
+    )
+    code_salt = models.CharField(
+        max_length=32,
+        default="",
+        blank=True,
+        verbose_name="نمک هش",
+        help_text=(
+            "نمک تصادفی مخصوص همین رکورد. بدون آن، کد یکسان همیشه هش یکسان "
+            "تولید می‌کند و کسی که دسترسی خواندن به دیتابیس دارد می‌تواند "
+            "OTPهای هم‌مقدار را در کل جدول به هم مرتبط کند."
+        ),
     )
     expires_at = models.DateTimeField(verbose_name="زمان انقضا")
     attempts = models.PositiveSmallIntegerField(

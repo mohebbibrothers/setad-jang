@@ -39,6 +39,7 @@ from tests.factories.auth import UserFactory
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _generate_valid_png_bytes(width: int = 10, height: int = 10) -> bytes:
     """
     ساخت یک PNG معتبر برای تست با Pillow.
@@ -65,6 +66,7 @@ def _make_image_file(name: str = "test.png") -> SimpleUploadedFile:
 # SponsorFactory
 # ---------------------------------------------------------------------------
 
+
 class SponsorFactory(factory.django.DjangoModelFactory):
     """Factory پایه برای Sponsor — بدون لوگو."""
 
@@ -84,6 +86,7 @@ class SponsorWithLogoFactory(SponsorFactory):
 # ---------------------------------------------------------------------------
 # CampaignFactory
 # ---------------------------------------------------------------------------
+
 
 class CampaignFactory(factory.django.DjangoModelFactory):
     """
@@ -123,9 +126,7 @@ class CampaignWithDeadlineFactory(PublishedCampaignFactory):
     """Campaign منتشرشده با مهلت زمانی (۳۰ روز آینده)."""
 
     has_deadline = True
-    deadline = factory.LazyFunction(
-        lambda: timezone.now() + timezone.timedelta(days=30)
-    )
+    deadline = factory.LazyFunction(lambda: timezone.now() + timezone.timedelta(days=30))
 
 
 class CompletedCampaignFactory(PublishedCampaignFactory):
@@ -149,6 +150,7 @@ class ClosedCampaignFactory(PublishedCampaignFactory):
 # CampaignImageFactory
 # ---------------------------------------------------------------------------
 
+
 class CampaignImageFactory(factory.django.DjangoModelFactory):
     """Factory برای تصاویر گالری حرکت."""
 
@@ -164,6 +166,7 @@ class CampaignImageFactory(factory.django.DjangoModelFactory):
 # ---------------------------------------------------------------------------
 # ParticipationFactory
 # ---------------------------------------------------------------------------
+
 
 class ParticipationFactory(factory.django.DjangoModelFactory):
     """
@@ -213,6 +216,7 @@ class ExpiredParticipationFactory(ParticipationFactory):
 # ---------------------------------------------------------------------------
 # PaymentFactory
 # ---------------------------------------------------------------------------
+
 
 class PaymentFactory(factory.django.DjangoModelFactory):
     """Factory پایه برای Payment در وضعیت PENDING."""

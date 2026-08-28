@@ -147,14 +147,18 @@ class TestGlobalOtpGuard:
     def test_trips_only_after_threshold_is_exceeded(
         self,
         monkeypatch: pytest.MonkeyPatch,
+        settings,
     ) -> None:
         warning_messages: list[str] = []
 
         def fake_warning(message: str, *args: object) -> None:
             warning_messages.append(message % args if args else message)
 
-        monkeypatch.setattr(anti_abuse, "_GLOBAL_OTP_GUARD_THRESHOLD", 2)
-        monkeypatch.setattr(anti_abuse, "_GLOBAL_OTP_GUARD_WINDOW_SECONDS", 60)
+        # آستانه از Django settings خوانده می‌شود، نه از یک ثابت سطح ماژول.
+        # همین که override_settings اینجا اثر می‌کند، یعنی dead config یافتهٔ
+        # ۵.۴ واقعاً زنده شده است.
+        settings.AUTH_OTP_GLOBAL_THRESHOLD = 2
+        settings.AUTH_OTP_GLOBAL_WINDOW_SECONDS = 60
         monkeypatch.setattr(anti_abuse.logger, "warning", fake_warning)
 
         anti_abuse.reset_global_otp_guard()
@@ -168,10 +172,10 @@ class TestGlobalOtpGuard:
 
     def test_reset_global_otp_guard_clears_counter(
         self,
-        monkeypatch: pytest.MonkeyPatch,
+        settings,
     ) -> None:
-        monkeypatch.setattr(anti_abuse, "_GLOBAL_OTP_GUARD_THRESHOLD", 1)
-        monkeypatch.setattr(anti_abuse, "_GLOBAL_OTP_GUARD_WINDOW_SECONDS", 60)
+        settings.AUTH_OTP_GLOBAL_THRESHOLD = 1
+        settings.AUTH_OTP_GLOBAL_WINDOW_SECONDS = 60
 
         anti_abuse.reset_global_otp_guard()
 
@@ -185,12 +189,13 @@ class TestGlobalOtpGuard:
     def test_recovers_safely_when_cache_incr_raises_value_error(
         self,
         monkeypatch: pytest.MonkeyPatch,
+        settings,
     ) -> None:
         fake_cache = _ValueErrorOnIncrCache()
 
         monkeypatch.setattr(anti_abuse, "cache", fake_cache)
-        monkeypatch.setattr(anti_abuse, "_GLOBAL_OTP_GUARD_THRESHOLD", 100)
-        monkeypatch.setattr(anti_abuse, "_GLOBAL_OTP_GUARD_WINDOW_SECONDS", 60)
+        settings.AUTH_OTP_GLOBAL_THRESHOLD = 100
+        settings.AUTH_OTP_GLOBAL_WINDOW_SECONDS = 60
 
         result = anti_abuse.is_global_otp_guard_tripped()
 

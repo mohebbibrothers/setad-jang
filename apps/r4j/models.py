@@ -31,6 +31,7 @@ from django.db import models
 from django.utils import timezone
 from django.utils.text import slugify
 
+from apps.core.fields import SanitizedImageField
 from apps.core.models import BaseModel
 
 from .choices import (
@@ -64,14 +65,16 @@ def _criminal_photo_upload_path(instance: R4JCriminalPhoto, filename: str) -> st
 
 
 def _criminal_attachment_upload_path(
-    instance: R4JCriminalAttachment, filename: str,
+    instance: R4JCriminalAttachment,
+    filename: str,
 ) -> str:
     """Internal helper for models."""
     return f"r4j/criminals/{instance.criminal_id}/attachments/{filename}"
 
 
 def _report_attachment_upload_path(
-    instance: R4JReportAttachment, filename: str,
+    instance: R4JReportAttachment,
+    filename: str,
 ) -> str:
     """Internal helper for models."""
     return f"r4j/reports/{instance.report_id}/attachments/{filename}"
@@ -375,10 +378,11 @@ class R4JCriminalPhoto(BaseModel):
         related_name="photos",
         verbose_name="مجرم",
     )
-    image = models.ImageField(
+    image = SanitizedImageField(
         upload_to=_criminal_photo_upload_path,
         validators=[validate_photo_size, validate_photo_extension],
         verbose_name="تصویر",
+        help_text="متادیتای تصویر (از جمله مختصات GPS در EXIF) هنگام ذخیره حذف می‌شود.",
     )
     caption = models.CharField(max_length=255, blank=True, verbose_name="توضیح کوتاه")
     is_primary = models.BooleanField(default=False, verbose_name="عکس اصلی")
@@ -625,8 +629,6 @@ class R4JReportFieldChange(BaseModel):
         return f"{self.field_name} -> {self.suggested_value!r} ({self.status})"
 
 
-
-
 class R4JReportAliasSuggestion(BaseModel):
     """User-suggested alias to be reviewed and applied to a criminal profile."""
 
@@ -673,7 +675,9 @@ class R4JReportPhoneSuggestion(BaseModel):
         verbose_name="گزارش",
     )
     label = models.CharField(max_length=50, blank=True, verbose_name="برچسب")
-    number = models.CharField(max_length=30, validators=[validate_phone_number], verbose_name="شماره پیشنهادی")
+    number = models.CharField(
+        max_length=30, validators=[validate_phone_number], verbose_name="شماره پیشنهادی"
+    )
     is_public = models.BooleanField(default=False, verbose_name="پیشنهاد نمایش عمومی")
     notes = models.TextField(blank=True, verbose_name="توضیحات")
     status = models.CharField(
@@ -714,7 +718,9 @@ class R4JReportSocialSuggestion(BaseModel):
         related_name="social_suggestions",
         verbose_name="گزارش",
     )
-    platform = models.CharField(max_length=20, choices=SocialPlatform.choices, verbose_name="پلتفرم")
+    platform = models.CharField(
+        max_length=20, choices=SocialPlatform.choices, verbose_name="پلتفرم"
+    )
     handle_or_url = models.CharField(max_length=255, verbose_name="هندل یا URL پیشنهادی")
     is_public = models.BooleanField(default=True, verbose_name="پیشنهاد نمایش عمومی")
     status = models.CharField(
@@ -822,8 +828,16 @@ class R4JEvidenceCustodyEvent(BaseModel):
         blank=True,
         related_name="custody_events",
     )
-    event_type = models.CharField(max_length=30, choices=EvidenceCustodyEventType.choices, db_index=True)
-    actor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="r4j_evidence_custody_events")
+    event_type = models.CharField(
+        max_length=30, choices=EvidenceCustodyEventType.choices, db_index=True
+    )
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="r4j_evidence_custody_events",
+    )
     file_sha256 = models.CharField(max_length=64, blank=True, db_index=True)
     note = models.TextField(blank=True)
     metadata = models.JSONField(default=dict, blank=True)
@@ -832,7 +846,10 @@ class R4JEvidenceCustodyEvent(BaseModel):
         verbose_name = "رویداد زنجیره نگهداری شواهد R4J"
         verbose_name_plural = "رویدادهای زنجیره نگهداری شواهد R4J"
         ordering = ["-created_at"]
-        indexes = [models.Index(fields=["event_type", "-created_at"]), models.Index(fields=["file_sha256"])]
+        indexes = [
+            models.Index(fields=["event_type", "-created_at"]),
+            models.Index(fields=["file_sha256"]),
+        ]
         constraints = [
             models.CheckConstraint(
                 condition=(

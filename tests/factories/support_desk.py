@@ -62,7 +62,9 @@ class SupportTicketTypeFactory(DjangoModelFactory):
     code = factory.Sequence(lambda n: f"type-{n}")
     title = factory.Sequence(lambda n: f"نوع تیکت {n}")
     default_department = factory.SubFactory(SupportDepartmentFactory)
-    default_category = factory.SubFactory(SupportCategoryFactory, department=factory.SelfAttribute("..default_department"))
+    default_category = factory.SubFactory(
+        SupportCategoryFactory, department=factory.SelfAttribute("..default_department")
+    )
     default_sla_policy = factory.SubFactory(SupportSLAPolicyFactory)
     default_priority = TicketPriority.NORMAL
     default_severity = TicketSeverity.MINOR
@@ -76,8 +78,14 @@ class SupportTicketFactory(DjangoModelFactory):
 
     owner = factory.SubFactory(UserFactory)
     department = factory.SubFactory(SupportDepartmentFactory)
-    category = factory.SubFactory(SupportCategoryFactory, department=factory.SelfAttribute("..department"))
-    ticket_type = factory.SubFactory(SupportTicketTypeFactory, default_department=factory.SelfAttribute("..department"), default_category=factory.SelfAttribute("..category"))
+    category = factory.SubFactory(
+        SupportCategoryFactory, department=factory.SelfAttribute("..department")
+    )
+    ticket_type = factory.SubFactory(
+        SupportTicketTypeFactory,
+        default_department=factory.SelfAttribute("..department"),
+        default_category=factory.SelfAttribute("..category"),
+    )
     subject = factory.Sequence(lambda n: f"موضوع تیکت پشتیبانی {n}")
     description_snapshot = "توضیحات کامل تیکت برای بررسی تیم پشتیبانی"
     status = TicketStatus.DRAFT

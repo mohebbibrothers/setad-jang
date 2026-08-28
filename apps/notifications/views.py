@@ -9,6 +9,7 @@ from rest_framework.views import APIView
 
 from apps.core.pagination import StandardPagination
 from apps.core.responses import CreatedResponse, ErrorResponse, SuccessResponse
+from apps.core.views import paginated_list_response
 from apps.notifications import selectors, services
 from apps.notifications.permissions import IsNotificationAdminUser
 from apps.notifications.serializers import (
@@ -28,10 +29,13 @@ class NotificationInboxView(APIView):
 
     def get(self, request) -> Response:
         """Return paginated notifications."""
-        queryset = selectors.get_user_deliveries(user_id=request.user.pk)
-        paginator = StandardPagination()
-        page = paginator.paginate_queryset(queryset, request, view=self)
-        return paginator.get_paginated_response(NotificationDeliverySerializer(page, many=True).data)
+        return paginated_list_response(
+            request=request,
+            view=self,
+            queryset=selectors.get_user_deliveries(user_id=request.user.pk),
+            serializer_class=NotificationDeliverySerializer,
+            pagination_class=StandardPagination,
+        )
 
 
 class NotificationMarkReadView(APIView):
@@ -42,11 +46,15 @@ class NotificationMarkReadView(APIView):
 
     def post(self, request, delivery_id: int) -> SuccessResponse | ErrorResponse:
         """Mark a user-owned delivery as read."""
-        delivery = selectors.get_user_delivery_by_id(user_id=request.user.pk, delivery_id=delivery_id)
+        delivery = selectors.get_user_delivery_by_id(
+            user_id=request.user.pk, delivery_id=delivery_id
+        )
         if delivery is None:
             return ErrorResponse(message="اعلان یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
         delivery = services.mark_delivery_read(delivery=delivery, user=request.user)
-        return SuccessResponse(data=NotificationDeliverySerializer(delivery).data, message="اعلان خوانده شد.")
+        return SuccessResponse(
+            data=NotificationDeliverySerializer(delivery).data, message="اعلان خوانده شد."
+        )
 
 
 class NotificationMarkAllReadView(APIView):
@@ -69,14 +77,20 @@ class NotificationPreferenceListSetView(APIView):
 
     def get(self, request) -> SuccessResponse:
         """Return preferences."""
-        return SuccessResponse(data=NotificationPreferenceSerializer(selectors.get_user_preferences(user_id=request.user.pk), many=True).data)
+        return SuccessResponse(
+            data=NotificationPreferenceSerializer(
+                selectors.get_user_preferences(user_id=request.user.pk), many=True
+            ).data
+        )
 
     def post(self, request) -> CreatedResponse:
         """Create/update one preference."""
         serializer = NotificationPreferenceInputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         preference = services.set_preference(user=request.user, **serializer.validated_data)
-        return CreatedResponse(data=NotificationPreferenceSerializer(preference).data, message="تنظیم اعلان ذخیره شد.")
+        return CreatedResponse(
+            data=NotificationPreferenceSerializer(preference).data, message="تنظیم اعلان ذخیره شد."
+        )
 
 
 class NotificationAdminEventListView(APIView):
@@ -102,7 +116,9 @@ class NotificationAdminDeliveryListView(APIView):
         """Return notification deliveries."""
         paginator = StandardPagination()
         page = paginator.paginate_queryset(selectors.get_admin_deliveries(), request, view=self)
-        return paginator.get_paginated_response(NotificationDeliverySerializer(page, many=True).data)
+        return paginator.get_paginated_response(
+            NotificationDeliverySerializer(page, many=True).data
+        )
 
 
 class NotificationAdminTemplateListView(APIView):
@@ -113,4 +129,6 @@ class NotificationAdminTemplateListView(APIView):
 
     def get(self, request) -> SuccessResponse:
         """Return templates."""
-        return SuccessResponse(data=NotificationTemplateSerializer(selectors.get_admin_templates(), many=True).data)
+        return SuccessResponse(
+            data=NotificationTemplateSerializer(selectors.get_admin_templates(), many=True).data
+        )

@@ -10,6 +10,7 @@ from datetime import timedelta
 from typing import Any, Final
 
 from django.contrib.auth import authenticate
+from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.http import HttpRequest
@@ -36,6 +37,11 @@ from .otp import (
 )
 
 logger = logging.getLogger("apps.authentication")
+
+
+# مقدار نگهبان برای «این نشست لغو شده». چون لغو نشست در این سامانه برگشت‌ناپذیر
+# است (هیچ مسیری is_revoked را دوباره False نمی‌کند)، کش کردن این حالت امن است.
+_SESSION_STATE_REVOKED = "revoked"
 
 BASIC_USER_UPDATABLE_FIELDS: Final[frozenset[str]] = frozenset(
     {
@@ -248,10 +254,7 @@ def _resolve_legacy_otp_identifier(*, user: User, purpose: str) -> tuple[str, st
             "Legacy email OTP flow requires a user with a valid email identifier.",
         )
 
-    if (
-        user.primary_identifier == PrimaryIdentifierKind.PHONE
-        and user.phone_number
-    ):
+    if user.primary_identifier == PrimaryIdentifierKind.PHONE and user.phone_number:
         return PrimaryIdentifierKind.PHONE, normalize_phone(user.phone_number)
 
     if user.email:
@@ -271,10 +274,7 @@ def _prepare_phone_number_update(*, user: User, phone_number: str | None) -> lis
         return []
 
     if phone_number == "":
-        if (
-            user.primary_identifier == PrimaryIdentifierKind.PHONE
-            and not user.email
-        ):
+        if user.primary_identifier == PrimaryIdentifierKind.PHONE and not user.email:
             raise ValidationError("برای این حساب حذف شماره موبایل مجاز نیست.")
 
         update_fields: list[str] = []
@@ -291,11 +291,7 @@ def _prepare_phone_number_update(*, user: User, phone_number: str | None) -> lis
 
     normalized_phone = normalize_phone(phone_number)
 
-    if (
-        User.all_objects.filter(phone_number=normalized_phone)
-        .exclude(pk=user.pk)
-        .exists()
-    ):
+    if User.all_objects.filter(phone_number=normalized_phone).exclude(pk=user.pk).exists():
         raise ValidationError("این شماره موبایل قبلاً ثبت شده است.")
 
     update_fields: list[str] = []
@@ -327,7 +323,9 @@ def _create_auth_session(*, user: User, refresh_token: str, request: HttpRequest
     user_agent = request.META.get("HTTP_USER_AGENT", "")[:512]
     expires_at = None
     if refresh.get("exp"):
-        expires_at = timezone.datetime.fromtimestamp(refresh["exp"], tz=timezone.get_current_timezone())
+        expires_at = timezone.datetime.fromtimestamp(
+            refresh["exp"], tz=timezone.get_current_timezone()
+        )
     return AuthSession.objects.create(
         user=user,
         refresh_jti=str(refresh["jti"]),
@@ -378,6 +376,7 @@ def _build_login_result(*, user: User, request: HttpRequest) -> dict[str, Any]:
         "tokens": tokens,
         "session": session,
     }
+
 
 def create_auth_risk_signal(
     *,
@@ -464,7 +463,9 @@ def record_failed_login_risk(
     from apps.audit_logs import actions as audit_actions
     from apps.audit_logs.models import AuditLog
 
-    failure_count = AuditLog.objects.filter(user=user, action=audit_actions.LOGIN_FAILED, created_at__gte=since).count()
+    failure_count = AuditLog.objects.filter(
+        user=user, action=audit_actions.LOGIN_FAILED, created_at__gte=since
+    ).count()
     if failure_count < threshold:
         return None
     return create_auth_risk_signal(
@@ -478,7 +479,9 @@ def record_failed_login_risk(
 
 
 @transaction.atomic
-def review_auth_risk_signal(*, signal: AuthRiskSignal, reviewed_by: User, status: str, review_note: str = "") -> AuthRiskSignal:
+def review_auth_risk_signal(
+    *, signal: AuthRiskSignal, reviewed_by: User, status: str, review_note: str = ""
+) -> AuthRiskSignal:
     """Review/dismiss/escalate an authentication risk signal."""
     if status not in {AuthRiskStatus.REVIEWED, AuthRiskStatus.DISMISSED, AuthRiskStatus.ESCALATED}:
         raise AuthServiceError("وضعیت بررسی ریسک نامعتبر است.")
@@ -648,7 +651,10 @@ def login_user(
     try:
         normalized_email = normalize_email(email)
     except ValidationError:
-        logger.info("Login failed due to invalid email format input=%s", mask_identifier(email, identifier_kind=PrimaryIdentifierKind.EMAIL))
+        logger.info(
+            "Login failed due to invalid email format input=%s",
+            mask_identifier(email, identifier_kind=PrimaryIdentifierKind.EMAIL),
+        )
         return None
 
     user = authenticate(
@@ -657,7 +663,10 @@ def login_user(
         password=password,
     )
     if not user:
-        logger.info("Login failed for identifier=%s", mask_identifier(normalized_email, identifier_kind=PrimaryIdentifierKind.EMAIL))
+        logger.info(
+            "Login failed for identifier=%s",
+            mask_identifier(normalized_email, identifier_kind=PrimaryIdentifierKind.EMAIL),
+        )
         return None
 
     logger.info(
@@ -683,7 +692,11 @@ def verify_user_email(*, user: User, code: str) -> bool:
         user.is_email_verified = True
         user.save(update_fields=["is_email_verified"])
 
-    logger.info("User email verified user_id=%s email=%s", user.pk, mask_identifier(user.email, identifier_kind=PrimaryIdentifierKind.EMAIL))
+    logger.info(
+        "User email verified user_id=%s email=%s",
+        user.pk,
+        mask_identifier(user.email, identifier_kind=PrimaryIdentifierKind.EMAIL),
+    )
     return True
 
 
@@ -755,7 +768,25 @@ def revoke_auth_session(*, session: AuthSession, revoked_by: User | None = None)
     outstanding = OutstandingToken.objects.filter(jti=locked.refresh_jti).first()
     if outstanding is not None:
         BlacklistedToken.objects.get_or_create(token=outstanding)
+    # کش را همین‌جا باطل می‌کنیم تا لغو نشست در اولین درخواست بعدی اثر کند
+    # و منتظر انقضای TTL نمانیم.
+    invalidate_session_validity_cache(sid=locked.pk, user_id=locked.user_id)
     return locked
+
+
+def session_validity_cache_key(*, sid: Any, user_id: Any) -> str:
+    """Cache key for the per-request session validity check."""
+    return f"auth:session_state:{user_id}:{sid}"
+
+
+def invalidate_session_validity_cache(*, sid: Any, user_id: Any) -> None:
+    """Drop the cached verdict for one session.
+
+    این تابع همان چیزی است که اجازه می‌دهد بدون از دست دادن «لغو فوری
+    نشست»، نتیجهٔ بررسی را کش کنیم: به‌جای اتکا به انقضای TTL، لحظهٔ لغو
+    صریحاً کش را باطل می‌کنیم.
+    """
+    cache.delete(session_validity_cache_key(sid=sid, user_id=user_id))
 
 
 def validate_and_touch_session(*, user: User, token_claims: Mapping[str, Any]) -> bool:
@@ -766,30 +797,64 @@ def validate_and_touch_session(*, user: User, token_claims: Mapping[str, Any]) -
         • توکنِ بدون claimای به نام sid (صادرشده پیش از این فیچر) → عبور
           بدون اعمال نشست (سازگاری با نشست‌های تاریخی).
         • نشستِ پاک‌شده یا لغوشده → False (مصرف‌کننده باید 401 بیندازد).
-          همین چکِ ساده است که «لغو نشست» را لحظه‌ای اثرگذار می‌کند —
-          حتی برای access tokenهایی که هنوز ساعت‌ها عمر دارند.
         • نشستِ سالم → True و last_seen_at با آستانه‌ی LAST_SEEN_TOUCH_SECONDS
-          لمس می‌شود (حداکثر یک UPDATE در دقیفه برای هر نشست؛ بدون فشار بر DB).
+          لمس می‌شود.
 
-    عمداً DRF-فری است تا لایه‌ی services به فریم‌ورک وابسته نشود.
+    چرا اینجا کش اضافه شد:
+        این تابع در مسیر احراز هویت **هر درخواست** اجرا می‌شود. نسخهٔ قبلی
+        همیشه یک SELECT به AuthSession می‌زد؛ یعنی هر API call احرازشده در
+        کل سامانه یک کوئری ثابت هزینه داشت، صرفاً برای اینکه بفهمد نشست
+        لغو نشده است.
+
+        نکتهٔ حساس این است که کش کردنِ ساده با TTL، «لغو فوری نشست» را
+        خراب می‌کند — و آن دقیقاً همان قابلیتی است که این کلاس برایش
+        ساخته شده. پس به‌جای اتکا به TTL، از invalidate-on-write استفاده
+        می‌کنیم: مسیرهای لغو نشست کلید کش را همان لحظه پاک می‌کنند، پس
+        لغو همچنان در اولین درخواست بعدی اثر می‌گذارد.
+
+        TTL فقط نقش تور ایمنی دارد و برابر همان پنجرهٔ لمس last_seen_at
+        است؛ یعنی حتی اگر یک مسیر لغو از قلم بیفتد، حداکثر پس از
+        LAST_SEEN_TOUCH_SECONDS ثانیه دوباره از دیتابیس خوانده می‌شود.
+
+        اگر کش در دسترس نباشد، رفتار دقیقاً به حالت قبلی (خواندن از
+        دیتابیس) برمی‌گردد — یعنی افت کارایی، نه افت امنیت.
     """
     sid = token_claims.get(SESSION_ID_CLAIM)
     if sid is None:
         return True
+
     now = timezone.now()
+    cache_key = session_validity_cache_key(sid=sid, user_id=user.pk)
+    cached = cache.get(cache_key)
+
+    if cached == _SESSION_STATE_REVOKED:
+        return False
+    if cached is not None and (now.timestamp() - float(cached)) < LAST_SEEN_TOUCH_SECONDS:
+        # نشست معتبر است و هنوز در پنجرهٔ لمس هستیم → صفر کوئری.
+        return True
+
     session = (
         AuthSession.objects.only("is_revoked", "last_seen_at")
         .filter(pk=sid, user_id=user.pk)
         .first()
     )
     if session is None or session.is_revoked:
+        cache.set(cache_key, _SESSION_STATE_REVOKED, timeout=LAST_SEEN_TOUCH_SECONDS)
         return False
+
     if now - session.last_seen_at >= timedelta(seconds=LAST_SEEN_TOUCH_SECONDS):
         AuthSession.objects.filter(pk=session.pk, is_revoked=False).update(last_seen_at=now)
+        last_seen = now
+    else:
+        last_seen = session.last_seen_at
+
+    cache.set(cache_key, last_seen.timestamp(), timeout=LAST_SEEN_TOUCH_SECONDS)
     return True
 
 
-def revoke_auth_session_by_jti(*, refresh_jti: str, revoked_by: User | None = None) -> AuthSession | None:
+def revoke_auth_session_by_jti(
+    *, refresh_jti: str, revoked_by: User | None = None
+) -> AuthSession | None:
     """Revoke tracked session by refresh token JTI if it exists."""
     session = AuthSession.objects.filter(refresh_jti=refresh_jti).first()
     if session is None:

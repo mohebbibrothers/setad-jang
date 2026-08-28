@@ -37,3 +37,6 @@ celerybeat-schedule.*
 
 # Logs
 *.log
+
+# سند تولیدشده — با «make structure» بازتولید می‌شود
+project_structure.txt

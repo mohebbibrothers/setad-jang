@@ -84,8 +84,17 @@ def _envelope_is_usable(envelope: dict[str, Any] | SwrCacheEnvelope, now: float)
         return envelope.is_usable(now)
     return now < float(envelope["hard_expires_at"])
 
+
 # پیشوند تمام cache keyهای پروژه — جلوگیری از تداخل با اپلیکیشن‌های دیگر
 _CACHE_KEY_PREFIX = "setadjang"
+
+# sentinel یکتا برای تشخیص «چیزی پیدا نشد» از «مقدار None کش شده».
+_SWR_MISSING = object()
+
+# سقف انتظار در مسیر کش سرد. عمداً کوتاه است: هدف حذف stampede است، نه
+# سریالایز کردن درخواست‌ها پشت یک قفل کند.
+_SWR_COLD_WAIT_SECONDS = 2.0
+_SWR_COLD_POLL_SECONDS = 0.05
 
 
 def make_cache_key(namespace: str, *parts: Any) -> str:
@@ -157,6 +166,27 @@ def cache_get_or_set(
     return value
 
 
+def _swr_store(
+    *,
+    key: str,
+    value: Any,
+    soft_ttl: int,
+    hard_ttl: int,
+) -> None:
+    """Persist a freshly built value in a new SWR envelope.
+
+    زمان مبنای envelope **بعد از** اجرای factory گرفته می‌شود. اگر factory سه
+    ثانیه طول کشیده باشد و از `now` قبل از آن استفاده کنیم، مقدار تازه‌ساخته
+    سه ثانیه از عمرش را همان لحظهٔ تولد از دست داده است.
+    """
+    envelope = _make_swr_envelope(
+        value=value,
+        now=time.time(),
+        soft_ttl=soft_ttl,
+        hard_ttl=hard_ttl,
+    )
+    cache.set(key, envelope, timeout=hard_ttl)
+
 
 def cache_get_or_set_swr(
     *,
@@ -171,44 +201,103 @@ def cache_get_or_set_swr(
     On soft-expired values, one request refreshes synchronously while other
     concurrent requests may serve the stale value until hard_ttl. If the refresh
     fails and a usable stale value exists, stale data is returned (fail-open).
+
+    دو نکتهٔ ظریف که این پیاده‌سازی رعایت می‌کند:
+
+    1. قفل تا **بعد از** نوشتن مقدار در کش نگه داشته می‌شود. اگر قفل در
+       `finally` و پیش از `cache.set` آزاد شود، یک پنجرهٔ کوچک باز می‌ماند که
+       در آن درخواست دیگری قفل را می‌گیرد و همان کار سنگین را دوباره انجام
+       می‌دهد — یعنی دقیقاً همان dogpileای که قرار بود بسته شود.
+    2. مسیر «کش کاملاً خالی» هم قفل دارد. این بدترین حالت stampede است
+       (استارت سرد یا درست بعد از invalidate) و بدون قفل، همهٔ درخواست‌های
+       همزمان با هم factory را اجرا می‌کنند. کسی که قفل را نمی‌گیرد کوتاه
+       منتظر می‌ماند تا نتیجهٔ برندهٔ قفل ظاهر شود و فقط اگر ظاهر نشد خودش
+       می‌سازد (fail-open، نه fail-slow).
     """
     now = time.time()
     namespace = key.split(":", 2)[1] if ":" in key else "unknown"
+    lock_key = f"{key}:lock"
     envelope = cache.get(key)
 
     if _is_swr_envelope(envelope):
         if _envelope_is_fresh(envelope, now):
-            CACHE_OPERATIONS_TOTAL.labels(namespace=namespace, operation="swr_get", outcome="fresh").inc()
-            return _envelope_value(envelope)
-        if _envelope_is_usable(envelope, now):
-            lock_key = f"{key}:lock"
-            if cache.add(lock_key, "1", timeout=lock_ttl):
-                try:
-                    value = factory()
-                except Exception:
-                    CACHE_OPERATIONS_TOTAL.labels(namespace=namespace, operation="swr_refresh", outcome="error_stale").inc()
-                    logger.exception("SWR refresh failed for %s; serving stale value", key)
-                    return _envelope_value(envelope)
-                finally:
-                    cache.delete(lock_key)
-                refreshed = _make_swr_envelope(
-                    value=value,
-                    now=now,
-                    soft_ttl=soft_ttl,
-                    hard_ttl=hard_ttl,
-                )
-                cache.set(key, refreshed, timeout=hard_ttl)
-                CACHE_OPERATIONS_TOTAL.labels(namespace=namespace, operation="swr_refresh", outcome="success").inc()
-                return value
-            CACHE_OPERATIONS_TOTAL.labels(namespace=namespace, operation="swr_get", outcome="stale_locked").inc()
+            CACHE_OPERATIONS_TOTAL.labels(
+                namespace=namespace, operation="swr_get", outcome="fresh"
+            ).inc()
             return _envelope_value(envelope)
 
+        if _envelope_is_usable(envelope, now):
+            # مقدار کهنه ولی قابل‌سرو داریم: فقط یک نفر refresh می‌کند،
+            # بقیه بدون هیچ انتظاری همان کهنه را می‌گیرند.
+            if not cache.add(lock_key, "1", timeout=lock_ttl):
+                CACHE_OPERATIONS_TOTAL.labels(
+                    namespace=namespace, operation="swr_get", outcome="stale_locked"
+                ).inc()
+                return _envelope_value(envelope)
+            try:
+                value = factory()
+            except Exception:
+                CACHE_OPERATIONS_TOTAL.labels(
+                    namespace=namespace, operation="swr_refresh", outcome="error_stale"
+                ).inc()
+                logger.exception("SWR refresh failed for %s; serving stale value", key)
+                cache.delete(lock_key)
+                return _envelope_value(envelope)
+            try:
+                _swr_store(key=key, value=value, soft_ttl=soft_ttl, hard_ttl=hard_ttl)
+            finally:
+                # قفل فقط پس از نوشتن آزاد می‌شود.
+                cache.delete(lock_key)
+            CACHE_OPERATIONS_TOTAL.labels(
+                namespace=namespace, operation="swr_refresh", outcome="success"
+            ).inc()
+            return value
+
+    # از اینجا به بعد یعنی کش خالی است یا مقدار موجود از hard_ttl هم گذشته.
     CACHE_OPERATIONS_TOTAL.labels(namespace=namespace, operation="swr_get", outcome="miss").inc()
-    value = factory()
-    envelope = _make_swr_envelope(value=value, now=now, soft_ttl=soft_ttl, hard_ttl=hard_ttl)
-    cache.set(key, envelope, timeout=hard_ttl)
+
+    if not cache.add(lock_key, "1", timeout=lock_ttl):
+        waited = _await_swr_value(key=key, timeout=_SWR_COLD_WAIT_SECONDS)
+        if waited is not _SWR_MISSING:
+            CACHE_OPERATIONS_TOTAL.labels(
+                namespace=namespace, operation="swr_get", outcome="cold_awaited"
+            ).inc()
+            return waited
+        # برندهٔ قفل به‌موقع جواب نداد؛ به‌جای بلوکه ماندن، خودمان می‌سازیم.
+        CACHE_OPERATIONS_TOTAL.labels(
+            namespace=namespace, operation="swr_get", outcome="cold_timeout"
+        ).inc()
+        value = factory()
+        _swr_store(key=key, value=value, soft_ttl=soft_ttl, hard_ttl=hard_ttl)
+        return value
+
+    try:
+        value = factory()
+    except Exception:
+        cache.delete(lock_key)
+        raise
+    try:
+        _swr_store(key=key, value=value, soft_ttl=soft_ttl, hard_ttl=hard_ttl)
+    finally:
+        cache.delete(lock_key)
     CACHE_OPERATIONS_TOTAL.labels(namespace=namespace, operation="swr_set", outcome="success").inc()
     return value
+
+
+def _await_swr_value(*, key: str, timeout: float) -> Any:
+    """Poll briefly for another worker's in-flight SWR result.
+
+    فقط در مسیر کش سرد استفاده می‌شود. مقدار برگشتی `_SWR_MISSING` یعنی در
+    مهلت مقرر چیزی ظاهر نشد و فراخوان باید خودش مقدار را بسازد.
+    """
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        time.sleep(_SWR_COLD_POLL_SECONDS)
+        envelope = cache.get(key)
+        if _is_swr_envelope(envelope) and _envelope_is_usable(envelope, time.time()):
+            return _envelope_value(envelope)
+    return _SWR_MISSING
+
 
 def cache_delete(key: str) -> None:
     """حذف یک کلید مشخص از cache."""
@@ -239,9 +328,9 @@ def cache_delete_namespace(namespace: str) -> None:
     try:
         new_version = cache.incr(version_key)
     except ValueError:
-        # کلید version هنوز وجود ندارد — مقدار اولیه می‌گذاریم
-        new_version = 1
-        cache.set(version_key, new_version, timeout=None)
+        # کلید version وجود ندارد. توضیح مفصل در `_seed_namespace_version`:
+        # عمداً از ۱ شروع نمی‌کنیم.
+        new_version = _seed_namespace_version(version_key)
 
     CACHE_INVALIDATIONS_TOTAL.labels(namespace=namespace).inc()
     logger.info(
@@ -266,6 +355,35 @@ def get_namespace_version(namespace: str) -> int:
     version_key = f"{_CACHE_KEY_PREFIX}:version:{namespace}"
     version = cache.get(version_key)
     if version is None:
-        cache.set(version_key, 1, timeout=None)
-        return 1
+        return _seed_namespace_version(version_key)
     return int(version)
+
+
+def _seed_namespace_version(version_key: str) -> int:
+    """Create a namespace version that can never collide with an older one.
+
+    اینجا یک باگ صحت پنهان وجود داشت. کلید version با ``timeout=None``
+    ذخیره می‌شود، ولی «بدون انقضا» به معنی «حذف‌نشدنی» نیست: اگر ردیس با
+    ``maxmemory-policy=allkeys-lru`` بالا آمده باشد — که پیکربندی بسیار
+    رایجی است — این کلید هم مثل هر کلید دیگری قابل evict شدن است.
+
+    در پیاده‌سازی قبلی، نبودِ کلید یعنی «برگرد به نسخهٔ ۱». پیامدش این بود:
+    namespaceای که مثلاً به نسخهٔ ۷ رسیده بود، بعد از یک evict دوباره
+    نسخهٔ ۱ می‌شد و سیستم شروع می‌کرد به خواندن کلیدهای نسخهٔ ۱ که هنوز
+    منقضی نشده بودند — یعنی **سرو کردن دادهٔ خیلی قدیمی، بی‌صدا، و فقط
+    تحت فشار حافظه**. بدترین نوع باگ: در تست هرگز دیده نمی‌شود.
+
+    راه‌حل: به‌جای عدد ثابت ۱، از مهر زمانی یونیکس به‌عنوان مقدار اولیه
+    استفاده می‌کنیم. چون زمان همیشه رو به جلو می‌رود، هر بار که کلید
+    version دوباره ساخته شود مقدارش قطعاً **بزرگ‌تر از هر نسخهٔ قبلی**
+    است. بنابراین کلیدهای کش قدیمی دیگر هرگز خوانده نمی‌شوند و خودشان
+    با hard_ttl پاک می‌شوند. این راه‌حل مستقل از سیاست eviction ردیس کار
+    می‌کند و نیازی به هماهنگی با تیم زیرساخت ندارد.
+    """
+    # دقت میلی‌ثانیه‌ای عمدی است: با دقت ثانیه، اگر یک namespace چند بار در
+    # همان ثانیه invalidate شود و بلافاصله کلیدش evict شود، مقدار بازسازی‌شده
+    # می‌تواند از آخرین نسخهٔ واقعی کوچک‌تر باشد. با میلی‌ثانیه، برای برخورد
+    # باید بیش از هزار invalidate در یک میلی‌ثانیه رخ دهد.
+    seed = int(time.time() * 1000)
+    cache.set(version_key, seed, timeout=None)
+    return seed

@@ -103,3 +103,43 @@ def create_audit_log_task(
             exc,
             exc_info=True,
         )
+
+
+@shared_task(
+    name="apps.audit_logs.tasks.enforce_audit_retention_task",
+    acks_late=True,
+    reject_on_worker_lost=True,
+    ignore_result=True,
+)
+def enforce_audit_retention_task() -> dict[str, Any]:
+    """Run the audit retention policy on a schedule.
+
+    سه تنظیم `AUDIT_LOG_RETENTION_DAYS`، `AUDIT_LOG_RETENTION_DELETE_ENABLED`
+    و `AUDIT_LOG_ARCHIVE_ROOT` تعریف شده بودند و `retention.py` هم گزارش
+    کاملی می‌ساخت — ولی هیچ زمان‌بندی‌ای این گزارش را اجرا نمی‌کرد. یعنی یک
+    سیاست نگهداشت روی کاغذ، بدون مجری. برای سامانه‌ای که ادعای انطباق و
+    forensic دارد، «سیاست اعلام‌شده ولی اجرانشده» از نداشتن سیاست بدتر است،
+    چون توهم پوشش ایجاد می‌کند.
+
+    این تسک عمداً **غیرمخرب** است: فقط وضعیت را می‌سنجد و ثبت می‌کند. حذف
+    واقعی همچنان پشت پرچم صریح `AUDIT_LOG_RETENTION_DELETE_ENABLED` است و
+    این تسک آن را روشن نمی‌کند؛ جدول audit طبق طراحی append-only است.
+    نقش این تسک، *مرئی کردن* بدهی نگهداشت است تا رشد بی‌صدای جدول به چشم
+    بیاید.
+    """
+    from .retention import build_audit_retention_report
+
+    report = build_audit_retention_report()
+    eligible = int(report.get("eligible_for_archive_count", 0))
+    if eligible:
+        logger.warning(
+            "Audit retention: %d records older than the %d-day policy await archiving "
+            "(total=%s, deletion_enabled=%s)",
+            eligible,
+            report["policy"]["retention_days"],
+            report.get("total_count"),
+            report["policy"]["deletion_enabled"],
+        )
+    else:
+        logger.info("Audit retention: no records exceed the retention window")
+    return report

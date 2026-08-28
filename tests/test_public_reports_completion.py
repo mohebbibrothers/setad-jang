@@ -63,8 +63,7 @@ class TestPublicReportMultipartUpload:
         subject = ReportSubjectFactory(title="آپلود پنج تصویر")
         client = APIClient()
         attachments = [
-            _make_image_file(f"evidence-{index}.png")
-            for index in range(MAX_ATTACHMENTS_PER_REPORT)
+            _make_image_file(f"evidence-{index}.png") for index in range(MAX_ATTACHMENTS_PER_REPORT)
         ]
 
         with patch(_TASK_PATCH_PATH) as mock_task:

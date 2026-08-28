@@ -1,265 +1,398 @@
-# Project Structure
+# ساختار پروژه
 
-Generated: 2026-06-10
+> این فایل **تولیدشده** است. دستی ویرایشش نکنید.
+> بازتولید: `make structure` — بررسی drift در CI: `make structure-check`
+
+نسخهٔ قبلی این سند دستی نگهداری می‌شد و کهنه شده بود: شش اپ در آن غایب
+بودند و تعداد مایگریشن‌ها غلط بود. حالا از روی خود مخزن ساخته می‌شود و
+یک گیت CI اختلافش با کد را می‌گیرد، پس دیگر نمی‌تواند بی‌صدا کهنه شود.
+
+## اپلیکیشن‌ها
+
+مجموع: **13 اپ** · 95 مدل · 54 مایگریشن · 285 ویو · 285 مسیر
+
+| اپ | مدل | مایگریشن | ویو | مسیر |
+|---|---:|---:|---:|---:|
+| `activity` | 1 | 1 | 2 | 2 |
+| `audit_logs` | 1 | 4 | 3 | 3 |
+| `authentication` | 4 | 9 | 29 | 30 |
+| `command_center` | 0 | 0 | 1 | 1 |
+| `core` | 2 | 3 | 1 | 0 |
+| `kindness_wall` | 12 | 2 | 34 | 34 |
+| `lms` | 18 | 4 | 51 | 51 |
+| `madadkar` | 14 | 8 | 47 | 47 |
+| `notifications` | 4 | 3 | 7 | 7 |
+| `public_reports` | 3 | 2 | 7 | 7 |
+| `r4j` | 15 | 9 | 36 | 36 |
+| `support_desk` | 19 | 6 | 54 | 54 |
+| `tabyin` | 2 | 3 | 13 | 13 |
+
+## قرارداد لایه‌ها
+
+هر اپ از یک تفکیک ثابت پیروی می‌کند:
+
+| فایل | مسئولیت |
+|---|---|
+| `models.py` | مدل‌های داده |
+| `selectors.py` | خواندن داده (بدون side effect) |
+| `services.py` | منطق کسب‌وکار و نوشتن |
+| `serializers.py` | اعتبارسنجی ورودی/خروجی |
+| `views.py` | لایهٔ HTTP |
+| `filters.py` | فیلترهای queryset |
+| `permissions.py` | کنترل دسترسی |
+| `tasks.py` | تسک‌های Celery |
+| `throttles.py` | محدودسازی نرخ |
+| `choices.py` | مقادیر ثابت و انتخاب‌ها |
+| `export.py` | خروجی اکسل |
+| `urls.py` | مسیرها |
+
+قواعدی که با تست معماری (`tests/test_architecture_discipline.py`) اجرا می‌شوند:
+
+- هر ماژول production باید docstring سطح ماژول داشته باشد.
+- `views.py` نباید مستقیماً روی manager یا queryset مدل بنویسد؛
+  نوشتن از طریق لایهٔ `services.py` انجام می‌شود.
+- `TODO`/`FIXME` مجاز است ولی باید شمارهٔ issue داشته باشد و از سقف
+  تعیین‌شده بیشتر نشود — بدهی فنی باید ثبت شود، نه پنهان.
+
+## درخت دایرکتوری
 
 ```text
-setad_jang/
-├── apps/
-│   ├── audit_logs/
-│   │   ├── migrations/
-│   │   │   ├── 0001_initial.py (2,330 B)
-│   │   │   └── __init__.py (0 B)
-│   │   ├── __init__.py (0 B)
-│   │   ├── actions.py (5,194 B)
-│   │   ├── admin.py (1,142 B)
-│   │   ├── apps.py (204 B)
-│   │   ├── filters.py (2,654 B)
-│   │   ├── helpers.py (1,812 B)
-│   │   ├── models.py (2,367 B)
-│   │   ├── selectors.py (1,230 B)
-│   │   ├── serializers.py (1,970 B)
-│   │   ├── services.py (3,554 B)
-│   │   ├── tasks.py (1,917 B)
-│   │   ├── tests.py (38,345 B)
-│   │   ├── urls.py (572 B)
-│   │   └── views.py (8,070 B)
-│   ├── authentication/
-│   │   ├── data/
-│   │   │   ├── __init__.py (351 B)
-│   │   │   └── disposable_email_domains.txt (71,002 B)
-│   │   ├── management/
-│   │   │   ├── commands/
-│   │   │   │   ├── __init__.py (0 B)
-│   │   │   │   └── update_disposable_email_blocklist.py (4,547 B)
-│   │   │   └── __init__.py (0 B)
-│   │   ├── migrations/
-│   │   │   ├── 0001_initial.py (6,156 B)
-│   │   │   ├── 0002_add_phone_identifier_fields.py (2,038 B)
-│   │   │   ├── 0003_move_phone_to_user.py (3,160 B)
-│   │   │   ├── 0004_remove_profile_phone_number.py (342 B)
-│   │   │   ├── 0005_refactor_otpcode.py (2,427 B)
-│   │   │   ├── 0006_alter_user_managers.py (451 B)
-│   │   │   └── __init__.py (0 B)
-│   │   ├── tests/
-│   │   │   ├── __init__.py (49 B)
-│   │   │   ├── test_anti_abuse.py (6,904 B)
-│   │   │   ├── test_backends.py (3,917 B)
-│   │   │   ├── test_deprecation.py (1,461 B)
-│   │   │   ├── test_normalizers.py (6,149 B)
-│   │   │   ├── test_otp.py (14,811 B)
-│   │   │   ├── test_providers.py (7,875 B)
-│   │   │   ├── test_validators.py (9,877 B)
-│   │   │   ├── test_views_identifier_management.py (13,517 B)
-│   │   │   ├── test_views_legacy_deprecation.py (5,131 B)
-│   │   │   └── test_views_multi_identifier.py (11,277 B)
-│   │   ├── __init__.py (0 B)
-│   │   ├── admin.py (3,599 B)
-│   │   ├── anti_abuse.py (5,349 B)
-│   │   ├── apps.py (272 B)
-│   │   ├── backends.py (2,525 B)
-│   │   ├── choices.py (1,438 B)
-│   │   ├── deprecation.py (2,432 B)
-│   │   ├── filters.py (675 B)
-│   │   ├── managers.py (5,012 B)
-│   │   ├── models.py (10,195 B)
-│   │   ├── normalizers.py (8,549 B)
-│   │   ├── otp.py (14,981 B)
-│   │   ├── permissions.py (1,173 B)
-│   │   ├── providers.py (8,818 B)
-│   │   ├── selectors.py (5,912 B)
-│   │   ├── serializers.py (19,703 B)
-│   │   ├── services.py (32,945 B)
-│   │   ├── signals.py (343 B)
-│   │   ├── throttles.py (1,825 B)
-│   │   ├── urls.py (4,065 B)
-│   │   ├── validators.py (9,485 B)
-│   │   └── views.py (62,368 B)
-│   ├── core/
-│   │   ├── health/
-│   │   │   ├── __init__.py (0 B)
-│   │   │   ├── checks.py (8,112 B)
-│   │   │   ├── serializers.py (4,341 B)
-│   │   │   ├── urls.py (531 B)
-│   │   │   └── views.py (6,864 B)
-│   │   ├── migrations/
-│   │   │   └── __init__.py (0 B)
-│   │   ├── tests/
-│   │   │   ├── __init__.py (39 B)
-│   │   │   └── test_request_id_middleware.py (5,290 B)
-│   │   ├── __init__.py (0 B)
-│   │   ├── admin.py (29 B)
-│   │   ├── apps.py (186 B)
-│   │   ├── cache.py (5,246 B)
-│   │   ├── email_backends.py (3,063 B)
-│   │   ├── exceptions.py (9,238 B)
-│   │   ├── managers.py (614 B)
-│   │   ├── middleware.py (5,979 B)
-│   │   ├── models.py (836 B)
-│   │   ├── pagination.py (1,347 B)
-│   │   ├── permissions.py (881 B)
-│   │   ├── responses.py (6,975 B)
-│   │   ├── schemas.py (3,391 B)
-│   │   └── views.py (26 B)
-│   ├── madadkar/
-│   │   ├── migrations/
-│   │   │   ├── 0001_initial.py (15,967 B)
-│   │   │   └── __init__.py (0 B)
-│   │   ├── payment_providers/
-│   │   │   ├── __init__.py (3,100 B)
-│   │   │   ├── base.py (5,998 B)
-│   │   │   ├── sandbox.py (3,798 B)
-│   │   │   └── zarinpal.py (13,296 B)
-│   │   ├── tests/
-│   │   │   ├── __init__.py (0 B)
-│   │   │   ├── test_analytics_admin.py (22,865 B)
-│   │   │   ├── test_campaigns_admin.py (36,259 B)
-│   │   │   ├── test_campaigns_public.py (10,192 B)
-│   │   │   ├── test_export.py (16,571 B)
-│   │   │   ├── test_models.py (17,317 B)
-│   │   │   ├── test_participation_user.py (22,721 B)
-│   │   │   ├── test_payment_flow.py (22,989 B)
-│   │   │   ├── test_payment_providers.py (16,265 B)
-│   │   │   ├── test_sponsors_admin.py (12,981 B)
-│   │   │   └── test_tasks.py (15,085 B)
-│   │   ├── __init__.py (0 B)
-│   │   ├── admin.py (6,891 B)
-│   │   ├── apps.py (596 B)
-│   │   ├── choices.py (956 B)
-│   │   ├── export.py (10,860 B)
-│   │   ├── filters.py (6,489 B)
-│   │   ├── managers.py (2,419 B)
-│   │   ├── models.py (20,674 B)
-│   │   ├── permissions.py (3,255 B)
-│   │   ├── selectors.py (14,342 B)
-│   │   ├── serializers.py (23,889 B)
-│   │   ├── services.py (39,235 B)
-│   │   ├── tasks.py (6,785 B)
-│   │   ├── throttles.py (1,971 B)
-│   │   ├── urls.py (7,860 B)
-│   │   ├── validators.py (3,838 B)
-│   │   └── views.py (70,199 B)
-│   ├── public_reports/
-│   │   ├── migrations/
-│   │   │   ├── 0001_initial.py (4,589 B)
-│   │   │   └── __init__.py (0 B)
-│   │   ├── __init__.py (0 B)
-│   │   ├── admin.py (971 B)
-│   │   ├── apps.py (211 B)
-│   │   ├── choices.py (269 B)
-│   │   ├── filters.py (841 B)
-│   │   ├── managers.py (752 B)
-│   │   ├── models.py (2,868 B)
-│   │   ├── permissions.py (0 B)
-│   │   ├── selectors.py (1,208 B)
-│   │   ├── serializers.py (4,262 B)
-│   │   ├── services.py (4,786 B)
-│   │   ├── tests.py (15,248 B)
-│   │   ├── throttles.py (243 B)
-│   │   ├── urls.py (1,614 B)
-│   │   ├── validators.py (693 B)
-│   │   └── views.py (20,854 B)
-│   ├── r4j/
-│   │   ├── migrations/
-│   │   │   ├── 0001_initial.py (23,466 B)
-│   │   │   ├── 0002_sync_choice_labels.py (1,876 B)
-│   │   │   └── __init__.py (0 B)
-│   │   ├── tests/
-│   │   │   ├── __init__.py (0 B)
-│   │   │   ├── test_bounties_admin.py (25,812 B)
-│   │   │   ├── test_bounties_user.py (29,176 B)
-│   │   │   ├── test_criminals_admin.py (15,642 B)
-│   │   │   ├── test_criminals_public.py (5,106 B)
-│   │   │   ├── test_models.py (6,916 B)
-│   │   │   ├── test_permissions.py (6,534 B)
-│   │   │   ├── test_reports_admin.py (35,961 B)
-│   │   │   └── test_reports_user.py (36,492 B)
-│   │   ├── __init__.py (515 B)
-│   │   ├── admin.py (3,466 B)
-│   │   ├── apps.py (202 B)
-│   │   ├── choices.py (4,854 B)
-│   │   ├── field_applicators.py (8,890 B)
-│   │   ├── filters.py (7,062 B)
-│   │   ├── managers.py (3,423 B)
-│   │   ├── models.py (23,672 B)
-│   │   ├── permissions.py (3,562 B)
-│   │   ├── selectors.py (15,950 B)
-│   │   ├── serializers.py (32,442 B)
-│   │   ├── services.py (39,333 B)
-│   │   ├── throttles.py (773 B)
-│   │   ├── urls.py (9,355 B)
-│   │   ├── validators.py (12,515 B)
-│   │   └── views.py (84,523 B)
-│   └── tabyin/
-│       ├── management/
-│       │   ├── commands/
-│       │   │   ├── __init__.py (0 B)
-│       │   │   └── sync_tabyin.py (2,490 B)
-│       │   └── __init__.py (0 B)
-│       ├── migrations/
-│       │   ├── 0001_initial.py (5,511 B)
-│       │   └── __init__.py (0 B)
-│       ├── providers/
-│       │   ├── __init__.py (1,451 B)
-│       │   ├── base.py (1,230 B)
-│       │   └── mohtavanegar.py (2,815 B)
-│       ├── sync/
-│       │   ├── __init__.py (0 B)
-│       │   ├── client.py (6,133 B)
-│       │   ├── engine.py (12,895 B)
-│       │   ├── hasher.py (1,833 B)
-│       │   └── parser.py (4,909 B)
-│       ├── tests/
-│       │   ├── __init__.py (45 B)
-│       │   ├── test_selectors.py (7,464 B)
-│       │   ├── test_services_sync_async.py (14,458 B)
-│       │   ├── test_services_toggle.py (5,685 B)
-│       │   ├── test_sync_engine.py (8,782 B)
-│       │   ├── test_views_admin_sync.py (9,919 B)
-│       │   └── test_views_admin_toggle.py (4,989 B)
-│       ├── __init__.py (0 B)
-│       ├── admin.py (2,535 B)
-│       ├── apps.py (190 B)
-│       ├── choices.py (411 B)
-│       ├── filters.py (3,051 B)
-│       ├── managers.py (2,624 B)
-│       ├── models.py (6,119 B)
-│       ├── selectors.py (6,841 B)
-│       ├── serializers.py (8,386 B)
-│       ├── services.py (8,247 B)
-│       ├── tasks.py (10,264 B)
-│       ├── throttles.py (637 B)
-│       ├── urls.py (1,889 B)
-│       └── views.py (20,198 B)
-├── config/
-│   ├── settings/
-│   │   ├── __init__.py (27 B)
-│   │   ├── base.py (28,864 B)
-│   │   ├── development.py (2,008 B)
-│   │   └── production.py (6,905 B)
-│   ├── __init__.py (316 B)
-│   ├── asgi.py (917 B)
-│   ├── celery.py (4,771 B)
-│   ├── urls.py (5,259 B)
-│   └── wsgi.py (906 B)
-└── tests/
-    ├── factories/
-    │   ├── __init__.py (3,235 B)
-    │   ├── audit_logs.py (1,239 B)
-    │   ├── auth.py (2,599 B)
-    │   ├── madadkar.py (8,682 B)
-    │   ├── public_reports.py (1,647 B)
-    │   ├── r4j.py (5,816 B)
-    │   └── tabyin.py (3,807 B)
-    ├── __init__.py (0 B)
-    └── test_operational_hardening.py (5,420 B)
-├── README.md (6,706 B)
-├── pyproject.toml (6,004 B)
-├── requirements.txt (625 B)
-├── requirements-dev.txt (788 B)
-├── requirements-lock.txt (1,085 B)
-├── Dockerfile (4,191 B)
-├── docker-compose.yml (4,504 B)
-├── .env.example (7,030 B)
-├── manage.py (1,009 B)
-├── schema.yaml (335,673 B)
+setad-jang/
+├── activity/
+│   ├── migrations/
+│   ├── __init__.py
+│   ├── admin.py
+│   ├── apps.py
+│   ├── choices.py  # مقادیر ثابت و انتخاب‌ها
+│   ├── filters.py  # فیلترهای queryset
+│   ├── models.py  # مدل‌های داده
+│   ├── permissions.py  # کنترل دسترسی
+│   ├── selectors.py  # خواندن داده (بدون side effect)
+│   ├── serializers.py  # اعتبارسنجی ورودی/خروجی
+│   ├── services.py  # منطق کسب‌وکار و نوشتن
+│   ├── tasks.py  # تسک‌های Celery
+│   ├── throttles.py  # محدودسازی نرخ
+│   ├── urls.py  # مسیرها
+│   └── views.py  # لایهٔ HTTP
+├── audit_logs/
+│   ├── management/
+│   ├── migrations/
+│   ├── tests/
+│   ├── __init__.py
+│   ├── actions.py
+│   ├── admin.py
+│   ├── apps.py
+│   ├── chain.py
+│   ├── exporters.py
+│   ├── filters.py  # فیلترهای queryset
+│   ├── helpers.py
+│   ├── models.py  # مدل‌های داده
+│   ├── retention.py
+│   ├── selectors.py  # خواندن داده (بدون side effect)
+│   ├── serializers.py  # اعتبارسنجی ورودی/خروجی
+│   ├── services.py  # منطق کسب‌وکار و نوشتن
+│   ├── tasks.py  # تسک‌های Celery
+│   ├── urls.py  # مسیرها
+│   └── views.py  # لایهٔ HTTP
+├── authentication/
+│   ├── data/
+│   ├── management/
+│   ├── migrations/
+│   ├── tests/
+│   ├── __init__.py
+│   ├── admin.py
+│   ├── anti_abuse.py
+│   ├── apps.py
+│   ├── backends.py
+│   ├── choices.py  # مقادیر ثابت و انتخاب‌ها
+│   ├── constants.py
+│   ├── deprecation.py
+│   ├── filters.py  # فیلترهای queryset
+│   ├── jwt_auth.py
+│   ├── logging_utils.py
+│   ├── managers.py
+│   ├── models.py  # مدل‌های داده
+│   ├── normalizers.py
+│   ├── otp.py
+│   ├── permissions.py  # کنترل دسترسی
+│   ├── providers.py
+│   ├── selectors.py  # خواندن داده (بدون side effect)
+│   ├── serializers.py  # اعتبارسنجی ورودی/خروجی
+│   ├── services.py  # منطق کسب‌وکار و نوشتن
+│   ├── signals.py
+│   ├── tasks.py  # تسک‌های Celery
+│   ├── throttles.py  # محدودسازی نرخ
+│   ├── urls.py  # مسیرها
+│   ├── validators.py
+│   └── views.py  # لایهٔ HTTP
+├── command_center/
+│   ├── tests/
+│   ├── __init__.py
+│   ├── admin.py
+│   ├── apps.py
+│   ├── filters.py  # فیلترهای queryset
+│   ├── models.py  # مدل‌های داده
+│   ├── permissions.py  # کنترل دسترسی
+│   ├── selectors.py  # خواندن داده (بدون side effect)
+│   ├── serializers.py  # اعتبارسنجی ورودی/خروجی
+│   ├── services.py  # منطق کسب‌وکار و نوشتن
+│   ├── throttles.py  # محدودسازی نرخ
+│   ├── urls.py  # مسیرها
+│   └── views.py  # لایهٔ HTTP
+├── core/
+│   ├── health/
+│   ├── migrations/
+│   ├── static/
+│   ├── tests/
+│   ├── __init__.py
+│   ├── admin.py
+│   ├── admin_i18n.py
+│   ├── api_cache.py
+│   ├── api_contracts.py
+│   ├── apps.py
+│   ├── cache.py
+│   ├── cache_invalidation.py
+│   ├── cache_policy.py
+│   ├── cache_signals.py
+│   ├── db_performance.py
+│   ├── email_backends.py
+│   ├── excel.py
+│   ├── exceptions.py
+│   ├── fields.py
+│   ├── file_security.py
+│   ├── frontend_revalidation.py
+│   ├── logging.py
+│   ├── managers.py
+│   ├── metrics.py
+│   ├── metrics_views.py
+│   ├── middleware.py
+│   ├── models.py  # مدل‌های داده
+│   ├── observability.py
+│   ├── pagination.py
+│   ├── performance.py
+│   ├── performance_contracts.py
+│   ├── permissions.py  # کنترل دسترسی
+│   ├── provider_readiness.py
+│   ├── public_media.py
+│   ├── responses.py
+│   ├── schemas.py
+│   ├── search.py
+│   ├── storage.py
+│   ├── tasks.py  # تسک‌های Celery
+│   ├── throttling.py
+│   └── views.py  # لایهٔ HTTP
+├── kindness_wall/
+│   ├── migrations/
+│   ├── tests/
+│   ├── __init__.py
+│   ├── admin.py
+│   ├── apps.py
+│   ├── choices.py  # مقادیر ثابت و انتخاب‌ها
+│   ├── export.py  # خروجی اکسل
+│   ├── filters.py  # فیلترهای queryset
+│   ├── managers.py
+│   ├── matching.py
+│   ├── models.py  # مدل‌های داده
+│   ├── permissions.py  # کنترل دسترسی
+│   ├── selectors.py  # خواندن داده (بدون side effect)
+│   ├── serializers.py  # اعتبارسنجی ورودی/خروجی
+│   ├── services.py  # منطق کسب‌وکار و نوشتن
+│   ├── signals.py
+│   ├── tasks.py  # تسک‌های Celery
+│   ├── throttles.py  # محدودسازی نرخ
+│   ├── urls.py  # مسیرها
+│   ├── validators.py
+│   └── views.py  # لایهٔ HTTP
+├── lms/
+│   ├── migrations/
+│   ├── tests/
+│   ├── __init__.py
+│   ├── admin.py
+│   ├── apps.py
+│   ├── certificate.py
+│   ├── choices.py  # مقادیر ثابت و انتخاب‌ها
+│   ├── export.py  # خروجی اکسل
+│   ├── filters.py  # فیلترهای queryset
+│   ├── managers.py
+│   ├── models.py  # مدل‌های داده
+│   ├── permissions.py  # کنترل دسترسی
+│   ├── selectors.py  # خواندن داده (بدون side effect)
+│   ├── serializers.py  # اعتبارسنجی ورودی/خروجی
+│   ├── services.py  # منطق کسب‌وکار و نوشتن
+│   ├── signals.py
+│   ├── tasks.py  # تسک‌های Celery
+│   ├── throttles.py  # محدودسازی نرخ
+│   ├── urls.py  # مسیرها
+│   ├── validators.py
+│   └── views.py  # لایهٔ HTTP
+├── madadkar/
+│   ├── management/
+│   ├── migrations/
+│   ├── payment_providers/
+│   ├── tests/
+│   ├── __init__.py
+│   ├── admin.py
+│   ├── apps.py
+│   ├── choices.py  # مقادیر ثابت و انتخاب‌ها
+│   ├── export.py  # خروجی اکسل
+│   ├── filters.py  # فیلترهای queryset
+│   ├── managers.py
+│   ├── models.py  # مدل‌های داده
+│   ├── permissions.py  # کنترل دسترسی
+│   ├── reconciliation.py
+│   ├── selectors.py  # خواندن داده (بدون side effect)
+│   ├── serializers.py  # اعتبارسنجی ورودی/خروجی
+│   ├── services.py  # منطق کسب‌وکار و نوشتن
+│   ├── signals.py
+│   ├── tasks.py  # تسک‌های Celery
+│   ├── throttles.py  # محدودسازی نرخ
+│   ├── urls.py  # مسیرها
+│   ├── validators.py
+│   └── views.py  # لایهٔ HTTP
+├── notifications/
+│   ├── migrations/
+│   ├── tests/
+│   ├── __init__.py
+│   ├── admin.py
+│   ├── apps.py
+│   ├── choices.py  # مقادیر ثابت و انتخاب‌ها
+│   ├── domain.py
+│   ├── filters.py  # فیلترهای queryset
+│   ├── managers.py
+│   ├── models.py  # مدل‌های داده
+│   ├── permissions.py  # کنترل دسترسی
+│   ├── providers.py
+│   ├── selectors.py  # خواندن داده (بدون side effect)
+│   ├── serializers.py  # اعتبارسنجی ورودی/خروجی
+│   ├── services.py  # منطق کسب‌وکار و نوشتن
+│   ├── tasks.py  # تسک‌های Celery
+│   ├── throttles.py  # محدودسازی نرخ
+│   ├── urls.py  # مسیرها
+│   └── views.py  # لایهٔ HTTP
+├── public_reports/
+│   ├── migrations/
+│   ├── tests/
+│   ├── __init__.py
+│   ├── admin.py
+│   ├── apps.py
+│   ├── choices.py  # مقادیر ثابت و انتخاب‌ها
+│   ├── filters.py  # فیلترهای queryset
+│   ├── managers.py
+│   ├── models.py  # مدل‌های داده
+│   ├── permissions.py  # کنترل دسترسی
+│   ├── selectors.py  # خواندن داده (بدون side effect)
+│   ├── serializers.py  # اعتبارسنجی ورودی/خروجی
+│   ├── services.py  # منطق کسب‌وکار و نوشتن
+│   ├── signals.py
+│   ├── test_admin_ux.py
+│   ├── throttles.py  # محدودسازی نرخ
+│   ├── urls.py  # مسیرها
+│   ├── validators.py
+│   └── views.py  # لایهٔ HTTP
+├── r4j/
+│   ├── migrations/
+│   ├── tests/
+│   ├── __init__.py
+│   ├── admin.py
+│   ├── apps.py
+│   ├── choices.py  # مقادیر ثابت و انتخاب‌ها
+│   ├── field_applicators.py
+│   ├── filters.py  # فیلترهای queryset
+│   ├── managers.py
+│   ├── models.py  # مدل‌های داده
+│   ├── permissions.py  # کنترل دسترسی
+│   ├── selectors.py  # خواندن داده (بدون side effect)
+│   ├── serializers.py  # اعتبارسنجی ورودی/خروجی
+│   ├── services.py  # منطق کسب‌وکار و نوشتن
+│   ├── signals.py
+│   ├── throttles.py  # محدودسازی نرخ
+│   ├── urls.py  # مسیرها
+│   ├── validators.py
+│   └── views.py  # لایهٔ HTTP
+├── support_desk/
+│   ├── migrations/
+│   ├── __init__.py
+│   ├── admin.py
+│   ├── apps.py
+│   ├── choices.py  # مقادیر ثابت و انتخاب‌ها
+│   ├── export.py  # خروجی اکسل
+│   ├── filters.py  # فیلترهای queryset
+│   ├── managers.py
+│   ├── models.py  # مدل‌های داده
+│   ├── permissions.py  # کنترل دسترسی
+│   ├── selectors.py  # خواندن داده (بدون side effect)
+│   ├── serializers.py  # اعتبارسنجی ورودی/خروجی
+│   ├── services.py  # منطق کسب‌وکار و نوشتن
+│   ├── tasks.py  # تسک‌های Celery
+│   ├── throttles.py  # محدودسازی نرخ
+│   ├── urls.py  # مسیرها
+│   ├── validators.py
+│   └── views.py  # لایهٔ HTTP
+└── tabyin/
+    ├── management/
+    ├── migrations/
+    ├── providers/
+    ├── sync/
+    ├── tests/
+    ├── __init__.py
+    ├── admin.py
+    ├── apps.py
+    ├── choices.py  # مقادیر ثابت و انتخاب‌ها
+    ├── filters.py  # فیلترهای queryset
+    ├── managers.py
+    ├── models.py  # مدل‌های داده
+    ├── selectors.py  # خواندن داده (بدون side effect)
+    ├── serializers.py  # اعتبارسنجی ورودی/خروجی
+    ├── services.py  # منطق کسب‌وکار و نوشتن
+    ├── tasks.py  # تسک‌های Celery
+    ├── throttles.py  # محدودسازی نرخ
+    ├── urls.py  # مسیرها
+    └── views.py  # لایهٔ HTTP
+```
+
+## زیرساخت مشترک (`apps/core`)
+
+```text
+apps/core/
+├── health/
+├── migrations/
+├── static/
+├── tests/
+├── __init__.py
+├── admin.py
+├── admin_i18n.py
+├── api_cache.py
+├── api_contracts.py
+├── apps.py
+├── cache.py
+├── cache_invalidation.py
+├── cache_policy.py
+├── cache_signals.py
+├── db_performance.py
+├── email_backends.py
+├── excel.py
+├── exceptions.py
+├── fields.py
+├── file_security.py
+├── frontend_revalidation.py
+├── logging.py
+├── managers.py
+├── metrics.py
+├── metrics_views.py
+├── middleware.py
+├── models.py  # مدل‌های داده
+├── observability.py
+├── pagination.py
+├── performance.py
+├── performance_contracts.py
+├── permissions.py  # کنترل دسترسی
+├── provider_readiness.py
+├── public_media.py
+├── responses.py
+├── schemas.py
+├── search.py
+├── storage.py
+├── tasks.py  # تسک‌های Celery
+├── throttling.py
+└── views.py  # لایهٔ HTTP
 ```

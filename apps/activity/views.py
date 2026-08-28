@@ -9,6 +9,7 @@ from apps.activity.filters import UserActivityFilter
 from apps.activity.permissions import IsActivityAdminUser
 from apps.activity.serializers import UserActivitySerializer
 from apps.core.pagination import StandardPagination
+from apps.core.views import paginated_list_response
 
 
 class UserActivityTimelineView(APIView):
@@ -19,13 +20,14 @@ class UserActivityTimelineView(APIView):
 
     def get(self, request) -> Response:
         """Return paginated current-user activity events."""
-        queryset = selectors.get_user_activities(user_id=request.user.pk)
-        filterset = UserActivityFilter(request.query_params, queryset=queryset)
-        if filterset.is_valid():
-            queryset = filterset.qs
-        paginator = StandardPagination()
-        page = paginator.paginate_queryset(queryset, request, view=self)
-        return paginator.get_paginated_response(UserActivitySerializer(page, many=True).data)
+        return paginated_list_response(
+            request=request,
+            view=self,
+            queryset=selectors.get_user_activities(user_id=request.user.pk),
+            serializer_class=UserActivitySerializer,
+            pagination_class=StandardPagination,
+            filterset_class=UserActivityFilter,
+        )
 
 
 class AdminActivityTimelineView(APIView):
@@ -36,10 +38,11 @@ class AdminActivityTimelineView(APIView):
 
     def get(self, request) -> Response:
         """Return paginated admin activity timeline."""
-        queryset = selectors.get_admin_activities()
-        filterset = UserActivityFilter(request.query_params, queryset=queryset)
-        if filterset.is_valid():
-            queryset = filterset.qs
-        paginator = StandardPagination()
-        page = paginator.paginate_queryset(queryset, request, view=self)
-        return paginator.get_paginated_response(UserActivitySerializer(page, many=True).data)
+        return paginated_list_response(
+            request=request,
+            view=self,
+            queryset=selectors.get_admin_activities(),
+            serializer_class=UserActivitySerializer,
+            pagination_class=StandardPagination,
+            filterset_class=UserActivityFilter,
+        )

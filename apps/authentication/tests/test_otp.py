@@ -75,9 +75,16 @@ class TestGenerateOTP:
         assert result.otp.code_hash  # not empty
 
     def test_code_plain_has_correct_length(self) -> None:
+        """طول کد از settings خوانده می‌شود و پیش‌فرضش ۶ رقم است (نه ۵)."""
         result = _make_email_otp()
-        assert len(result.code_plain) == 5
+        assert len(result.code_plain) == 6
         assert result.code_plain.isdigit()
+
+    def test_code_length_is_configurable_from_settings(self, settings) -> None:
+        """ثابت‌های OTP باید در زمان فراخوانی خوانده شوند، نه زمان import."""
+        settings.AUTH_OTP_CODE_LENGTH = 8
+        result = _make_email_otp(identifier="len8@example.com")
+        assert len(result.code_plain) == 8
 
     def test_code_plain_is_not_stored_in_db(self) -> None:
         result = _make_email_otp()
@@ -97,10 +104,18 @@ class TestGenerateOTP:
         # اولین OTP
         first = _make_email_otp(identifier="bob@example.com", purpose="signup")
 
-        # سعی کن دومی بسازی — باید با cooldown مواجه شویم
-        # پس اول cooldown را با تغییر created_at قبلی دور بزنیم
+        # سعی کن دومی بسازی — باید با cooldown مواجه شویم.
+        # cooldown حالا دو سد دارد: رزرو اتمیک در کش و بررسی دیتابیس.
+        # پس عقب‌بردن created_at به‌تنهایی کافی نیست و باید رزرو کش هم
+        # آزاد شود. همین که این تست بدون خط زیر رد می‌شود، خودش نشان
+        # می‌دهد سد جدید واقعاً فعال است.
         first.otp.created_at = timezone.now() - timedelta(seconds=120)
         first.otp.save(update_fields=["created_at"])
+        otp_service._release_cooldown_slot(
+            identifier_kind="email",
+            identifier_value="bob@example.com",
+            purpose="signup",
+        )
 
         # دومین OTP
         second = _make_email_otp(identifier="bob@example.com", purpose="signup")
@@ -186,7 +201,9 @@ class TestVerifySuccess:
                 code=result.code_plain,
             )
 
-    def test_concurrent_success_replay_loses_conditional_update(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_concurrent_success_replay_loses_conditional_update(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """اگر request دیگری بین read و mark استفاده کرده باشد، verify موفق نشود."""
         result = _make_email_otp(identifier="race@example.com", purpose="signup")
 
@@ -358,21 +375,69 @@ class TestSecurity:
 
     def test_two_different_codes_have_different_hashes(self) -> None:
         """sanity check: hash واقعاً به code وابسته است."""
-        h1 = otp_service._hash_code("12345")
-        h2 = otp_service._hash_code("12346")
-        assert h1 != h2
+        context = {
+            "salt": "a" * 32,
+            "identifier_kind": "email",
+            "identifier_value": "x@example.com",
+            "purpose": "signup",
+        }
+        assert otp_service._hash_code("123456", **context) != otp_service._hash_code(
+            "123457", **context
+        )
 
-    def test_same_code_has_consistent_hash(self) -> None:
-        """sanity check: hash deterministic است (با همان SECRET_KEY)."""
-        h1 = otp_service._hash_code("99999")
-        h2 = otp_service._hash_code("99999")
-        assert h1 == h2
+    def test_hash_is_deterministic_for_the_same_record(self) -> None:
+        """با نمک و کانتکست یکسان، هش باید بازتولیدپذیر باشد — وگرنه verify کار نمی‌کند."""
+        context = {
+            "salt": "b" * 32,
+            "identifier_kind": "email",
+            "identifier_value": "y@example.com",
+            "purpose": "signup",
+        }
+        assert otp_service._hash_code("999999", **context) == otp_service._hash_code(
+            "999999", **context
+        )
+
+    def test_same_code_hashes_differently_across_records(self) -> None:
+        """هستهٔ یافتهٔ ۵.۳: کد یکسان نباید در دو رکورد هش یکسان بدهد."""
+        base = {
+            "identifier_kind": "email",
+            "identifier_value": "z@example.com",
+            "purpose": "signup",
+        }
+        first = otp_service._hash_code("424242", salt=otp_service._generate_salt(), **base)
+        second = otp_service._hash_code("424242", salt=otp_service._generate_salt(), **base)
+        assert first != second, "نمک اختصاصی هر رکورد باید هش‌ها را از هم جدا کند"
+
+    def test_hash_is_bound_to_purpose(self) -> None:
+        """هش یک کد برای یک purpose نباید در purpose دیگری معتبر باشد."""
+        base = {
+            "salt": "c" * 32,
+            "identifier_kind": "email",
+            "identifier_value": "w@example.com",
+        }
+        assert otp_service._hash_code("555555", purpose="signup", **base) != otp_service._hash_code(
+            "555555", purpose="login", **base
+        )
 
     def test_hash_is_sha256_hex_length(self) -> None:
-        h = otp_service._hash_code("00000")
+        h = otp_service._hash_code(
+            "000000",
+            salt="d" * 32,
+            identifier_kind="email",
+            identifier_value="v@example.com",
+            purpose="signup",
+        )
         assert len(h) == 64
         # SHA-256 hex فقط شامل [0-9a-f]
         assert all(c in "0123456789abcdef" for c in h)
+
+    def test_every_generated_otp_gets_a_unique_salt(self) -> None:
+        """نمک باید واقعاً per-record باشد، نه یک مقدار ثابت مشترک."""
+        first = _make_email_otp(identifier="s1@example.com")
+        second = _make_email_otp(identifier="s2@example.com")
+        assert first.otp.code_salt
+        assert len(first.otp.code_salt) == 32
+        assert first.otp.code_salt != second.otp.code_salt
 
 
 # ============================================================

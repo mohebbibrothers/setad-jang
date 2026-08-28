@@ -87,7 +87,6 @@ def test_production_settings_boot_with_postgresql_by_default() -> None:
     assert "System check identified no issues" in result.stdout
 
 
-
 def test_production_settings_reject_sample_postgres_password() -> None:
     """production.py نباید با POSTGRES_PASSWORD نمونه یا خالی boot شود."""
     result = _run_manage_check(
@@ -98,6 +97,7 @@ def test_production_settings_reject_sample_postgres_password() -> None:
 
     assert result.returncode != 0
     assert "POSTGRES_PASSWORD" in result.stderr
+
 
 def test_production_settings_reject_sqlite_without_explicit_escape_hatch() -> None:
     """SQLite در production بدون ALLOW_SQLITE_IN_PRODUCTION باید fail-fast شود."""

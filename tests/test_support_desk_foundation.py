@@ -34,10 +34,18 @@ class TestSupportDeskSeedTaxonomy:
     def test_default_departments_categories_ticket_types_sla_and_macros_are_seeded(self) -> None:
         assert SupportDepartment.objects.filter(title="مالی و پرداخت").exists()
         assert SupportDepartment.objects.filter(title="دیوار مهربانی").exists()
-        assert SupportCategory.objects.filter(title="پرداخت ناموفق", parent__title="پرداخت و مالی").exists()
-        assert SupportCategory.objects.filter(title="مچینگ و پیشنهادها", parent__title="دیوار مهربانی").exists()
-        assert SupportTicketType.objects.filter(code="security", title="امنیت و حریم خصوصی").exists()
-        assert SupportSLAPolicy.objects.filter(title="فوری / بحرانی", first_response_minutes=120).exists()
+        assert SupportCategory.objects.filter(
+            title="پرداخت ناموفق", parent__title="پرداخت و مالی"
+        ).exists()
+        assert SupportCategory.objects.filter(
+            title="مچینگ و پیشنهادها", parent__title="دیوار مهربانی"
+        ).exists()
+        assert SupportTicketType.objects.filter(
+            code="security", title="امنیت و حریم خصوصی"
+        ).exists()
+        assert SupportSLAPolicy.objects.filter(
+            title="فوری / بحرانی", first_response_minutes=120
+        ).exists()
         assert SupportCannedResponse.objects.filter(title="پیگیری پرداخت").exists()
 
     def test_seeded_taxonomy_is_not_hard_locked_and_can_be_edited_by_admin_logic(self) -> None:
@@ -62,7 +70,9 @@ class TestSupportDeskTreeCategories:
         assert child.depth == 1
         assert child.path == f"{root.path.rstrip('/')}/{child.slug}/"
 
-    def test_same_title_allowed_under_different_departments_but_not_same_parent_department(self) -> None:
+    def test_same_title_allowed_under_different_departments_but_not_same_parent_department(
+        self,
+    ) -> None:
         left_department = SupportDepartmentFactory(title="دپارتمان چپ")
         right_department = SupportDepartmentFactory(title="دپارتمان راست")
         SupportCategoryFactory(department=left_department, title="پیگیری")
@@ -76,7 +86,9 @@ class TestSupportDeskTicketFoundation:
     """Ticket core model behavior and constraints."""
 
     def test_ticket_number_search_document_and_reopen_policy_are_generated(self) -> None:
-        ticket = SupportTicketFactory(subject="مشکل پرداخت کمپین", description_snapshot="پرداخت انجام شد اما ثبت نشد")
+        ticket = SupportTicketFactory(
+            subject="مشکل پرداخت کمپین", description_snapshot="پرداخت انجام شد اما ثبت نشد"
+        )
 
         assert ticket.ticket_number.startswith("SUP-")
         assert "مشکل پرداخت کمپین" in ticket.search_document
@@ -85,7 +97,9 @@ class TestSupportDeskTicketFoundation:
     def test_ticket_type_is_dynamic_and_carries_routing_defaults(self) -> None:
         department = SupportDepartmentFactory(title="مالی تست")
         category = SupportCategoryFactory(department=department, title="رسید پرداخت تست")
-        sla = SupportSLAPolicyFactory(title="SLA مالی تست", priority=TicketPriority.HIGH, severity=TicketSeverity.MAJOR)
+        sla = SupportSLAPolicyFactory(
+            title="SLA مالی تست", priority=TicketPriority.HIGH, severity=TicketSeverity.MAJOR
+        )
         ticket_type = SupportTicketTypeFactory(
             code="payment-test",
             title="پرداخت تست",
@@ -108,7 +122,9 @@ class TestSupportDeskTicketFoundation:
         SupportTicketSatisfaction.objects.create(ticket=ticket, user=user, rating=5)
 
         with pytest.raises(IntegrityError):
-            SupportTicketSatisfaction.objects.create(ticket=SupportTicketFactory(), user=UserFactory(), rating=9)
+            SupportTicketSatisfaction.objects.create(
+                ticket=SupportTicketFactory(), user=UserFactory(), rating=9
+            )
 
     def test_duplicate_score_validator_rejects_invalid_scores(self) -> None:
         validate_duplicate_score(0)
@@ -116,4 +132,3 @@ class TestSupportDeskTicketFoundation:
 
         with pytest.raises(ValidationError):
             validate_duplicate_score(101)
-

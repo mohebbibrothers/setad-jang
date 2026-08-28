@@ -21,6 +21,7 @@ from apps.core.schemas import (
     build_paginated_success_response_serializer,
     build_success_response_serializer,
 )
+from apps.core.views import paginated_list_response
 from apps.support_desk import selectors, services
 from apps.support_desk.export import (
     build_csat_workbook,
@@ -89,29 +90,60 @@ TAG_SUPPORT_USER = "میز پشتیبانی — کاربر"
 TAG_SUPPORT_TAXONOMY = "میز پشتیبانی — دسته‌بندی"
 
 SUPPORT_ERROR_RESPONSE = build_error_response_serializer(name="SupportDeskErrorResponse")
-DEPARTMENT_LIST_RESPONSE = build_success_response_serializer(name="SupportDepartmentListResponse", data_serializer=SupportDepartmentSerializer, many=True)
-CATEGORY_LIST_RESPONSE = build_success_response_serializer(name="SupportCategoryListResponse", data_serializer=SupportCategorySerializer, many=True)
-TICKET_TYPE_LIST_RESPONSE = build_success_response_serializer(name="SupportTicketTypeListResponse", data_serializer=SupportTicketTypeSerializer, many=True)
-TICKET_LIST_RESPONSE = build_paginated_success_response_serializer(name="SupportTicketListResponse", item_serializer=SupportTicketListSerializer)
-TICKET_DETAIL_RESPONSE = build_success_response_serializer(name="SupportTicketDetailResponse", data_serializer=SupportTicketDetailSerializer)
-KNOWLEDGE_ARTICLE_LIST_RESPONSE = build_paginated_success_response_serializer(name="SupportKnowledgeArticleListResponse", item_serializer=SupportKnowledgeArticleSerializer)
-KNOWLEDGE_ARTICLE_DETAIL_RESPONSE = build_success_response_serializer(name="SupportKnowledgeArticleDetailResponse", data_serializer=SupportKnowledgeArticleSerializer)
-KNOWLEDGE_ARTICLE_USE_RESPONSE = build_success_response_serializer(name="SupportKnowledgeArticleUseResponse", data_serializer=SupportKnowledgeArticleUseSerializer)
-MESSAGE_LIST_RESPONSE = build_success_response_serializer(name="SupportTicketTimelineResponse", data_serializer=SupportTicketMessageSerializer, many=True)
-ATTACHMENT_RESPONSE = build_success_response_serializer(name="SupportTicketAttachmentResponse", data_serializer=SupportTicketAttachmentSerializer)
-TRIAGE_RESPONSE = build_success_response_serializer(name="SupportTriageSuggestionResponse", data_serializer=SupportTriageSuggestionSerializer)
-ASSIGNMENT_RECOMMENDATION_RESPONSE = build_success_response_serializer(name="SupportAssignmentRecommendationResponse", data_serializer=SupportAssignmentRecommendationSerializer)
-SMART_REPLY_BUNDLE_RESPONSE = build_success_response_serializer(name="SupportSmartReplyBundleResponse", data_serializer=SupportSmartReplyBundleSerializer)
+DEPARTMENT_LIST_RESPONSE = build_success_response_serializer(
+    name="SupportDepartmentListResponse", data_serializer=SupportDepartmentSerializer, many=True
+)
+CATEGORY_LIST_RESPONSE = build_success_response_serializer(
+    name="SupportCategoryListResponse", data_serializer=SupportCategorySerializer, many=True
+)
+TICKET_TYPE_LIST_RESPONSE = build_success_response_serializer(
+    name="SupportTicketTypeListResponse", data_serializer=SupportTicketTypeSerializer, many=True
+)
+TICKET_LIST_RESPONSE = build_paginated_success_response_serializer(
+    name="SupportTicketListResponse", item_serializer=SupportTicketListSerializer
+)
+TICKET_DETAIL_RESPONSE = build_success_response_serializer(
+    name="SupportTicketDetailResponse", data_serializer=SupportTicketDetailSerializer
+)
+KNOWLEDGE_ARTICLE_LIST_RESPONSE = build_paginated_success_response_serializer(
+    name="SupportKnowledgeArticleListResponse", item_serializer=SupportKnowledgeArticleSerializer
+)
+KNOWLEDGE_ARTICLE_DETAIL_RESPONSE = build_success_response_serializer(
+    name="SupportKnowledgeArticleDetailResponse", data_serializer=SupportKnowledgeArticleSerializer
+)
+KNOWLEDGE_ARTICLE_USE_RESPONSE = build_success_response_serializer(
+    name="SupportKnowledgeArticleUseResponse", data_serializer=SupportKnowledgeArticleUseSerializer
+)
+MESSAGE_LIST_RESPONSE = build_success_response_serializer(
+    name="SupportTicketTimelineResponse", data_serializer=SupportTicketMessageSerializer, many=True
+)
+ATTACHMENT_RESPONSE = build_success_response_serializer(
+    name="SupportTicketAttachmentResponse", data_serializer=SupportTicketAttachmentSerializer
+)
+TRIAGE_RESPONSE = build_success_response_serializer(
+    name="SupportTriageSuggestionResponse", data_serializer=SupportTriageSuggestionSerializer
+)
+ASSIGNMENT_RECOMMENDATION_RESPONSE = build_success_response_serializer(
+    name="SupportAssignmentRecommendationResponse",
+    data_serializer=SupportAssignmentRecommendationSerializer,
+)
+SMART_REPLY_BUNDLE_RESPONSE = build_success_response_serializer(
+    name="SupportSmartReplyBundleResponse", data_serializer=SupportSmartReplyBundleSerializer
+)
 
 
-def _service_error_response(exc: Exception, *, status_code: int = status.HTTP_400_BAD_REQUEST) -> ErrorResponse:
+def _service_error_response(
+    exc: Exception, *, status_code: int = status.HTTP_400_BAD_REQUEST
+) -> ErrorResponse:
     """Convert service-layer exception to project error response."""
     return ErrorResponse(message=str(exc), status_code=status_code)
 
 
 def _get_user_ticket_or_error(*, request: Request, ticket_number: str):
     """Return user ticket or a standardized 404 response."""
-    ticket = selectors.get_user_ticket_by_number(user_id=request.user.pk, ticket_number=ticket_number)
+    ticket = selectors.get_user_ticket_by_number(
+        user_id=request.user.pk, ticket_number=ticket_number
+    )
     if ticket is None:
         return None, ErrorResponse(message="تیکت یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
     return ticket, None
@@ -122,10 +154,16 @@ class SupportDepartmentListView(APIView):
 
     permission_classes = [IsAuthenticated]
 
-    @extend_schema(operation_id="support_departments_list", tags=[TAG_SUPPORT_TAXONOMY], responses={200: DEPARTMENT_LIST_RESPONSE, 401: SUPPORT_ERROR_RESPONSE})
+    @extend_schema(
+        operation_id="support_departments_list",
+        tags=[TAG_SUPPORT_TAXONOMY],
+        responses={200: DEPARTMENT_LIST_RESPONSE, 401: SUPPORT_ERROR_RESPONSE},
+    )
     def get(self, request: Request) -> SuccessResponse:
         """Return active support departments."""
-        return SuccessResponse(data=SupportDepartmentSerializer(selectors.get_active_departments(), many=True).data)
+        return SuccessResponse(
+            data=SupportDepartmentSerializer(selectors.get_active_departments(), many=True).data
+        )
 
 
 class SupportCategoryListView(APIView):
@@ -133,10 +171,16 @@ class SupportCategoryListView(APIView):
 
     permission_classes = [IsAuthenticated]
 
-    @extend_schema(operation_id="support_categories_list", tags=[TAG_SUPPORT_TAXONOMY], responses={200: CATEGORY_LIST_RESPONSE})
+    @extend_schema(
+        operation_id="support_categories_list",
+        tags=[TAG_SUPPORT_TAXONOMY],
+        responses={200: CATEGORY_LIST_RESPONSE},
+    )
     def get(self, request: Request) -> SuccessResponse:
         """Return active support categories."""
-        return SuccessResponse(data=SupportCategorySerializer(selectors.get_active_category_tree(), many=True).data)
+        return SuccessResponse(
+            data=SupportCategorySerializer(selectors.get_active_category_tree(), many=True).data
+        )
 
 
 class SupportTicketTypeListView(APIView):
@@ -144,10 +188,16 @@ class SupportTicketTypeListView(APIView):
 
     permission_classes = [IsAuthenticated]
 
-    @extend_schema(operation_id="support_ticket_types_list", tags=[TAG_SUPPORT_TAXONOMY], responses={200: TICKET_TYPE_LIST_RESPONSE})
+    @extend_schema(
+        operation_id="support_ticket_types_list",
+        tags=[TAG_SUPPORT_TAXONOMY],
+        responses={200: TICKET_TYPE_LIST_RESPONSE},
+    )
     def get(self, request: Request) -> SuccessResponse:
         """Return active support ticket types."""
-        return SuccessResponse(data=SupportTicketTypeSerializer(selectors.get_active_ticket_types(), many=True).data)
+        return SuccessResponse(
+            data=SupportTicketTypeSerializer(selectors.get_active_ticket_types(), many=True).data
+        )
 
 
 class SupportKnowledgeArticleListView(APIView):
@@ -155,13 +205,21 @@ class SupportKnowledgeArticleListView(APIView):
 
     permission_classes = [IsAuthenticated]
 
-    @extend_schema(operation_id="support_knowledge_articles_list", tags=[TAG_SUPPORT_USER], responses={200: KNOWLEDGE_ARTICLE_LIST_RESPONSE})
+    @extend_schema(
+        operation_id="support_knowledge_articles_list",
+        tags=[TAG_SUPPORT_USER],
+        responses={200: KNOWLEDGE_ARTICLE_LIST_RESPONSE},
+    )
     def get(self, request: Request) -> Response:
         """Return published knowledge articles with simple search/taxonomy filters."""
         queryset = selectors.get_published_knowledge_articles()
         search = request.query_params.get("search")
         if search:
-            queryset = queryset.filter(Q(title__icontains=search) | Q(summary__icontains=search) | Q(body__icontains=search))
+            queryset = queryset.filter(
+                Q(title__icontains=search)
+                | Q(summary__icontains=search)
+                | Q(body__icontains=search)
+            )
         department = request.query_params.get("department")
         if department:
             queryset = queryset.filter(department_id=department)
@@ -172,8 +230,13 @@ class SupportKnowledgeArticleListView(APIView):
         page = paginator.paginate_queryset(queryset, request, view=self)
         if page is not None:
             serializer = SupportKnowledgeArticleSerializer(page, many=True)
-            return paginator.get_paginated_response(serializer.data, message="لیست مقالات پایگاه دانش دریافت شد.")
-        return SuccessResponse(data=SupportKnowledgeArticleSerializer(queryset, many=True).data, message="لیست مقالات پایگاه دانش دریافت شد.")
+            return paginator.get_paginated_response(
+                serializer.data, message="لیست مقالات پایگاه دانش دریافت شد."
+            )
+        return SuccessResponse(
+            data=SupportKnowledgeArticleSerializer(queryset, many=True).data,
+            message="لیست مقالات پایگاه دانش دریافت شد.",
+        )
 
 
 class SupportKnowledgeArticleDetailView(APIView):
@@ -181,13 +244,22 @@ class SupportKnowledgeArticleDetailView(APIView):
 
     permission_classes = [IsAuthenticated]
 
-    @extend_schema(operation_id="support_knowledge_article_retrieve", tags=[TAG_SUPPORT_USER], responses={200: KNOWLEDGE_ARTICLE_DETAIL_RESPONSE, 404: SUPPORT_ERROR_RESPONSE})
+    @extend_schema(
+        operation_id="support_knowledge_article_retrieve",
+        tags=[TAG_SUPPORT_USER],
+        responses={200: KNOWLEDGE_ARTICLE_DETAIL_RESPONSE, 404: SUPPORT_ERROR_RESPONSE},
+    )
     def get(self, request: Request, slug: str) -> SuccessResponse | ErrorResponse:
         """Return one published knowledge article by slug."""
         article = selectors.get_public_knowledge_article_by_slug(slug=slug)
         if article is None:
-            return ErrorResponse(message="مقاله‌ای با این شناسه یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
-        return SuccessResponse(data=SupportKnowledgeArticleSerializer(article).data, message="مقاله پایگاه دانش دریافت شد.")
+            return ErrorResponse(
+                message="مقاله‌ای با این شناسه یافت نشد.", status_code=status.HTTP_404_NOT_FOUND
+            )
+        return SuccessResponse(
+            data=SupportKnowledgeArticleSerializer(article).data,
+            message="مقاله پایگاه دانش دریافت شد.",
+        )
 
 
 class SupportKnowledgeRecommendView(APIView):
@@ -195,7 +267,12 @@ class SupportKnowledgeRecommendView(APIView):
 
     permission_classes = [IsAuthenticated]
 
-    @extend_schema(operation_id="support_knowledge_articles_recommend", tags=[TAG_SUPPORT_USER], request=SupportKnowledgeRecommendationSerializer, responses={200: KNOWLEDGE_ARTICLE_LIST_RESPONSE})
+    @extend_schema(
+        operation_id="support_knowledge_articles_recommend",
+        tags=[TAG_SUPPORT_USER],
+        request=SupportKnowledgeRecommendationSerializer,
+        responses={200: KNOWLEDGE_ARTICLE_LIST_RESPONSE},
+    )
     def post(self, request: Request) -> SuccessResponse:
         """Recommend published articles from subject/description/taxonomy context."""
         serializer = SupportKnowledgeRecommendationSerializer(data=request.data)
@@ -206,7 +283,10 @@ class SupportKnowledgeRecommendView(APIView):
             category=serializer.validated_data.get("category"),
             ticket_type=serializer.validated_data.get("ticket_type"),
         )
-        return SuccessResponse(data=SupportKnowledgeArticleSerializer(articles, many=True).data, message="مقالات پیشنهادی پایگاه دانش دریافت شد.")
+        return SuccessResponse(
+            data=SupportKnowledgeArticleSerializer(articles, many=True).data,
+            message="مقالات پیشنهادی پایگاه دانش دریافت شد.",
+        )
 
 
 class SupportAdminKnowledgeArticleListCreateView(APIView):
@@ -214,7 +294,11 @@ class SupportAdminKnowledgeArticleListCreateView(APIView):
 
     permission_classes = [IsSupportAdminUser]
 
-    @extend_schema(operation_id="support_admin_knowledge_articles_list", tags=[TAG_SUPPORT_TAXONOMY], responses={200: KNOWLEDGE_ARTICLE_LIST_RESPONSE})
+    @extend_schema(
+        operation_id="support_admin_knowledge_articles_list",
+        tags=[TAG_SUPPORT_TAXONOMY],
+        responses={200: KNOWLEDGE_ARTICLE_LIST_RESPONSE},
+    )
     def get(self, request: Request) -> Response:
         """Return all knowledge articles for admin management."""
         queryset = selectors.get_admin_knowledge_articles()
@@ -225,10 +309,20 @@ class SupportAdminKnowledgeArticleListCreateView(APIView):
         page = paginator.paginate_queryset(queryset, request, view=self)
         if page is not None:
             serializer = SupportKnowledgeArticleSerializer(page, many=True)
-            return paginator.get_paginated_response(serializer.data, message="لیست مقالات پایگاه دانش دریافت شد.")
-        return SuccessResponse(data=SupportKnowledgeArticleSerializer(queryset, many=True).data, message="لیست مقالات پایگاه دانش دریافت شد.")
+            return paginator.get_paginated_response(
+                serializer.data, message="لیست مقالات پایگاه دانش دریافت شد."
+            )
+        return SuccessResponse(
+            data=SupportKnowledgeArticleSerializer(queryset, many=True).data,
+            message="لیست مقالات پایگاه دانش دریافت شد.",
+        )
 
-    @extend_schema(operation_id="support_admin_knowledge_articles_create", tags=[TAG_SUPPORT_TAXONOMY], request=SupportKnowledgeArticleInputSerializer, responses={201: KNOWLEDGE_ARTICLE_DETAIL_RESPONSE, 400: SUPPORT_ERROR_RESPONSE})
+    @extend_schema(
+        operation_id="support_admin_knowledge_articles_create",
+        tags=[TAG_SUPPORT_TAXONOMY],
+        request=SupportKnowledgeArticleInputSerializer,
+        responses={201: KNOWLEDGE_ARTICLE_DETAIL_RESPONSE, 400: SUPPORT_ERROR_RESPONSE},
+    )
     def post(self, request: Request) -> CreatedResponse | ErrorResponse:
         """Create a knowledge base article."""
         serializer = SupportKnowledgeArticleInputSerializer(data=request.data)
@@ -237,8 +331,17 @@ class SupportAdminKnowledgeArticleListCreateView(APIView):
             article = services.create_knowledge_article(**serializer.validated_data)
         except services.SupportDeskServiceError as exc:
             return _service_error_response(exc)
-        log_action_async(user_id=request.user.pk, action=audit_actions.SUPPORT_KB_ARTICLE_CREATED, resource_type="support_knowledge_article", resource_id=str(article.pk), **extract_audit_metadata(request))
-        return CreatedResponse(data=SupportKnowledgeArticleSerializer(article).data, message="مقاله پایگاه دانش ایجاد شد.")
+        log_action_async(
+            user_id=request.user.pk,
+            action=audit_actions.SUPPORT_KB_ARTICLE_CREATED,
+            resource_type="support_knowledge_article",
+            resource_id=str(article.pk),
+            **extract_audit_metadata(request),
+        )
+        return CreatedResponse(
+            data=SupportKnowledgeArticleSerializer(article).data,
+            message="مقاله پایگاه دانش ایجاد شد.",
+        )
 
 
 class SupportAdminKnowledgeArticleDetailView(APIView):
@@ -246,7 +349,11 @@ class SupportAdminKnowledgeArticleDetailView(APIView):
 
     permission_classes = [IsSupportAdminUser]
 
-    @extend_schema(operation_id="support_admin_knowledge_article_retrieve", tags=[TAG_SUPPORT_TAXONOMY], responses={200: KNOWLEDGE_ARTICLE_DETAIL_RESPONSE, 404: SUPPORT_ERROR_RESPONSE})
+    @extend_schema(
+        operation_id="support_admin_knowledge_article_retrieve",
+        tags=[TAG_SUPPORT_TAXONOMY],
+        responses={200: KNOWLEDGE_ARTICLE_DETAIL_RESPONSE, 404: SUPPORT_ERROR_RESPONSE},
+    )
     def get(self, request: Request, article_id: int) -> SuccessResponse | ErrorResponse:
         """Return article detail for admin."""
         article = selectors.get_admin_knowledge_article_by_id(article_id=article_id)
@@ -254,7 +361,16 @@ class SupportAdminKnowledgeArticleDetailView(APIView):
             return ErrorResponse(message="مقاله یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
         return SuccessResponse(data=SupportKnowledgeArticleSerializer(article).data)
 
-    @extend_schema(operation_id="support_admin_knowledge_article_update", tags=[TAG_SUPPORT_TAXONOMY], request=SupportKnowledgeArticleInputSerializer, responses={200: KNOWLEDGE_ARTICLE_DETAIL_RESPONSE, 400: SUPPORT_ERROR_RESPONSE, 404: SUPPORT_ERROR_RESPONSE})
+    @extend_schema(
+        operation_id="support_admin_knowledge_article_update",
+        tags=[TAG_SUPPORT_TAXONOMY],
+        request=SupportKnowledgeArticleInputSerializer,
+        responses={
+            200: KNOWLEDGE_ARTICLE_DETAIL_RESPONSE,
+            400: SUPPORT_ERROR_RESPONSE,
+            404: SUPPORT_ERROR_RESPONSE,
+        },
+    )
     def patch(self, request: Request, article_id: int) -> SuccessResponse | ErrorResponse:
         """Update article content/metadata."""
         article = selectors.get_admin_knowledge_article_by_id(article_id=article_id)
@@ -263,11 +379,22 @@ class SupportAdminKnowledgeArticleDetailView(APIView):
         serializer = SupportKnowledgeArticleInputSerializer(data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         try:
-            article = services.update_knowledge_article(article=article, **serializer.validated_data)
+            article = services.update_knowledge_article(
+                article=article, **serializer.validated_data
+            )
         except services.SupportDeskServiceError as exc:
             return _service_error_response(exc)
-        log_action_async(user_id=request.user.pk, action=audit_actions.SUPPORT_KB_ARTICLE_UPDATED, resource_type="support_knowledge_article", resource_id=str(article.pk), **extract_audit_metadata(request))
-        return SuccessResponse(data=SupportKnowledgeArticleSerializer(article).data, message="مقاله پایگاه دانش به‌روزرسانی شد.")
+        log_action_async(
+            user_id=request.user.pk,
+            action=audit_actions.SUPPORT_KB_ARTICLE_UPDATED,
+            resource_type="support_knowledge_article",
+            resource_id=str(article.pk),
+            **extract_audit_metadata(request),
+        )
+        return SuccessResponse(
+            data=SupportKnowledgeArticleSerializer(article).data,
+            message="مقاله پایگاه دانش به‌روزرسانی شد.",
+        )
 
 
 class SupportAdminKnowledgeArticlePublishView(APIView):
@@ -276,15 +403,28 @@ class SupportAdminKnowledgeArticlePublishView(APIView):
     permission_classes = [IsSupportAdminUser]
     serializer_class = SupportKnowledgeArticleSerializer
 
-    @extend_schema(operation_id="support_admin_knowledge_article_publish", tags=[TAG_SUPPORT_TAXONOMY], request=None, responses={200: KNOWLEDGE_ARTICLE_DETAIL_RESPONSE, 404: SUPPORT_ERROR_RESPONSE})
+    @extend_schema(
+        operation_id="support_admin_knowledge_article_publish",
+        tags=[TAG_SUPPORT_TAXONOMY],
+        request=None,
+        responses={200: KNOWLEDGE_ARTICLE_DETAIL_RESPONSE, 404: SUPPORT_ERROR_RESPONSE},
+    )
     def post(self, request: Request, article_id: int) -> SuccessResponse | ErrorResponse:
         """Publish one knowledge article."""
         article = selectors.get_admin_knowledge_article_by_id(article_id=article_id)
         if article is None:
             return ErrorResponse(message="مقاله یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
         article = services.publish_knowledge_article(article=article)
-        log_action_async(user_id=request.user.pk, action=audit_actions.SUPPORT_KB_ARTICLE_PUBLISHED, resource_type="support_knowledge_article", resource_id=str(article.pk), **extract_audit_metadata(request))
-        return SuccessResponse(data=SupportKnowledgeArticleSerializer(article).data, message="مقاله منتشر شد.")
+        log_action_async(
+            user_id=request.user.pk,
+            action=audit_actions.SUPPORT_KB_ARTICLE_PUBLISHED,
+            resource_type="support_knowledge_article",
+            resource_id=str(article.pk),
+            **extract_audit_metadata(request),
+        )
+        return SuccessResponse(
+            data=SupportKnowledgeArticleSerializer(article).data, message="مقاله منتشر شد."
+        )
 
 
 class SupportAdminKnowledgeArticleArchiveView(APIView):
@@ -293,15 +433,28 @@ class SupportAdminKnowledgeArticleArchiveView(APIView):
     permission_classes = [IsSupportAdminUser]
     serializer_class = SupportKnowledgeArticleSerializer
 
-    @extend_schema(operation_id="support_admin_knowledge_article_archive", tags=[TAG_SUPPORT_TAXONOMY], request=None, responses={200: KNOWLEDGE_ARTICLE_DETAIL_RESPONSE, 404: SUPPORT_ERROR_RESPONSE})
+    @extend_schema(
+        operation_id="support_admin_knowledge_article_archive",
+        tags=[TAG_SUPPORT_TAXONOMY],
+        request=None,
+        responses={200: KNOWLEDGE_ARTICLE_DETAIL_RESPONSE, 404: SUPPORT_ERROR_RESPONSE},
+    )
     def post(self, request: Request, article_id: int) -> SuccessResponse | ErrorResponse:
         """Archive one knowledge article."""
         article = selectors.get_admin_knowledge_article_by_id(article_id=article_id)
         if article is None:
             return ErrorResponse(message="مقاله یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
         article = services.archive_knowledge_article(article=article)
-        log_action_async(user_id=request.user.pk, action=audit_actions.SUPPORT_KB_ARTICLE_ARCHIVED, resource_type="support_knowledge_article", resource_id=str(article.pk), **extract_audit_metadata(request))
-        return SuccessResponse(data=SupportKnowledgeArticleSerializer(article).data, message="مقاله آرشیو شد.")
+        log_action_async(
+            user_id=request.user.pk,
+            action=audit_actions.SUPPORT_KB_ARTICLE_ARCHIVED,
+            resource_type="support_knowledge_article",
+            resource_id=str(article.pk),
+            **extract_audit_metadata(request),
+        )
+        return SuccessResponse(
+            data=SupportKnowledgeArticleSerializer(article).data, message="مقاله آرشیو شد."
+        )
 
 
 class SupportAdminKnowledgeArticleUseView(APIView):
@@ -309,7 +462,12 @@ class SupportAdminKnowledgeArticleUseView(APIView):
 
     permission_classes = [IsSupportAdminUser]
 
-    @extend_schema(operation_id="support_admin_knowledge_article_use", tags=[TAG_SUPPORT_TAXONOMY], request=SupportKnowledgeArticleUseInputSerializer, responses={201: KNOWLEDGE_ARTICLE_USE_RESPONSE, 404: SUPPORT_ERROR_RESPONSE})
+    @extend_schema(
+        operation_id="support_admin_knowledge_article_use",
+        tags=[TAG_SUPPORT_TAXONOMY],
+        request=SupportKnowledgeArticleUseInputSerializer,
+        responses={201: KNOWLEDGE_ARTICLE_USE_RESPONSE, 404: SUPPORT_ERROR_RESPONSE},
+    )
     def post(self, request: Request, article_id: int) -> CreatedResponse | ErrorResponse:
         """Record article usage for analytics and audit."""
         article = selectors.get_admin_knowledge_article_by_id(article_id=article_id)
@@ -322,10 +480,30 @@ class SupportAdminKnowledgeArticleUseView(APIView):
         if ticket_number:
             ticket = selectors.get_admin_ticket_by_number(ticket_number=ticket_number)
             if ticket is None:
-                return ErrorResponse(message="تیکت یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
-        article_use = services.record_knowledge_article_use(article=article, user=request.user, ticket=ticket, context=serializer.validated_data.get("context", "reply"))
-        log_action_async(user_id=request.user.pk, action=audit_actions.SUPPORT_KB_ARTICLE_USED, resource_type="support_knowledge_article", resource_id=str(article.pk), extra_data={"ticket_number": ticket.ticket_number if ticket else "", "context": article_use.context}, **extract_audit_metadata(request))
-        return CreatedResponse(data=SupportKnowledgeArticleUseSerializer(article_use).data, message="استفاده از مقاله ثبت شد.")
+                return ErrorResponse(
+                    message="تیکت یافت نشد.", status_code=status.HTTP_404_NOT_FOUND
+                )
+        article_use = services.record_knowledge_article_use(
+            article=article,
+            user=request.user,
+            ticket=ticket,
+            context=serializer.validated_data.get("context", "reply"),
+        )
+        log_action_async(
+            user_id=request.user.pk,
+            action=audit_actions.SUPPORT_KB_ARTICLE_USED,
+            resource_type="support_knowledge_article",
+            resource_id=str(article.pk),
+            extra_data={
+                "ticket_number": ticket.ticket_number if ticket else "",
+                "context": article_use.context,
+            },
+            **extract_audit_metadata(request),
+        )
+        return CreatedResponse(
+            data=SupportKnowledgeArticleUseSerializer(article_use).data,
+            message="استفاده از مقاله ثبت شد.",
+        )
 
 
 class SupportTicketSuggestView(APIView):
@@ -334,13 +512,21 @@ class SupportTicketSuggestView(APIView):
     permission_classes = [IsAuthenticated]
     throttle_classes = [SupportSuggestThrottle]
 
-    @extend_schema(operation_id="support_user_tickets_suggest", tags=[TAG_SUPPORT_USER], request=SupportTicketSuggestSerializer, responses={200: TRIAGE_RESPONSE})
+    @extend_schema(
+        operation_id="support_user_tickets_suggest",
+        tags=[TAG_SUPPORT_USER],
+        request=SupportTicketSuggestSerializer,
+        responses={200: TRIAGE_RESPONSE},
+    )
     def post(self, request: Request) -> SuccessResponse:
         """Return smart triage suggestions and duplicate warning."""
         serializer = SupportTicketSuggestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         suggestion = services.suggest_ticket_triage(owner=request.user, **serializer.validated_data)
-        return SuccessResponse(data=SupportTriageSuggestionSerializer(suggestion).data, message="پیشنهاد هوشمند تریاژ دریافت شد.")
+        return SuccessResponse(
+            data=SupportTriageSuggestionSerializer(suggestion).data,
+            message="پیشنهاد هوشمند تریاژ دریافت شد.",
+        )
 
 
 class SupportUserTicketListCreateView(APIView):
@@ -354,7 +540,11 @@ class SupportUserTicketListCreateView(APIView):
             return [SupportTicketCreateThrottle()]
         return super().get_throttles()
 
-    @extend_schema(operation_id="support_user_tickets_list", tags=[TAG_SUPPORT_USER], responses={200: TICKET_LIST_RESPONSE})
+    @extend_schema(
+        operation_id="support_user_tickets_list",
+        tags=[TAG_SUPPORT_USER],
+        responses={200: TICKET_LIST_RESPONSE},
+    )
     def get(self, request: Request) -> Response:
         """Return current user's tickets."""
         queryset = selectors.get_user_tickets(user_id=request.user.pk)
@@ -363,9 +553,16 @@ class SupportUserTicketListCreateView(APIView):
             queryset = filterset.qs
         paginator = StandardPagination()
         page = paginator.paginate_queryset(queryset, request, view=self)
-        return paginator.get_paginated_response(SupportTicketListSerializer(page, many=True).data, message="لیست تیکت‌های شما دریافت شد.")
+        return paginator.get_paginated_response(
+            SupportTicketListSerializer(page, many=True).data, message="لیست تیکت‌های شما دریافت شد."
+        )
 
-    @extend_schema(operation_id="support_user_tickets_create", tags=[TAG_SUPPORT_USER], request=SupportTicketCreateUpdateSerializer, responses={201: TICKET_DETAIL_RESPONSE, 400: SUPPORT_ERROR_RESPONSE})
+    @extend_schema(
+        operation_id="support_user_tickets_create",
+        tags=[TAG_SUPPORT_USER],
+        request=SupportTicketCreateUpdateSerializer,
+        responses={201: TICKET_DETAIL_RESPONSE, 400: SUPPORT_ERROR_RESPONSE},
+    )
     def post(self, request: Request) -> CreatedResponse | ErrorResponse:
         """Create a draft ticket for current user."""
         serializer = SupportTicketCreateUpdateSerializer(data=request.data)
@@ -374,8 +571,17 @@ class SupportUserTicketListCreateView(APIView):
             ticket = services.create_ticket(owner=request.user, **serializer.validated_data)
         except services.SupportDeskServiceError as exc:
             return _service_error_response(exc)
-        log_action_async(user_id=request.user.pk, action=audit_actions.SUPPORT_TICKET_CREATED, resource_type="support_ticket", resource_id=ticket.ticket_number, **extract_audit_metadata(request))
-        return CreatedResponse(data=SupportTicketDetailSerializer(ticket).data, message="تیکت شما به‌صورت پیش‌نویس ساخته شد.")
+        log_action_async(
+            user_id=request.user.pk,
+            action=audit_actions.SUPPORT_TICKET_CREATED,
+            resource_type="support_ticket",
+            resource_id=ticket.ticket_number,
+            **extract_audit_metadata(request),
+        )
+        return CreatedResponse(
+            data=SupportTicketDetailSerializer(ticket).data,
+            message="تیکت شما به‌صورت پیش‌نویس ساخته شد.",
+        )
 
 
 class SupportUserTicketDetailView(APIView):
@@ -383,7 +589,11 @@ class SupportUserTicketDetailView(APIView):
 
     permission_classes = [IsAuthenticated]
 
-    @extend_schema(operation_id="support_user_tickets_retrieve", tags=[TAG_SUPPORT_USER], responses={200: TICKET_DETAIL_RESPONSE, 404: SUPPORT_ERROR_RESPONSE})
+    @extend_schema(
+        operation_id="support_user_tickets_retrieve",
+        tags=[TAG_SUPPORT_USER],
+        responses={200: TICKET_DETAIL_RESPONSE, 404: SUPPORT_ERROR_RESPONSE},
+    )
     def get(self, request: Request, ticket_number: str) -> SuccessResponse | ErrorResponse:
         """Return current user's ticket detail."""
         ticket, error = _get_user_ticket_or_error(request=request, ticket_number=ticket_number)
@@ -391,7 +601,16 @@ class SupportUserTicketDetailView(APIView):
             return error
         return SuccessResponse(data=SupportTicketDetailSerializer(ticket).data)
 
-    @extend_schema(operation_id="support_user_tickets_update", tags=[TAG_SUPPORT_USER], request=SupportTicketCreateUpdateSerializer, responses={200: TICKET_DETAIL_RESPONSE, 403: SUPPORT_ERROR_RESPONSE, 404: SUPPORT_ERROR_RESPONSE})
+    @extend_schema(
+        operation_id="support_user_tickets_update",
+        tags=[TAG_SUPPORT_USER],
+        request=SupportTicketCreateUpdateSerializer,
+        responses={
+            200: TICKET_DETAIL_RESPONSE,
+            403: SUPPORT_ERROR_RESPONSE,
+            404: SUPPORT_ERROR_RESPONSE,
+        },
+    )
     def patch(self, request: Request, ticket_number: str) -> SuccessResponse | ErrorResponse:
         """Update a draft ticket before submission."""
         ticket, error = _get_user_ticket_or_error(request=request, ticket_number=ticket_number)
@@ -400,11 +619,25 @@ class SupportUserTicketDetailView(APIView):
         serializer = SupportTicketCreateUpdateSerializer(data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         try:
-            ticket = services.update_draft_ticket(ticket=ticket, user=request.user, **serializer.validated_data)
-        except (services.SupportPermissionError, services.SupportTicketStateError, services.SupportDeskServiceError) as exc:
+            ticket = services.update_draft_ticket(
+                ticket=ticket, user=request.user, **serializer.validated_data
+            )
+        except (
+            services.SupportPermissionError,
+            services.SupportTicketStateError,
+            services.SupportDeskServiceError,
+        ) as exc:
             return _service_error_response(exc, status_code=status.HTTP_403_FORBIDDEN)
-        log_action_async(user_id=request.user.pk, action=audit_actions.SUPPORT_TICKET_UPDATED, resource_type="support_ticket", resource_id=ticket.ticket_number, **extract_audit_metadata(request))
-        return SuccessResponse(data=SupportTicketDetailSerializer(ticket).data, message="تیکت بروزرسانی شد.")
+        log_action_async(
+            user_id=request.user.pk,
+            action=audit_actions.SUPPORT_TICKET_UPDATED,
+            resource_type="support_ticket",
+            resource_id=ticket.ticket_number,
+            **extract_audit_metadata(request),
+        )
+        return SuccessResponse(
+            data=SupportTicketDetailSerializer(ticket).data, message="تیکت بروزرسانی شد."
+        )
 
 
 class SupportUserTicketSubmitView(APIView):
@@ -412,7 +645,16 @@ class SupportUserTicketSubmitView(APIView):
 
     permission_classes = [IsAuthenticated]
 
-    @extend_schema(operation_id="support_user_tickets_submit", tags=[TAG_SUPPORT_USER], request=None, responses={200: TICKET_DETAIL_RESPONSE, 403: SUPPORT_ERROR_RESPONSE, 404: SUPPORT_ERROR_RESPONSE})
+    @extend_schema(
+        operation_id="support_user_tickets_submit",
+        tags=[TAG_SUPPORT_USER],
+        request=None,
+        responses={
+            200: TICKET_DETAIL_RESPONSE,
+            403: SUPPORT_ERROR_RESPONSE,
+            404: SUPPORT_ERROR_RESPONSE,
+        },
+    )
     def post(self, request: Request, ticket_number: str) -> SuccessResponse | ErrorResponse:
         """Submit current user's draft ticket."""
         ticket, error = _get_user_ticket_or_error(request=request, ticket_number=ticket_number)
@@ -422,8 +664,16 @@ class SupportUserTicketSubmitView(APIView):
             ticket = services.submit_ticket(ticket=ticket, user=request.user)
         except (services.SupportPermissionError, services.SupportTicketStateError) as exc:
             return _service_error_response(exc, status_code=status.HTTP_403_FORBIDDEN)
-        log_action_async(user_id=request.user.pk, action=audit_actions.SUPPORT_TICKET_SUBMITTED, resource_type="support_ticket", resource_id=ticket.ticket_number, **extract_audit_metadata(request))
-        return SuccessResponse(data=SupportTicketDetailSerializer(ticket).data, message="تیکت برای بررسی ارسال شد.")
+        log_action_async(
+            user_id=request.user.pk,
+            action=audit_actions.SUPPORT_TICKET_SUBMITTED,
+            resource_type="support_ticket",
+            resource_id=ticket.ticket_number,
+            **extract_audit_metadata(request),
+        )
+        return SuccessResponse(
+            data=SupportTicketDetailSerializer(ticket).data, message="تیکت برای بررسی ارسال شد."
+        )
 
 
 class SupportUserTicketReplyView(APIView):
@@ -432,7 +682,18 @@ class SupportUserTicketReplyView(APIView):
     permission_classes = [IsAuthenticated]
     throttle_classes = [SupportTicketMessageThrottle]
 
-    @extend_schema(operation_id="support_user_tickets_reply", tags=[TAG_SUPPORT_USER], request=SupportTicketReplySerializer, responses={201: build_success_response_serializer(name="SupportTicketReplyResponse", data_serializer=SupportTicketMessageSerializer), 403: SUPPORT_ERROR_RESPONSE, 404: SUPPORT_ERROR_RESPONSE})
+    @extend_schema(
+        operation_id="support_user_tickets_reply",
+        tags=[TAG_SUPPORT_USER],
+        request=SupportTicketReplySerializer,
+        responses={
+            201: build_success_response_serializer(
+                name="SupportTicketReplyResponse", data_serializer=SupportTicketMessageSerializer
+            ),
+            403: SUPPORT_ERROR_RESPONSE,
+            404: SUPPORT_ERROR_RESPONSE,
+        },
+    )
     def post(self, request: Request, ticket_number: str) -> CreatedResponse | ErrorResponse:
         """Append a user reply to the public timeline."""
         ticket, error = _get_user_ticket_or_error(request=request, ticket_number=ticket_number)
@@ -441,11 +702,21 @@ class SupportUserTicketReplyView(APIView):
         serializer = SupportTicketReplySerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         try:
-            message = services.add_user_reply(ticket=ticket, user=request.user, **serializer.validated_data)
+            message = services.add_user_reply(
+                ticket=ticket, user=request.user, **serializer.validated_data
+            )
         except (services.SupportPermissionError, services.SupportTicketStateError) as exc:
             return _service_error_response(exc, status_code=status.HTTP_403_FORBIDDEN)
-        log_action_async(user_id=request.user.pk, action=audit_actions.SUPPORT_TICKET_REPLIED, resource_type="support_ticket", resource_id=ticket.ticket_number, **extract_audit_metadata(request))
-        return CreatedResponse(data=SupportTicketMessageSerializer(message).data, message="پاسخ شما ثبت شد.")
+        log_action_async(
+            user_id=request.user.pk,
+            action=audit_actions.SUPPORT_TICKET_REPLIED,
+            resource_type="support_ticket",
+            resource_id=ticket.ticket_number,
+            **extract_audit_metadata(request),
+        )
+        return CreatedResponse(
+            data=SupportTicketMessageSerializer(message).data, message="پاسخ شما ثبت شد."
+        )
 
 
 class SupportUserTicketTimelineView(APIView):
@@ -453,13 +724,21 @@ class SupportUserTicketTimelineView(APIView):
 
     permission_classes = [IsAuthenticated]
 
-    @extend_schema(operation_id="support_user_tickets_timeline", tags=[TAG_SUPPORT_USER], responses={200: MESSAGE_LIST_RESPONSE, 404: SUPPORT_ERROR_RESPONSE})
+    @extend_schema(
+        operation_id="support_user_tickets_timeline",
+        tags=[TAG_SUPPORT_USER],
+        responses={200: MESSAGE_LIST_RESPONSE, 404: SUPPORT_ERROR_RESPONSE},
+    )
     def get(self, request: Request, ticket_number: str) -> SuccessResponse | ErrorResponse:
         """Return public messages only; internal notes are never exposed."""
         ticket, error = _get_user_ticket_or_error(request=request, ticket_number=ticket_number)
         if error:
             return error
-        return SuccessResponse(data=SupportTicketMessageSerializer(selectors.get_user_ticket_timeline(ticket=ticket), many=True).data)
+        return SuccessResponse(
+            data=SupportTicketMessageSerializer(
+                selectors.get_user_ticket_timeline(ticket=ticket), many=True
+            ).data
+        )
 
 
 class SupportUserTicketAttachmentView(APIView):
@@ -468,7 +747,16 @@ class SupportUserTicketAttachmentView(APIView):
     permission_classes = [IsAuthenticated]
     throttle_classes = [SupportAttachmentUploadThrottle]
 
-    @extend_schema(operation_id="support_user_tickets_attachment_create", tags=[TAG_SUPPORT_USER], request=SupportTicketAttachmentCreateSerializer, responses={201: ATTACHMENT_RESPONSE, 403: SUPPORT_ERROR_RESPONSE, 404: SUPPORT_ERROR_RESPONSE})
+    @extend_schema(
+        operation_id="support_user_tickets_attachment_create",
+        tags=[TAG_SUPPORT_USER],
+        request=SupportTicketAttachmentCreateSerializer,
+        responses={
+            201: ATTACHMENT_RESPONSE,
+            403: SUPPORT_ERROR_RESPONSE,
+            404: SUPPORT_ERROR_RESPONSE,
+        },
+    )
     def post(self, request: Request, ticket_number: str) -> CreatedResponse | ErrorResponse:
         """Attach a validated public file to the ticket."""
         ticket, error = _get_user_ticket_or_error(request=request, ticket_number=ticket_number)
@@ -489,8 +777,17 @@ class SupportUserTicketAttachmentView(APIView):
             )
         except (services.SupportPermissionError, services.SupportTicketStateError) as exc:
             return _service_error_response(exc, status_code=status.HTTP_403_FORBIDDEN)
-        log_action_async(user_id=request.user.pk, action=audit_actions.SUPPORT_ATTACHMENT_ADDED, resource_type="support_ticket_attachment", resource_id=str(attachment.pk), extra_data={"ticket_number": ticket.ticket_number}, **extract_audit_metadata(request))
-        return CreatedResponse(data=SupportTicketAttachmentSerializer(attachment).data, message="ضمیمه تیکت ثبت شد.")
+        log_action_async(
+            user_id=request.user.pk,
+            action=audit_actions.SUPPORT_ATTACHMENT_ADDED,
+            resource_type="support_ticket_attachment",
+            resource_id=str(attachment.pk),
+            extra_data={"ticket_number": ticket.ticket_number},
+            **extract_audit_metadata(request),
+        )
+        return CreatedResponse(
+            data=SupportTicketAttachmentSerializer(attachment).data, message="ضمیمه تیکت ثبت شد."
+        )
 
 
 class SupportUserTicketReopenView(APIView):
@@ -498,7 +795,16 @@ class SupportUserTicketReopenView(APIView):
 
     permission_classes = [IsAuthenticated]
 
-    @extend_schema(operation_id="support_user_tickets_reopen", tags=[TAG_SUPPORT_USER], request=SupportTicketReopenSerializer, responses={200: TICKET_DETAIL_RESPONSE, 403: SUPPORT_ERROR_RESPONSE, 404: SUPPORT_ERROR_RESPONSE})
+    @extend_schema(
+        operation_id="support_user_tickets_reopen",
+        tags=[TAG_SUPPORT_USER],
+        request=SupportTicketReopenSerializer,
+        responses={
+            200: TICKET_DETAIL_RESPONSE,
+            403: SUPPORT_ERROR_RESPONSE,
+            404: SUPPORT_ERROR_RESPONSE,
+        },
+    )
     def post(self, request: Request, ticket_number: str) -> SuccessResponse | ErrorResponse:
         """Reopen ticket within the policy window."""
         ticket, error = _get_user_ticket_or_error(request=request, ticket_number=ticket_number)
@@ -507,11 +813,21 @@ class SupportUserTicketReopenView(APIView):
         serializer = SupportTicketReopenSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         try:
-            ticket = services.reopen_ticket(ticket=ticket, user=request.user, **serializer.validated_data)
+            ticket = services.reopen_ticket(
+                ticket=ticket, user=request.user, **serializer.validated_data
+            )
         except (services.SupportPermissionError, services.SupportTicketStateError) as exc:
             return _service_error_response(exc, status_code=status.HTTP_403_FORBIDDEN)
-        log_action_async(user_id=request.user.pk, action=audit_actions.SUPPORT_TICKET_REOPENED, resource_type="support_ticket", resource_id=ticket.ticket_number, **extract_audit_metadata(request))
-        return SuccessResponse(data=SupportTicketDetailSerializer(ticket).data, message="تیکت بازگشایی شد.")
+        log_action_async(
+            user_id=request.user.pk,
+            action=audit_actions.SUPPORT_TICKET_REOPENED,
+            resource_type="support_ticket",
+            resource_id=ticket.ticket_number,
+            **extract_audit_metadata(request),
+        )
+        return SuccessResponse(
+            data=SupportTicketDetailSerializer(ticket).data, message="تیکت بازگشایی شد."
+        )
 
 
 class SupportUserTicketSatisfactionView(APIView):
@@ -519,7 +835,16 @@ class SupportUserTicketSatisfactionView(APIView):
 
     permission_classes = [IsAuthenticated]
 
-    @extend_schema(operation_id="support_user_tickets_satisfaction", tags=[TAG_SUPPORT_USER], request=SupportTicketSatisfactionCreateSerializer, responses={201: build_success_response_serializer(name="SupportTicketSatisfactionResponse"), 403: SUPPORT_ERROR_RESPONSE, 404: SUPPORT_ERROR_RESPONSE})
+    @extend_schema(
+        operation_id="support_user_tickets_satisfaction",
+        tags=[TAG_SUPPORT_USER],
+        request=SupportTicketSatisfactionCreateSerializer,
+        responses={
+            201: build_success_response_serializer(name="SupportTicketSatisfactionResponse"),
+            403: SUPPORT_ERROR_RESPONSE,
+            404: SUPPORT_ERROR_RESPONSE,
+        },
+    )
     def post(self, request: Request, ticket_number: str) -> CreatedResponse | ErrorResponse:
         """Submit CSAT rating."""
         ticket, error = _get_user_ticket_or_error(request=request, ticket_number=ticket_number)
@@ -528,21 +853,54 @@ class SupportUserTicketSatisfactionView(APIView):
         serializer = SupportTicketSatisfactionCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         try:
-            satisfaction = services.submit_satisfaction(ticket=ticket, user=request.user, **serializer.validated_data)
-        except (services.SupportPermissionError, services.SupportTicketStateError, services.SupportDeskServiceError) as exc:
+            satisfaction = services.submit_satisfaction(
+                ticket=ticket, user=request.user, **serializer.validated_data
+            )
+        except (
+            services.SupportPermissionError,
+            services.SupportTicketStateError,
+            services.SupportDeskServiceError,
+        ) as exc:
             return _service_error_response(exc, status_code=status.HTTP_403_FORBIDDEN)
-        log_action_async(user_id=request.user.pk, action=audit_actions.SUPPORT_SATISFACTION_SUBMITTED, resource_type="support_ticket", resource_id=ticket.ticket_number, extra_data={"rating": satisfaction.rating}, **extract_audit_metadata(request))
-        return CreatedResponse(data={"ticket_number": ticket.ticket_number, "rating": satisfaction.rating}, message="امتیاز رضایت شما ثبت شد.")
+        log_action_async(
+            user_id=request.user.pk,
+            action=audit_actions.SUPPORT_SATISFACTION_SUBMITTED,
+            resource_type="support_ticket",
+            resource_id=ticket.ticket_number,
+            extra_data={"rating": satisfaction.rating},
+            **extract_audit_metadata(request),
+        )
+        return CreatedResponse(
+            data={"ticket_number": ticket.ticket_number, "rating": satisfaction.rating},
+            message="امتیاز رضایت شما ثبت شد.",
+        )
 
 
-ADMIN_TICKET_LIST_RESPONSE = build_paginated_success_response_serializer(name="SupportAdminTicketListResponse", item_serializer=SupportTicketListSerializer)
-ADMIN_TICKET_DETAIL_RESPONSE = build_success_response_serializer(name="SupportAdminTicketDetailResponse", data_serializer=SupportAdminTicketDetailSerializer)
-ADMIN_DEPARTMENT_RESPONSE = build_success_response_serializer(name="SupportAdminDepartmentResponse", data_serializer=SupportDepartmentSerializer)
-ADMIN_CATEGORY_RESPONSE = build_success_response_serializer(name="SupportAdminCategoryResponse", data_serializer=SupportCategorySerializer)
-ADMIN_TICKET_TYPE_RESPONSE = build_success_response_serializer(name="SupportAdminTicketTypeResponse", data_serializer=SupportTicketTypeSerializer)
-ADMIN_SLA_RESPONSE = build_success_response_serializer(name="SupportAdminSLAPolicyResponse", data_serializer=SupportSLAPolicySerializer)
-ADMIN_CANNED_RESPONSE = build_success_response_serializer(name="SupportAdminCannedResponseResponse", data_serializer=SupportCannedResponseSerializer)
-ADMIN_DUPLICATE_RESPONSE = build_success_response_serializer(name="SupportAdminDuplicateCandidateResponse", data_serializer=SupportDuplicateCandidateSerializer)
+ADMIN_TICKET_LIST_RESPONSE = build_paginated_success_response_serializer(
+    name="SupportAdminTicketListResponse", item_serializer=SupportTicketListSerializer
+)
+ADMIN_TICKET_DETAIL_RESPONSE = build_success_response_serializer(
+    name="SupportAdminTicketDetailResponse", data_serializer=SupportAdminTicketDetailSerializer
+)
+ADMIN_DEPARTMENT_RESPONSE = build_success_response_serializer(
+    name="SupportAdminDepartmentResponse", data_serializer=SupportDepartmentSerializer
+)
+ADMIN_CATEGORY_RESPONSE = build_success_response_serializer(
+    name="SupportAdminCategoryResponse", data_serializer=SupportCategorySerializer
+)
+ADMIN_TICKET_TYPE_RESPONSE = build_success_response_serializer(
+    name="SupportAdminTicketTypeResponse", data_serializer=SupportTicketTypeSerializer
+)
+ADMIN_SLA_RESPONSE = build_success_response_serializer(
+    name="SupportAdminSLAPolicyResponse", data_serializer=SupportSLAPolicySerializer
+)
+ADMIN_CANNED_RESPONSE = build_success_response_serializer(
+    name="SupportAdminCannedResponseResponse", data_serializer=SupportCannedResponseSerializer
+)
+ADMIN_DUPLICATE_RESPONSE = build_success_response_serializer(
+    name="SupportAdminDuplicateCandidateResponse",
+    data_serializer=SupportDuplicateCandidateSerializer,
+)
 
 
 class SupportAdminDepartmentListCreateView(APIView):
@@ -551,18 +909,38 @@ class SupportAdminDepartmentListCreateView(APIView):
     permission_classes = [IsSupportAdminUser]
     serializer_class = SupportDepartmentSerializer
 
-    @extend_schema(operation_id="support_admin_departments_list", tags=[TAG_SUPPORT_TAXONOMY], responses={200: build_success_response_serializer(name="SupportAdminDepartmentListResponse", data_serializer=SupportDepartmentSerializer, many=True)})
+    @extend_schema(
+        operation_id="support_admin_departments_list",
+        tags=[TAG_SUPPORT_TAXONOMY],
+        responses={
+            200: build_success_response_serializer(
+                name="SupportAdminDepartmentListResponse",
+                data_serializer=SupportDepartmentSerializer,
+                many=True,
+            )
+        },
+    )
     def get(self, request: Request) -> SuccessResponse:
         """Return all departments for admin taxonomy management."""
-        return SuccessResponse(data=SupportDepartmentSerializer(selectors.get_admin_departments(), many=True).data)
+        return SuccessResponse(
+            data=SupportDepartmentSerializer(selectors.get_admin_departments(), many=True).data
+        )
 
     def post(self, request: Request) -> CreatedResponse:
         """Create support department."""
         serializer = SupportDepartmentInputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         department = services.create_department(**serializer.validated_data)
-        log_action_async(user_id=request.user.pk, action=audit_actions.SUPPORT_DEPARTMENT_CREATED, resource_type="support_department", resource_id=str(department.pk), **extract_audit_metadata(request))
-        return CreatedResponse(data=SupportDepartmentSerializer(department).data, message="دپارتمان پشتیبانی ساخته شد.")
+        log_action_async(
+            user_id=request.user.pk,
+            action=audit_actions.SUPPORT_DEPARTMENT_CREATED,
+            resource_type="support_department",
+            resource_id=str(department.pk),
+            **extract_audit_metadata(request),
+        )
+        return CreatedResponse(
+            data=SupportDepartmentSerializer(department).data, message="دپارتمان پشتیبانی ساخته شد."
+        )
 
 
 class SupportAdminDepartmentDetailView(APIView):
@@ -571,36 +949,62 @@ class SupportAdminDepartmentDetailView(APIView):
     permission_classes = [IsSupportAdminUser]
     serializer_class = SupportDepartmentSerializer
 
-    @extend_schema(operation_id="support_admin_departments_retrieve", tags=[TAG_SUPPORT_TAXONOMY], responses={200: ADMIN_DEPARTMENT_RESPONSE, 404: SUPPORT_ERROR_RESPONSE})
+    @extend_schema(
+        operation_id="support_admin_departments_retrieve",
+        tags=[TAG_SUPPORT_TAXONOMY],
+        responses={200: ADMIN_DEPARTMENT_RESPONSE, 404: SUPPORT_ERROR_RESPONSE},
+    )
     def get(self, request: Request, department_id: int) -> SuccessResponse | ErrorResponse:
         """Return one department."""
         department = selectors.get_admin_department_by_id(department_id=department_id)
         if department is None:
-            return ErrorResponse(message="دپارتمان یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+            return ErrorResponse(
+                message="دپارتمان یافت نشد.", status_code=status.HTTP_404_NOT_FOUND
+            )
         return SuccessResponse(data=SupportDepartmentSerializer(department).data)
 
     def patch(self, request: Request, department_id: int) -> SuccessResponse | ErrorResponse:
         """Update department."""
         department = selectors.get_admin_department_by_id(department_id=department_id)
         if department is None:
-            return ErrorResponse(message="دپارتمان یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+            return ErrorResponse(
+                message="دپارتمان یافت نشد.", status_code=status.HTTP_404_NOT_FOUND
+            )
         serializer = SupportDepartmentInputSerializer(data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         department = services.update_department(department=department, **serializer.validated_data)
-        log_action_async(user_id=request.user.pk, action=audit_actions.SUPPORT_DEPARTMENT_UPDATED, resource_type="support_department", resource_id=str(department.pk), **extract_audit_metadata(request))
-        return SuccessResponse(data=SupportDepartmentSerializer(department).data, message="دپارتمان بروزرسانی شد.")
+        log_action_async(
+            user_id=request.user.pk,
+            action=audit_actions.SUPPORT_DEPARTMENT_UPDATED,
+            resource_type="support_department",
+            resource_id=str(department.pk),
+            **extract_audit_metadata(request),
+        )
+        return SuccessResponse(
+            data=SupportDepartmentSerializer(department).data, message="دپارتمان بروزرسانی شد."
+        )
 
     def delete(self, request: Request, department_id: int) -> SuccessResponse | ErrorResponse:
         """Deactivate department safely."""
         department = selectors.get_admin_department_by_id(department_id=department_id)
         if department is None:
-            return ErrorResponse(message="دپارتمان یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+            return ErrorResponse(
+                message="دپارتمان یافت نشد.", status_code=status.HTTP_404_NOT_FOUND
+            )
         try:
             department = services.deactivate_department(department=department)
         except services.SupportDeskServiceError as exc:
             return _service_error_response(exc)
-        log_action_async(user_id=request.user.pk, action=audit_actions.SUPPORT_DEPARTMENT_DEACTIVATED, resource_type="support_department", resource_id=str(department.pk), **extract_audit_metadata(request))
-        return SuccessResponse(data=SupportDepartmentSerializer(department).data, message="دپارتمان غیرفعال شد.")
+        log_action_async(
+            user_id=request.user.pk,
+            action=audit_actions.SUPPORT_DEPARTMENT_DEACTIVATED,
+            resource_type="support_department",
+            resource_id=str(department.pk),
+            **extract_audit_metadata(request),
+        )
+        return SuccessResponse(
+            data=SupportDepartmentSerializer(department).data, message="دپارتمان غیرفعال شد."
+        )
 
 
 class SupportAdminCategoryListCreateView(APIView):
@@ -611,7 +1015,9 @@ class SupportAdminCategoryListCreateView(APIView):
 
     def get(self, request: Request) -> SuccessResponse:
         """Return all categories for admin tree management."""
-        return SuccessResponse(data=SupportCategorySerializer(selectors.get_admin_category_tree(), many=True).data)
+        return SuccessResponse(
+            data=SupportCategorySerializer(selectors.get_admin_category_tree(), many=True).data
+        )
 
     def post(self, request: Request) -> CreatedResponse | ErrorResponse:
         """Create support category."""
@@ -621,8 +1027,16 @@ class SupportAdminCategoryListCreateView(APIView):
             category = services.create_category(**serializer.validated_data)
         except services.SupportTaxonomyTreeError as exc:
             return _service_error_response(exc)
-        log_action_async(user_id=request.user.pk, action=audit_actions.SUPPORT_CATEGORY_CREATED, resource_type="support_category", resource_id=str(category.pk), **extract_audit_metadata(request))
-        return CreatedResponse(data=SupportCategorySerializer(category).data, message="دسته‌بندی پشتیبانی ساخته شد.")
+        log_action_async(
+            user_id=request.user.pk,
+            action=audit_actions.SUPPORT_CATEGORY_CREATED,
+            resource_type="support_category",
+            resource_id=str(category.pk),
+            **extract_audit_metadata(request),
+        )
+        return CreatedResponse(
+            data=SupportCategorySerializer(category).data, message="دسته‌بندی پشتیبانی ساخته شد."
+        )
 
 
 class SupportAdminCategoryDetailView(APIView):
@@ -635,27 +1049,47 @@ class SupportAdminCategoryDetailView(APIView):
         """Update category tree node."""
         category = selectors.get_admin_category_by_id(category_id=category_id)
         if category is None:
-            return ErrorResponse(message="دسته‌بندی یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+            return ErrorResponse(
+                message="دسته‌بندی یافت نشد.", status_code=status.HTTP_404_NOT_FOUND
+            )
         serializer = SupportCategoryInputSerializer(data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         try:
             category = services.update_category(category=category, **serializer.validated_data)
         except services.SupportTaxonomyTreeError as exc:
             return _service_error_response(exc)
-        log_action_async(user_id=request.user.pk, action=audit_actions.SUPPORT_CATEGORY_UPDATED, resource_type="support_category", resource_id=str(category.pk), **extract_audit_metadata(request))
-        return SuccessResponse(data=SupportCategorySerializer(category).data, message="دسته‌بندی بروزرسانی شد.")
+        log_action_async(
+            user_id=request.user.pk,
+            action=audit_actions.SUPPORT_CATEGORY_UPDATED,
+            resource_type="support_category",
+            resource_id=str(category.pk),
+            **extract_audit_metadata(request),
+        )
+        return SuccessResponse(
+            data=SupportCategorySerializer(category).data, message="دسته‌بندی بروزرسانی شد."
+        )
 
     def delete(self, request: Request, category_id: int) -> SuccessResponse | ErrorResponse:
         """Deactivate category safely."""
         category = selectors.get_admin_category_by_id(category_id=category_id)
         if category is None:
-            return ErrorResponse(message="دسته‌بندی یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+            return ErrorResponse(
+                message="دسته‌بندی یافت نشد.", status_code=status.HTTP_404_NOT_FOUND
+            )
         try:
             category = services.deactivate_category(category=category)
         except services.SupportTaxonomyTreeError as exc:
             return _service_error_response(exc)
-        log_action_async(user_id=request.user.pk, action=audit_actions.SUPPORT_CATEGORY_DEACTIVATED, resource_type="support_category", resource_id=str(category.pk), **extract_audit_metadata(request))
-        return SuccessResponse(data=SupportCategorySerializer(category).data, message="دسته‌بندی غیرفعال شد.")
+        log_action_async(
+            user_id=request.user.pk,
+            action=audit_actions.SUPPORT_CATEGORY_DEACTIVATED,
+            resource_type="support_category",
+            resource_id=str(category.pk),
+            **extract_audit_metadata(request),
+        )
+        return SuccessResponse(
+            data=SupportCategorySerializer(category).data, message="دسته‌بندی غیرفعال شد."
+        )
 
 
 class SupportAdminTicketTypeListCreateView(APIView):
@@ -666,7 +1100,9 @@ class SupportAdminTicketTypeListCreateView(APIView):
 
     def get(self, request: Request) -> SuccessResponse:
         """Return ticket types."""
-        return SuccessResponse(data=SupportTicketTypeSerializer(selectors.get_admin_ticket_types(), many=True).data)
+        return SuccessResponse(
+            data=SupportTicketTypeSerializer(selectors.get_admin_ticket_types(), many=True).data
+        )
 
     def post(self, request: Request) -> CreatedResponse | ErrorResponse:
         """Create ticket type."""
@@ -676,8 +1112,16 @@ class SupportAdminTicketTypeListCreateView(APIView):
             ticket_type = services.create_ticket_type(**serializer.validated_data)
         except services.SupportDeskServiceError as exc:
             return _service_error_response(exc)
-        log_action_async(user_id=request.user.pk, action=audit_actions.SUPPORT_TICKET_TYPE_CREATED, resource_type="support_ticket_type", resource_id=str(ticket_type.pk), **extract_audit_metadata(request))
-        return CreatedResponse(data=SupportTicketTypeSerializer(ticket_type).data, message="نوع تیکت ساخته شد.")
+        log_action_async(
+            user_id=request.user.pk,
+            action=audit_actions.SUPPORT_TICKET_TYPE_CREATED,
+            resource_type="support_ticket_type",
+            resource_id=str(ticket_type.pk),
+            **extract_audit_metadata(request),
+        )
+        return CreatedResponse(
+            data=SupportTicketTypeSerializer(ticket_type).data, message="نوع تیکت ساخته شد."
+        )
 
 
 class SupportAdminTicketTypeDetailView(APIView):
@@ -690,15 +1134,27 @@ class SupportAdminTicketTypeDetailView(APIView):
         """Update ticket type."""
         ticket_type = selectors.get_admin_ticket_type_by_id(ticket_type_id=ticket_type_id)
         if ticket_type is None:
-            return ErrorResponse(message="نوع تیکت یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+            return ErrorResponse(
+                message="نوع تیکت یافت نشد.", status_code=status.HTTP_404_NOT_FOUND
+            )
         serializer = SupportTicketTypeInputSerializer(data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         try:
-            ticket_type = services.update_ticket_type(ticket_type=ticket_type, **serializer.validated_data)
+            ticket_type = services.update_ticket_type(
+                ticket_type=ticket_type, **serializer.validated_data
+            )
         except services.SupportDeskServiceError as exc:
             return _service_error_response(exc)
-        log_action_async(user_id=request.user.pk, action=audit_actions.SUPPORT_TICKET_TYPE_UPDATED, resource_type="support_ticket_type", resource_id=str(ticket_type.pk), **extract_audit_metadata(request))
-        return SuccessResponse(data=SupportTicketTypeSerializer(ticket_type).data, message="نوع تیکت بروزرسانی شد.")
+        log_action_async(
+            user_id=request.user.pk,
+            action=audit_actions.SUPPORT_TICKET_TYPE_UPDATED,
+            resource_type="support_ticket_type",
+            resource_id=str(ticket_type.pk),
+            **extract_audit_metadata(request),
+        )
+        return SuccessResponse(
+            data=SupportTicketTypeSerializer(ticket_type).data, message="نوع تیکت بروزرسانی شد."
+        )
 
 
 class SupportAdminBusinessCalendarListCreateView(APIView):
@@ -709,14 +1165,20 @@ class SupportAdminBusinessCalendarListCreateView(APIView):
 
     def get(self, request: Request) -> SuccessResponse:
         """Return business calendars."""
-        return SuccessResponse(data=SupportBusinessCalendarSerializer(selectors.get_admin_business_calendars(), many=True).data)
+        return SuccessResponse(
+            data=SupportBusinessCalendarSerializer(
+                selectors.get_admin_business_calendars(), many=True
+            ).data
+        )
 
     def post(self, request: Request) -> CreatedResponse:
         """Create business calendar."""
         serializer = SupportBusinessCalendarInputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         calendar = services.create_business_calendar(**serializer.validated_data)
-        return CreatedResponse(data=SupportBusinessCalendarSerializer(calendar).data, message="تقویم کاری ساخته شد.")
+        return CreatedResponse(
+            data=SupportBusinessCalendarSerializer(calendar).data, message="تقویم کاری ساخته شد."
+        )
 
 
 class SupportAdminBusinessCalendarDetailView(APIView):
@@ -729,11 +1191,16 @@ class SupportAdminBusinessCalendarDetailView(APIView):
         """Update business calendar."""
         calendar = selectors.get_admin_business_calendar_by_id(calendar_id=calendar_id)
         if calendar is None:
-            return ErrorResponse(message="تقویم کاری یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+            return ErrorResponse(
+                message="تقویم کاری یافت نشد.", status_code=status.HTTP_404_NOT_FOUND
+            )
         serializer = SupportBusinessCalendarInputSerializer(data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         calendar = services.update_business_calendar(calendar=calendar, **serializer.validated_data)
-        return SuccessResponse(data=SupportBusinessCalendarSerializer(calendar).data, message="تقویم کاری بروزرسانی شد.")
+        return SuccessResponse(
+            data=SupportBusinessCalendarSerializer(calendar).data,
+            message="تقویم کاری بروزرسانی شد.",
+        )
 
 
 class SupportAdminHolidayListCreateView(APIView):
@@ -744,14 +1211,18 @@ class SupportAdminHolidayListCreateView(APIView):
 
     def get(self, request: Request) -> SuccessResponse:
         """Return support holidays."""
-        return SuccessResponse(data=SupportHolidaySerializer(selectors.get_admin_holidays(), many=True).data)
+        return SuccessResponse(
+            data=SupportHolidaySerializer(selectors.get_admin_holidays(), many=True).data
+        )
 
     def post(self, request: Request) -> CreatedResponse:
         """Create support holiday."""
         serializer = SupportHolidayInputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         holiday = services.create_holiday(**serializer.validated_data)
-        return CreatedResponse(data=SupportHolidaySerializer(holiday).data, message="تعطیلی پشتیبانی ثبت شد.")
+        return CreatedResponse(
+            data=SupportHolidaySerializer(holiday).data, message="تعطیلی پشتیبانی ثبت شد."
+        )
 
 
 class SupportAdminHolidayDetailView(APIView):
@@ -768,7 +1239,9 @@ class SupportAdminHolidayDetailView(APIView):
         serializer = SupportHolidayInputSerializer(data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         holiday = services.update_holiday(holiday=holiday, **serializer.validated_data)
-        return SuccessResponse(data=SupportHolidaySerializer(holiday).data, message="تعطیلی بروزرسانی شد.")
+        return SuccessResponse(
+            data=SupportHolidaySerializer(holiday).data, message="تعطیلی بروزرسانی شد."
+        )
 
 
 class SupportAdminSLAPolicyListCreateView(APIView):
@@ -779,15 +1252,25 @@ class SupportAdminSLAPolicyListCreateView(APIView):
 
     def get(self, request: Request) -> SuccessResponse:
         """Return SLA policies."""
-        return SuccessResponse(data=SupportSLAPolicySerializer(selectors.get_admin_sla_policies(), many=True).data)
+        return SuccessResponse(
+            data=SupportSLAPolicySerializer(selectors.get_admin_sla_policies(), many=True).data
+        )
 
     def post(self, request: Request) -> CreatedResponse:
         """Create SLA policy."""
         serializer = SupportSLAPolicyInputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         policy = services.create_sla_policy(**serializer.validated_data)
-        log_action_async(user_id=request.user.pk, action=audit_actions.SUPPORT_SLA_POLICY_CREATED, resource_type="support_sla_policy", resource_id=str(policy.pk), **extract_audit_metadata(request))
-        return CreatedResponse(data=SupportSLAPolicySerializer(policy).data, message="سیاست SLA ساخته شد.")
+        log_action_async(
+            user_id=request.user.pk,
+            action=audit_actions.SUPPORT_SLA_POLICY_CREATED,
+            resource_type="support_sla_policy",
+            resource_id=str(policy.pk),
+            **extract_audit_metadata(request),
+        )
+        return CreatedResponse(
+            data=SupportSLAPolicySerializer(policy).data, message="سیاست SLA ساخته شد."
+        )
 
 
 class SupportAdminSLAPolicyDetailView(APIView):
@@ -800,12 +1283,22 @@ class SupportAdminSLAPolicyDetailView(APIView):
         """Update SLA policy."""
         policy = selectors.get_admin_sla_policy_by_id(policy_id=policy_id)
         if policy is None:
-            return ErrorResponse(message="سیاست SLA یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+            return ErrorResponse(
+                message="سیاست SLA یافت نشد.", status_code=status.HTTP_404_NOT_FOUND
+            )
         serializer = SupportSLAPolicyInputSerializer(data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         policy = services.update_sla_policy(policy=policy, **serializer.validated_data)
-        log_action_async(user_id=request.user.pk, action=audit_actions.SUPPORT_SLA_POLICY_UPDATED, resource_type="support_sla_policy", resource_id=str(policy.pk), **extract_audit_metadata(request))
-        return SuccessResponse(data=SupportSLAPolicySerializer(policy).data, message="سیاست SLA بروزرسانی شد.")
+        log_action_async(
+            user_id=request.user.pk,
+            action=audit_actions.SUPPORT_SLA_POLICY_UPDATED,
+            resource_type="support_sla_policy",
+            resource_id=str(policy.pk),
+            **extract_audit_metadata(request),
+        )
+        return SuccessResponse(
+            data=SupportSLAPolicySerializer(policy).data, message="سیاست SLA بروزرسانی شد."
+        )
 
 
 class SupportAdminCannedResponseListCreateView(APIView):
@@ -816,7 +1309,11 @@ class SupportAdminCannedResponseListCreateView(APIView):
 
     def get(self, request: Request) -> SuccessResponse:
         """Return canned responses."""
-        return SuccessResponse(data=SupportCannedResponseSerializer(selectors.get_admin_canned_responses(), many=True).data)
+        return SuccessResponse(
+            data=SupportCannedResponseSerializer(
+                selectors.get_admin_canned_responses(), many=True
+            ).data
+        )
 
     def post(self, request: Request) -> CreatedResponse | ErrorResponse:
         """Create canned response."""
@@ -826,8 +1323,16 @@ class SupportAdminCannedResponseListCreateView(APIView):
             canned = services.create_canned_response(**serializer.validated_data)
         except services.SupportDeskServiceError as exc:
             return _service_error_response(exc)
-        log_action_async(user_id=request.user.pk, action=audit_actions.SUPPORT_CANNED_RESPONSE_CREATED, resource_type="support_canned_response", resource_id=str(canned.pk), **extract_audit_metadata(request))
-        return CreatedResponse(data=SupportCannedResponseSerializer(canned).data, message="پاسخ آماده ساخته شد.")
+        log_action_async(
+            user_id=request.user.pk,
+            action=audit_actions.SUPPORT_CANNED_RESPONSE_CREATED,
+            resource_type="support_canned_response",
+            resource_id=str(canned.pk),
+            **extract_audit_metadata(request),
+        )
+        return CreatedResponse(
+            data=SupportCannedResponseSerializer(canned).data, message="پاسخ آماده ساخته شد."
+        )
 
 
 class SupportAdminCannedResponseDetailView(APIView):
@@ -840,14 +1345,20 @@ class SupportAdminCannedResponseDetailView(APIView):
         """Update canned response."""
         canned = selectors.get_admin_canned_response_by_id(canned_response_id=canned_response_id)
         if canned is None:
-            return ErrorResponse(message="پاسخ آماده یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+            return ErrorResponse(
+                message="پاسخ آماده یافت نشد.", status_code=status.HTTP_404_NOT_FOUND
+            )
         serializer = SupportCannedResponseInputSerializer(data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         try:
-            canned = services.update_canned_response(canned_response=canned, **serializer.validated_data)
+            canned = services.update_canned_response(
+                canned_response=canned, **serializer.validated_data
+            )
         except services.SupportDeskServiceError as exc:
             return _service_error_response(exc)
-        return SuccessResponse(data=SupportCannedResponseSerializer(canned).data, message="پاسخ آماده بروزرسانی شد.")
+        return SuccessResponse(
+            data=SupportCannedResponseSerializer(canned).data, message="پاسخ آماده بروزرسانی شد."
+        )
 
 
 class SupportAdminCannedResponseUseView(APIView):
@@ -860,10 +1371,21 @@ class SupportAdminCannedResponseUseView(APIView):
         """Mark canned response as used."""
         canned = selectors.get_admin_canned_response_by_id(canned_response_id=canned_response_id)
         if canned is None:
-            return ErrorResponse(message="پاسخ آماده یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+            return ErrorResponse(
+                message="پاسخ آماده یافت نشد.", status_code=status.HTTP_404_NOT_FOUND
+            )
         canned = services.use_canned_response(canned_response=canned)
-        log_action_async(user_id=request.user.pk, action=audit_actions.SUPPORT_CANNED_RESPONSE_USED, resource_type="support_canned_response", resource_id=str(canned.pk), **extract_audit_metadata(request))
-        return SuccessResponse(data=SupportCannedResponseSerializer(canned).data, message="استفاده از پاسخ آماده ثبت شد.")
+        log_action_async(
+            user_id=request.user.pk,
+            action=audit_actions.SUPPORT_CANNED_RESPONSE_USED,
+            resource_type="support_canned_response",
+            resource_id=str(canned.pk),
+            **extract_audit_metadata(request),
+        )
+        return SuccessResponse(
+            data=SupportCannedResponseSerializer(canned).data,
+            message="استفاده از پاسخ آماده ثبت شد.",
+        )
 
 
 class SupportAdminTicketListView(APIView):
@@ -872,16 +1394,21 @@ class SupportAdminTicketListView(APIView):
     permission_classes = [IsSupportAdminUser]
     serializer_class = SupportTicketListSerializer
 
-    @extend_schema(operation_id="support_admin_tickets_list", tags=[TAG_SUPPORT_USER], responses={200: ADMIN_TICKET_LIST_RESPONSE})
+    @extend_schema(
+        operation_id="support_admin_tickets_list",
+        tags=[TAG_SUPPORT_USER],
+        responses={200: ADMIN_TICKET_LIST_RESPONSE},
+    )
     def get(self, request: Request) -> Response:
         """Return filtered admin ticket queue."""
-        queryset = selectors.get_admin_tickets()
-        filterset = SupportAdminTicketFilter(request.query_params, queryset=queryset)
-        if filterset.is_valid():
-            queryset = filterset.qs
-        paginator = StandardPagination()
-        page = paginator.paginate_queryset(queryset, request, view=self)
-        return paginator.get_paginated_response(SupportTicketListSerializer(page, many=True).data)
+        return paginated_list_response(
+            request=request,
+            view=self,
+            queryset=selectors.get_admin_tickets(),
+            serializer_class=SupportTicketListSerializer,
+            pagination_class=StandardPagination,
+            filterset_class=SupportAdminTicketFilter,
+        )
 
 
 class SupportAdminTicketDetailView(APIView):
@@ -890,7 +1417,11 @@ class SupportAdminTicketDetailView(APIView):
     permission_classes = [IsSupportAdminUser]
     serializer_class = SupportAdminTicketDetailSerializer
 
-    @extend_schema(operation_id="support_admin_tickets_retrieve", tags=[TAG_SUPPORT_USER], responses={200: ADMIN_TICKET_DETAIL_RESPONSE, 404: SUPPORT_ERROR_RESPONSE})
+    @extend_schema(
+        operation_id="support_admin_tickets_retrieve",
+        tags=[TAG_SUPPORT_USER],
+        responses={200: ADMIN_TICKET_DETAIL_RESPONSE, 404: SUPPORT_ERROR_RESPONSE},
+    )
     def get(self, request: Request, ticket_number: str) -> SuccessResponse | ErrorResponse:
         """Return ticket with internal timeline."""
         ticket = selectors.get_admin_ticket_by_number(ticket_number=ticket_number)
@@ -913,11 +1444,21 @@ class SupportAdminTicketReplyView(APIView):
         serializer = SupportTicketReplySerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         try:
-            message = services.add_admin_reply(ticket=ticket, admin=request.user, **serializer.validated_data)
+            message = services.add_admin_reply(
+                ticket=ticket, admin=request.user, **serializer.validated_data
+            )
         except (services.SupportPermissionError, services.SupportTicketStateError) as exc:
             return _service_error_response(exc, status_code=status.HTTP_403_FORBIDDEN)
-        log_action_async(user_id=request.user.pk, action=audit_actions.SUPPORT_TICKET_REPLIED, resource_type="support_ticket", resource_id=ticket.ticket_number, **extract_audit_metadata(request))
-        return CreatedResponse(data=SupportAdminTicketMessageSerializer(message).data, message="پاسخ ادمین ثبت شد.")
+        log_action_async(
+            user_id=request.user.pk,
+            action=audit_actions.SUPPORT_TICKET_REPLIED,
+            resource_type="support_ticket",
+            resource_id=ticket.ticket_number,
+            **extract_audit_metadata(request),
+        )
+        return CreatedResponse(
+            data=SupportAdminTicketMessageSerializer(message).data, message="پاسخ ادمین ثبت شد."
+        )
 
 
 class SupportAdminTicketInternalNoteView(APIView):
@@ -933,9 +1474,19 @@ class SupportAdminTicketInternalNoteView(APIView):
             return ErrorResponse(message="تیکت یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
         serializer = SupportTicketReplySerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        message = services.add_internal_note(ticket=ticket, admin=request.user, **serializer.validated_data)
-        log_action_async(user_id=request.user.pk, action=audit_actions.SUPPORT_TICKET_INTERNAL_NOTE_ADDED, resource_type="support_ticket", resource_id=ticket.ticket_number, **extract_audit_metadata(request))
-        return CreatedResponse(data=SupportAdminTicketMessageSerializer(message).data, message="یادداشت داخلی ثبت شد.")
+        message = services.add_internal_note(
+            ticket=ticket, admin=request.user, **serializer.validated_data
+        )
+        log_action_async(
+            user_id=request.user.pk,
+            action=audit_actions.SUPPORT_TICKET_INTERNAL_NOTE_ADDED,
+            resource_type="support_ticket",
+            resource_id=ticket.ticket_number,
+            **extract_audit_metadata(request),
+        )
+        return CreatedResponse(
+            data=SupportAdminTicketMessageSerializer(message).data, message="یادداشت داخلی ثبت شد."
+        )
 
 
 class SupportAdminTicketAssignView(APIView):
@@ -951,9 +1502,19 @@ class SupportAdminTicketAssignView(APIView):
             return ErrorResponse(message="تیکت یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
         serializer = SupportAdminAssignSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        ticket = services.assign_ticket(ticket=ticket, admin=request.user, **serializer.validated_data)
-        log_action_async(user_id=request.user.pk, action=audit_actions.SUPPORT_TICKET_ASSIGNED, resource_type="support_ticket", resource_id=ticket.ticket_number, **extract_audit_metadata(request))
-        return SuccessResponse(data=SupportAdminTicketDetailSerializer(ticket).data, message="تیکت ارجاع شد.")
+        ticket = services.assign_ticket(
+            ticket=ticket, admin=request.user, **serializer.validated_data
+        )
+        log_action_async(
+            user_id=request.user.pk,
+            action=audit_actions.SUPPORT_TICKET_ASSIGNED,
+            resource_type="support_ticket",
+            resource_id=ticket.ticket_number,
+            **extract_audit_metadata(request),
+        )
+        return SuccessResponse(
+            data=SupportAdminTicketDetailSerializer(ticket).data, message="تیکت ارجاع شد."
+        )
 
 
 class SupportAdminTicketAssignmentRecommendationView(APIView):
@@ -979,7 +1540,10 @@ class SupportAdminTicketAssignmentRecommendationView(APIView):
             action=audit_actions.SUPPORT_ASSIGNMENT_RECOMMENDED,
             resource_type="support_ticket",
             resource_id=ticket.ticket_number,
-            extra_data={"recommended_assignee_id": payload["recommended_assignee_id"], "policy_version": payload["policy_version"]},
+            extra_data={
+                "recommended_assignee_id": payload["recommended_assignee_id"],
+                "policy_version": payload["policy_version"],
+            },
             **extract_audit_metadata(request),
         )
         return SuccessResponse(data=payload, message="پیشنهاد ارجاع تیکت با موفقیت تولید شد.")
@@ -995,7 +1559,11 @@ class SupportAdminTicketAutoAssignView(APIView):
         operation_id="support_admin_ticket_auto_assign",
         tags=[TAG_SUPPORT_USER],
         request=SupportAdminAssignSerializer,
-        responses={200: TICKET_DETAIL_RESPONSE, 400: SUPPORT_ERROR_RESPONSE, 404: SUPPORT_ERROR_RESPONSE},
+        responses={
+            200: TICKET_DETAIL_RESPONSE,
+            400: SUPPORT_ERROR_RESPONSE,
+            404: SUPPORT_ERROR_RESPONSE,
+        },
     )
     def post(self, request: Request, ticket_number: str) -> SuccessResponse | ErrorResponse:
         """Auto-assign ticket to the least-loaded support admin."""
@@ -1021,10 +1589,15 @@ class SupportAdminTicketAutoAssignView(APIView):
             extra_data={"auto_assigned": True, "assigned_to_id": ticket.assigned_to_id},
             **extract_audit_metadata(request),
         )
-        return SuccessResponse(data=SupportAdminTicketDetailSerializer(ticket).data, message="تیکت به‌صورت خودکار ارجاع شد.")
+        return SuccessResponse(
+            data=SupportAdminTicketDetailSerializer(ticket).data,
+            message="تیکت به‌صورت خودکار ارجاع شد.",
+        )
 
 
-def _serialize_assignment_recommendation(recommendation: services.SupportAssignmentRecommendation) -> dict:
+def _serialize_assignment_recommendation(
+    recommendation: services.SupportAssignmentRecommendation,
+) -> dict:
     """Serialize assignment recommendation without leaking unnecessary user fields."""
     assignee = recommendation.recommended_assignee
     return {
@@ -1037,7 +1610,9 @@ def _serialize_assignment_recommendation(recommendation: services.SupportAssignm
             {
                 "user_id": candidate.user.pk,
                 "user_email": getattr(candidate.user, "email", "") or "",
-                "user_display_name": getattr(candidate.user, "full_name", "") or getattr(candidate.user, "email", "") or f"user#{candidate.user.pk}",
+                "user_display_name": getattr(candidate.user, "full_name", "")
+                or getattr(candidate.user, "email", "")
+                or f"user#{candidate.user.pk}",
                 "workload_score": candidate.workload_score,
                 "open_tickets": candidate.open_tickets,
                 "urgent_or_critical_tickets": candidate.urgent_or_critical_tickets,
@@ -1074,7 +1649,10 @@ class SupportAdminTicketSmartReplyView(APIView):
             action=audit_actions.SUPPORT_SMART_REPLY_SUGGESTED,
             resource_type="support_ticket",
             resource_id=ticket.ticket_number,
-            extra_data={"suggestions_count": len(payload["suggestions"]), "policy_version": payload["policy_version"]},
+            extra_data={
+                "suggestions_count": len(payload["suggestions"]),
+                "policy_version": payload["policy_version"],
+            },
             **extract_audit_metadata(request),
         )
         return SuccessResponse(data=payload, message="پیشنهادهای پاسخ هوشمند با موفقیت تولید شد.")
@@ -1090,7 +1668,14 @@ class SupportAdminTicketSmartReplyUseView(APIView):
         operation_id="support_admin_ticket_smart_reply_use",
         tags=[TAG_SUPPORT_USER],
         request=SupportSmartReplyUseSerializer,
-        responses={201: build_success_response_serializer(name="SupportSmartReplyUseResponse", data_serializer=SupportAdminTicketMessageSerializer), 403: SUPPORT_ERROR_RESPONSE, 404: SUPPORT_ERROR_RESPONSE},
+        responses={
+            201: build_success_response_serializer(
+                name="SupportSmartReplyUseResponse",
+                data_serializer=SupportAdminTicketMessageSerializer,
+            ),
+            403: SUPPORT_ERROR_RESPONSE,
+            404: SUPPORT_ERROR_RESPONSE,
+        },
     )
     def post(self, request: Request, ticket_number: str) -> CreatedResponse | ErrorResponse:
         """Send reviewed smart reply body as an admin reply and audit source metadata."""
@@ -1100,7 +1685,9 @@ class SupportAdminTicketSmartReplyUseView(APIView):
         serializer = SupportSmartReplyUseSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         try:
-            message = services.add_admin_reply(ticket=ticket, admin=request.user, body=serializer.validated_data["body"])
+            message = services.add_admin_reply(
+                ticket=ticket, admin=request.user, body=serializer.validated_data["body"]
+            )
         except (services.SupportPermissionError, services.SupportTicketStateError) as exc:
             return _service_error_response(exc, status_code=status.HTTP_403_FORBIDDEN)
         source_type = serializer.validated_data.get("source_type", "")
@@ -1108,17 +1695,32 @@ class SupportAdminTicketSmartReplyUseView(APIView):
         if source_type == "knowledge_article" and source_id:
             article = selectors.get_admin_knowledge_article_by_id(article_id=source_id)
             if article is not None:
-                services.record_knowledge_article_use(article=article, user=request.user, ticket=ticket, context="smart_reply")
+                services.record_knowledge_article_use(
+                    article=article, user=request.user, ticket=ticket, context="smart_reply"
+                )
         log_action_async(
             user_id=request.user.pk,
             action=audit_actions.SUPPORT_SMART_REPLY_USED,
             resource_type="support_ticket",
             resource_id=ticket.ticket_number,
-            extra_data={"source_type": source_type, "source_id": source_id, "message_id": message.pk},
+            extra_data={
+                "source_type": source_type,
+                "source_id": source_id,
+                "message_id": message.pk,
+            },
             **extract_audit_metadata(request),
         )
-        log_action_async(user_id=request.user.pk, action=audit_actions.SUPPORT_TICKET_REPLIED, resource_type="support_ticket", resource_id=ticket.ticket_number, **extract_audit_metadata(request))
-        return CreatedResponse(data=SupportAdminTicketMessageSerializer(message).data, message="پاسخ هوشمند بازبینی‌شده ارسال شد.")
+        log_action_async(
+            user_id=request.user.pk,
+            action=audit_actions.SUPPORT_TICKET_REPLIED,
+            resource_type="support_ticket",
+            resource_id=ticket.ticket_number,
+            **extract_audit_metadata(request),
+        )
+        return CreatedResponse(
+            data=SupportAdminTicketMessageSerializer(message).data,
+            message="پاسخ هوشمند بازبینی‌شده ارسال شد.",
+        )
 
 
 def _serialize_smart_reply_bundle(bundle: services.SupportSmartReplyBundle) -> dict:
@@ -1154,9 +1756,19 @@ class SupportAdminTicketStatusView(APIView):
             return ErrorResponse(message="تیکت یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
         serializer = SupportAdminStatusSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        ticket = services.change_ticket_status(ticket=ticket, admin=request.user, **serializer.validated_data)
-        log_action_async(user_id=request.user.pk, action=audit_actions.SUPPORT_TICKET_STATUS_CHANGED, resource_type="support_ticket", resource_id=ticket.ticket_number, **extract_audit_metadata(request))
-        return SuccessResponse(data=SupportAdminTicketDetailSerializer(ticket).data, message="وضعیت تیکت تغییر کرد.")
+        ticket = services.change_ticket_status(
+            ticket=ticket, admin=request.user, **serializer.validated_data
+        )
+        log_action_async(
+            user_id=request.user.pk,
+            action=audit_actions.SUPPORT_TICKET_STATUS_CHANGED,
+            resource_type="support_ticket",
+            resource_id=ticket.ticket_number,
+            **extract_audit_metadata(request),
+        )
+        return SuccessResponse(
+            data=SupportAdminTicketDetailSerializer(ticket).data, message="وضعیت تیکت تغییر کرد."
+        )
 
 
 class SupportAdminTicketEscalateView(APIView):
@@ -1172,9 +1784,21 @@ class SupportAdminTicketEscalateView(APIView):
             return ErrorResponse(message="تیکت یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
         serializer = SupportAdminReasonSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        ticket = services.escalate_ticket(ticket=ticket, admin=request.user, reason=serializer.validated_data.get("reason", "ارجاع فوری"))
-        log_action_async(user_id=request.user.pk, action=audit_actions.SUPPORT_TICKET_ESCALATED, resource_type="support_ticket", resource_id=ticket.ticket_number, **extract_audit_metadata(request))
-        return SuccessResponse(data=SupportAdminTicketDetailSerializer(ticket).data, message="تیکت ارجاع فوری شد.")
+        ticket = services.escalate_ticket(
+            ticket=ticket,
+            admin=request.user,
+            reason=serializer.validated_data.get("reason", "ارجاع فوری"),
+        )
+        log_action_async(
+            user_id=request.user.pk,
+            action=audit_actions.SUPPORT_TICKET_ESCALATED,
+            resource_type="support_ticket",
+            resource_id=ticket.ticket_number,
+            **extract_audit_metadata(request),
+        )
+        return SuccessResponse(
+            data=SupportAdminTicketDetailSerializer(ticket).data, message="تیکت ارجاع فوری شد."
+        )
 
 
 class SupportAdminTicketCloseView(APIView):
@@ -1191,11 +1815,23 @@ class SupportAdminTicketCloseView(APIView):
         serializer = SupportAdminReasonSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         try:
-            ticket = services.close_ticket(ticket=ticket, actor=request.user, reason=serializer.validated_data.get("reason", ""))
+            ticket = services.close_ticket(
+                ticket=ticket,
+                actor=request.user,
+                reason=serializer.validated_data.get("reason", ""),
+            )
         except (services.SupportPermissionError, services.SupportTicketStateError) as exc:
             return _service_error_response(exc, status_code=status.HTTP_403_FORBIDDEN)
-        log_action_async(user_id=request.user.pk, action=audit_actions.SUPPORT_TICKET_CLOSED, resource_type="support_ticket", resource_id=ticket.ticket_number, **extract_audit_metadata(request))
-        return SuccessResponse(data=SupportAdminTicketDetailSerializer(ticket).data, message="تیکت بسته شد.")
+        log_action_async(
+            user_id=request.user.pk,
+            action=audit_actions.SUPPORT_TICKET_CLOSED,
+            resource_type="support_ticket",
+            resource_id=ticket.ticket_number,
+            **extract_audit_metadata(request),
+        )
+        return SuccessResponse(
+            data=SupportAdminTicketDetailSerializer(ticket).data, message="تیکت بسته شد."
+        )
 
 
 class SupportAdminDuplicateCandidateListView(APIView):
@@ -1206,13 +1842,14 @@ class SupportAdminDuplicateCandidateListView(APIView):
 
     def get(self, request: Request) -> Response:
         """Return duplicate candidates."""
-        queryset = selectors.get_admin_duplicate_candidates()
-        filterset = SupportDuplicateCandidateAdminFilter(request.query_params, queryset=queryset)
-        if filterset.is_valid():
-            queryset = filterset.qs
-        paginator = StandardPagination()
-        page = paginator.paginate_queryset(queryset, request, view=self)
-        return paginator.get_paginated_response(SupportDuplicateCandidateSerializer(page, many=True).data)
+        return paginated_list_response(
+            request=request,
+            view=self,
+            queryset=selectors.get_admin_duplicate_candidates(),
+            serializer_class=SupportDuplicateCandidateSerializer,
+            pagination_class=StandardPagination,
+            filterset_class=SupportDuplicateCandidateAdminFilter,
+        )
 
 
 class SupportAdminDuplicateCandidateReviewView(APIView):
@@ -1225,15 +1862,30 @@ class SupportAdminDuplicateCandidateReviewView(APIView):
         """Review duplicate candidate."""
         duplicate = selectors.get_admin_duplicate_candidate_by_id(duplicate_id=duplicate_id)
         if duplicate is None:
-            return ErrorResponse(message="کاندیدای تکراری یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+            return ErrorResponse(
+                message="کاندیدای تکراری یافت نشد.", status_code=status.HTTP_404_NOT_FOUND
+            )
         serializer = SupportDuplicateReviewSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        duplicate = services.review_duplicate_candidate(duplicate=duplicate, admin=request.user, **serializer.validated_data)
-        log_action_async(user_id=request.user.pk, action=audit_actions.SUPPORT_DUPLICATE_REVIEWED, resource_type="support_duplicate_candidate", resource_id=str(duplicate.pk), **extract_audit_metadata(request))
-        return SuccessResponse(data=SupportDuplicateCandidateSerializer(duplicate).data, message="وضعیت کاندیدای تکراری بروزرسانی شد.")
+        duplicate = services.review_duplicate_candidate(
+            duplicate=duplicate, admin=request.user, **serializer.validated_data
+        )
+        log_action_async(
+            user_id=request.user.pk,
+            action=audit_actions.SUPPORT_DUPLICATE_REVIEWED,
+            resource_type="support_duplicate_candidate",
+            resource_id=str(duplicate.pk),
+            **extract_audit_metadata(request),
+        )
+        return SuccessResponse(
+            data=SupportDuplicateCandidateSerializer(duplicate).data,
+            message="وضعیت کاندیدای تکراری بروزرسانی شد.",
+        )
 
 
-ADMIN_ANALYTICS_RESPONSE = build_success_response_serializer(name="SupportAdminAnalyticsResponse", data_serializer=SupportAdminAnalyticsSerializer)
+ADMIN_ANALYTICS_RESPONSE = build_success_response_serializer(
+    name="SupportAdminAnalyticsResponse", data_serializer=SupportAdminAnalyticsSerializer
+)
 
 
 class SupportAdminAnalyticsView(APIView):
@@ -1242,10 +1894,17 @@ class SupportAdminAnalyticsView(APIView):
     permission_classes = [IsSupportAdminUser]
     serializer_class = SupportAdminAnalyticsSerializer
 
-    @extend_schema(operation_id="support_admin_analytics", tags=[TAG_SUPPORT_USER], responses={200: ADMIN_ANALYTICS_RESPONSE})
+    @extend_schema(
+        operation_id="support_admin_analytics",
+        tags=[TAG_SUPPORT_USER],
+        responses={200: ADMIN_ANALYTICS_RESPONSE},
+    )
     def get(self, request: Request) -> SuccessResponse:
         """Return support desk analytics summary."""
-        return SuccessResponse(data=services.get_admin_analytics_summary(), message="گزارش تحلیلی میز پشتیبانی دریافت شد.")
+        return SuccessResponse(
+            data=services.get_admin_analytics_summary(),
+            message="گزارش تحلیلی میز پشتیبانی دریافت شد.",
+        )
 
 
 class SupportAdminTicketExportView(APIView):
@@ -1253,7 +1912,9 @@ class SupportAdminTicketExportView(APIView):
 
     permission_classes = [IsSupportAdminUser]
 
-    @extend_schema(operation_id="support_admin_export_tickets", tags=[TAG_SUPPORT_USER], responses={200: None})
+    @extend_schema(
+        operation_id="support_admin_export_tickets", tags=[TAG_SUPPORT_USER], responses={200: None}
+    )
     def get(self, request: Request) -> HttpResponse:
         """Export filtered ticket queue as an RTL Excel workbook."""
         queryset = selectors.get_admin_tickets()
@@ -1262,8 +1923,18 @@ class SupportAdminTicketExportView(APIView):
             queryset = filterset.qs
         workbook = build_tickets_workbook(tickets=queryset)
         filename = build_support_export_filename(export_type="tickets")
-        log_action_async(user_id=request.user.pk, action=audit_actions.SUPPORT_EXPORT_GENERATED, resource_type="support_ticket", resource_id="bulk", extra_data={"filename": filename, "export_type": "tickets"}, **extract_audit_metadata(request))
-        response = HttpResponse(workbook.getvalue(), content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        log_action_async(
+            user_id=request.user.pk,
+            action=audit_actions.SUPPORT_EXPORT_GENERATED,
+            resource_type="support_ticket",
+            resource_id="bulk",
+            extra_data={"filename": filename, "export_type": "tickets"},
+            **extract_audit_metadata(request),
+        )
+        response = HttpResponse(
+            workbook.getvalue(),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
         response["Content-Disposition"] = f'attachment; filename="{filename}"'
         return response
 
@@ -1273,13 +1944,25 @@ class SupportAdminMessageExportView(APIView):
 
     permission_classes = [IsSupportAdminUser]
 
-    @extend_schema(operation_id="support_admin_export_messages", tags=[TAG_SUPPORT_USER], responses={200: None})
+    @extend_schema(
+        operation_id="support_admin_export_messages", tags=[TAG_SUPPORT_USER], responses={200: None}
+    )
     def get(self, request: Request) -> HttpResponse:
         """Export timeline messages as an RTL Excel workbook."""
         workbook = build_messages_workbook(messages=selectors.get_admin_messages())
         filename = build_support_export_filename(export_type="messages")
-        log_action_async(user_id=request.user.pk, action=audit_actions.SUPPORT_EXPORT_GENERATED, resource_type="support_ticket_message", resource_id="bulk", extra_data={"filename": filename, "export_type": "messages"}, **extract_audit_metadata(request))
-        response = HttpResponse(workbook.getvalue(), content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        log_action_async(
+            user_id=request.user.pk,
+            action=audit_actions.SUPPORT_EXPORT_GENERATED,
+            resource_type="support_ticket_message",
+            resource_id="bulk",
+            extra_data={"filename": filename, "export_type": "messages"},
+            **extract_audit_metadata(request),
+        )
+        response = HttpResponse(
+            workbook.getvalue(),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
         response["Content-Disposition"] = f'attachment; filename="{filename}"'
         return response
 
@@ -1289,13 +1972,25 @@ class SupportAdminSLAExportView(APIView):
 
     permission_classes = [IsSupportAdminUser]
 
-    @extend_schema(operation_id="support_admin_export_sla", tags=[TAG_SUPPORT_USER], responses={200: None})
+    @extend_schema(
+        operation_id="support_admin_export_sla", tags=[TAG_SUPPORT_USER], responses={200: None}
+    )
     def get(self, request: Request) -> HttpResponse:
         """Export SLA ticket data as an RTL Excel workbook."""
         workbook = build_sla_workbook(tickets=selectors.get_admin_sla_tickets())
         filename = build_support_export_filename(export_type="sla")
-        log_action_async(user_id=request.user.pk, action=audit_actions.SUPPORT_EXPORT_GENERATED, resource_type="support_sla", resource_id="bulk", extra_data={"filename": filename, "export_type": "sla"}, **extract_audit_metadata(request))
-        response = HttpResponse(workbook.getvalue(), content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        log_action_async(
+            user_id=request.user.pk,
+            action=audit_actions.SUPPORT_EXPORT_GENERATED,
+            resource_type="support_sla",
+            resource_id="bulk",
+            extra_data={"filename": filename, "export_type": "sla"},
+            **extract_audit_metadata(request),
+        )
+        response = HttpResponse(
+            workbook.getvalue(),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
         response["Content-Disposition"] = f'attachment; filename="{filename}"'
         return response
 
@@ -1305,12 +2000,24 @@ class SupportAdminCSATExportView(APIView):
 
     permission_classes = [IsSupportAdminUser]
 
-    @extend_schema(operation_id="support_admin_export_csat", tags=[TAG_SUPPORT_USER], responses={200: None})
+    @extend_schema(
+        operation_id="support_admin_export_csat", tags=[TAG_SUPPORT_USER], responses={200: None}
+    )
     def get(self, request: Request) -> HttpResponse:
         """Export CSAT data as an RTL Excel workbook."""
         workbook = build_csat_workbook(ratings=selectors.get_admin_satisfaction_ratings())
         filename = build_support_export_filename(export_type="csat")
-        log_action_async(user_id=request.user.pk, action=audit_actions.SUPPORT_EXPORT_GENERATED, resource_type="support_csat", resource_id="bulk", extra_data={"filename": filename, "export_type": "csat"}, **extract_audit_metadata(request))
-        response = HttpResponse(workbook.getvalue(), content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        log_action_async(
+            user_id=request.user.pk,
+            action=audit_actions.SUPPORT_EXPORT_GENERATED,
+            resource_type="support_csat",
+            resource_id="bulk",
+            extra_data={"filename": filename, "export_type": "csat"},
+            **extract_audit_metadata(request),
+        )
+        response = HttpResponse(
+            workbook.getvalue(),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
         response["Content-Disposition"] = f'attachment; filename="{filename}"'
         return response

@@ -28,7 +28,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from decouple import config
+from django.conf import settings
 from django.core.cache import cache
 
 logger = logging.getLogger("apps.authentication")
@@ -74,17 +74,30 @@ def is_honeypot_triggered(data: dict[str, Any] | None) -> bool:
 # Global anomaly guard
 # ============================================================
 
-# پیکربندی: قابل override از env
-_GLOBAL_OTP_GUARD_THRESHOLD = config(
-    "AUTH_OTP_GLOBAL_THRESHOLD",
-    default=1000,
-    cast=int,
-)
-_GLOBAL_OTP_GUARD_WINDOW_SECONDS = config(
-    "AUTH_OTP_GLOBAL_WINDOW_SECONDS",
-    default=60,
-    cast=int,
-)
+# پیکربندی گارد سراسری.
+#
+# قبلاً این دو مقدار مستقیماً و *در زمان import ماژول* از env خوانده می‌شدند.
+# سه پیامد داشت:
+#
+#   ۱. `AUTH_OTP_GLOBAL_THRESHOLD` که در production.py به‌عنوان Django setting
+#      تعریف شده بود، عملاً هرگز خوانده نمی‌شد — یک dead config تمام‌عیار.
+#   ۲. پیش‌فرض‌ها ناسازگار بودند: ۵۰۰ در production.py و ۱۰۰۰ اینجا. آنچه
+#      واقعاً اعمال می‌شد ۱۰۰۰ بود، یعنی گارد دو برابر شل‌تر از چیزی که
+#      اپراتور فکر می‌کرد پیکربندی کرده است.
+#   ۳. خواندن در زمان import یعنی نه `override_settings` در تست کار می‌کرد و
+#      نه تغییر مقدار در runtime.
+#
+# حالا تنها مرجع، Django settings است و مقدار در زمان فراخوانی خوانده می‌شود.
+_GLOBAL_OTP_GUARD_DEFAULTS = {
+    "AUTH_OTP_GLOBAL_THRESHOLD": 500,
+    "AUTH_OTP_GLOBAL_WINDOW_SECONDS": 60,
+}
+
+
+def _guard_setting(name: str) -> int:
+    """Read a global-guard tunable from settings at call time."""
+    return int(getattr(settings, name, _GLOBAL_OTP_GUARD_DEFAULTS[name]))
+
 
 # نام کلید cache برای global counter
 _GLOBAL_OTP_GUARD_CACHE_KEY = "auth:otp:global_counter"
@@ -100,6 +113,9 @@ def is_global_otp_guard_tripped() -> bool:
     Fail-open: اگر Redis قطع باشد، False برمی‌گرداند (یعنی عبور می‌دهد)
     ولی WARNING log می‌زند.
     """
+    threshold = _guard_setting("AUTH_OTP_GLOBAL_THRESHOLD")
+    window_seconds = _guard_setting("AUTH_OTP_GLOBAL_WINDOW_SECONDS")
+
     try:
         # incr atomic در Django cache backend (Redis یا LocMem)
         # اگر کلید وجود نداشت، اول 1 ست می‌کنیم با ttl پنجره.
@@ -109,7 +125,7 @@ def is_global_otp_guard_tripped() -> bool:
             cache.set(
                 _GLOBAL_OTP_GUARD_CACHE_KEY,
                 1,
-                timeout=_GLOBAL_OTP_GUARD_WINDOW_SECONDS,
+                timeout=window_seconds,
             )
             counter = 1
         else:
@@ -120,16 +136,16 @@ def is_global_otp_guard_tripped() -> bool:
                 cache.set(
                     _GLOBAL_OTP_GUARD_CACHE_KEY,
                     1,
-                    timeout=_GLOBAL_OTP_GUARD_WINDOW_SECONDS,
+                    timeout=window_seconds,
                 )
                 counter = 1
 
-        if counter > _GLOBAL_OTP_GUARD_THRESHOLD:
+        if counter > threshold:
             logger.warning(
                 "Global OTP guard TRIPPED at counter=%d threshold=%d window=%ds",
                 counter,
-                _GLOBAL_OTP_GUARD_THRESHOLD,
-                _GLOBAL_OTP_GUARD_WINDOW_SECONDS,
+                threshold,
+                window_seconds,
             )
             return True
 

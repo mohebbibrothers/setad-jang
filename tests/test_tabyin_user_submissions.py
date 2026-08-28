@@ -80,7 +80,10 @@ class TestUserTabyinSubmissionFlow:
         assert content.external_id.startswith("local-")
 
         mock_task.delay.assert_called_once()
-        assert mock_task.delay.call_args.kwargs["action"] == audit_actions.TABYIN_USER_SUBMISSION_SUBMITTED
+        assert (
+            mock_task.delay.call_args.kwargs["action"]
+            == audit_actions.TABYIN_USER_SUBMISSION_SUBMITTED
+        )
 
     def test_anonymous_user_cannot_submit_content(self) -> None:
         response = APIClient().post(

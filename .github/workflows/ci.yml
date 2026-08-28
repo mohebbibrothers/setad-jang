@@ -81,6 +81,9 @@ jobs:
       - name: Ruff lint
         run: make lint
 
+      - name: Ruff format check
+        run: make format-check
+
       - name: Django system check
         run: make check
 
@@ -90,7 +93,10 @@ jobs:
       - name: Migration drift check
         run: make migrations-check
 
-      - name: OpenAPI schema validation
+      - name: STRUCTURE.md drift check
+        run: make structure-check
+
+      - name: OpenAPI schema validation and drift check
         run: make schema-check SCHEMA_OUTPUT=schema-ci.yaml
 
       - name: Test suite with coverage gate

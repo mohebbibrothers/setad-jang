@@ -36,19 +36,23 @@ def _decorator_names(module, function_name: str) -> list[str]:
     """Return decorator names on a top-level function, via AST."""
     tree = ast.parse(inspect.getsource(module))
     node = next(
-        item for item in tree.body
+        item
+        for item in tree.body
         if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and item.name == function_name
     )
     names = []
     for decorator in node.decorator_list:
         target = decorator.func if isinstance(decorator, ast.Call) else decorator
-        names.append(target.attr if isinstance(target, ast.Attribute) else getattr(target, "id", "?"))
+        names.append(
+            target.attr if isinstance(target, ast.Attribute) else getattr(target, "id", "?")
+        )
     return names
 
 
 # ===========================================================================
 # 4.1 — cache key flooding via arbitrary query params
 # ===========================================================================
+
 
 class TestCacheKeyBounding:
     """The public cache key must be bounded and canonical."""
@@ -62,7 +66,9 @@ class TestCacheKeyBounding:
 
         request = Request(RequestFactory().get(f"/x?{query}"), parsers=[JSONParser()])
         filterset = CampaignPublicFilter(request.query_params, queryset=None)
-        return build_cache_variant(request, filterset=filterset, pagination_class=StandardPagination)
+        return build_cache_variant(
+            request, filterset=filterset, pagination_class=StandardPagination
+        )
 
     def test_unknown_query_params_do_not_create_new_cache_keys(self) -> None:
         """The classic flooding attack must collapse to a single key."""
@@ -123,6 +129,7 @@ class TestCacheKeyBounding:
 # 4.2 — production must refuse to boot on a per-process cache
 # ===========================================================================
 
+
 class TestProductionCacheFailFast:
     """Production settings must reject non-shared cache backends."""
 
@@ -168,6 +175,7 @@ class TestProductionCacheFailFast:
 # 4.3 — gunicorn worker model
 # ===========================================================================
 
+
 class TestGunicornConfiguration:
     """The container command must survive blocking I/O and deploys."""
 
@@ -203,6 +211,7 @@ class TestGunicornConfiguration:
 # 4.4 — notification fan-out
 # ===========================================================================
 
+
 @pytest.mark.django_db
 class TestNotificationFanOut:
     """Notification creation must not scale queries with recipient count."""
@@ -217,9 +226,19 @@ class TestNotificationFanOut:
         large = [UserFactory() for _ in range(40)]
 
         with CaptureQueriesContext(connection) as small_ctx:
-            create_notification_event(event_type="fanout.small", recipients=small, channels=channels, payload={"title": "t"})
+            create_notification_event(
+                event_type="fanout.small",
+                recipients=small,
+                channels=channels,
+                payload={"title": "t"},
+            )
         with CaptureQueriesContext(connection) as large_ctx:
-            create_notification_event(event_type="fanout.large", recipients=large, channels=channels, payload={"title": "t"})
+            create_notification_event(
+                event_type="fanout.large",
+                recipients=large,
+                channels=channels,
+                payload={"title": "t"},
+            )
 
         assert len(small_ctx.captured_queries) == len(large_ctx.captured_queries)
         assert len(large_ctx.captured_queries) <= 12
@@ -231,7 +250,9 @@ class TestNotificationFanOut:
 
         allowed = UserFactory()
         muted = UserFactory()
-        set_preference(user=muted, event_type="pref.check", channel=NotificationChannel.IN_APP, enabled=False)
+        set_preference(
+            user=muted, event_type="pref.check", channel=NotificationChannel.IN_APP, enabled=False
+        )
 
         event = create_notification_event(
             event_type="pref.check",
@@ -293,7 +314,10 @@ class TestNotificationFanOut:
             channels=[NotificationChannel.IN_APP],
             payload={"title": "t"},
         )
-        with patch("apps.notifications.services.get_notification_provider", side_effect=RuntimeError("boom")):
+        with patch(
+            "apps.notifications.services.get_notification_provider",
+            side_effect=RuntimeError("boom"),
+        ):
             dispatch_event(event=event)
 
         delivery = event.deliveries.get()
@@ -319,6 +343,7 @@ class TestNotificationFanOut:
 # ===========================================================================
 # 4.5 — command center
 # ===========================================================================
+
 
 @pytest.mark.django_db
 class TestCommandCenter:
@@ -380,6 +405,7 @@ class TestCommandCenter:
 # 4.6 — JWT blacklist growth
 # ===========================================================================
 
+
 @pytest.mark.django_db
 class TestExpiredTokenFlush:
     """Rotated refresh tokens must be garbage collected."""
@@ -398,13 +424,18 @@ class TestExpiredTokenFlush:
         user = UserFactory()
         now = timezone.now()
         expired = OutstandingToken.objects.create(
-            user=user, jti="expired-1", token="t1",
+            user=user,
+            jti="expired-1",
+            token="t1",
             created_at=now - timezone.timedelta(days=30),
             expires_at=now - timezone.timedelta(days=1),
         )
         alive = OutstandingToken.objects.create(
-            user=user, jti="alive-1", token="t2",
-            created_at=now, expires_at=now + timezone.timedelta(days=7),
+            user=user,
+            jti="alive-1",
+            token="t2",
+            created_at=now,
+            expires_at=now + timezone.timedelta(days=7),
         )
 
         result = flush_expired_jwt_tokens_task()
@@ -421,19 +452,25 @@ class TestExpiredTokenFlush:
 
         user = UserFactory()
         now = timezone.now()
-        OutstandingToken.objects.bulk_create([
-            OutstandingToken(
-                user=user, jti=f"e{index}", token=f"t{index}",
-                created_at=now - timezone.timedelta(days=30),
-                expires_at=now - timezone.timedelta(days=1),
-            )
-            for index in range(10)
-        ])
+        OutstandingToken.objects.bulk_create(
+            [
+                OutstandingToken(
+                    user=user,
+                    jti=f"e{index}",
+                    token=f"t{index}",
+                    created_at=now - timezone.timedelta(days=30),
+                    expires_at=now - timezone.timedelta(days=1),
+                )
+                for index in range(10)
+            ]
+        )
 
         with CaptureQueriesContext(connection) as ctx:
             result = flush_expired_jwt_tokens_task(batch_size=2, max_batches=100)
 
-        deletes = [q for q in ctx.captured_queries if q["sql"].lstrip().upper().startswith("DELETE")]
+        deletes = [
+            q for q in ctx.captured_queries if q["sql"].lstrip().upper().startswith("DELETE")
+        ]
         assert result["deleted_outstanding"] == 10
         assert len(deletes) > 1
 
@@ -445,14 +482,18 @@ class TestExpiredTokenFlush:
 
         user = UserFactory()
         now = timezone.now()
-        OutstandingToken.objects.bulk_create([
-            OutstandingToken(
-                user=user, jti=f"c{index}", token=f"t{index}",
-                created_at=now - timezone.timedelta(days=30),
-                expires_at=now - timezone.timedelta(days=1),
-            )
-            for index in range(6)
-        ])
+        OutstandingToken.objects.bulk_create(
+            [
+                OutstandingToken(
+                    user=user,
+                    jti=f"c{index}",
+                    token=f"t{index}",
+                    created_at=now - timezone.timedelta(days=30),
+                    expires_at=now - timezone.timedelta(days=1),
+                )
+                for index in range(6)
+            ]
+        )
 
         result = flush_expired_jwt_tokens_task(batch_size=2, max_batches=1)
         assert result["deleted_outstanding"] == 2
@@ -462,6 +503,7 @@ class TestExpiredTokenFlush:
 # ===========================================================================
 # 4.7 — Excel exports
 # ===========================================================================
+
 
 @pytest.mark.django_db
 class TestStreamingExcelExports:
@@ -534,6 +576,7 @@ class TestStreamingExcelExports:
 # 4.8 — Flower exposure
 # ===========================================================================
 
+
 class TestFlowerHardening:
     """The Celery dashboard leaks task arguments and can control workers."""
 
@@ -564,6 +607,7 @@ class TestFlowerHardening:
 # 4.9 — Celery delivery guarantees
 # ===========================================================================
 
+
 class TestCeleryDeliveryGuarantees:
     """Financial and audit tasks must not vanish when a worker dies."""
 
@@ -585,6 +629,7 @@ class TestCeleryDeliveryGuarantees:
 # 4.10 — campaign counter recomputation
 # ===========================================================================
 
+
 @pytest.mark.django_db
 class TestCampaignCounterRecompute:
     """Recomputation stays source-of-truth, but must not scan rows in Python."""
@@ -597,20 +642,25 @@ class TestCampaignCounterRecompute:
         from tests.factories.madadkar import PublishedCampaignFactory
 
         campaign = PublishedCampaignFactory()
-        CampaignFinancialAdjustment.objects.bulk_create([
-            CampaignFinancialAdjustment(
-                campaign=campaign, amount=100,
-                adjustment_type=FinancialAdjustmentType.CREDIT,
-                status=FinancialAdjustmentStatus.APPLIED, reason=f"r{index}",
-            )
-            for index in range(25)
-        ])
+        CampaignFinancialAdjustment.objects.bulk_create(
+            [
+                CampaignFinancialAdjustment(
+                    campaign=campaign,
+                    amount=100,
+                    adjustment_type=FinancialAdjustmentType.CREDIT,
+                    status=FinancialAdjustmentStatus.APPLIED,
+                    reason=f"r{index}",
+                )
+                for index in range(25)
+            ]
+        )
 
         with CaptureQueriesContext(connection) as ctx:
             _sync_campaign_counters(campaign=campaign)
 
         adjustment_reads = [
-            query["sql"] for query in ctx.captured_queries
+            query["sql"]
+            for query in ctx.captured_queries
             if "financialadjustment" in query["sql"].lower()
         ]
         assert len(adjustment_reads) == 1
@@ -630,7 +680,8 @@ class TestCampaignCounterRecompute:
         # فقط کوئری‌هایی که *از* جدول مشارکت می‌خوانند؛ کوئری refund هم به آن
         # JOIN می‌زند ولی FROM آن جدول دیگری است.
         participation_reads = [
-            query["sql"] for query in ctx.captured_queries
+            query["sql"]
+            for query in ctx.captured_queries
             if 'FROM "madadkar_participation"' in query["sql"]
         ]
         assert len(participation_reads) == 1
@@ -648,14 +699,18 @@ class TestCampaignCounterRecompute:
         baseline = participation.total_amount
 
         CampaignFinancialAdjustment.objects.create(
-            campaign=campaign, amount=5_000,
+            campaign=campaign,
+            amount=5_000,
             adjustment_type=FinancialAdjustmentType.CREDIT,
-            status=FinancialAdjustmentStatus.APPLIED, reason="credit",
+            status=FinancialAdjustmentStatus.APPLIED,
+            reason="credit",
         )
         CampaignFinancialAdjustment.objects.create(
-            campaign=campaign, amount=2_000,
+            campaign=campaign,
+            amount=2_000,
             adjustment_type=FinancialAdjustmentType.DEBIT,
-            status=FinancialAdjustmentStatus.APPLIED, reason="debit",
+            status=FinancialAdjustmentStatus.APPLIED,
+            reason="debit",
         )
         _sync_campaign_counters(campaign=campaign)
         campaign.refresh_from_db()
@@ -671,9 +726,11 @@ class TestCampaignCounterRecompute:
         campaign = PublishedCampaignFactory()
         participation = PaidParticipationFactory(campaign=campaign)
         CampaignFinancialAdjustment.objects.create(
-            campaign=campaign, amount=9_999,
+            campaign=campaign,
+            amount=9_999,
             adjustment_type=FinancialAdjustmentType.CREDIT,
-            status=FinancialAdjustmentStatus.PENDING_REVIEW, reason="pending",
+            status=FinancialAdjustmentStatus.PENDING_REVIEW,
+            reason="pending",
         )
         _sync_campaign_counters(campaign=campaign)
         campaign.refresh_from_db()
