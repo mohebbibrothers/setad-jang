@@ -1,6 +1,7 @@
 """فیلترهای محتوای تبیین."""
 
 import django_filters
+from django.db.models import Q
 
 from apps.core.search import SearchField, apply_smart_search
 from apps.tabyin.choices import MediaType
@@ -30,7 +31,15 @@ class PublicTabyinContentFilter(django_filters.FilterSet):
         fields = ["media_type", "author"]
 
     def filter_by_media_type(self, queryset, name, value):
-        """فیلتر بر اساس نوع رسانه پیوست‌ها."""
+        """فیلتر بر اساس نوع رسانه — ملاک، «پیوستِ واقعی» است.
+
+        برای «سایر» (متن‌محورها) یک استثنای مهم لحاظ می‌شود: نوشته‌های
+        متنی که هیچ پیوستی ندارند هم باید در تب «متن» دیده شوند؛ پس
+        علاوه بر پیوست‌های other، محتواهای فاقدِ هرگونه پیوست هم در
+        این باکت می‌آیند. برای سایر انواع (فیلم/عکس/صوت) صرفاً وجودِ
+        پیوستِ همان نوع ملاک است — تا محتوایی که بالادست به‌غلط
+        طبقه‌بندی شده، در تب اشتباه دیده نشود.
+        """
         content_ids = (
             TabyinAttachment.objects.filter(
                 media_type=value,
@@ -38,6 +47,8 @@ class PublicTabyinContentFilter(django_filters.FilterSet):
             .values_list("content_id", flat=True)
             .distinct()
         )
+        if value == MediaType.OTHER:
+            return queryset.filter(Q(id__in=content_ids) | Q(attachments__isnull=True)).distinct()
         return queryset.filter(id__in=content_ids)
 
     def filter_search(self, queryset, name, value):
