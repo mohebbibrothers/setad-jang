@@ -1,7 +1,9 @@
 """Excel export helpers for Kindness Wall admin analytics.
 
-The exports are generated in-memory with openpyxl, RTL-friendly styling, frozen
-headers, deterministic filenames, and no view-layer formatting logic.
+خروجی‌ها با ``StreamingExcelSheet`` تولید می‌شوند: هر ردیف بلافاصله روی
+دیسک نوشته می‌شود و queryset با ``iterator()`` پیمایش می‌شود، پس مصرف حافظه
+مستقل از تعداد آگهی‌ها ثابت می‌ماند. نسخهٔ قبلی کل شبکهٔ سلول‌ها را در حافظه
+نگه می‌داشت و سپس یک پاس دوم روی همهٔ سلول‌ها برای استایل‌دهی می‌زد.
 """
 
 from __future__ import annotations
@@ -10,51 +12,61 @@ from collections.abc import Iterable
 from io import BytesIO
 
 from django.utils import timezone
-from openpyxl import Workbook
-from openpyxl.styles import Alignment, Font, PatternFill
-from openpyxl.utils import get_column_letter
 
+from apps.core.excel import ExcelColumn, ExcelTheme, StreamingExcelSheet, stream_rows
 from apps.kindness_wall.models import KindnessListing, KindnessListingReport
 
-_HEADER_FILL = PatternFill("solid", fgColor="7A277A")
-_HEADER_FONT = Font(name="Tahoma", bold=True, color="FFFFFF")
-_BODY_FONT = Font(name="Tahoma", size=11)
-_SUMMARY_FILL = PatternFill("solid", fgColor="F2EAF2")
+_THEME = ExcelTheme(header_color="7A277A", summary_color="F2EAF2")
+
+_LISTING_COLUMNS: list[ExcelColumn] = [
+    ExcelColumn("شناسه", 12, "int"),
+    ExcelColumn("نوع", 20, "text"),
+    ExcelColumn("وضعیت", 18, "text"),
+    ExcelColumn("عنوان", 34, "text"),
+    ExcelColumn("دسته‌بندی", 24, "text"),
+    ExcelColumn("استان", 16, "text"),
+    ExcelColumn("شهر", 16, "text"),
+    ExcelColumn("نام صاحب آگهی", 24, "text"),
+    ExcelColumn("شماره تماس Snapshot", 24, "text"),
+    ExcelColumn("بازدید", 14, "int"),
+    ExcelColumn("نمایش شماره", 14, "int"),
+    ExcelColumn("ذخیره", 12, "int"),
+    ExcelColumn("گزارش", 12, "int"),
+    ExcelColumn("تاریخ انتشار", 22, "text"),
+    ExcelColumn("تاریخ انقضا", 22, "text"),
+    ExcelColumn("تاریخ ایجاد", 22, "text"),
+]
+
+_REPORT_COLUMNS: list[ExcelColumn] = [
+    ExcelColumn("شناسه گزارش", 14, "int"),
+    ExcelColumn("شناسه آگهی", 14, "int"),
+    ExcelColumn("عنوان آگهی", 34, "text"),
+    ExcelColumn("دلیل", 22, "text"),
+    ExcelColumn("وضعیت", 18, "text"),
+    ExcelColumn("توضیحات کاربر", 42, "text"),
+    ExcelColumn("یادداشت ادمین", 42, "text"),
+    ExcelColumn("گزارش‌دهنده", 24, "text"),
+    ExcelColumn("بررسی‌کننده", 24, "text"),
+    ExcelColumn("تاریخ ثبت", 22, "text"),
+    ExcelColumn("تاریخ بررسی", 22, "text"),
+]
 
 
 def build_listings_workbook(*, listings: Iterable[KindnessListing]) -> BytesIO:
     """Build an RTL Excel workbook for Kindness Wall listings."""
-    workbook = Workbook()
-    worksheet = workbook.active
-    worksheet.title = "آگهی‌ها"
-    _prepare_sheet(worksheet)
-    headers = [
-        "شناسه",
-        "نوع",
-        "وضعیت",
-        "عنوان",
-        "دسته‌بندی",
-        "استان",
-        "شهر",
-        "نام صاحب آگهی",
-        "شماره تماس Snapshot",
-        "بازدید",
-        "نمایش شماره",
-        "ذخیره",
-        "گزارش",
-        "تاریخ انتشار",
-        "تاریخ انقضا",
-        "تاریخ ایجاد",
-    ]
-    worksheet.append(headers)
-    _style_header(worksheet)
+    sheet = StreamingExcelSheet(
+        title="آگهی‌ها",
+        columns=_LISTING_COLUMNS,
+        auto_filter=True,
+        theme=_THEME,
+    )
 
     total_views = 0
     total_reveals = 0
-    for listing in listings:
+    for listing in stream_rows(listings):
         total_views += listing.view_count
         total_reveals += listing.contact_reveal_count
-        worksheet.append(
+        sheet.append(
             [
                 listing.pk,
                 listing.get_listing_type_display(),
@@ -72,39 +84,26 @@ def build_listings_workbook(*, listings: Iterable[KindnessListing]) -> BytesIO:
                 _format_dt(listing.published_at),
                 _format_dt(listing.expires_at),
                 _format_dt(listing.created_at),
-            ]
+            ],
         )
 
-    worksheet.append(["جمع", "", "", "", "", "", "", "", "", total_views, total_reveals, "", "", "", "", ""])
-    _style_body_and_summary(worksheet)
-    _set_widths(worksheet, [12, 20, 18, 34, 24, 16, 16, 24, 24, 14, 14, 12, 12, 22, 22, 22])
-    return _save_workbook(workbook)
+    sheet.append_summary(
+        ["جمع", "", "", "", "", "", "", "", "", total_views, total_reveals, "", "", "", "", ""],
+    )
+    return sheet.save()
 
 
 def build_reports_workbook(*, reports: Iterable[KindnessListingReport]) -> BytesIO:
     """Build an RTL Excel workbook for Kindness Wall report moderation."""
-    workbook = Workbook()
-    worksheet = workbook.active
-    worksheet.title = "گزارش‌ها"
-    _prepare_sheet(worksheet)
-    headers = [
-        "شناسه گزارش",
-        "شناسه آگهی",
-        "عنوان آگهی",
-        "دلیل",
-        "وضعیت",
-        "توضیحات کاربر",
-        "یادداشت ادمین",
-        "گزارش‌دهنده",
-        "بررسی‌کننده",
-        "تاریخ ثبت",
-        "تاریخ بررسی",
-    ]
-    worksheet.append(headers)
-    _style_header(worksheet)
+    sheet = StreamingExcelSheet(
+        title="گزارش‌ها",
+        columns=_REPORT_COLUMNS,
+        auto_filter=True,
+        theme=_THEME,
+    )
 
-    for report in reports:
-        worksheet.append(
+    for report in stream_rows(reports):
+        sheet.append(
             [
                 report.pk,
                 report.listing_id,
@@ -117,59 +116,16 @@ def build_reports_workbook(*, reports: Iterable[KindnessListingReport]) -> Bytes
                 getattr(report.reviewed_by, "full_name", "") if report.reviewed_by else "",
                 _format_dt(report.created_at),
                 _format_dt(report.reviewed_at),
-            ]
+            ],
         )
 
-    _style_body_and_summary(worksheet, include_summary=False)
-    _set_widths(worksheet, [14, 14, 34, 22, 18, 42, 42, 24, 24, 22, 22])
-    return _save_workbook(workbook)
+    return sheet.save()
 
 
 def build_kindness_export_filename(*, export_type: str) -> str:
     """Build deterministic Kindness Wall export filenames."""
     date_part = timezone.now().strftime("%Y%m%d")
     return f"kindness-wall-{export_type}-{date_part}.xlsx"
-
-
-def _prepare_sheet(worksheet) -> None:
-    """Apply common worksheet settings."""
-    worksheet.sheet_view.rightToLeft = True
-    worksheet.freeze_panes = "A2"
-    worksheet.auto_filter.ref = "A1:Z1"
-
-
-def _style_header(worksheet) -> None:
-    """Style first row as a prominent report header."""
-    for cell in worksheet[1]:
-        cell.fill = _HEADER_FILL
-        cell.font = _HEADER_FONT
-        cell.alignment = Alignment(horizontal="center", vertical="center")
-
-
-def _style_body_and_summary(worksheet, *, include_summary: bool = True) -> None:
-    """Style body rows and optional final summary row."""
-    for row in worksheet.iter_rows(min_row=2):
-        for cell in row:
-            cell.font = _BODY_FONT
-            cell.alignment = Alignment(horizontal="right", vertical="top", wrap_text=True)
-    if include_summary and worksheet.max_row >= 2:
-        for cell in worksheet[worksheet.max_row]:
-            cell.fill = _SUMMARY_FILL
-            cell.font = Font(name="Tahoma", bold=True)
-
-
-def _set_widths(worksheet, widths: list[int]) -> None:
-    """Set readable Excel column widths."""
-    for index, width in enumerate(widths, start=1):
-        worksheet.column_dimensions[get_column_letter(index)].width = width
-
-
-def _save_workbook(workbook: Workbook) -> BytesIO:
-    """Save workbook to rewound BytesIO."""
-    output = BytesIO()
-    workbook.save(output)
-    output.seek(0)
-    return output
 
 
 def _format_dt(value) -> str:

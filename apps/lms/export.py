@@ -1,7 +1,9 @@
 """Excel export helpers for LMS admin analytics.
 
-Exports are generated in-memory with openpyxl and are intentionally kept outside
-views/services so reporting output remains testable and replaceable.
+خروجی جریانی تولید می‌شود (``StreamingExcelSheet``) و queryset با
+``iterator()`` پیمایش می‌شود، پس مصرف حافظه مستقل از تعداد ثبت‌نام‌های یک
+دوره ثابت می‌ماند. exportها عمداً بیرون از views/services نگه داشته شده‌اند
+تا قابل تست و جایگزینی بمانند.
 """
 
 from __future__ import annotations
@@ -10,46 +12,37 @@ from collections.abc import Iterable
 from io import BytesIO
 
 from django.utils import timezone
-from openpyxl import Workbook
-from openpyxl.styles import Alignment, Font, PatternFill
-from openpyxl.utils import get_column_letter
 
+from apps.core.excel import ExcelColumn, ExcelTheme, StreamingExcelSheet, stream_rows
 from apps.lms.models import Course, Enrollment
 
-_HEADER_FILL = PatternFill("solid", fgColor="277A7E")
-_HEADER_FONT = Font(name="Tahoma", bold=True, color="FFFFFF")
-_BODY_FONT = Font(name="Tahoma", size=11)
+_THEME = ExcelTheme(header_color="277A7E", summary_color="E3F2FD")
+
+_ENROLLMENT_COLUMNS: list[ExcelColumn] = [
+    ExcelColumn("شناسه ثبت‌نام", 16, "int"),
+    ExcelColumn("نام کامل", 28, "text"),
+    ExcelColumn("ایمیل", 32, "text"),
+    ExcelColumn("وضعیت", 18, "text"),
+    ExcelColumn("درصد پیشرفت", 18, "decimal"),
+    ExcelColumn("ثانیه مشاهده‌شده", 20, "int"),
+    ExcelColumn("کد مدرک", 28, "text"),
+    ExcelColumn("تاریخ ثبت‌نام", 24, "text"),
+    ExcelColumn("تاریخ تکمیل", 24, "text"),
+]
 
 
 def build_course_enrollments_workbook(*, course: Course, enrollments: Iterable[Enrollment]) -> BytesIO:
     """Build an RTL Excel workbook for a course participant report."""
-    workbook = Workbook()
-    worksheet = workbook.active
-    worksheet.title = _safe_sheet_title(course.title)
-    worksheet.sheet_view.rightToLeft = True
-    worksheet.freeze_panes = "A2"
+    sheet = StreamingExcelSheet(
+        title=course.title,
+        columns=_ENROLLMENT_COLUMNS,
+        theme=_THEME,
+    )
 
-    headers = [
-        "شناسه ثبت‌نام",
-        "نام کامل",
-        "ایمیل",
-        "وضعیت",
-        "درصد پیشرفت",
-        "ثانیه مشاهده‌شده",
-        "کد مدرک",
-        "تاریخ ثبت‌نام",
-        "تاریخ تکمیل",
-    ]
-    worksheet.append(headers)
-    for cell in worksheet[1]:
-        cell.fill = _HEADER_FILL
-        cell.font = _HEADER_FONT
-        cell.alignment = Alignment(horizontal="center")
-
-    for enrollment in enrollments:
+    for enrollment in stream_rows(enrollments):
         user = enrollment.user
         certificate = getattr(enrollment, "certificate", None)
-        worksheet.append(
+        sheet.append(
             [
                 enrollment.pk,
                 getattr(user, "full_name", "") or str(user),
@@ -60,21 +53,10 @@ def build_course_enrollments_workbook(*, course: Course, enrollments: Iterable[E
                 getattr(certificate, "certificate_code", "") if certificate else "",
                 _format_dt(enrollment.enrolled_at),
                 _format_dt(enrollment.completed_at),
-            ]
+            ],
         )
 
-    for row in worksheet.iter_rows(min_row=2):
-        for cell in row:
-            cell.font = _BODY_FONT
-            cell.alignment = Alignment(horizontal="right")
-
-    for index, width in enumerate([16, 28, 32, 18, 18, 20, 28, 24, 24], start=1):
-        worksheet.column_dimensions[get_column_letter(index)].width = width
-
-    output = BytesIO()
-    workbook.save(output)
-    output.seek(0)
-    return output
+    return sheet.save()
 
 
 def build_course_export_filename(*, course: Course) -> str:
@@ -89,9 +71,3 @@ def _format_dt(value) -> str:
         return ""
     return timezone.localtime(value).strftime("%Y-%m-%d %H:%M")
 
-
-def _safe_sheet_title(value: str) -> str:
-    """Return an Excel-safe sheet title."""
-    forbidden = set('[]:*?/\\')
-    cleaned = "".join("-" if char in forbidden else char for char in value).strip() or "گزارش"
-    return cleaned[:31]

@@ -1,4 +1,10 @@
-"""Excel export helpers for Support Desk admin reporting."""
+"""Excel export helpers for Support Desk admin reporting.
+
+خروجی‌ها جریانی تولید می‌شوند (``StreamingExcelSheet``): هر ردیف بلافاصله
+روی دیسک نوشته می‌شود و queryset با ``iterator()`` پیمایش می‌شود، پس مصرف
+حافظه مستقل از تعداد تیکت‌ها یا پیام‌ها ثابت می‌ماند. جدول پیام‌ها به‌ویژه
+حساس است چون ستون «متن» می‌تواند بسیار حجیم باشد.
+"""
 
 from __future__ import annotations
 
@@ -6,50 +12,70 @@ from collections.abc import Iterable
 from io import BytesIO
 
 from django.utils import timezone
-from openpyxl import Workbook
-from openpyxl.styles import Alignment, Font, PatternFill
-from openpyxl.utils import get_column_letter
 
+from apps.core.excel import ExcelColumn, ExcelTheme, StreamingExcelSheet, stream_rows
 from apps.support_desk.models import SupportTicket, SupportTicketMessage, SupportTicketSatisfaction
 
-_HEADER_FILL = PatternFill("solid", fgColor="4B2E83")
-_HEADER_FONT = Font(name="Tahoma", bold=True, color="FFFFFF")
-_BODY_FONT = Font(name="Tahoma", size=11)
-_SUMMARY_FILL = PatternFill("solid", fgColor="EFE9FF")
+_THEME = ExcelTheme(header_color="4B2E83", summary_color="EFE9FF")
+
+_TICKET_COLUMNS: list[ExcelColumn] = [
+    ExcelColumn("شماره تیکت", 20, "text"),
+    ExcelColumn("موضوع", 36, "text"),
+    ExcelColumn("مالک", 28, "text"),
+    ExcelColumn("دپارتمان", 24, "text"),
+    ExcelColumn("دسته", 24, "text"),
+    ExcelColumn("نوع", 22, "text"),
+    ExcelColumn("وضعیت", 18, "text"),
+    ExcelColumn("اولویت", 16, "text"),
+    ExcelColumn("شدت", 16, "text"),
+    ExcelColumn("مسئول", 28, "text"),
+    ExcelColumn("SLA نقض شده؟", 16, "center"),
+    ExcelColumn("تعداد پیام", 14, "int"),
+    ExcelColumn("تعداد ضمیمه", 14, "int"),
+    ExcelColumn("امتیاز رضایت", 14, "center"),
+    ExcelColumn("آخرین فعالیت", 24, "text"),
+    ExcelColumn("تاریخ ایجاد", 24, "text"),
+]
+
+_MESSAGE_COLUMNS: list[ExcelColumn] = [
+    ExcelColumn("شماره تیکت", 20, "text"),
+    ExcelColumn("نوع پیام", 22, "text"),
+    ExcelColumn("نویسنده", 28, "text"),
+    ExcelColumn("داخلی؟", 12, "center"),
+    ExcelColumn("متن", 70, "text"),
+    ExcelColumn("زمان ایجاد", 24, "text"),
+]
+
+_SLA_COLUMNS: list[ExcelColumn] = [
+    ExcelColumn("شماره تیکت", 20, "text"),
+    ExcelColumn("وضعیت", 18, "text"),
+    ExcelColumn("سیاست SLA", 28, "text"),
+    ExcelColumn("اولین پاسخ تا", 24, "text"),
+    ExcelColumn("حل تا", 24, "text"),
+    ExcelColumn("نقض در", 24, "text"),
+    ExcelColumn("ثانیه توقف", 18, "int"),
+    ExcelColumn("ارجاع فوری", 16, "center"),
+]
+
+_CSAT_COLUMNS: list[ExcelColumn] = [
+    ExcelColumn("شماره تیکت", 20, "text"),
+    ExcelColumn("کاربر", 28, "text"),
+    ExcelColumn("امتیاز", 12, "center"),
+    ExcelColumn("نظر", 60, "text"),
+    ExcelColumn("زمان ثبت", 24, "text"),
+]
 
 
 def build_tickets_workbook(*, tickets: Iterable[SupportTicket]) -> BytesIO:
     """Build an RTL Excel workbook for support ticket queue/export."""
-    workbook = Workbook()
-    worksheet = workbook.active
-    worksheet.title = "تیکت‌ها"
-    _prepare_sheet(worksheet)
-    headers = [
-        "شماره تیکت",
-        "موضوع",
-        "مالک",
-        "دپارتمان",
-        "دسته",
-        "نوع",
-        "وضعیت",
-        "اولویت",
-        "شدت",
-        "مسئول",
-        "SLA نقض شده؟",
-        "تعداد پیام",
-        "تعداد ضمیمه",
-        "امتیاز رضایت",
-        "آخرین فعالیت",
-        "تاریخ ایجاد",
-    ]
-    worksheet.append(headers)
-    _style_header(worksheet)
+    sheet = StreamingExcelSheet(title="تیکت‌ها", columns=_TICKET_COLUMNS, auto_filter=True, theme=_THEME)
+
     total_messages = 0
     breached = 0
-    for ticket in tickets:
+    for ticket in stream_rows(tickets):
         total_messages += ticket.message_count
         breached += 1 if ticket.sla_breached_at else 0
-        worksheet.append(
+        sheet.append(
             [
                 ticket.ticket_number,
                 ticket.subject,
@@ -67,25 +93,20 @@ def build_tickets_workbook(*, tickets: Iterable[SupportTicket]) -> BytesIO:
                 ticket.satisfaction_rating_snapshot or "",
                 _format_dt(ticket.last_activity_at),
                 _format_dt(ticket.created_at),
-            ]
+            ],
         )
-    worksheet.append(["جمع", "", "", "", "", "", "", "", "", "", breached, total_messages, "", "", "", ""])
-    _style_body(worksheet, include_summary=True)
-    _set_widths(worksheet, [20, 36, 28, 24, 24, 22, 18, 16, 16, 28, 16, 14, 14, 14, 24, 24])
-    return _save(workbook)
+
+    sheet.append_summary(
+        ["جمع", "", "", "", "", "", "", "", "", "", breached, total_messages, "", "", "", ""],
+    )
+    return sheet.save()
 
 
 def build_messages_workbook(*, messages: Iterable[SupportTicketMessage]) -> BytesIO:
     """Build an RTL Excel workbook for ticket timeline messages."""
-    workbook = Workbook()
-    worksheet = workbook.active
-    worksheet.title = "پیام‌ها"
-    _prepare_sheet(worksheet)
-    headers = ["شماره تیکت", "نوع پیام", "نویسنده", "داخلی؟", "متن", "زمان ایجاد"]
-    worksheet.append(headers)
-    _style_header(worksheet)
-    for message in messages:
-        worksheet.append(
+    sheet = StreamingExcelSheet(title="پیام‌ها", columns=_MESSAGE_COLUMNS, auto_filter=True, theme=_THEME)
+    for message in stream_rows(messages):
+        sheet.append(
             [
                 message.ticket.ticket_number,
                 message.get_message_type_display(),
@@ -93,24 +114,16 @@ def build_messages_workbook(*, messages: Iterable[SupportTicketMessage]) -> Byte
                 "بله" if message.is_internal else "خیر",
                 message.body,
                 _format_dt(message.created_at),
-            ]
+            ],
         )
-    _style_body(worksheet)
-    _set_widths(worksheet, [20, 22, 28, 12, 70, 24])
-    return _save(workbook)
+    return sheet.save()
 
 
 def build_sla_workbook(*, tickets: Iterable[SupportTicket]) -> BytesIO:
     """Build an RTL Excel workbook for SLA breaches and deadlines."""
-    workbook = Workbook()
-    worksheet = workbook.active
-    worksheet.title = "SLA"
-    _prepare_sheet(worksheet)
-    headers = ["شماره تیکت", "وضعیت", "سیاست SLA", "اولین پاسخ تا", "حل تا", "نقض در", "ثانیه توقف", "ارجاع فوری"]
-    worksheet.append(headers)
-    _style_header(worksheet)
-    for ticket in tickets:
-        worksheet.append(
+    sheet = StreamingExcelSheet(title="SLA", columns=_SLA_COLUMNS, auto_filter=True, theme=_THEME)
+    for ticket in stream_rows(tickets):
+        sheet.append(
             [
                 ticket.ticket_number,
                 ticket.get_status_display(),
@@ -120,78 +133,35 @@ def build_sla_workbook(*, tickets: Iterable[SupportTicket]) -> BytesIO:
                 _format_dt(ticket.sla_breached_at),
                 ticket.sla_total_paused_seconds,
                 "بله" if ticket.escalated_at else "خیر",
-            ]
+            ],
         )
-    _style_body(worksheet)
-    _set_widths(worksheet, [20, 18, 28, 24, 24, 24, 18, 16])
-    return _save(workbook)
+    return sheet.save()
 
 
 def build_csat_workbook(*, ratings: Iterable[SupportTicketSatisfaction]) -> BytesIO:
     """Build an RTL Excel workbook for CSAT ratings."""
-    workbook = Workbook()
-    worksheet = workbook.active
-    worksheet.title = "رضایت‌سنجی"
-    _prepare_sheet(worksheet)
-    headers = ["شماره تیکت", "کاربر", "امتیاز", "نظر", "زمان ثبت"]
-    worksheet.append(headers)
-    _style_header(worksheet)
+    sheet = StreamingExcelSheet(title="رضایت‌سنجی", columns=_CSAT_COLUMNS, auto_filter=True, theme=_THEME)
     total = 0
     count = 0
-    for rating in ratings:
+    for rating in stream_rows(ratings):
         total += rating.rating
         count += 1
-        worksheet.append([rating.ticket.ticket_number, _display_user(rating.user), rating.rating, rating.comment, _format_dt(rating.created_at)])
-    worksheet.append(["میانگین", "", round(total / count, 2) if count else 0, "", ""])
-    _style_body(worksheet, include_summary=True)
-    _set_widths(worksheet, [20, 28, 12, 60, 24])
-    return _save(workbook)
+        sheet.append(
+            [
+                rating.ticket.ticket_number,
+                _display_user(rating.user),
+                rating.rating,
+                rating.comment,
+                _format_dt(rating.created_at),
+            ],
+        )
+    sheet.append_summary(["میانگین", "", round(total / count, 2) if count else 0, "", ""])
+    return sheet.save()
 
 
 def build_support_export_filename(*, export_type: str) -> str:
     """Build deterministic support export filename."""
     return f"support-{export_type}-{timezone.now():%Y%m%d}.xlsx"
-
-
-def _prepare_sheet(worksheet) -> None:
-    """Apply common worksheet settings."""
-    worksheet.sheet_view.rightToLeft = True
-    worksheet.freeze_panes = "A2"
-    worksheet.auto_filter.ref = "A1:Z1"
-
-
-def _style_header(worksheet) -> None:
-    """Style header row."""
-    for cell in worksheet[1]:
-        cell.fill = _HEADER_FILL
-        cell.font = _HEADER_FONT
-        cell.alignment = Alignment(horizontal="center", vertical="center")
-
-
-def _style_body(worksheet, *, include_summary: bool = False) -> None:
-    """Style body rows and optional summary row."""
-    for row in worksheet.iter_rows(min_row=2):
-        for cell in row:
-            cell.font = _BODY_FONT
-            cell.alignment = Alignment(horizontal="right", vertical="top", wrap_text=True)
-    if include_summary and worksheet.max_row >= 2:
-        for cell in worksheet[worksheet.max_row]:
-            cell.fill = _SUMMARY_FILL
-            cell.font = Font(name="Tahoma", bold=True)
-
-
-def _set_widths(worksheet, widths: list[int]) -> None:
-    """Set worksheet column widths."""
-    for index, width in enumerate(widths, start=1):
-        worksheet.column_dimensions[get_column_letter(index)].width = width
-
-
-def _save(workbook: Workbook) -> BytesIO:
-    """Save workbook to BytesIO."""
-    output = BytesIO()
-    workbook.save(output)
-    output.seek(0)
-    return output
 
 
 def _format_dt(value) -> str:

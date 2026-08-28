@@ -39,7 +39,7 @@ from typing import Any
 from django.conf import settings
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
-from django.db.models import Count, Sum
+from django.db.models import BigIntegerField, Case, Count, F, Q, Sum, When
 from django.utils import timezone
 
 from apps.madadkar.choices import (
@@ -195,40 +195,72 @@ def _sync_campaign_counters(*, campaign: Campaign) -> Campaign:
     - purchased_shares: SUM از share_count برای PAID + PENDING_PAYMENT
       (PENDING رزرو شده محسوب می‌شود تا oversell نشود)
     - purchased_amount: SUM از total_amount فقط برای PAID (مبلغ واقعی)
+      منهای refundهای COMPLETED به‌علاوهٔ adjustmentهای APPLIED
     - participant_count: COUNT DISTINCT user_id برای PAID
 
     باید با transaction.atomic فراخوانی شود و در صورت نیاز
     select_for_update روی campaign اعمال شده باشد.
+
+    چرا delta-based نشد
+    --------------------
+    وسوسه‌کننده است که در مسیر داغ به‌جای بازمحاسبه از ``F("purchased_shares")
+    + n`` استفاده شود. این کار عمداً انجام *نشده*: نگهداری delta روی یک
+    شمارندهٔ **مالی** یک کلاس کامل از باگ‌های drift را وارد می‌کند (رویداد
+    گم‌شده، جبران دوباره‌اعمال‌شده، تسک تکراری) که بی‌صدا انباشته می‌شوند و
+    فقط وقتی کشف می‌شوند که عدد نمایش‌داده‌شده به کاربر غلط از آب دربیاید.
+    بازمحاسبه از منبع حقیقت خودترمیم است.
+
+    آنچه اصلاح شد، هزینهٔ خود بازمحاسبه است:
+
+    - دو ``aggregate`` جدا روی همان جدول با conditional aggregation در یک
+      کوئری ادغام شد.
+    - جمع adjustmentها که با یک حلقهٔ پایتونی روی **تمام** ردیف‌ها انجام
+      می‌شد به ``Case/When`` سمت دیتابیس منتقل شد. مورد قبلی تنها بخش
+      بی‌کران این تابع بود: با رشد تعداد adjustment یک حرکت، هر رویداد
+      پرداخت همهٔ آن ردیف‌ها را از دیتابیس می‌کشید و در پایتون جمع می‌زد.
+
+    نتیجه: ۴ کوئری با یک fetch بی‌کران → ۳ کوئری، همگی aggregate و
+    index-scoped. ایندکس ``(campaign, status)`` روی Participation این
+    بازمحاسبه را به یک range scan محدود به همان حرکت نگه می‌دارد.
     """
-    aggregates = campaign.participations.filter(
-        status__in=[
-            ParticipationStatus.PAID,
-            ParticipationStatus.PENDING_PAYMENT,
-        ],
-    ).aggregate(
-        reserved_shares=Sum("share_count"),
+    aggregates = campaign.participations.aggregate(
+        reserved_shares=Sum(
+            "share_count",
+            filter=Q(
+                status__in=[
+                    ParticipationStatus.PAID,
+                    ParticipationStatus.PENDING_PAYMENT,
+                ],
+            ),
+        ),
+        paid_amount=Sum("total_amount", filter=Q(status=ParticipationStatus.PAID)),
+        unique_users=Count("user_id", distinct=True, filter=Q(status=ParticipationStatus.PAID)),
     )
 
-    paid_aggregates = campaign.participations.filter(
-        status=ParticipationStatus.PAID,
-    ).aggregate(
-        paid_amount=Sum("total_amount"),
-        unique_users=Count("user_id", distinct=True),
-    )
     completed_refunds = PaymentRefund.objects.filter(
         payment__participation__campaign=campaign,
         payment__participation__status=ParticipationStatus.PAID,
         status=RefundStatus.COMPLETED,
     ).aggregate(total=Sum("amount"))["total"] or 0
-    applied_adjustments = CampaignFinancialAdjustment.objects.filter(
+
+    # معادل سمت دیتابیسِ property پایتونی ``signed_amount``: CREDIT مثبت،
+    # هر چیز دیگری منفی. علامت‌ها باید با آن property هم‌راستا بمانند.
+    adjustment_delta = CampaignFinancialAdjustment.objects.filter(
         campaign=campaign,
         status=FinancialAdjustmentStatus.APPLIED,
-    )
-    adjustment_delta = sum(adjustment.signed_amount for adjustment in applied_adjustments)
+    ).aggregate(
+        delta=Sum(
+            Case(
+                When(adjustment_type=FinancialAdjustmentType.CREDIT, then=F("amount")),
+                default=-F("amount"),
+                output_field=BigIntegerField(),
+            ),
+        ),
+    )["delta"] or 0
 
     campaign.purchased_shares = aggregates["reserved_shares"] or 0
-    campaign.purchased_amount = max((paid_aggregates["paid_amount"] or 0) - completed_refunds + adjustment_delta, 0)
-    campaign.participant_count = paid_aggregates["unique_users"] or 0
+    campaign.purchased_amount = max((aggregates["paid_amount"] or 0) - completed_refunds + adjustment_delta, 0)
+    campaign.participant_count = aggregates["unique_users"] or 0
     campaign.save(
         update_fields=[
             "purchased_shares",

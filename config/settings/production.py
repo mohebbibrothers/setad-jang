@@ -15,7 +15,7 @@ Production environment overrides for Setad Jang project.
 """
 
 from .base import *
-from .base import SIMPLE_JWT, config
+from .base import CACHE_BACKEND, SIMPLE_JWT, config
 
 # ============================================================
 # Fail-fast checks
@@ -55,7 +55,6 @@ if not ALLOWED_HOSTS:
         "ALLOWED_HOSTS در production نباید خالی باشد. "
         "حداقل یک hostname معتبر مشخص کن.",
     )
-
 
 # ============================================================
 # Debug
@@ -108,6 +107,32 @@ elif _DATABASE_ENGINE == "sqlite":
 else:
     raise RuntimeError(
         "DATABASE_ENGINE نامعتبر است. مقدارهای مجاز: postgres, sqlite.",
+    )
+
+
+# ============================================================
+# Cache — must be shared across processes
+# ============================================================
+
+# کش در این پروژه صرفاً یک بهینه‌سازی نیست؛ چند سازوکار *صحت* روی آن سوارند.
+# با locmem هر worker گانیکورن کش مستقل خودش را دارد و نتیجه‌اش این است:
+#
+#   - همهٔ throttleهای DRF per-process می‌شوند، پس با N worker نرخ واقعی
+#     N برابر مقدار تنظیم‌شده است. یعنی محافظت anti-abuse و anti-brute-force
+#     بی‌سروصدا چند برابر ضعیف‌تر از چیزی است که در تنظیمات نوشته شده.
+#   - گارد سراسری OTP هم به همان نسبت شل می‌شود.
+#   - و از همه بدتر: cache_delete_namespace فقط روی همان workerی اثر می‌کند
+#     که درخواست را گرفته است. بقیهٔ workerها تا انقضای hard_ttl دادهٔ کهنه
+#     سرو می‌کنند. این یک باگ صحت تمام‌عیار است، نه افت کارایی.
+#
+# چون CACHE_BACKEND در base.py مقدار پیش‌فرض "locmem" دارد و .env.example هم
+# همان را نشان می‌دهد، یک deploy که فقط فایل نمونه را کپی کرده باشد کاملاً
+# بی‌صدا در این حالت بالا می‌آید. پس اینجا fail-fast می‌کنیم.
+if CACHE_BACKEND != "redis":
+    raise RuntimeError(
+        f"CACHE_BACKEND در production باید 'redis' باشد (مقدار فعلی: '{CACHE_BACKEND}'). "
+        "با کش per-process، تمام throttleها به تعداد workerها ضعیف‌تر می‌شوند و "
+        "invalidate کش فقط روی یک worker اثر می‌کند که باعث سرو شدن دادهٔ کهنه است.",
     )
 
 

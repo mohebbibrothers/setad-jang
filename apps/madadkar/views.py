@@ -45,7 +45,7 @@ from rest_framework.views import APIView
 from apps.audit_logs import actions as audit_actions
 from apps.audit_logs.helpers import extract_audit_metadata
 from apps.audit_logs.services import log_action, log_action_async
-from apps.core.api_cache import build_query_signature, cached_public_payload
+from apps.core.api_cache import build_cache_variant, cached_public_payload
 from apps.core.pagination import StandardPagination
 from apps.core.responses import (
     CreatedResponse,
@@ -628,11 +628,11 @@ class MadadkarPublicCampaignListView(APIView):
     throttle_classes = [MadadkarBrowseAnonThrottle, MadadkarBrowseUserThrottle]
 
     def get(self, request: Request) -> Response:
+        base_queryset = selectors.get_public_campaigns_queryset()
+        filterset = CampaignPublicFilter(request.query_params, queryset=base_queryset)
+
         def build_payload() -> dict:
-            queryset = selectors.get_public_campaigns_queryset()
-            filterset = CampaignPublicFilter(request.query_params, queryset=queryset)
-            if filterset.is_valid():
-                queryset = filterset.qs
+            queryset = filterset.qs if filterset.is_valid() else base_queryset
 
             paginator = StandardPagination()
             page = paginator.paginate_queryset(queryset, request, view=self)
@@ -657,9 +657,7 @@ class MadadkarPublicCampaignListView(APIView):
             namespace="madadkar:public_list",
             parts=(
                 "campaigns",
-                request.query_params.get("page", "1"),
-                request.query_params.get("page_size", str(StandardPagination.page_size)),
-                build_query_signature(request),
+                *build_cache_variant(request, filterset=filterset, pagination_class=StandardPagination),
             ),
             factory=build_payload,
         )

@@ -857,7 +857,39 @@ CELERY_WORKER_SEND_TASK_EVENTS = True
 
 CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
 
+# ---------------------------------------------------------------------------
+# تحویل at-least-once
+# ---------------------------------------------------------------------------
+# پیش‌فرض Celery ``acks_late=False`` است: پیام **قبل از** اجرای تسک ack
+# می‌شود. اگر worker وسط کار بمیرد (OOM، SIGKILL هنگام deploy، از دست رفتن
+# نود) تسک برای همیشه گم می‌شود و هیچ ردی هم باقی نمی‌ماند. برای تسک‌های
+# مالی، نوتیفیکیشن و audit این رفتار قابل قبول نیست.
+#
+# با ``acks_late=True`` پیام فقط پس از اتمام موفق تسک ack می‌شود و در صورت
+# مرگ worker دوباره تحویل داده می‌شود. هزینه‌اش این است که تسک ممکن است
+# بیش از یک بار اجرا شود.
+#
+# قرارداد لازم: هر تسک این پروژه باید idempotent یا نسبت به تکرار بی‌تفاوت
+# باشد. این شرط برای همهٔ تسک‌های فعلی بررسی و تأیید شده است — یا بر پایهٔ
+# فیلتر وضعیت کار می‌کنند، یا از ``get_or_create``/``update`` استفاده
+# می‌کنند، یا عمداً append-only هستند (snapshot مالی، audit log) که در
+# آن‌ها یک ردیف تکراری از یک رکورد گم‌شده به‌مراتب کم‌ضررتر است.
+CELERY_TASK_ACKS_LATE = True
+
+# اگر worker بدون ack شدن پیام از بین برود، پیام به‌جای ack شدن reject و
+# دوباره صف می‌شود. بدون این گزینه ``acks_late`` دقیقاً در سناریوی مرگ
+# ناگهانی worker — یعنی همان چیزی که می‌خواهیم پوشش دهیم — بی‌اثر است.
+CELERY_TASK_REJECT_ON_WORKER_LOST = True
+
+# visibility_timeout مخصوص brokerهای مبتنی بر Redis است: اگر تسکی طولانی‌تر
+# از این مقدار طول بکشد، Redis آن را «گم‌شده» فرض کرده و به worker دیگری
+# تحویل می‌دهد — یعنی اجرای همزمان دوتایی. مقدار باید قاطعانه بزرگ‌تر از
+# ``CELERY_TASK_TIME_LIMIT`` باشد تا این حالت هرگز رخ ندهد.
 CELERY_TASK_TIME_LIMIT = 60 * 30
+CELERY_BROKER_TRANSPORT_OPTIONS = {
+    "visibility_timeout": CELERY_TASK_TIME_LIMIT * 2,
+}
+
 CELERY_TASK_SOFT_TIME_LIMIT = 60 * 25
 CELERY_RESULT_EXPIRES = 60 * 60 * 24
 
@@ -905,6 +937,9 @@ CELERY_TASK_ROUTES = {
     "apps.notifications.tasks.dispatch_notification_event_task": {
         "queue": "default",
     },
+    "apps.authentication.tasks.flush_expired_jwt_tokens_task": {
+        "queue": "default",
+    },
 }
 
 CELERY_BEAT_SCHEDULE = {
@@ -944,7 +979,26 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.support_desk.tasks.daily_support_digest_task",
         "schedule": crontab(minute=0, hour=8),
     },
+    # پاک‌سازی توکن‌های JWT منقضی. با ROTATE_REFRESH_TOKENS و
+    # BLACKLIST_AFTER_ROTATION هر refresh دو ردیف جدید می‌سازد، پس بدون این
+    # زمان‌بندی جدول‌های token_blacklist بی‌نهایت رشد می‌کنند و چون مسیر
+    # احراز هویت در هر درخواست به آن‌ها می‌خورد، کل API تدریجاً کند می‌شود.
+    # اجرای ساعتی (نه روزانه) باعث می‌شود هر نوبت حجم کمی حذف شود.
+    "auth-flush-expired-jwt-tokens-hourly": {
+        "task": "apps.authentication.tasks.flush_expired_jwt_tokens_task",
+        "schedule": crontab(minute=15),
+    },
 }
+
+# ============================================================================
+# Excel exports
+# ============================================================================
+
+# سقف تعداد ردیف داده در یک فایل export. حتی با نوشتن جریانی، یک گزارش
+# بی‌کران فایلی می‌سازد که نه دانلود می‌شود و نه در اکسل باز می‌شود، و در
+# همان مدت یک worker را اشغال می‌کند. عبور از این سقف خطای روشن می‌دهد.
+EXPORT_MAX_ROWS = config("EXPORT_MAX_ROWS", default=200_000, cast=int)
+
 
 # ============================================================================
 # Madadkar (Charitable Crowdfunding) Configuration

@@ -14722,6 +14722,13 @@ components:
         generated_at:
           type: string
           format: date-time
+        counters_generated_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: زمان محاسبهٔ شمارنده‌ها. شمارنده‌ها با stale-while-revalidate
+            کش می‌شوند و می‌توانند تا یک دقیقه کهنه باشند؛ بخش health و providers
+            همیشه زنده است.
         support:
           type: object
           additionalProperties: {}
@@ -14757,6 +14764,7 @@ components:
           additionalProperties: {}
       required:
       - activity
+      - counters_generated_at
       - generated_at
       - health
       - kindness_wall

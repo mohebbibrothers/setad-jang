@@ -10,7 +10,7 @@ SCHEMA_OUTPUT ?= /tmp/setad-jang-schema-check.yaml
 
 PROD_CHECK_ENV := \
 	ALLOWED_HOSTS=example.com \
-	CACHE_BACKEND=locmem \
+	CACHE_BACKEND=redis \
 	CORS_ALLOWED_ORIGINS=https://example.com \
 	DATABASE_ENGINE=postgres \
 	POSTGRES_DB=setadjang \

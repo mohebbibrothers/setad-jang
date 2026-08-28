@@ -106,12 +106,52 @@ EXPOSE 8000
 ENTRYPOINT ["/usr/bin/tini", "--", "/app/entrypoint.sh"]
 
 # CMD پیش‌فرض: gunicorn روی WSGI app.
-CMD ["sh", "-c", "gunicorn config.wsgi:application \
+#
+# چرا gthread و نه sync
+# ----------------------
+# worker class پیش‌فرض gunicorn «sync» است، یعنی هر worker دقیقاً یک درخواست
+# را در لحظه می‌گیرد. با ۳ worker سقف همزمانی کل سیستم ۳ درخواست است. این
+# مدل با معماری I/O این پروژه سازگار نیست: تماس با درگاه پرداخت، پنل پیامک
+# و سرویس revalidate فرانت‌اند می‌توانند ثانیه‌ها طول بکشند و در تمام آن مدت
+# worker فقط منتظر شبکه است. سه کاربر همزمان روی درگاه کند یعنی کل سایت
+# برای بقیه از دسترس خارج است.
+#
+# gthread با ۸ ریسمان روی هر worker همزمانی مؤثر را به ۲۴ می‌رساند بدون
+# اینکه به monkey-patching (gevent/eventlet) نیاز باشد — که با درایور
+# psycopg و کتابخانه‌های C این پروژه ریسک‌دار است.
+#
+# نکتهٔ ظرفیت دیتابیس: هر ریسمان connection مستقل خودش را می‌گیرد، پس سقف
+# اتصال این سرویس workers × threads است (پیش‌فرض ۲۴). موقع بالا بردن این
+# اعداد باید max_connections پستگرس و سهم celery هم با هم دیده شوند.
+#
+# exec لازم است
+# --------------
+# بدون exec، پوستهٔ sh به‌عنوان والد gunicorn باقی می‌ماند و SIGTERM را به
+# فرزندش forward نمی‌کند؛ همان اشکالی که در entrypoint.sh هم برطرف شد.
+# نتیجه‌اش این است که هر deploy به‌جای shutdown گریسفول با SIGKILL تمام
+# می‌شود و درخواست‌های در حال پردازش — از جمله callback تأیید پرداخت — قطع
+# می‌شوند.
+#
+# max-requests چرخهٔ بازیافت worker است و در برابر نشت تدریجی حافظه محافظت
+# می‌کند؛ jitter از هم‌زمان شدن ری‌استارت همهٔ workerها جلوگیری می‌کند.
+# worker-tmp-dir روی /dev/shm گذاشته شده تا heartbeat روی فایل‌سیستم‌های
+# کند (مثل overlay روی دیسک شبکه) باعث کشته شدن اشتباهی worker نشود.
+# access-logformat هم request_id ساخته‌شده در middleware را از هدر پاسخ
+# می‌خواند تا لاگ gunicorn و لاگ اپلیکیشن قابل correlate باشند.
+CMD ["sh", "-c", "exec gunicorn config.wsgi:application \
     --bind 0.0.0.0:${PORT} \
+    --worker-class ${GUNICORN_WORKER_CLASS:-gthread} \
     --workers ${GUNICORN_WORKERS:-3} \
-    --timeout 60 \
+    --threads ${GUNICORN_THREADS:-8} \
+    --timeout ${GUNICORN_TIMEOUT:-60} \
+    --graceful-timeout ${GUNICORN_GRACEFUL_TIMEOUT:-30} \
+    --keep-alive ${GUNICORN_KEEPALIVE:-5} \
+    --max-requests ${GUNICORN_MAX_REQUESTS:-1000} \
+    --max-requests-jitter ${GUNICORN_MAX_REQUESTS_JITTER:-100} \
+    --worker-tmp-dir /dev/shm \
     --access-logfile - \
-    --error-logfile -"]
+    --error-logfile - \
+    --access-logformat '%(h)s %(l)s %(u)s %(t)s \"%(r)s\" %(s)s %(b)s \"%(f)s\" \"%(a)s\" rid=%({x-request-id}o)s dur=%(D)sus'"]
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
   CMD curl -fsS "http://127.0.0.1:${PORT}/api/v1/health/ready/" || exit 1

@@ -33,7 +33,7 @@ def _production_env(**overrides: str) -> dict[str, str]:
     env.update(
         {
             "ALLOWED_HOSTS": "127.0.0.1,localhost,testserver",
-            "CACHE_BACKEND": "locmem",
+            "CACHE_BACKEND": "redis",
             "CORS_ALLOWED_ORIGINS": "",
             "DEBUG": "False",
             "DJANGO_SETTINGS_MODULE": "config.settings.production",

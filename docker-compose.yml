@@ -172,10 +172,19 @@ services:
       <<: *app_env
       RUN_MIGRATIONS: "0"
       RUN_COLLECTSTATIC: "0"
+      FLOWER_USER: ${FLOWER_USER:?FLOWER_USER must be set}
+      FLOWER_PASSWORD: ${FLOWER_PASSWORD:?FLOWER_PASSWORD must be set}
+    # فقط روی loopback هاست publish می‌شود. قبلاً روی 0.0.0.0:5555 باز بود،
+    # یعنی هر کسی با دسترسی شبکه‌ای به سرور می‌توانست آرگومان تمام تسک‌ها را
+    # ببیند (user_id، ip_address، authority پرداخت، محتوای audit) و حتی
+    # تسک‌ها را revoke یا worker را shutdown کند. برای دسترسی از راه دور از
+    # SSH tunnel یا یک reverse proxy با احراز هویت استفاده کنید.
     ports:
-      - "5555:5555"
+      - "127.0.0.1:5555:5555"
     networks:
       - internal
+    # basic-auth اجباری است: compose بدون FLOWER_USER/FLOWER_PASSWORD اصلاً
+    # بالا نمی‌آید. دفاع لایه‌ای در کنار bind روی loopback.
     command:
       [
         "celery",
@@ -183,9 +192,13 @@ services:
         "config",
         "flower",
         "--port=5555",
+        "--address=0.0.0.0",
+        "--basic-auth=${FLOWER_USER:?FLOWER_USER must be set}:${FLOWER_PASSWORD:?FLOWER_PASSWORD must be set}",
       ]
+    # healthcheck باید credential بدهد، وگرنه بعد از فعال شدن basic-auth
+    # همیشه 401 می‌گیرد و کانتینر برای همیشه unhealthy علامت می‌خورد.
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:5555/"]
+      test: ["CMD-SHELL", "curl -fsS -u \"$${FLOWER_USER}:$${FLOWER_PASSWORD}\" http://127.0.0.1:5555/ >/dev/null"]
       interval: 30s
       timeout: 5s
       retries: 3

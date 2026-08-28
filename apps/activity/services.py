@@ -91,3 +91,51 @@ def record_activity_from_notification_event(*, event, recipient) -> UserActivity
         aggregate_id=event.aggregate_id,
         metadata={"notification_event_id": event.pk, **payload},
     )
+
+
+def build_activity_from_notification_event(*, event, recipient) -> UserActivity:
+    """Build (without saving) the activity row for one notification recipient.
+
+    این تابع دقیقاً همان فیلدهایی را می‌سازد که
+    ``record_activity_from_notification_event`` می‌ساخت، ولی چیزی را ذخیره
+    نمی‌کند. جدا کردن «ساختن» از «ذخیره کردن» همان چیزی است که اجازه می‌دهد
+    فن‌اوت نوتیفیکیشن به‌جای یک INSERT به‌ازای هر گیرنده، یک ``bulk_create``
+    واحد بزند.
+    """
+    if not getattr(recipient, "pk", None):
+        raise ValueError("Activity user must be persisted.")
+    payload = event.payload or {}
+    title = str(payload.get("title") or event.event_type)
+    summary = str(payload.get("message") or payload.get("subject") or "")
+    aggregate_type = event.aggregate_type
+    event_type = event.event_type
+    return UserActivity(
+        user=recipient,
+        actor=event.actor if getattr(event.actor, "pk", None) else None,
+        event_type=event_type,
+        app_label=infer_app_label(event_type, aggregate_type),
+        verb=_EVENT_VERB_MAP.get(event_type, ActivityVerb.NOTIFIED),
+        title=title[:260],
+        summary=summary,
+        aggregate_type=aggregate_type,
+        aggregate_id=event.aggregate_id,
+        visibility=ActivityVisibility.PRIVATE,
+        metadata={"notification_event_id": event.pk, **payload},
+    )
+
+
+def record_activities_from_notification_event(*, event, recipients) -> list[UserActivity]:
+    """Create activity rows for many notification recipients in a single query.
+
+    ترتیب و تعداد ردیف‌ها عمداً برابر رفتار قبلی نگه داشته شده: یک ردیف
+    فعالیت به‌ازای هر تحویل ساخته‌شده، یعنی اگر یک گیرنده روی دو کانال
+    اعلان بگیرد دو ردیف می‌گیرد. تغییر این معنا خارج از محدودهٔ این اصلاح
+    است و باید جداگانه تصمیم‌گیری شود.
+    """
+    activities = [
+        build_activity_from_notification_event(event=event, recipient=recipient)
+        for recipient in recipients
+    ]
+    if not activities:
+        return []
+    return UserActivity.objects.bulk_create(activities)

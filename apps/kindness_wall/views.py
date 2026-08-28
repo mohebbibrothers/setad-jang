@@ -13,7 +13,7 @@ from rest_framework.views import APIView
 from apps.audit_logs import actions as audit_actions
 from apps.audit_logs.helpers import extract_audit_metadata
 from apps.audit_logs.services import log_action_async
-from apps.core.api_cache import build_query_signature, cached_public_payload
+from apps.core.api_cache import build_cache_variant, cached_public_payload
 from apps.core.pagination import StandardPagination
 from apps.core.responses import CreatedResponse, DeletedResponse, ErrorResponse, SuccessResponse
 from apps.core.schemas import (
@@ -113,11 +113,11 @@ class KindnessListingPublicListView(APIView):
     @extend_schema(operation_id="kindness_listings_list", tags=[TAG_PUBLIC], responses={200: LISTING_LIST_RESPONSE})
     def get(self, request: Request) -> Response:
         """Return filtered published listings without phone numbers."""
+        base_queryset = selectors.get_public_listings()
+        filterset = KindnessListingPublicFilter(request.query_params, queryset=base_queryset)
+
         def build_payload() -> dict:
-            queryset = selectors.get_public_listings()
-            filterset = KindnessListingPublicFilter(request.query_params, queryset=queryset)
-            if filterset.is_valid():
-                queryset = filterset.qs
+            queryset = filterset.qs if filterset.is_valid() else base_queryset
             paginator = StandardPagination()
             page = paginator.paginate_queryset(queryset, request, view=self)
             serializer = KindnessListingListSerializer(page, many=True)
@@ -129,9 +129,7 @@ class KindnessListingPublicListView(APIView):
             namespace="kindness:public_list",
             parts=(
                 "listings",
-                request.query_params.get("page", "1"),
-                request.query_params.get("page_size", str(StandardPagination.page_size)),
-                build_query_signature(request),
+                *build_cache_variant(request, filterset=filterset, pagination_class=StandardPagination),
             ),
             factory=build_payload,
         )
