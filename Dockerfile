@@ -95,6 +95,13 @@ RUN chmod +x /app/entrypoint.sh
 # کپی کد پروژه
 COPY . /app
 
+# نکتهٔ حیاتی: `COPY . /app` فایل entrypoint را (با modeِ build context) دوباره
+# بازنویسی می‌کند و chmodِ مرحلهٔ قبل را خنثی می‌سازد. اگر checkout شل اسکریپت را
+# بدون بیت اجرایی داشته باشد (مثلاً بعد از `git reset --hard` وقتی mode در گیت
+# قدیمی 644 بود)، ایمیج نهایی entrypoint غیراجرایی می‌گیرد و tini با
+# «Permission denied» کرش‌لوپ می‌شود. بنابراین chmod اینجا، بعد از COPY، حتمی است.
+RUN chmod +x /app/entrypoint.sh
+
 # پوشه‌های runtime را از قبل بساز و owner را به app بده.
 # داده روی named-volumeها در entrypoint مدیریت می‌شود.
 RUN mkdir -p /app/staticfiles /app/media \
