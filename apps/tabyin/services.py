@@ -61,7 +61,6 @@ def _invalidate_public_caches() -> None:
     logger.info("Public tabyin caches invalidated")
 
 
-
 # ============================================================
 # Exceptions
 # ============================================================
@@ -103,7 +102,9 @@ def submit_user_content(
         submission_status=SubmissionStatus.PENDING_REVIEW,
         is_active=False,
         is_deleted_in_source=False,
-        author_username=getattr(user, "primary_identifier_value", "") or getattr(user, "email", "") or "",
+        author_username=getattr(user, "primary_identifier_value", "")
+        or getattr(user, "email", "")
+        or "",
         source_created_at=now,
         source_updated_at=now,
         raw_payload={"source": "user_submission"},
@@ -310,10 +311,7 @@ def dispatch_sync_task(
         dispatch_ip=dispatch_ip,
     )
     logger.info(
-        (
-            "Sync task dispatched mode=%s task_id=%s "
-            "triggered_by_user_id=%s request_id=%s"
-        ),
+        ("Sync task dispatched mode=%s task_id=%s triggered_by_user_id=%s request_id=%s"),
         mode,
         async_result.id,
         triggered_by_user_id,

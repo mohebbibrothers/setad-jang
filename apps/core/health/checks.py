@@ -173,7 +173,9 @@ def check_cache() -> dict[str, Any]:
         }
         if component_status == STATUS_DEGRADED:
             result["detail"] = "Cache latency is above threshold."
-            logger.warning("Cache health degraded backend=%s latency_ms=%s", backend_name, latency_ms)
+            logger.warning(
+                "Cache health degraded backend=%s latency_ms=%s", backend_name, latency_ms
+            )
         return result
     except Exception as exc:
         latency_ms = _latency_ms_since(start)
@@ -279,7 +281,9 @@ def check_celery_broker() -> dict[str, Any]:
         }
         if component_status == STATUS_DEGRADED:
             result["detail"] = "Celery broker latency is above threshold."
-            logger.warning("Celery broker health degraded broker=%s latency_ms=%s", broker_label, latency_ms)
+            logger.warning(
+                "Celery broker health degraded broker=%s latency_ms=%s", broker_label, latency_ms
+            )
         return result
     except Exception as exc:
         latency_ms = _latency_ms_since(start)
@@ -370,11 +374,17 @@ def check_migration_state() -> dict[str, Any]:
             "status": STATUS_OK if unapplied == 0 else STATUS_DEGRADED,
             "latency_ms": _latency_ms_since(start),
             "unapplied_migrations": unapplied,
-            "detail": "Unapplied migrations detected." if unapplied else "Migration state is current.",
+            "detail": "Unapplied migrations detected."
+            if unapplied
+            else "Migration state is current.",
         }
     except Exception as exc:
         logger.exception("Migration health check failed error_type=%s", type(exc).__name__)
-        return {"status": STATUS_ERROR, "latency_ms": _latency_ms_since(start), "detail": _safe_error_detail(exc)}
+        return {
+            "status": STATUS_ERROR,
+            "latency_ms": _latency_ms_since(start),
+            "detail": _safe_error_detail(exc),
+        }
 
 
 def check_media_storage() -> dict[str, Any]:
@@ -387,11 +397,25 @@ def check_media_storage() -> dict[str, Any]:
         default_storage.delete(saved_name)
         latency_ms = _latency_ms_since(start)
         if not exists:
-            return {"status": STATUS_ERROR, "latency_ms": latency_ms, "backend": default_storage.__class__.__name__, "detail": "Storage probe was not readable."}
-        return {"status": _status_for_latency(latency_ms, degraded_after_ms=250.0), "latency_ms": latency_ms, "backend": default_storage.__class__.__name__}
+            return {
+                "status": STATUS_ERROR,
+                "latency_ms": latency_ms,
+                "backend": default_storage.__class__.__name__,
+                "detail": "Storage probe was not readable.",
+            }
+        return {
+            "status": _status_for_latency(latency_ms, degraded_after_ms=250.0),
+            "latency_ms": latency_ms,
+            "backend": default_storage.__class__.__name__,
+        }
     except Exception as exc:
         logger.exception("Media storage health check failed error_type=%s", type(exc).__name__)
-        return {"status": STATUS_ERROR, "latency_ms": _latency_ms_since(start), "backend": default_storage.__class__.__name__, "detail": _safe_error_detail(exc)}
+        return {
+            "status": STATUS_ERROR,
+            "latency_ms": _latency_ms_since(start),
+            "backend": default_storage.__class__.__name__,
+            "detail": _safe_error_detail(exc),
+        }
 
 
 def check_audit_chain_quick() -> dict[str, Any]:
@@ -402,14 +426,33 @@ def check_audit_chain_quick() -> dict[str, Any]:
 
         latest = AuditLog.all_objects.order_by("-created_at", "-id").first()
         if latest is None:
-            return {"status": STATUS_OK, "latency_ms": _latency_ms_since(start), "checked": 0, "detail": "No audit rows yet."}
+            return {
+                "status": STATUS_OK,
+                "latency_ms": _latency_ms_since(start),
+                "checked": 0,
+                "detail": "No audit rows yet.",
+            }
         expected = latest.compute_event_hash(previous_hash=latest.previous_hash)
         if latest.event_hash != expected:
-            return {"status": STATUS_ERROR, "latency_ms": _latency_ms_since(start), "checked": 1, "detail": "Latest audit hash mismatch."}
-        return {"status": STATUS_OK, "latency_ms": _latency_ms_since(start), "checked": 1, "head_hash_prefix": latest.event_hash[:12]}
+            return {
+                "status": STATUS_ERROR,
+                "latency_ms": _latency_ms_since(start),
+                "checked": 1,
+                "detail": "Latest audit hash mismatch.",
+            }
+        return {
+            "status": STATUS_OK,
+            "latency_ms": _latency_ms_since(start),
+            "checked": 1,
+            "head_hash_prefix": latest.event_hash[:12],
+        }
     except Exception as exc:
         logger.exception("Audit quick health check failed error_type=%s", type(exc).__name__)
-        return {"status": STATUS_ERROR, "latency_ms": _latency_ms_since(start), "detail": _safe_error_detail(exc)}
+        return {
+            "status": STATUS_ERROR,
+            "latency_ms": _latency_ms_since(start),
+            "detail": _safe_error_detail(exc),
+        }
 
 
 def check_performance_contracts() -> dict[str, Any]:
@@ -417,16 +460,22 @@ def check_performance_contracts() -> dict[str, Any]:
     try:
         contracts = getattr(settings, "PERFORMANCE_CONTRACTS", {}) or {}
         default_budget = int(getattr(settings, "DEFAULT_PERFORMANCE_BUDGET_MS", 1000))
-        invalid = [key for key, value in contracts.items() if not isinstance(value, int) or value <= 0]
+        invalid = [
+            key for key, value in contracts.items() if not isinstance(value, int) or value <= 0
+        ]
         return {
             "status": STATUS_OK if not invalid and default_budget > 0 else STATUS_DEGRADED,
             "contracts_count": len(contracts),
             "default_budget_ms": default_budget,
             "invalid_contracts_count": len(invalid),
-            "detail": "Performance contracts configured." if not invalid else "Invalid performance contract budgets detected.",
+            "detail": "Performance contracts configured."
+            if not invalid
+            else "Invalid performance contract budgets detected.",
         }
     except Exception as exc:
-        logger.exception("Performance contract health check failed error_type=%s", type(exc).__name__)
+        logger.exception(
+            "Performance contract health check failed error_type=%s", type(exc).__name__
+        )
         return {"status": STATUS_ERROR, "detail": _safe_error_detail(exc)}
 
 

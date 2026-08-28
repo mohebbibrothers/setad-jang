@@ -43,8 +43,6 @@ class SocialPlatform(models.TextChoices):
     OTHER = "other", "سایر"
 
 
-
-
 class PublicVisibilityField(models.TextChoices):
     """Criminal profile fields whose public visibility can be overridden per criminal."""
 
@@ -115,9 +113,7 @@ class ReportStatus(models.TextChoices):
 
 # ── Transitions allowed for cancel request ──────────────────
 #: از این وضعیت‌ها می‌توان درخواست لغو فرستاد.
-REPORT_CANCELABLE_STATUSES: frozenset[str] = frozenset(
-    [ReportStatus.PENDING]
-)
+REPORT_CANCELABLE_STATUSES: frozenset[str] = frozenset([ReportStatus.PENDING])
 
 #: وضعیت‌های نهایی — دیگر قابل تغییر نیستند (توسط کاربر).
 REPORT_TERMINAL_STATUSES: frozenset[str] = frozenset(

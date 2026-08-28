@@ -128,7 +128,6 @@ TAG_R4J_BOUNTY = "جایزه‌ای برای عدالت — تعیین جایز�
 TAG_R4J_ADMIN = "جایزه‌ای برای عدالت — مدیریت"
 
 
-
 def _build_filters_signature(request: Request) -> str:
     """Build a stable short signature for cacheable public list filters."""
     relevant_keys = sorted(k for k in request.query_params.keys() if k not in {"page", "page_size"})
@@ -138,6 +137,7 @@ def _build_filters_signature(request: Request) -> str:
     parts = [f"{key}={request.query_params.get(key, '')}" for key in relevant_keys]
     raw = "|".join(parts)
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
+
 
 # ============================================================
 # Swagger Response Schemas
@@ -590,8 +590,7 @@ class R4JPublicCriminalDetailView(APIView):
         tags=[TAG_R4J_ADMIN],
         summary="ساخت پروفایل مجرم جدید — ادمین",
         description=(
-            "ساخت پروفایل جدید. همیشه draft ساخته می‌شود و "
-            "باید با endpoint publish منتشر شود."
+            "ساخت پروفایل جدید. همیشه draft ساخته می‌شود و باید با endpoint publish منتشر شود."
         ),
         request=R4JCriminalCreateSerializer,
         responses={
@@ -2106,9 +2105,7 @@ class R4JUserBountySetView(APIView):
         log_action_async(
             user_id=request.user.pk,
             action=(
-                audit_actions.R4J_BOUNTY_CREATED
-                if created
-                else audit_actions.R4J_BOUNTY_UPDATED
+                audit_actions.R4J_BOUNTY_CREATED if created else audit_actions.R4J_BOUNTY_UPDATED
             ),
             resource_type="r4j_bounty",
             resource_id=str(bounty.pk),
@@ -2413,7 +2410,9 @@ class R4JAdminEvidenceCustodyListView(APIView):
         paginator = StandardPagination()
         page = paginator.paginate_queryset(queryset, request, view=self)
         serializer = R4JEvidenceCustodyEventSerializer(page, many=True)
-        return paginator.get_paginated_response(serializer.data, message="زنجیره نگهداری شواهد دریافت شد.")
+        return paginator.get_paginated_response(
+            serializer.data, message="زنجیره نگهداری شواهد دریافت شد."
+        )
 
 
 class R4JAdminEvidenceCustodyReviewView(APIView):
@@ -2430,7 +2429,9 @@ class R4JAdminEvidenceCustodyReviewView(APIView):
     def post(self, request: Request, event_id: int) -> Response:
         event = selectors.get_admin_evidence_custody_event_by_id(event_id=event_id)
         if event is None:
-            return ErrorResponse(message="رویداد custody یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+            return ErrorResponse(
+                message="رویداد custody یافت نشد.", status_code=status.HTTP_404_NOT_FOUND
+            )
         serializer = R4JEvidenceCustodyReviewSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         new_event = services.record_evidence_custody_review(
@@ -2447,4 +2448,6 @@ class R4JAdminEvidenceCustodyReviewView(APIView):
             extra_data={"event_type": new_event.event_type, "file_sha256": new_event.file_sha256},
             **extract_audit_metadata(request),
         )
-        return CreatedResponse(data=R4JEvidenceCustodyEventSerializer(new_event).data, message="رویداد custody ثبت شد.")
+        return CreatedResponse(
+            data=R4JEvidenceCustodyEventSerializer(new_event).data, message="رویداد custody ثبت شد."
+        )

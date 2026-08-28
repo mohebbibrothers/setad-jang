@@ -18,6 +18,7 @@ _IDENTIFIER_PHONE = "phone"
 
 class UserQuerySet(BaseQuerySet):
     """UserQuerySet implementation for the authentication application."""
+
     def admins(self):
         return self.filter(role=UserRole.ADMIN)
 

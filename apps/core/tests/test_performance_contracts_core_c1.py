@@ -19,7 +19,9 @@ def test_resolve_performance_contract_uses_exact_and_prefix_budget(settings) -> 
     }
 
     exact = resolve_performance_contract(method="GET", path="/api/v1/health/ready/")
-    prefix = resolve_performance_contract(method="POST", path="/api/v1/support/admin/tickets/ABC/auto-assign/")
+    prefix = resolve_performance_contract(
+        method="POST", path="/api/v1/support/admin/tickets/ABC/auto-assign/"
+    )
     default = resolve_performance_contract(method="GET", path="/other/")
 
     assert exact.budget_ms == 100

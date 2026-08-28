@@ -7,7 +7,9 @@ from apps.activity.models import UserActivity
 
 def get_user_activities(*, user_id: int) -> QuerySet[UserActivity]:
     """Return private timeline events for a user."""
-    return UserActivity.objects.filter(user_id=user_id).select_related("actor").order_by("-created_at")
+    return (
+        UserActivity.objects.filter(user_id=user_id).select_related("actor").order_by("-created_at")
+    )
 
 
 def get_user_activity_by_id(*, user_id: int, activity_id: int) -> UserActivity | None:

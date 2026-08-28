@@ -12,7 +12,11 @@ from apps.notifications.models import (
 
 def get_user_deliveries(*, user_id: int) -> QuerySet[NotificationDelivery]:
     """Return notifications for a user."""
-    return NotificationDelivery.objects.filter(recipient_id=user_id).select_related("event").order_by("-created_at")
+    return (
+        NotificationDelivery.objects.filter(recipient_id=user_id)
+        .select_related("event")
+        .order_by("-created_at")
+    )
 
 
 def get_user_unread_deliveries(*, user_id: int) -> QuerySet[NotificationDelivery]:
@@ -27,7 +31,11 @@ def get_user_delivery_by_id(*, user_id: int, delivery_id: int) -> NotificationDe
 
 def get_admin_events() -> QuerySet[NotificationEvent]:
     """Return notification events for admin inspection."""
-    return NotificationEvent.objects.select_related("actor").prefetch_related("deliveries").order_by("-created_at")
+    return (
+        NotificationEvent.objects.select_related("actor")
+        .prefetch_related("deliveries")
+        .order_by("-created_at")
+    )
 
 
 def get_admin_deliveries() -> QuerySet[NotificationDelivery]:

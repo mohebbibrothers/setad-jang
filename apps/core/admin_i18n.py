@@ -39,7 +39,6 @@ MODEL_VERBOSE_NAMES: dict[tuple[str, str], tuple[str, str]] = {
         "توکن صادرشده فعال",
         "توکن‌های صادرشده فعال",
     ),
-
     # Core / platform
     ("core", "cacheinvalidationevent"): (
         "رویداد ابطال کش",
@@ -50,7 +49,6 @@ MODEL_VERBOSE_NAMES: dict[tuple[str, str], tuple[str, str]] = {
         "رویدادهای فعالیت کاربران",
     ),
     ("audit_logs", "auditlog"): ("لاگ فعالیت", "لاگ‌های فعالیت"),
-
     # Authentication
     ("authentication", "user"): ("کاربر", "کاربران"),
     ("authentication", "profile"): ("پروفایل کاربر", "پروفایل‌های کاربران"),
@@ -63,7 +61,6 @@ MODEL_VERBOSE_NAMES: dict[tuple[str, str], tuple[str, str]] = {
         "سیگنال ریسک احراز هویت",
         "سیگنال‌های ریسک احراز هویت",
     ),
-
     # Notifications
     ("notifications", "notificationtemplate"): (
         "قالب اعلان",
@@ -81,7 +78,6 @@ MODEL_VERBOSE_NAMES: dict[tuple[str, str], tuple[str, str]] = {
         "ترجیح اعلان کاربر",
         "ترجیحات اعلان کاربران",
     ),
-
     # R4J
     ("r4j", "r4jcriminal"): ("مجرم", "مجرمان"),
     ("r4j", "r4jcriminalalias"): ("نام مستعار مجرم", "نام‌های مستعار مجرمان"),
@@ -110,12 +106,10 @@ MODEL_VERBOSE_NAMES: dict[tuple[str, str], tuple[str, str]] = {
         "رویدادهای زنجیره نگهداری شواهد",
     ),
     ("r4j", "r4jbounty"): ("جایزه عدالت", "جوایز عدالت"),
-
     # Tabyin
     ("tabyin", "tabyincontent"): ("محتوای تبیین", "محتواهای تبیین"),
     ("tabyin", "tabyinusersubmission"): ("ارسال کاربر تبیین", "ارسال‌های کاربران تبیین"),
     ("tabyin", "tabyinattachment"): ("پیوست تبیین", "پیوست‌های تبیین"),
-
     # Kindness wall
     ("kindness_wall", "kindnesscategory"): (
         "دسته‌بندی دیوار مهربانی",
@@ -162,7 +156,6 @@ MODEL_VERBOSE_NAMES: dict[tuple[str, str], tuple[str, str]] = {
         "مورد تکراری احتمالی دیوار مهربانی",
         "موارد تکراری احتمالی دیوار مهربانی",
     ),
-
     # LMS
     ("lms", "lmscategory"): ("دسته‌بندی آموزش", "دسته‌بندی‌های آموزش"),
     ("lms", "course"): ("دوره آموزشی", "دوره‌های آموزشی"),
@@ -191,7 +184,6 @@ MODEL_VERBOSE_NAMES: dict[tuple[str, str], tuple[str, str]] = {
     ("lms", "quizunlock"): ("بازگشایی آزمون", "بازگشایی‌های آزمون"),
     ("lms", "certificate"): ("گواهی آموزشی", "گواهی‌های آموزشی"),
     ("lms", "lmsuserskill"): ("مهارت آموزشی کاربر", "مهارت‌های آموزشی کاربران"),
-
     # Madadkar
     ("madadkar", "sponsor"): ("مددکار", "مددکاران"),
     ("madadkar", "campaign"): ("حرکت", "حرکت‌ها"),
@@ -228,12 +220,10 @@ MODEL_VERBOSE_NAMES: dict[tuple[str, str], tuple[str, str]] = {
         "ردیف تطبیق پرداخت",
         "ردیف‌های تطبیق پرداخت",
     ),
-
     # Public reports
     ("public_reports", "reportsubject"): ("موضوع گزارش", "موضوعات گزارش"),
     ("public_reports", "report"): ("گزارش مردمی", "گزارش‌های مردمی"),
     ("public_reports", "reportattachment"): ("مستند گزارش", "مستندات گزارش‌ها"),
-
     # Support desk
     ("support_desk", "supportdepartment"): (
         "دپارتمان پشتیبانی",

@@ -56,7 +56,9 @@ MATCH_THRESHOLD = 40
 MAX_MATCHES_PER_LISTING = 25
 
 
-def _assert_valid_category_parent(*, category: KindnessCategory | None = None, parent: KindnessCategory | None = None) -> None:
+def _assert_valid_category_parent(
+    *, category: KindnessCategory | None = None, parent: KindnessCategory | None = None
+) -> None:
     """Prevent self-parenting/cycles in the admin-managed category tree."""
     if category is None or parent is None:
         return
@@ -121,7 +123,9 @@ def update_category(*, category: KindnessCategory, **fields: Any) -> KindnessCat
 def deactivate_category(*, category: KindnessCategory) -> KindnessCategory:
     """Soft-delete a category only when it is safe for public navigation."""
     if KindnessCategory.all_objects.filter(parent=category, is_active=True).exists():
-        raise KindnessCategoryTreeError("برای غیرفعال‌سازی این دسته ابتدا زیرشاخه‌های فعال آن را غیرفعال کنید.")
+        raise KindnessCategoryTreeError(
+            "برای غیرفعال‌سازی این دسته ابتدا زیرشاخه‌های فعال آن را غیرفعال کنید."
+        )
     if KindnessListing.objects.published().filter(category=category).exists():
         raise KindnessCategoryTreeError("دسته‌ای که آگهی منتشرشده دارد قابل حذف نیست.")
     category.is_active = False
@@ -165,7 +169,8 @@ def _snapshot_owner(user: Any) -> dict[str, str]:
     avatar = getattr(profile, "avatar", None) if profile else None
     return {
         "contact_phone_snapshot": user.phone_number,
-        "owner_full_name_snapshot": getattr(user, "full_name", "") or f"{user.first_name} {user.last_name}".strip(),
+        "owner_full_name_snapshot": getattr(user, "full_name", "")
+        or f"{user.first_name} {user.last_name}".strip(),
         "owner_avatar_snapshot": getattr(avatar, "url", "") if avatar else "",
         "owner_gender_snapshot": getattr(profile, "gender", "") if profile else "",
         "owner_province_snapshot": getattr(profile, "province", "") if profile else "",
@@ -216,7 +221,9 @@ def sync_listing_tags(*, listing: KindnessListing) -> None:
     """Extract and persist normalized tags from listing title/description."""
     tokens = tokenize(f"{listing.title} {listing.description}")
     for token in tokens:
-        tag, _created = KindnessTag.objects.get_or_create(name=token, defaults={"normalized_name": token})
+        tag, _created = KindnessTag.objects.get_or_create(
+            name=token, defaults={"normalized_name": token}
+        )
         KindnessListingTag.objects.get_or_create(listing=listing, tag=tag, defaults={"weight": 1})
         tag.usage_count = tag.listing_tags.count()
         tag.save(update_fields=["usage_count", "updated_at"])
@@ -227,7 +234,12 @@ def submit_listing_for_review(*, listing: KindnessListing, user: Any) -> Kindnes
     """Submit a draft/rejected/needs-edit listing for admin review."""
     if listing.owner_id != user.pk:
         raise KindnessPermissionError("فقط سازنده آگهی می‌تواند آن را برای بررسی ارسال کند.")
-    if listing.status not in {ListingStatus.DRAFT, ListingStatus.REJECTED, ListingStatus.NEEDS_EDIT, ListingStatus.CLOSED}:
+    if listing.status not in {
+        ListingStatus.DRAFT,
+        ListingStatus.REJECTED,
+        ListingStatus.NEEDS_EDIT,
+        ListingStatus.CLOSED,
+    }:
         raise KindnessListingStateError("این آگهی در وضعیت فعلی قابل ارسال برای بررسی نیست.")
     listing.status = ListingStatus.PENDING_REVIEW
     listing.save(update_fields=["status", "updated_at"])
@@ -235,7 +247,9 @@ def submit_listing_for_review(*, listing: KindnessListing, user: Any) -> Kindnes
 
 
 @transaction.atomic
-def approve_listing(*, listing: KindnessListing, admin: Any, admin_note: str = "") -> KindnessListing:
+def approve_listing(
+    *, listing: KindnessListing, admin: Any, admin_note: str = ""
+) -> KindnessListing:
     """Approve a pending listing, publish it, and regenerate matches."""
     if listing.status != ListingStatus.PENDING_REVIEW:
         raise KindnessListingStateError("فقط آگهی‌های در انتظار بررسی قابل تأیید هستند.")
@@ -244,14 +258,25 @@ def approve_listing(*, listing: KindnessListing, admin: Any, admin_note: str = "
     listing.reviewed_at = timezone.now()
     listing.admin_note = admin_note
     listing.published_at = timezone.now()
-    listing.save(update_fields=["status", "reviewed_by", "reviewed_at", "admin_note", "published_at", "updated_at"])
+    listing.save(
+        update_fields=[
+            "status",
+            "reviewed_by",
+            "reviewed_at",
+            "admin_note",
+            "published_at",
+            "updated_at",
+        ]
+    )
     sync_category_counters(category=listing.category)
     regenerate_matches_for_listing(listing=listing)
     return listing
 
 
 @transaction.atomic
-def reject_listing(*, listing: KindnessListing, admin: Any, reason: str, needs_edit: bool = False) -> KindnessListing:
+def reject_listing(
+    *, listing: KindnessListing, admin: Any, reason: str, needs_edit: bool = False
+) -> KindnessListing:
     """Reject or mark a pending listing as needing edits."""
     if listing.status != ListingStatus.PENDING_REVIEW:
         raise KindnessListingStateError("فقط آگهی‌های در انتظار بررسی قابل رد هستند.")
@@ -259,14 +284,18 @@ def reject_listing(*, listing: KindnessListing, admin: Any, reason: str, needs_e
     listing.reviewed_by = admin
     listing.reviewed_at = timezone.now()
     listing.rejection_reason = reason
-    listing.save(update_fields=["status", "reviewed_by", "reviewed_at", "rejection_reason", "updated_at"])
+    listing.save(
+        update_fields=["status", "reviewed_by", "reviewed_at", "rejection_reason", "updated_at"]
+    )
     return listing
 
 
 def sync_category_counters(*, category: KindnessCategory) -> KindnessCategory:
     """Recalculate category listing counters."""
     category.listings_count = KindnessListing.all_objects.filter(category=category).count()
-    category.published_listings_count = KindnessListing.objects.published().filter(category=category).count()
+    category.published_listings_count = (
+        KindnessListing.objects.published().filter(category=category).count()
+    )
     category.save(update_fields=["listings_count", "published_listings_count", "updated_at"])
     return category
 
@@ -301,11 +330,20 @@ def regenerate_matches_for_listing(*, listing: KindnessListing) -> list[Kindness
             },
         )
         matches.append(match)
-    stale_ids = [match.pk for match in sorted(matches, key=lambda item: item.score, reverse=True)[:MAX_MATCHES_PER_LISTING]]
-    KindnessMatch.objects.filter(source_listing=listing).exclude(pk__in=stale_ids).update(status=MatchStatus.STALE)
+    stale_ids = [
+        match.pk
+        for match in sorted(matches, key=lambda item: item.score, reverse=True)[
+            :MAX_MATCHES_PER_LISTING
+        ]
+    ]
+    KindnessMatch.objects.filter(source_listing=listing).exclude(pk__in=stale_ids).update(
+        status=MatchStatus.STALE
+    )
     listing.last_matched_at = timezone.now()
     listing.save(update_fields=["last_matched_at", "updated_at"])
-    top_matches = sorted(matches, key=lambda item: item.score, reverse=True)[:MAX_MATCHES_PER_LISTING]
+    top_matches = sorted(matches, key=lambda item: item.score, reverse=True)[
+        :MAX_MATCHES_PER_LISTING
+    ]
     if top_matches:
         from apps.notifications.domain import notify_kindness_high_match
 
@@ -319,10 +357,14 @@ def _text_similarity_score(left: str, right: str, *, multiplier: int) -> int:
     right_tokens = tokenize(right)
     if not left_tokens or not right_tokens:
         return 0
-    return round((len(left_tokens & right_tokens) / len(left_tokens | right_tokens)) * 10 * multiplier)
+    return round(
+        (len(left_tokens & right_tokens) / len(left_tokens | right_tokens)) * 10 * multiplier
+    )
 
 
-def detect_duplicate_candidates(*, listing: KindnessListing, threshold: int = 75) -> list[KindnessDuplicateCandidate]:
+def detect_duplicate_candidates(
+    *, listing: KindnessListing, threshold: int = 75
+) -> list[KindnessDuplicateCandidate]:
     """Detect likely duplicate listings by same owner/type/category and text similarity."""
     candidates = KindnessListing.all_objects.filter(
         owner=listing.owner,
@@ -332,7 +374,9 @@ def detect_duplicate_candidates(*, listing: KindnessListing, threshold: int = 75
     duplicates: list[KindnessDuplicateCandidate] = []
     for candidate in candidates:
         title_score = _text_similarity_score(listing.title, candidate.title, multiplier=4)
-        description_score = _text_similarity_score(listing.description, candidate.description, multiplier=3)
+        description_score = _text_similarity_score(
+            listing.description, candidate.description, multiplier=3
+        )
         duplicate_score = min(title_score + description_score, 100)
         if duplicate_score >= threshold:
             duplicate, _created = KindnessDuplicateCandidate.objects.update_or_create(
@@ -390,7 +434,12 @@ def close_listing(*, listing: KindnessListing, user: Any) -> KindnessListing:
     """Close a listing by owner."""
     if listing.owner_id != user.pk:
         raise KindnessPermissionError("فقط سازنده آگهی می‌تواند آن را ببندد.")
-    if listing.status not in {ListingStatus.PUBLISHED, ListingStatus.PENDING_REVIEW, ListingStatus.REJECTED, ListingStatus.NEEDS_EDIT}:
+    if listing.status not in {
+        ListingStatus.PUBLISHED,
+        ListingStatus.PENDING_REVIEW,
+        ListingStatus.REJECTED,
+        ListingStatus.NEEDS_EDIT,
+    }:
         raise KindnessListingStateError("این آگهی در وضعیت فعلی قابل بستن نیست.")
     listing.status = ListingStatus.CLOSED
     listing.closed_at = timezone.now()
@@ -418,7 +467,9 @@ def suspend_listing(*, listing: KindnessListing, admin: Any, reason: str) -> Kin
     listing.reviewed_by = admin
     listing.reviewed_at = timezone.now()
     listing.suspension_reason = reason
-    listing.save(update_fields=["status", "reviewed_by", "reviewed_at", "suspension_reason", "updated_at"])
+    listing.save(
+        update_fields=["status", "reviewed_by", "reviewed_at", "suspension_reason", "updated_at"]
+    )
     return listing
 
 
@@ -431,13 +482,17 @@ def restore_suspended_listing(*, listing: KindnessListing, admin: Any) -> Kindne
     listing.reviewed_by = admin
     listing.reviewed_at = timezone.now()
     listing.suspension_reason = ""
-    listing.save(update_fields=["status", "reviewed_by", "reviewed_at", "suspension_reason", "updated_at"])
+    listing.save(
+        update_fields=["status", "reviewed_by", "reviewed_at", "suspension_reason", "updated_at"]
+    )
     regenerate_matches_for_listing(listing=listing)
     return listing
 
 
 @transaction.atomic
-def renew_listing(*, listing: KindnessListing, user: Any, ttl_days: int = DEFAULT_LISTING_TTL_DAYS) -> KindnessListing:
+def renew_listing(
+    *, listing: KindnessListing, user: Any, ttl_days: int = DEFAULT_LISTING_TTL_DAYS
+) -> KindnessListing:
     """Renew an owner listing expiration window."""
     if listing.owner_id != user.pk:
         raise KindnessPermissionError("فقط سازنده آگهی می‌تواند آن را تمدید کند.")
@@ -482,11 +537,15 @@ def create_risk_signal(
     )
 
 
-def evaluate_contact_reveal_risk(*, reveal: KindnessContactReveal, window_minutes: int = 60) -> list[KindnessRiskSignal]:
+def evaluate_contact_reveal_risk(
+    *, reveal: KindnessContactReveal, window_minutes: int = 60
+) -> list[KindnessRiskSignal]:
     """Generate risk signals for suspicious contact reveal velocity/spikes."""
     since = timezone.now() - timezone.timedelta(minutes=window_minutes)
     signals: list[KindnessRiskSignal] = []
-    viewer_count = KindnessContactReveal.objects.filter(viewer=reveal.viewer, created_at__gte=since).count()
+    viewer_count = KindnessContactReveal.objects.filter(
+        viewer=reveal.viewer, created_at__gte=since
+    ).count()
     if viewer_count >= 5:
         signals.append(
             create_risk_signal(
@@ -498,7 +557,9 @@ def evaluate_contact_reveal_risk(*, reveal: KindnessContactReveal, window_minute
                 metadata={"window_minutes": window_minutes, "viewer_reveal_count": viewer_count},
             )
         )
-    listing_count = KindnessContactReveal.objects.filter(listing=reveal.listing, created_at__gte=since).count()
+    listing_count = KindnessContactReveal.objects.filter(
+        listing=reveal.listing, created_at__gte=since
+    ).count()
     if listing_count >= 10:
         signals.append(
             create_risk_signal(
@@ -514,12 +575,21 @@ def evaluate_contact_reveal_risk(*, reveal: KindnessContactReveal, window_minute
 
 
 @transaction.atomic
-def reveal_contact(*, listing: KindnessListing, viewer: Any, ip_address: str | None = None, user_agent: str = "", request_id: str = "") -> KindnessContactReveal:
+def reveal_contact(
+    *,
+    listing: KindnessListing,
+    viewer: Any,
+    ip_address: str | None = None,
+    user_agent: str = "",
+    request_id: str = "",
+) -> KindnessContactReveal:
     """Reveal listing contact phone to an authenticated user and record audit trail."""
     if not getattr(viewer, "is_authenticated", False):
         raise KindnessPermissionError("برای مشاهده شماره تماس باید وارد حساب کاربری شوید.")
     if listing.owner_id == viewer.pk:
-        raise KindnessPermissionError("سازنده آگهی شماره تماس خود را در جزئیات آگهی مدیریت می‌کند و نیازی به نمایش عمومی ندارد.")
+        raise KindnessPermissionError(
+            "سازنده آگهی شماره تماس خود را در جزئیات آگهی مدیریت می‌کند و نیازی به نمایش عمومی ندارد."
+        )
     if not listing.is_public:
         raise KindnessListingStateError("شماره تماس فقط برای آگهی منتشرشده قابل مشاهده است.")
     reveal = KindnessContactReveal.objects.create(
@@ -560,7 +630,9 @@ def delete_bookmark(*, listing: KindnessListing, user: Any) -> None:
 
 
 @transaction.atomic
-def report_listing(*, listing: KindnessListing, reported_by: Any, reason: str, description: str = "") -> KindnessListingReport:
+def report_listing(
+    *, listing: KindnessListing, reported_by: Any, reason: str, description: str = ""
+) -> KindnessListingReport:
     """Report a public listing for admin moderation."""
     if not listing.is_public:
         raise KindnessListingStateError("فقط آگهی منتشرشده قابل گزارش است.")
@@ -576,7 +648,14 @@ def report_listing(*, listing: KindnessListing, reported_by: Any, reason: str, d
 
 
 @transaction.atomic
-def review_listing_report(*, report: KindnessListingReport, admin: Any, status: str, admin_note: str = "", suspend_listing_on_review: bool = False) -> KindnessListingReport:
+def review_listing_report(
+    *,
+    report: KindnessListingReport,
+    admin: Any,
+    status: str,
+    admin_note: str = "",
+    suspend_listing_on_review: bool = False,
+) -> KindnessListingReport:
     """Review a listing report and optionally suspend the listing."""
     if status not in ReportStatus.values:
         raise KindnessListingStateError("وضعیت گزارش نامعتبر است.")
@@ -585,8 +664,14 @@ def review_listing_report(*, report: KindnessListingReport, admin: Any, status: 
     report.reviewed_at = timezone.now()
     report.admin_note = admin_note
     report.save(update_fields=["status", "reviewed_by", "reviewed_at", "admin_note", "updated_at"])
-    if suspend_listing_on_review and status == ReportStatus.REVIEWED and report.listing.status == ListingStatus.PUBLISHED:
-        suspend_listing(listing=report.listing, admin=admin, reason=admin_note or "گزارش تخلف تأیید شد.")
+    if (
+        suspend_listing_on_review
+        and status == ReportStatus.REVIEWED
+        and report.listing.status == ListingStatus.PUBLISHED
+    ):
+        suspend_listing(
+            listing=report.listing, admin=admin, reason=admin_note or "گزارش تخلف تأیید شد."
+        )
     return report
 
 
@@ -606,7 +691,9 @@ def dismiss_match(*, match: KindnessMatch, user: Any) -> KindnessMatch:
 def mark_match_contacted(*, match: KindnessMatch, user: Any) -> KindnessMatch:
     """Mark a match as contacted by the source listing owner."""
     if match.source_listing.owner_id != user.pk:
-        raise KindnessPermissionError("فقط صاحب آگهی می‌تواند این پیشنهاد را به‌عنوان تماس‌گرفته‌شده ثبت کند.")
+        raise KindnessPermissionError(
+            "فقط صاحب آگهی می‌تواند این پیشنهاد را به‌عنوان تماس‌گرفته‌شده ثبت کند."
+        )
     match.status = MatchStatus.CONTACTED
     match.contacted_at = timezone.now()
     match.save(update_fields=["status", "contacted_at", "updated_at"])
@@ -614,7 +701,9 @@ def mark_match_contacted(*, match: KindnessMatch, user: Any) -> KindnessMatch:
 
 
 @transaction.atomic
-def review_duplicate_candidate(*, duplicate: KindnessDuplicateCandidate, status: str, reason: str = "") -> KindnessDuplicateCandidate:
+def review_duplicate_candidate(
+    *, duplicate: KindnessDuplicateCandidate, status: str, reason: str = ""
+) -> KindnessDuplicateCandidate:
     """Review a duplicate candidate."""
     if status not in DuplicateStatus.values:
         raise KindnessListingStateError("وضعیت بررسی تکراری بودن نامعتبر است.")
@@ -636,7 +725,9 @@ def _distribution(queryset, *fields: str, limit: int | None = None) -> list[dict
 def get_admin_analytics_summary() -> dict[str, Any]:
     """Return executive-grade aggregate counters for admin dashboard."""
     listings = KindnessListing.all_objects.all()
-    match_distribution = dict(KindnessMatch.objects.values_list("status").annotate(count=Count("id")))
+    match_distribution = dict(
+        KindnessMatch.objects.values_list("status").annotate(count=Count("id"))
+    )
     contacted_matches = match_distribution.get(MatchStatus.CONTACTED, 0)
     active_matches = match_distribution.get(MatchStatus.ACTIVE, 0)
     total_matches = KindnessMatch.objects.count()
@@ -649,28 +740,44 @@ def get_admin_analytics_summary() -> dict[str, Any]:
         "offer_help_listings": listings.filter(listing_type="offer_help").count(),
         "contact_reveals": reveals_count,
         "active_matches": active_matches,
-        "pending_reports": KindnessListingReport.objects.filter(status=ReportStatus.PENDING).count(),
-        "duplicate_candidates": KindnessDuplicateCandidate.objects.filter(status=DuplicateStatus.ACTIVE).count(),
+        "pending_reports": KindnessListingReport.objects.filter(
+            status=ReportStatus.PENDING
+        ).count(),
+        "duplicate_candidates": KindnessDuplicateCandidate.objects.filter(
+            status=DuplicateStatus.ACTIVE
+        ).count(),
         "status_distribution": _distribution(listings, "status"),
         "type_distribution": _distribution(listings, "listing_type"),
         "province_distribution": _distribution(listings.exclude(province=""), "province", limit=20),
         "city_distribution": _distribution(listings.exclude(city=""), "province", "city", limit=30),
-        "category_distribution": _distribution(listings, "category_id", "category__title", limit=30),
+        "category_distribution": _distribution(
+            listings, "category_id", "category__title", limit=30
+        ),
         "top_viewed_listings": list(
-            listings.order_by("-view_count", "-created_at").values("id", "title", "view_count", "status")[:10]
+            listings.order_by("-view_count", "-created_at").values(
+                "id", "title", "view_count", "status"
+            )[:10]
         ),
         "top_revealed_listings": list(
-            listings.order_by("-contact_reveal_count", "-created_at").values("id", "title", "contact_reveal_count", "status")[:10]
+            listings.order_by("-contact_reveal_count", "-created_at").values(
+                "id", "title", "contact_reveal_count", "status"
+            )[:10]
         ),
         "match_effectiveness": {
             "total_matches": total_matches,
             "active_matches": active_matches,
             "contacted_matches": contacted_matches,
-            "contacted_rate_percent": round((contacted_matches / total_matches) * 100, 2) if total_matches else 0,
-            "reveals_per_published_listing": round(reveals_count / max(KindnessListing.objects.published().count(), 1), 2),
+            "contacted_rate_percent": round((contacted_matches / total_matches) * 100, 2)
+            if total_matches
+            else 0,
+            "reveals_per_published_listing": round(
+                reveals_count / max(KindnessListing.objects.published().count(), 1), 2
+            ),
             "status_distribution": match_distribution,
         },
-        "report_distribution": _distribution(KindnessListingReport.objects.all(), "status", "reason"),
+        "report_distribution": _distribution(
+            KindnessListingReport.objects.all(), "status", "reason"
+        ),
         "generated_at": timezone.now(),
     }
 

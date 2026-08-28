@@ -22,7 +22,9 @@ class SupportTicketQuerySet(models.QuerySet):
 
     def open_queue(self):
         """Return tickets that still need operational attention."""
-        return self.exclude(status__in={TicketStatus.CLOSED, TicketStatus.ARCHIVED, TicketStatus.SPAM})
+        return self.exclude(
+            status__in={TicketStatus.CLOSED, TicketStatus.ARCHIVED, TicketStatus.SPAM}
+        )
 
     def overdue(self):
         """Return tickets with breached SLA markers."""

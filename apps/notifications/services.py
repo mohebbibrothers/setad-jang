@@ -100,7 +100,9 @@ def create_notification_event(
 
     # یک کوئری برای همهٔ ترجیح‌ها. فقط ردیف‌های صریحاً غیرفعال اهمیت دارند،
     # چون نبودِ ردیف یعنی «مجاز» (همان رفتار ``_preference_enabled``).
-    recipient_pks = [pk for pk in (getattr(r, "pk", None) for r in recipient_list) if pk is not None]
+    recipient_pks = [
+        pk for pk in (getattr(r, "pk", None) for r in recipient_list) if pk is not None
+    ]
     muted: set[tuple[Any, str]] = set(
         NotificationPreference.objects.filter(
             user_id__in=recipient_pks,
@@ -113,8 +115,12 @@ def create_notification_event(
     # یک کوئری برای همهٔ قالب‌ها. ``(code, channel)`` unique است پس هر کانال
     # حداکثر یک قالب دارد و نگاشت قطعی است.
     rendered: dict[str, tuple[str, str]] = {
-        channel: render_notification(event_type=event_type, channel=channel, payload=payload, template=template)
-        for channel, template in _templates_by_channel(event_type=event_type, channels=channel_list).items()
+        channel: render_notification(
+            event_type=event_type, channel=channel, payload=payload, template=template
+        )
+        for channel, template in _templates_by_channel(
+            event_type=event_type, channels=channel_list
+        ).items()
     }
 
     deliveries: list[NotificationDelivery] = []
@@ -125,7 +131,9 @@ def create_notification_event(
                 continue
             subject, body = rendered[channel]
             deliveries.append(
-                NotificationDelivery(event=event, recipient=recipient, channel=channel, subject=subject, body=body),
+                NotificationDelivery(
+                    event=event, recipient=recipient, channel=channel, subject=subject, body=body
+                ),
             )
             activity_recipients.append(recipient)
 
@@ -141,7 +149,9 @@ def create_notification_event(
     return event
 
 
-def _templates_by_channel(*, event_type: str, channels: list[str]) -> dict[str, NotificationTemplate | None]:
+def _templates_by_channel(
+    *, event_type: str, channels: list[str]
+) -> dict[str, NotificationTemplate | None]:
     """Fetch active templates for one event type keyed by channel, in one query."""
     found = {
         template.channel: template
@@ -169,7 +179,9 @@ def render_notification(
     امضای عمومی تابع سازگار بماند.
     """
     if template is None:
-        template = NotificationTemplate.objects.filter(code=event_type, channel=channel, is_active=True).first()
+        template = NotificationTemplate.objects.filter(
+            code=event_type, channel=channel, is_active=True
+        ).first()
     if template:
         return (
             render_template_string(template.subject_template, payload),
@@ -213,7 +225,9 @@ def dispatch_event(*, event: NotificationEvent) -> NotificationEvent:
         event.save(update_fields=["status", "attempt_count", "updated_at"])
 
     pending = list(
-        event.deliveries.filter(status=NotificationDeliveryStatus.PENDING).select_related("recipient"),
+        event.deliveries.filter(status=NotificationDeliveryStatus.PENDING).select_related(
+            "recipient"
+        ),
     )
     sent = failed = 0
     for delivery in pending:
@@ -238,13 +252,19 @@ def dispatch_event(*, event: NotificationEvent) -> NotificationEvent:
                 pending,
                 ["provider", "external_id", "status", "sent_at", "error_message", "updated_at"],
             )
-        event.status = NotificationEventStatus.SENT if failed == 0 else (NotificationEventStatus.PARTIAL if sent else NotificationEventStatus.FAILED)
+        event.status = (
+            NotificationEventStatus.SENT
+            if failed == 0
+            else (NotificationEventStatus.PARTIAL if sent else NotificationEventStatus.FAILED)
+        )
         event.processed_at = timezone.now()
         event.save(update_fields=["status", "processed_at", "updated_at"])
     return event
 
 
-def _send_delivery(*, delivery: NotificationDelivery, event: NotificationEvent) -> NotificationDeliveryResult:
+def _send_delivery(
+    *, delivery: NotificationDelivery, event: NotificationEvent
+) -> NotificationDeliveryResult:
     """Send one delivery, converting an unexpected provider error into a failure result.
 
     providerهای موجود خطاهای مورد انتظارشان را خودشان به نتیجهٔ ناموفق
@@ -288,12 +308,18 @@ def mark_delivery_read(*, delivery: NotificationDelivery, user: Any) -> Notifica
 def mark_all_read(*, user: Any) -> int:
     """Mark all current user's deliveries as read."""
     now = timezone.now()
-    updated = NotificationDelivery.objects.filter(recipient=user).exclude(status=NotificationDeliveryStatus.READ).update(status=NotificationDeliveryStatus.READ, read_at=now, updated_at=now)
+    updated = (
+        NotificationDelivery.objects.filter(recipient=user)
+        .exclude(status=NotificationDeliveryStatus.READ)
+        .update(status=NotificationDeliveryStatus.READ, read_at=now, updated_at=now)
+    )
     return int(updated)
 
 
 @transaction.atomic
-def set_preference(*, user: Any, event_type: str, channel: str, enabled: bool) -> NotificationPreference:
+def set_preference(
+    *, user: Any, event_type: str, channel: str, enabled: bool
+) -> NotificationPreference:
     """Set a user's preference for an event/channel pair."""
     preference, _created = NotificationPreference.objects.update_or_create(
         user=user,
@@ -306,7 +332,9 @@ def set_preference(*, user: Any, event_type: str, channel: str, enabled: bool) -
 
 def _preference_enabled(*, user: Any, event_type: str, channel: str) -> bool:
     """Return whether a user allows the event/channel delivery."""
-    preference = NotificationPreference.objects.filter(user=user, event_type=event_type, channel=channel).first()
+    preference = NotificationPreference.objects.filter(
+        user=user, event_type=event_type, channel=channel
+    ).first()
     return True if preference is None else preference.enabled
 
 

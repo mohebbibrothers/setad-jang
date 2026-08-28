@@ -12,6 +12,7 @@ from .models import User
 
 class UserAdminFilter(django_filters.FilterSet):
     """UserAdminFilter implementation for the authentication application."""
+
     role = django_filters.ChoiceFilter(
         field_name="role",
         choices=UserRole.choices,

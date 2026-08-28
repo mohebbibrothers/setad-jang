@@ -81,7 +81,12 @@ class R4JCriminalPublicFilter(django_filters.FilterSet):
         searched = apply_smart_search(
             queryset,
             search_term=value,
-            fields=[SearchField("first_name", "A"), SearchField("last_name", "A"), SearchField("slug", "B"), SearchField("aliases__alias", "B")],
+            fields=[
+                SearchField("first_name", "A"),
+                SearchField("last_name", "A"),
+                SearchField("slug", "B"),
+                SearchField("aliases__alias", "B"),
+            ],
             trigram_fields=["first_name", "last_name", "slug", "aliases__alias"],
         )
         return searched.distinct()

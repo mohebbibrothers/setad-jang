@@ -28,7 +28,9 @@ def process_lesson_video_job_task(self, *, job_id: int) -> dict[str, Any]:
         logger.warning("LMS video processing job missing job_id=%s", job_id)
         return {"job_id": job_id, "status": "missing"}
     except Exception as exc:
-        logger.exception("LMS video processing failed job_id=%s error_type=%s", job_id, type(exc).__name__)
+        logger.exception(
+            "LMS video processing failed job_id=%s error_type=%s", job_id, type(exc).__name__
+        )
         job = LessonVideoProcessingJob.objects.filter(pk=job_id).first()
         if job is not None:
             fail_lesson_video_job(job=job, error_message=type(exc).__name__)

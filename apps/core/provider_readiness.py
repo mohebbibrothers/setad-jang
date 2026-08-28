@@ -21,7 +21,9 @@ def check_email_provider_readiness() -> ProviderReadinessResult:
     """Check SMTP/email provider configuration without sending an email."""
     backend = settings.EMAIL_BACKEND
     if backend.endswith("ReadableConsoleEmailBackend"):
-        return ProviderReadinessResult("email", settings.DEBUG, "console", "Console email backend is development-only.")
+        return ProviderReadinessResult(
+            "email", settings.DEBUG, "console", "Console email backend is development-only."
+        )
     required = [settings.EMAIL_HOST, settings.EMAIL_PORT, settings.DEFAULT_FROM_EMAIL]
     credentials_present = bool(settings.EMAIL_HOST_USER and settings.EMAIL_HOST_PASSWORD)
     ready = all(required) and credentials_present
@@ -37,7 +39,9 @@ def check_sms_provider_readiness() -> ProviderReadinessResult:
     """Check SMS provider configuration without sending an SMS."""
     provider = getattr(settings, "OTP_SMS_PROVIDER", "console")
     if provider == "console":
-        return ProviderReadinessResult("sms", settings.DEBUG, "console", "Console SMS backend is development-only.")
+        return ProviderReadinessResult(
+            "sms", settings.DEBUG, "console", "Console SMS backend is development-only."
+        )
     if provider == "http":
         ready = bool(getattr(settings, "SMS_API_URL", "") and getattr(settings, "SMS_API_KEY", ""))
         return ProviderReadinessResult(
@@ -53,14 +57,21 @@ def check_payment_provider_readiness() -> ProviderReadinessResult:
     """Check Madadkar payment provider configuration without requesting payment."""
     provider = getattr(settings, "MADADKAR_PAYMENT_PROVIDER", "sandbox")
     if provider == "sandbox":
-        return ProviderReadinessResult("payment", settings.DEBUG, "sandbox", "Sandbox payment provider is development/staging only.")
+        return ProviderReadinessResult(
+            "payment",
+            settings.DEBUG,
+            "sandbox",
+            "Sandbox payment provider is development/staging only.",
+        )
     if provider == "zarinpal":
         ready = bool(getattr(settings, "MADADKAR_ZARINPAL_MERCHANT_ID", ""))
         return ProviderReadinessResult(
             "payment",
             ready,
             "zarinpal",
-            "Zarinpal merchant id configured." if ready else "MADADKAR_ZARINPAL_MERCHANT_ID is required.",
+            "Zarinpal merchant id configured."
+            if ready
+            else "MADADKAR_ZARINPAL_MERCHANT_ID is required.",
         )
     return ProviderReadinessResult("payment", False, provider, "Unsupported payment provider.")
 

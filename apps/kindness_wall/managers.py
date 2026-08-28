@@ -45,7 +45,11 @@ class KindnessListingQuerySet(models.QuerySet):
         """Return listings with the opposite fixed type."""
         from apps.kindness_wall.choices import ListingType
 
-        opposite = ListingType.OFFER_HELP if listing_type == ListingType.NEED_HELP else ListingType.NEED_HELP
+        opposite = (
+            ListingType.OFFER_HELP
+            if listing_type == ListingType.NEED_HELP
+            else ListingType.NEED_HELP
+        )
         return self.filter(listing_type=opposite)
 
 

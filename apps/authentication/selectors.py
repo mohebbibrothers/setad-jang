@@ -211,11 +211,16 @@ def get_profile_by_user(user: User) -> Profile | None:
 # Auth session selectors
 # ============================================================
 
+
 def get_user_auth_sessions(*, user_id: int):
     """Return auth sessions owned by a user with newest activity first."""
     from apps.authentication.models import AuthSession
 
-    return AuthSession.objects.filter(user_id=user_id).select_related("revoked_by").order_by("-last_seen_at", "-created_at")
+    return (
+        AuthSession.objects.filter(user_id=user_id)
+        .select_related("revoked_by")
+        .order_by("-last_seen_at", "-created_at")
+    )
 
 
 def get_user_auth_session_by_id(*, user_id: int, session_id: int):
@@ -232,7 +237,9 @@ def get_admin_auth_risk_signals():
     """Return auth risk signals for admin security review."""
     from apps.authentication.models import AuthRiskSignal
 
-    return AuthRiskSignal.objects.select_related("user", "session", "reviewed_by").order_by("-created_at")
+    return AuthRiskSignal.objects.select_related("user", "session", "reviewed_by").order_by(
+        "-created_at"
+    )
 
 
 def get_admin_auth_risk_signal_by_id(*, signal_id: int):

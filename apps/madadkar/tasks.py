@@ -42,6 +42,7 @@ logger = logging.getLogger("apps.madadkar")
 # Expire stale participations
 # ===========================================================================
 
+
 @shared_task(
     name="apps.madadkar.tasks.expire_stale_participations_task",
     bind=True,
@@ -122,6 +123,7 @@ def expire_stale_participations_task(self) -> dict[str, Any]:
 # Close expired campaigns
 # ===========================================================================
 
+
 @shared_task(
     name="apps.madadkar.tasks.close_expired_campaigns_task",
     bind=True,
@@ -185,8 +187,7 @@ def close_expired_campaigns_task(self) -> dict[str, Any]:
     }
 
     logger.info(
-        "Madadkar close_expired_campaigns_task finished task_id=%s "
-        "total=%s closed=%s failed=%s",
+        "Madadkar close_expired_campaigns_task finished task_id=%s total=%s closed=%s failed=%s",
         self.request.id,
         total_found,
         closed_count,
@@ -199,6 +200,7 @@ def close_expired_campaigns_task(self) -> dict[str, Any]:
 # ===========================================================================
 # Financial control snapshot
 # ===========================================================================
+
 
 @shared_task(
     name="apps.madadkar.tasks.generate_financial_control_snapshot_task",

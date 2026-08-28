@@ -48,9 +48,7 @@ class MultiIdentifierBackend(ModelBackend):
 
         try:
             # جستجو با ایمیل (غیر حساس به حروف کوچک/بزرگ) یا شماره موبایل دقیق
-            user = User.objects.get(
-                Q(email__iexact=identifier) | Q(phone_number=identifier)
-            )
+            user = User.objects.get(Q(email__iexact=identifier) | Q(phone_number=identifier))
         except User.DoesNotExist:
             # Mitigation برای Timing Attack:
             # اجرای یک round هشینگ رمز عبور حتی اگر کاربر وجود نداشته باشد،

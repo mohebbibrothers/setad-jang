@@ -9,6 +9,7 @@ from .managers import ActiveManager, AllObjectsManager
 
 class BaseModel(models.Model):
     """BaseModel implementation for the core application."""
+
     created_at = models.DateTimeField(
         auto_now_add=True,
         verbose_name="تاریخ ایجاد",
@@ -58,7 +59,9 @@ class CacheInvalidationEvent(BaseModel):
     domain = models.CharField(max_length=80, db_index=True)
     tags = models.JSONField(default=list, blank=True)
     paths = models.JSONField(default=list, blank=True)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING, db_index=True)
+    status = models.CharField(
+        max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING, db_index=True
+    )
     attempts = models.PositiveSmallIntegerField(default=0)
     last_error = models.TextField(blank=True, default="")
     next_attempt_at = models.DateTimeField(null=True, blank=True, db_index=True)
@@ -67,7 +70,9 @@ class CacheInvalidationEvent(BaseModel):
     class Meta:
         ordering = ["created_at"]
         indexes = [
-            models.Index(fields=["status", "next_attempt_at", "created_at"], name="core_cache_event_due_idx"),
+            models.Index(
+                fields=["status", "next_attempt_at", "created_at"], name="core_cache_event_due_idx"
+            ),
             models.Index(fields=["domain", "-created_at"], name="core_cache_event_domain_idx"),
         ]
 

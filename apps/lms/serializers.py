@@ -190,7 +190,9 @@ class CourseReportEnrollmentSerializer(serializers.ModelSerializer):
 
     user_email = serializers.EmailField(source="user.email", read_only=True)
     full_name = serializers.CharField(source="user.full_name", read_only=True)
-    certificate_code = serializers.CharField(source="certificate.certificate_code", read_only=True, allow_null=True)
+    certificate_code = serializers.CharField(
+        source="certificate.certificate_code", read_only=True, allow_null=True
+    )
 
     class Meta:
         model = Enrollment
@@ -226,7 +228,15 @@ class LMSUserSkillSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = LMSUserSkill
-        fields = ("id", "title", "slug", "badge_level", "course_title", "certificate_code", "issued_at")
+        fields = (
+            "id",
+            "title",
+            "slug",
+            "badge_level",
+            "course_title",
+            "certificate_code",
+            "issued_at",
+        )
         read_only_fields = fields
 
 
@@ -454,7 +464,9 @@ class QuizCreateUpdateSerializer(serializers.Serializer):
     title = serializers.CharField(max_length=255, required=False)
     description = serializers.CharField(required=False, allow_blank=True)
     time_limit_minutes = serializers.IntegerField(required=False, min_value=1)
-    passing_score = serializers.DecimalField(required=False, max_digits=4, decimal_places=2, min_value=0, max_value=20)
+    passing_score = serializers.DecimalField(
+        required=False, max_digits=4, decimal_places=2, min_value=0, max_value=20
+    )
     max_attempts = serializers.IntegerField(required=False, min_value=1, max_value=10)
     retake_delay_days = serializers.IntegerField(required=False, min_value=0, max_value=365)
     shuffle_questions = serializers.BooleanField(required=False)
@@ -470,7 +482,9 @@ class QuizQuestionCreateSerializer(serializers.Serializer):
     text = serializers.CharField()
     explanation = serializers.CharField(required=False, allow_blank=True, default="")
     order = serializers.IntegerField(required=False, min_value=1, default=1)
-    weight = serializers.DecimalField(required=False, max_digits=6, decimal_places=2, min_value=0, default="1.00")
+    weight = serializers.DecimalField(
+        required=False, max_digits=6, decimal_places=2, min_value=0, default="1.00"
+    )
 
 
 class QuizOptionCreateSerializer(serializers.Serializer):
@@ -526,7 +540,9 @@ class QuizAttemptQuestionSerializer(serializers.ModelSerializer):
         option_order = self.context.get("option_order", {})
         ordered_ids = option_order.get(str(obj.pk), [])
         options_by_id = {option.pk: option for option in obj.options.all()}
-        ordered_options = [options_by_id[option_id] for option_id in ordered_ids if option_id in options_by_id]
+        ordered_options = [
+            options_by_id[option_id] for option_id in ordered_ids if option_id in options_by_id
+        ]
         return QuizAttemptQuestionOptionSerializer(ordered_options, many=True).data
 
 
@@ -558,8 +574,7 @@ class QuizAttemptDetailSerializer(serializers.ModelSerializer):
     def get_questions(self, obj: QuizAttempt) -> list[dict]:
         """Return questions in snapshot order."""
         questions = list(
-            QuizQuestion.objects.filter(pk__in=obj.question_snapshot)
-            .prefetch_related("options")
+            QuizQuestion.objects.filter(pk__in=obj.question_snapshot).prefetch_related("options")
         )
         by_id = {question.pk: question for question in questions}
         ordered = [by_id[qid] for qid in obj.question_snapshot if qid in by_id]
@@ -600,7 +615,9 @@ class QuizAttemptSubmitSerializer(serializers.Serializer):
         """Validate each answer object has required keys."""
         for item in value:
             if "question_id" not in item or "selected_option_id" not in item:
-                raise serializers.ValidationError("هر پاسخ باید question_id و selected_option_id داشته باشد.")
+                raise serializers.ValidationError(
+                    "هر پاسخ باید question_id و selected_option_id داشته باشد."
+                )
         return value
 
 
@@ -618,7 +635,17 @@ class QuizUnlockSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = QuizUnlock
-        fields = ("id", "quiz_id", "course_id", "user_id", "unlocked_by_id", "reason", "extra_attempts", "valid_until", "created_at")
+        fields = (
+            "id",
+            "quiz_id",
+            "course_id",
+            "user_id",
+            "unlocked_by_id",
+            "reason",
+            "extra_attempts",
+            "valid_until",
+            "created_at",
+        )
         read_only_fields = fields
 
 
@@ -768,7 +795,9 @@ class LearningActivityStatementSerializer(serializers.ModelSerializer):
 
     actor_email = serializers.EmailField(source="actor.email", read_only=True, allow_null=True)
     course_title = serializers.CharField(source="course.title", read_only=True)
-    lesson_title = serializers.CharField(source="lesson.title", read_only=True, allow_blank=True, allow_null=True)
+    lesson_title = serializers.CharField(
+        source="lesson.title", read_only=True, allow_blank=True, allow_null=True
+    )
     verb_display = serializers.CharField(source="get_verb_display", read_only=True)
 
     class Meta:

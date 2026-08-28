@@ -46,21 +46,26 @@ from apps.madadkar.models import (
 # Sponsor selectors
 # ---------------------------------------------------------------------------
 
+
 def get_public_sponsors_queryset() -> QuerySet[Sponsor]:
     """
     لیست مددکاران برای نمایش عمومی.
 
     شامل فقط Sponsorهایی که حداقل یک Campaign قابل نمایش دارند.
     """
-    return Sponsor.objects.filter(
-        campaigns__is_visible=True,
-        campaigns__is_active=True,
-        campaigns__status__in=[
-            CampaignStatus.PUBLISHED,
-            CampaignStatus.COMPLETED,
-            CampaignStatus.CLOSED,
-        ],
-    ).distinct().order_by("name")
+    return (
+        Sponsor.objects.filter(
+            campaigns__is_visible=True,
+            campaigns__is_active=True,
+            campaigns__status__in=[
+                CampaignStatus.PUBLISHED,
+                CampaignStatus.COMPLETED,
+                CampaignStatus.CLOSED,
+            ],
+        )
+        .distinct()
+        .order_by("name")
+    )
 
 
 def get_admin_sponsors_queryset() -> QuerySet[Sponsor]:
@@ -81,6 +86,7 @@ def get_sponsor_by_id_admin(sponsor_id: int) -> Sponsor | None:
 # ---------------------------------------------------------------------------
 # Campaign selectors — public scope
 # ---------------------------------------------------------------------------
+
 
 def _gallery_prefetch() -> Prefetch:
     """Prefetch گالری حرکت با ordering مشخص."""
@@ -120,6 +126,7 @@ def get_public_campaigns_by_sponsor(sponsor: Sponsor) -> QuerySet[Campaign]:
 # Campaign selectors — admin scope
 # ---------------------------------------------------------------------------
 
+
 def get_admin_campaigns_queryset() -> QuerySet[Campaign]:
     """لیست کامل حرکت‌ها برای ادمین (همه وضعیت‌ها به جز soft-deleted)."""
     return (
@@ -137,6 +144,7 @@ def get_admin_campaign_by_id(campaign_id: int) -> Campaign | None:
 # ---------------------------------------------------------------------------
 # Campaign selectors — operational
 # ---------------------------------------------------------------------------
+
 
 def get_campaigns_due_for_closing() -> QuerySet[Campaign]:
     """
@@ -156,6 +164,7 @@ def get_campaigns_due_for_closing() -> QuerySet[Campaign]:
 # Participation selectors — user scope (IDOR-safe)
 # ---------------------------------------------------------------------------
 
+
 def _participation_user_queryset_base() -> QuerySet[Participation]:
     """
     queryset پایه برای participationهای کاربر.
@@ -164,16 +173,12 @@ def _participation_user_queryset_base() -> QuerySet[Participation]:
     - campaign + sponsor (برای نمایش خلاصه campaign)
     - payment (one-to-one — برای نمایش وضعیت پرداخت)
     """
-    return (
-        Participation.objects
-        .select_related(
-            "campaign",
-            "campaign__sponsor",
-            "payment",
-            "user",
-        )
-        .order_by("-created_at")
-    )
+    return Participation.objects.select_related(
+        "campaign",
+        "campaign__sponsor",
+        "payment",
+        "user",
+    ).order_by("-created_at")
 
 
 def get_user_participations_queryset(*, user_id: int) -> QuerySet[Participation]:
@@ -196,29 +201,22 @@ def get_user_participation_by_id(
     IDOR-safe: فقط اگر مالک participation برابر user_id باشد برمی‌گردد.
     در غیر این صورت None.
     """
-    return (
-        _participation_user_queryset_base()
-        .filter(pk=participation_id, user_id=user_id)
-        .first()
-    )
+    return _participation_user_queryset_base().filter(pk=participation_id, user_id=user_id).first()
 
 
 # ---------------------------------------------------------------------------
 # Participation selectors — admin scope
 # ---------------------------------------------------------------------------
 
+
 def _participation_admin_queryset_base() -> QuerySet[Participation]:
     """queryset پایه برای participationهای ادمین — همه کاربران."""
-    return (
-        Participation.objects
-        .select_related(
-            "campaign",
-            "campaign__sponsor",
-            "payment",
-            "user",
-        )
-        .order_by("-created_at")
-    )
+    return Participation.objects.select_related(
+        "campaign",
+        "campaign__sponsor",
+        "payment",
+        "user",
+    ).order_by("-created_at")
 
 
 def get_admin_participations_queryset() -> QuerySet[Participation]:
@@ -239,28 +237,21 @@ def get_admin_participation_by_id(
     participation_id: int,
 ) -> Participation | None:
     """یک مشارکت برای ادمین با pk (بدون قید owner)."""
-    return (
-        _participation_admin_queryset_base()
-        .filter(pk=participation_id)
-        .first()
-    )
+    return _participation_admin_queryset_base().filter(pk=participation_id).first()
 
 
 # ---------------------------------------------------------------------------
 # Payment selectors — admin scope
 # ---------------------------------------------------------------------------
 
+
 def get_admin_payments_queryset() -> QuerySet[Payment]:
     """لیست تمام پرداخت‌ها برای ادمین."""
-    return (
-        Payment.objects
-        .select_related(
-            "participation",
-            "participation__campaign",
-            "user",
-        )
-        .order_by("-created_at")
-    )
+    return Payment.objects.select_related(
+        "participation",
+        "participation__campaign",
+        "user",
+    ).order_by("-created_at")
 
 
 def get_payment_by_authority(*, authority: str) -> Payment | None:
@@ -271,8 +262,7 @@ def get_payment_by_authority(*, authority: str) -> Payment | None:
     session کاربر را در callback ندارد).
     """
     return (
-        Payment.objects
-        .select_related(
+        Payment.objects.select_related(
             "participation",
             "participation__campaign",
             "user",
@@ -291,6 +281,7 @@ def get_admin_payment_by_id(*, payment_id: int) -> Payment | None:
 # Analytics selectors — admin only
 # ---------------------------------------------------------------------------
 
+
 def get_campaign_paid_participations_queryset(
     *,
     campaign: Campaign,
@@ -301,8 +292,7 @@ def get_campaign_paid_participations_queryset(
     ترتیب: بزرگ‌ترین مبلغ ابتدا، سپس آخرین پرداخت‌ها.
     """
     return (
-        Participation.objects
-        .select_related("user", "payment", "campaign")
+        Participation.objects.select_related("user", "payment", "campaign")
         .filter(
             campaign=campaign,
             status=ParticipationStatus.PAID,
@@ -342,8 +332,7 @@ def get_campaign_leaderboard(
                        total_shares, total_amount, participations_count
     """
     aggregations = (
-        Participation.objects
-        .filter(campaign=campaign, status=ParticipationStatus.PAID)
+        Participation.objects.filter(campaign=campaign, status=ParticipationStatus.PAID)
         .values("user_id")
         .annotate(
             total_shares=Sum("share_count"),
@@ -359,10 +348,9 @@ def get_campaign_leaderboard(
         return []
 
     from django.contrib.auth import get_user_model
+
     User = get_user_model()
-    users_map = {
-        u.pk: u for u in User.objects.filter(pk__in=user_ids)
-    }
+    users_map = {u.pk: u for u in User.objects.filter(pk__in=user_ids)}
 
     result = []
     for agg in aggregations:
@@ -372,16 +360,16 @@ def get_campaign_leaderboard(
         full_name = ""
         if hasattr(user, "get_full_name"):
             full_name = (user.get_full_name() or "").strip()
-        result.append({
-            "user_id": user.pk,
-            "user_email": getattr(user, "email", "") or "",
-            "user_display_name": (
-                full_name or getattr(user, "email", "") or "—"
-            ),
-            "total_shares": agg["total_shares"] or 0,
-            "total_amount": agg["total_amount"] or 0,
-            "participations_count": agg["participations_count"] or 0,
-        })
+        result.append(
+            {
+                "user_id": user.pk,
+                "user_email": getattr(user, "email", "") or "",
+                "user_display_name": (full_name or getattr(user, "email", "") or "—"),
+                "total_shares": agg["total_shares"] or 0,
+                "total_amount": agg["total_amount"] or 0,
+                "participations_count": agg["participations_count"] or 0,
+            }
+        )
 
     return result
 
@@ -405,28 +393,23 @@ def get_campaign_analytics(*, campaign: Campaign) -> dict:
     """
     from django.db.models import Q
 
-    counts = (
-        Participation.objects
-        .filter(campaign=campaign)
-        .aggregate(
-            total=Count("id"),
-            paid=Count("id", filter=Q(status=ParticipationStatus.PAID)),
-            pending=Count(
-                "id", filter=Q(status=ParticipationStatus.PENDING_PAYMENT),
-            ),
-            failed=Count("id", filter=Q(status=ParticipationStatus.FAILED)),
-            expired=Count("id", filter=Q(status=ParticipationStatus.EXPIRED)),
-        )
+    counts = Participation.objects.filter(campaign=campaign).aggregate(
+        total=Count("id"),
+        paid=Count("id", filter=Q(status=ParticipationStatus.PAID)),
+        pending=Count(
+            "id",
+            filter=Q(status=ParticipationStatus.PENDING_PAYMENT),
+        ),
+        failed=Count("id", filter=Q(status=ParticipationStatus.FAILED)),
+        expired=Count("id", filter=Q(status=ParticipationStatus.EXPIRED)),
     )
 
-    paid_aggregates = (
-        Participation.objects
-        .filter(campaign=campaign, status=ParticipationStatus.PAID)
-        .aggregate(
-            total_amount=Sum("total_amount"),
-            total_shares=Sum("share_count"),
-            unique_users=Count("user_id", distinct=True),
-        )
+    paid_aggregates = Participation.objects.filter(
+        campaign=campaign, status=ParticipationStatus.PAID
+    ).aggregate(
+        total_amount=Sum("total_amount"),
+        total_shares=Sum("share_count"),
+        unique_users=Count("user_id", distinct=True),
     )
 
     return {
@@ -447,19 +430,16 @@ def get_campaign_analytics(*, campaign: Campaign) -> dict:
 # Refund / adjustment selectors — admin scope
 # ---------------------------------------------------------------------------
 
+
 def get_admin_refunds_queryset() -> QuerySet[PaymentRefund]:
     """Return all refund workflow rows with payment/campaign/user eager loading."""
-    return (
-        PaymentRefund.objects
-        .select_related(
-            "payment",
-            "payment__participation",
-            "payment__participation__campaign",
-            "requested_by",
-            "reviewed_by",
-        )
-        .order_by("-created_at")
-    )
+    return PaymentRefund.objects.select_related(
+        "payment",
+        "payment__participation",
+        "payment__participation__campaign",
+        "requested_by",
+        "reviewed_by",
+    ).order_by("-created_at")
 
 
 def get_admin_refund_by_id(*, refund_id: int) -> PaymentRefund | None:
@@ -469,11 +449,9 @@ def get_admin_refund_by_id(*, refund_id: int) -> PaymentRefund | None:
 
 def get_admin_adjustments_queryset() -> QuerySet[CampaignFinancialAdjustment]:
     """Return all financial adjustments with campaign/payment/user eager loading."""
-    return (
-        CampaignFinancialAdjustment.objects
-        .select_related("campaign", "payment", "requested_by", "reviewed_by")
-        .order_by("-created_at")
-    )
+    return CampaignFinancialAdjustment.objects.select_related(
+        "campaign", "payment", "requested_by", "reviewed_by"
+    ).order_by("-created_at")
 
 
 def get_admin_adjustment_by_id(*, adjustment_id: int) -> CampaignFinancialAdjustment | None:
@@ -497,7 +475,8 @@ def get_campaign_financial_control_summary(*, campaign: Campaign) -> dict:
         "gross_paid_amount": Participation.objects.filter(
             campaign=campaign,
             status=ParticipationStatus.PAID,
-        ).aggregate(total=Sum("total_amount"))["total"] or 0,
+        ).aggregate(total=Sum("total_amount"))["total"]
+        or 0,
         "completed_refund_amount": completed_refunds["total"] or 0,
         "completed_refund_count": completed_refunds["count"] or 0,
         "applied_adjustment_delta": adjustment_delta,
@@ -511,13 +490,12 @@ def get_campaign_financial_control_summary(*, campaign: Campaign) -> dict:
 # Risk selectors — admin scope
 # ---------------------------------------------------------------------------
 
+
 def get_admin_risk_signals_queryset() -> QuerySet[MadadkarRiskSignal]:
     """Return all Madadkar risk signals for admin review with eager loading."""
-    return (
-        MadadkarRiskSignal.objects
-        .select_related("user", "campaign", "payment", "refund", "adjustment", "reviewed_by")
-        .order_by("-created_at")
-    )
+    return MadadkarRiskSignal.objects.select_related(
+        "user", "campaign", "payment", "refund", "adjustment", "reviewed_by"
+    ).order_by("-created_at")
 
 
 def get_admin_risk_signal_by_id(*, signal_id: int) -> MadadkarRiskSignal | None:
@@ -529,6 +507,7 @@ def get_admin_risk_signal_by_id(*, signal_id: int) -> MadadkarRiskSignal | None:
 # Campaign Intelligence selectors — admin scope
 # ---------------------------------------------------------------------------
 
+
 def get_campaign_intelligence(*, campaign: Campaign, days: int = 30) -> dict:
     """Build refund-adjusted intelligence metrics for one campaign."""
     safe_days = max(1, min(days, 365))
@@ -536,8 +515,12 @@ def get_campaign_intelligence(*, campaign: Campaign, days: int = 30) -> dict:
     start_date = today - timezone.timedelta(days=safe_days - 1)
     payments = Payment.objects.filter(participation__campaign=campaign)
     successful_payments = payments.filter(status=PaymentStatus.SUCCESS)
-    refunds = PaymentRefund.objects.filter(payment__participation__campaign=campaign, status=RefundStatus.COMPLETED)
-    adjustments = CampaignFinancialAdjustment.objects.filter(campaign=campaign, status=FinancialAdjustmentStatus.APPLIED)
+    refunds = PaymentRefund.objects.filter(
+        payment__participation__campaign=campaign, status=RefundStatus.COMPLETED
+    )
+    adjustments = CampaignFinancialAdjustment.objects.filter(
+        campaign=campaign, status=FinancialAdjustmentStatus.APPLIED
+    )
     trend = _build_campaign_daily_trend(
         successful_payments=successful_payments,
         refunds=refunds,
@@ -554,8 +537,12 @@ def get_campaign_intelligence(*, campaign: Campaign, days: int = 30) -> dict:
     failed_count = payments.filter(status=PaymentStatus.FAILED).count()
     pending_count = payments.filter(status=PaymentStatus.PENDING).count()
     paid_users = successful_payments.values("user_id").distinct().count()
-    donor_concentration = _calculate_donor_concentration(successful_payments=successful_payments, gross_amount=gross_amount)
-    velocity = _calculate_campaign_velocity(campaign=campaign, net_amount=net_amount, trend=trend, today=today)
+    donor_concentration = _calculate_donor_concentration(
+        successful_payments=successful_payments, gross_amount=gross_amount
+    )
+    velocity = _calculate_campaign_velocity(
+        campaign=campaign, net_amount=net_amount, trend=trend, today=today
+    )
     risk = _calculate_campaign_intelligence_risk(campaign=campaign)
     health_score, health_flags = _calculate_campaign_health_score(
         campaign=campaign,
@@ -580,15 +567,21 @@ def get_campaign_intelligence(*, campaign: Campaign, days: int = 30) -> dict:
             "net_amount": net_amount,
             "target_amount": campaign.total_amount,
             "remaining_amount": max(campaign.total_amount - net_amount, 0),
-            "net_progress_percent": round((net_amount / campaign.total_amount) * 100, 2) if campaign.total_amount else 0,
+            "net_progress_percent": round((net_amount / campaign.total_amount) * 100, 2)
+            if campaign.total_amount
+            else 0,
         },
         "funnel": {
             "payment_attempts": total_attempts,
             "successful_payments": success_count,
             "failed_payments": failed_count,
             "pending_payments": pending_count,
-            "success_rate": round((success_count / total_attempts) * 100, 2) if total_attempts else 0,
-            "failure_rate": round((failed_count / total_attempts) * 100, 2) if total_attempts else 0,
+            "success_rate": round((success_count / total_attempts) * 100, 2)
+            if total_attempts
+            else 0,
+            "failure_rate": round((failed_count / total_attempts) * 100, 2)
+            if total_attempts
+            else 0,
             "unique_paid_users": paid_users,
         },
         "velocity": velocity,
@@ -604,9 +597,14 @@ def get_madadkar_intelligence_overview(*, days: int = 30) -> dict:
     safe_days = max(1, min(days, 365))
     campaigns = Campaign.objects.filter(is_active=True)
     published_campaigns = campaigns.filter(status=CampaignStatus.PUBLISHED)
-    campaign_snapshots = [get_campaign_intelligence(campaign=campaign, days=safe_days) for campaign in published_campaigns.order_by("-published_at", "-created_at")[:25]]
+    campaign_snapshots = [
+        get_campaign_intelligence(campaign=campaign, days=safe_days)
+        for campaign in published_campaigns.order_by("-published_at", "-created_at")[:25]
+    ]
     weakest = sorted(campaign_snapshots, key=lambda item: item["health"]["score"])[:5]
-    strongest = sorted(campaign_snapshots, key=lambda item: item["health"]["score"], reverse=True)[:5]
+    strongest = sorted(campaign_snapshots, key=lambda item: item["health"]["score"], reverse=True)[
+        :5
+    ]
     return {
         "generated_at": timezone.now().isoformat(),
         "window_days": safe_days,
@@ -614,9 +612,19 @@ def get_madadkar_intelligence_overview(*, days: int = 30) -> dict:
             "active_campaigns": campaigns.count(),
             "published_campaigns": published_campaigns.count(),
             "completed_campaigns": campaigns.filter(status=CampaignStatus.COMPLETED).count(),
-            "total_open_risk_signals": MadadkarRiskSignal.objects.filter(status=MadadkarRiskStatus.OPEN).count(),
-            "total_net_amount": sum(item["financials"]["net_amount"] for item in campaign_snapshots),
-            "average_health_score": round(sum(item["health"]["score"] for item in campaign_snapshots) / len(campaign_snapshots), 2) if campaign_snapshots else 0,
+            "total_open_risk_signals": MadadkarRiskSignal.objects.filter(
+                status=MadadkarRiskStatus.OPEN
+            ).count(),
+            "total_net_amount": sum(
+                item["financials"]["net_amount"] for item in campaign_snapshots
+            ),
+            "average_health_score": round(
+                sum(item["health"]["score"] for item in campaign_snapshots)
+                / len(campaign_snapshots),
+                2,
+            )
+            if campaign_snapshots
+            else 0,
         },
         "weakest_campaigns": _summarize_campaign_snapshots(weakest),
         "strongest_campaigns": _summarize_campaign_snapshots(strongest),
@@ -643,24 +651,37 @@ def _build_campaign_daily_trend(
         }
         for offset in range((today - start_date).days + 1)
     }
-    for payment in successful_payments.filter(created_at__date__gte=start_date, created_at__date__lte=today):
+    for payment in successful_payments.filter(
+        created_at__date__gte=start_date, created_at__date__lte=today
+    ):
         bucket = buckets[payment.created_at.date()]
         bucket["gross_amount"] += payment.amount
         bucket["successful_payments"] += 1
     for refund in refunds.filter(completed_at__date__gte=start_date, completed_at__date__lte=today):
         completed_at = refund.completed_at or refund.updated_at
         buckets[completed_at.date()]["refund_amount"] += refund.amount
-    for adjustment in adjustments.filter(applied_at__date__gte=start_date, applied_at__date__lte=today):
+    for adjustment in adjustments.filter(
+        applied_at__date__gte=start_date, applied_at__date__lte=today
+    ):
         applied_at = adjustment.applied_at or adjustment.updated_at
         buckets[applied_at.date()]["adjustment_delta"] += adjustment.signed_amount
     for bucket in buckets.values():
-        bucket["net_amount"] = max(bucket["gross_amount"] - bucket["refund_amount"] + bucket["adjustment_delta"], 0)
+        bucket["net_amount"] = max(
+            bucket["gross_amount"] - bucket["refund_amount"] + bucket["adjustment_delta"], 0
+        )
     return list(buckets.values())
 
 
-def _calculate_donor_concentration(*, successful_payments: QuerySet[Payment], gross_amount: int) -> dict:
+def _calculate_donor_concentration(
+    *, successful_payments: QuerySet[Payment], gross_amount: int
+) -> dict:
     """Calculate donor concentration and top donor dependency risk."""
-    top = successful_payments.values("user_id").annotate(total=Sum("amount"), payments=Count("id")).order_by("-total").first()
+    top = (
+        successful_payments.values("user_id")
+        .annotate(total=Sum("amount"), payments=Count("id"))
+        .order_by("-total")
+        .first()
+    )
     top_amount = top["total"] if top else 0
     top_share = round((top_amount / gross_amount) * 100, 2) if gross_amount else 0
     return {
@@ -671,10 +692,14 @@ def _calculate_donor_concentration(*, successful_payments: QuerySet[Payment], gr
     }
 
 
-def _calculate_campaign_velocity(*, campaign: Campaign, net_amount: int, trend: list[dict], today) -> dict:
+def _calculate_campaign_velocity(
+    *, campaign: Campaign, net_amount: int, trend: list[dict], today
+) -> dict:
     """Calculate completion velocity and estimated completion date."""
     non_zero_days = [day for day in trend if day["net_amount"] > 0]
-    average_daily_net = round(sum(day["net_amount"] for day in trend) / len(trend), 2) if trend else 0
+    average_daily_net = (
+        round(sum(day["net_amount"] for day in trend) / len(trend), 2) if trend else 0
+    )
     remaining_amount = max(campaign.total_amount - net_amount, 0)
     if average_daily_net > 0 and remaining_amount > 0:
         estimated_days = int((remaining_amount + average_daily_net - 1) // average_daily_net)
@@ -696,10 +721,14 @@ def _calculate_campaign_velocity(*, campaign: Campaign, net_amount: int, trend: 
 
 def _calculate_campaign_intelligence_risk(*, campaign: Campaign) -> dict:
     """Summarize open risk-signal exposure for campaign intelligence."""
-    open_signals = MadadkarRiskSignal.objects.filter(campaign=campaign, status=MadadkarRiskStatus.OPEN)
+    open_signals = MadadkarRiskSignal.objects.filter(
+        campaign=campaign, status=MadadkarRiskStatus.OPEN
+    )
     return {
         "open_risk_signals": open_signals.count(),
-        "high_or_critical_open_signals": open_signals.filter(severity__in=["high", "critical"]).count(),
+        "high_or_critical_open_signals": open_signals.filter(
+            severity__in=["high", "critical"]
+        ).count(),
     }
 
 
@@ -737,7 +766,12 @@ def _calculate_campaign_health_score(
     if velocity["is_stalled"]:
         score -= 20
         flags.append("stalled_campaign")
-    if campaign.has_deadline and campaign.deadline and campaign.deadline <= timezone.now() + timezone.timedelta(days=3) and campaign.remaining_shares > 0:
+    if (
+        campaign.has_deadline
+        and campaign.deadline
+        and campaign.deadline <= timezone.now() + timezone.timedelta(days=3)
+        and campaign.remaining_shares > 0
+    ):
         score -= 10
         flags.append("deadline_pressure")
     return max(score, 0), flags
@@ -763,11 +797,11 @@ def _summarize_campaign_snapshots(snapshots: list[dict]) -> list[dict]:
 # Donation receipt selectors — user/public/admin scope
 # ---------------------------------------------------------------------------
 
+
 def get_user_receipts_queryset(*, user_id: int) -> QuerySet[DonationReceipt]:
     """Return donation receipts owned by one user with eager loaded context."""
     return (
-        DonationReceipt.objects
-        .select_related("payment", "campaign", "user")
+        DonationReceipt.objects.select_related("payment", "campaign", "user")
         .filter(user_id=user_id)
         .order_by("-issued_at", "-created_at")
     )
@@ -780,17 +814,26 @@ def get_user_receipt_by_id(*, user_id: int, receipt_id: int) -> DonationReceipt 
 
 def get_receipt_by_number(*, receipt_number: str) -> DonationReceipt | None:
     """Return one receipt by public receipt number for verification."""
-    return DonationReceipt.objects.select_related("payment", "campaign", "user").filter(receipt_number=receipt_number).first()
+    return (
+        DonationReceipt.objects.select_related("payment", "campaign", "user")
+        .filter(receipt_number=receipt_number)
+        .first()
+    )
 
 
 def get_admin_receipt_by_id(*, receipt_id: int) -> DonationReceipt | None:
     """Return one receipt for audited admin actions."""
-    return DonationReceipt.objects.select_related("payment", "campaign", "user").filter(pk=receipt_id).first()
+    return (
+        DonationReceipt.objects.select_related("payment", "campaign", "user")
+        .filter(pk=receipt_id)
+        .first()
+    )
 
 
 # ---------------------------------------------------------------------------
 # Reconciliation selectors — admin scope
 # ---------------------------------------------------------------------------
+
 
 def get_admin_reconciliation_batches_queryset() -> QuerySet[PaymentReconciliationBatch]:
     """Return provider settlement reconciliation batches for admin review."""
@@ -802,7 +845,9 @@ def get_admin_reconciliation_batch_by_id(*, batch_id: int) -> PaymentReconciliat
     return get_admin_reconciliation_batches_queryset().filter(pk=batch_id).first()
 
 
-def get_admin_reconciliation_items_queryset(*, batch: PaymentReconciliationBatch) -> QuerySet[PaymentReconciliationItem]:
+def get_admin_reconciliation_items_queryset(
+    *, batch: PaymentReconciliationBatch
+) -> QuerySet[PaymentReconciliationItem]:
     """Return reconciliation items for one batch with payment eager loading."""
     return batch.items.select_related("payment").order_by("created_at", "id")
 
@@ -811,13 +856,12 @@ def get_admin_reconciliation_items_queryset(*, batch: PaymentReconciliationBatch
 # Disbursement selectors — admin scope
 # ---------------------------------------------------------------------------
 
+
 def get_admin_disbursements_queryset() -> QuerySet[CampaignDisbursement]:
     """Return disbursement workflow rows with campaign/user eager loading."""
-    return (
-        CampaignDisbursement.objects
-        .select_related("campaign", "requested_by", "reviewed_by", "paid_by")
-        .order_by("-created_at")
-    )
+    return CampaignDisbursement.objects.select_related(
+        "campaign", "requested_by", "reviewed_by", "paid_by"
+    ).order_by("-created_at")
 
 
 def get_admin_disbursement_by_id(*, disbursement_id: int) -> CampaignDisbursement | None:
@@ -829,10 +873,16 @@ def get_campaign_disbursable_summary(*, campaign: Campaign) -> dict:
     """Return campaign disbursable amount summary for allocation decisions."""
     active = CampaignDisbursement.objects.filter(
         campaign=campaign,
-        status__in=[DisbursementStatus.REQUESTED, DisbursementStatus.APPROVED, DisbursementStatus.PAID],
+        status__in=[
+            DisbursementStatus.REQUESTED,
+            DisbursementStatus.APPROVED,
+            DisbursementStatus.PAID,
+        ],
     )
     committed = active.aggregate(total=Sum("amount"))["total"] or 0
-    paid = active.filter(status=DisbursementStatus.PAID).aggregate(total=Sum("amount"))["total"] or 0
+    paid = (
+        active.filter(status=DisbursementStatus.PAID).aggregate(total=Sum("amount"))["total"] or 0
+    )
     return {
         "campaign_id": campaign.pk,
         "net_effective_amount": campaign.purchased_amount,
@@ -846,20 +896,37 @@ def get_campaign_disbursable_summary(*, campaign: Campaign) -> dict:
 # Public transparency selectors
 # ---------------------------------------------------------------------------
 
+
 def get_public_campaign_transparency(*, campaign: Campaign) -> dict:
     """Build public-safe financial transparency snapshot for one visible campaign."""
-    payments = Payment.objects.filter(participation__campaign=campaign, status=PaymentStatus.SUCCESS)
-    refunds = PaymentRefund.objects.filter(payment__participation__campaign=campaign, status=RefundStatus.COMPLETED)
-    adjustments = CampaignFinancialAdjustment.objects.filter(campaign=campaign, status=FinancialAdjustmentStatus.APPLIED)
+    payments = Payment.objects.filter(
+        participation__campaign=campaign, status=PaymentStatus.SUCCESS
+    )
+    refunds = PaymentRefund.objects.filter(
+        payment__participation__campaign=campaign, status=RefundStatus.COMPLETED
+    )
+    adjustments = CampaignFinancialAdjustment.objects.filter(
+        campaign=campaign, status=FinancialAdjustmentStatus.APPLIED
+    )
     disbursements = CampaignDisbursement.objects.filter(campaign=campaign)
     gross_amount = payments.aggregate(total=Sum("amount"))["total"] or 0
     refund_amount = refunds.aggregate(total=Sum("amount"))["total"] or 0
     adjustment_delta = sum(adjustment.signed_amount for adjustment in adjustments)
     net_raised = max(gross_amount - refund_amount + adjustment_delta, 0)
-    paid_disbursements = disbursements.filter(status=DisbursementStatus.PAID).aggregate(total=Sum("amount"))["total"] or 0
-    committed_disbursements = disbursements.filter(
-        status__in=[DisbursementStatus.REQUESTED, DisbursementStatus.APPROVED, DisbursementStatus.PAID],
-    ).aggregate(total=Sum("amount"))["total"] or 0
+    paid_disbursements = (
+        disbursements.filter(status=DisbursementStatus.PAID).aggregate(total=Sum("amount"))["total"]
+        or 0
+    )
+    committed_disbursements = (
+        disbursements.filter(
+            status__in=[
+                DisbursementStatus.REQUESTED,
+                DisbursementStatus.APPROVED,
+                DisbursementStatus.PAID,
+            ],
+        ).aggregate(total=Sum("amount"))["total"]
+        or 0
+    )
     receipt_count = DonationReceipt.objects.filter(campaign=campaign).count()
     return {
         "campaign_id": campaign.pk,
@@ -879,7 +946,9 @@ def get_public_campaign_transparency(*, campaign: Campaign) -> dict:
         "successful_payment_count": payments.count(),
         "completed_refund_count": refunds.count(),
         "paid_disbursement_count": disbursements.filter(status=DisbursementStatus.PAID).count(),
-        "net_progress_percent": round((net_raised / campaign.total_amount) * 100, 2) if campaign.total_amount else 0,
+        "net_progress_percent": round((net_raised / campaign.total_amount) * 100, 2)
+        if campaign.total_amount
+        else 0,
         "public_note": "این گزارش عمومی، بدون نمایش اطلاعات خصوصی مشارکت‌کنندگان تولید شده است.",
     }
 
@@ -887,6 +956,7 @@ def get_public_campaign_transparency(*, campaign: Campaign) -> dict:
 # ---------------------------------------------------------------------------
 # Financial control selectors — admin scope
 # ---------------------------------------------------------------------------
+
 
 def get_admin_financial_control_snapshots_queryset() -> QuerySet[MadadkarFinancialControlSnapshot]:
     """Return generated financial control snapshots for admin review."""

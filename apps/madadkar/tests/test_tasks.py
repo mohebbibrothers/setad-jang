@@ -75,6 +75,7 @@ def _make_stale_participation_with_payment(*, share_count: int = 1):
 
     # sync counter — تا purchased_shares به‌روز شود (به‌خاطر factory)
     from apps.madadkar.services import _sync_campaign_counters
+
     _sync_campaign_counters(campaign=campaign)
 
     # تاریخ ایجاد را به گذشته منتقل می‌کنیم
@@ -206,6 +207,7 @@ class TestExpireStaleParticipationsTask:
             from apps.madadkar.services import (
                 expire_stale_participation as real_expire,
             )
+
             return real_expire(participation=participation)
 
         with patch(
@@ -338,6 +340,7 @@ class TestCloseExpiredCampaignsTask:
             from apps.madadkar.services import (
                 close_campaign_due_to_deadline as real_close,
             )
+
             return real_close(campaign=campaign)
 
         with patch(
@@ -390,6 +393,5 @@ class TestTaskRegistration:
 
     def test_close_task_has_correct_name(self):
         assert (
-            close_expired_campaigns_task.name
-            == "apps.madadkar.tasks.close_expired_campaigns_task"
+            close_expired_campaigns_task.name == "apps.madadkar.tasks.close_expired_campaigns_task"
         )

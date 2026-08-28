@@ -36,9 +36,7 @@ def _auth_url(name: str) -> str:
 
 def _assert_deprecated(response, *, successor: str) -> None:
     assert response[DEPRECATION_HEADER] == "true"
-    assert response[SUCCESSOR_LINK_HEADER] == (
-        f'<{successor}>; rel="successor-version"'
-    )
+    assert response[SUCCESSOR_LINK_HEADER] == (f'<{successor}>; rel="successor-version"')
 
 
 class TestLegacyAuthDeprecationHeaders:

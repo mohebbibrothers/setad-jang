@@ -37,7 +37,9 @@ def get_audit_retention_policy() -> AuditRetentionPolicy:
     retention_days = int(getattr(settings, "AUDIT_LOG_RETENTION_DAYS", 2555))
     legal_hold_enabled = bool(getattr(settings, "AUDIT_LOG_LEGAL_HOLD_ENABLED", True))
     deletion_enabled = bool(getattr(settings, "AUDIT_LOG_RETENTION_DELETE_ENABLED", False))
-    archive_root = str(getattr(settings, "AUDIT_LOG_ARCHIVE_ROOT", settings.BASE_DIR / "audit_exports"))
+    archive_root = str(
+        getattr(settings, "AUDIT_LOG_ARCHIVE_ROOT", settings.BASE_DIR / "audit_exports")
+    )
     note = (
         "Audit logs are append-only. Retention automation is archive-first and does not delete "
         "records unless AUDIT_LOG_RETENTION_DELETE_ENABLED is explicitly enabled by operations."

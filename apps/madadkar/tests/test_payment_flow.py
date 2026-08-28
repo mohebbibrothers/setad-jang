@@ -70,16 +70,21 @@ def _initiate_via_api(*, campaign, user, share_count) -> tuple[Participation, Pa
 
     with patch(_AUDIT_TASK_PATH):
         response = client.post(
-            url, data={"share_count": share_count}, format="json",
+            url,
+            data={"share_count": share_count},
+            format="json",
         )
 
-    assert response.status_code == status.HTTP_201_CREATED, (
-        f"initiate failed: {response.data}"
-    )
+    assert response.status_code == status.HTTP_201_CREATED, f"initiate failed: {response.data}"
 
-    participation = Participation.objects.filter(
-        user=user, campaign=campaign,
-    ).order_by("-pk").first()
+    participation = (
+        Participation.objects.filter(
+            user=user,
+            campaign=campaign,
+        )
+        .order_by("-pk")
+        .first()
+    )
     payment = participation.payment
     return participation, payment
 
@@ -100,7 +105,9 @@ class TestVerifyEndpointGET:
         )
         user = UserFactory()
         participation, payment = _initiate_via_api(
-            campaign=campaign, user=user, share_count=2,
+            campaign=campaign,
+            user=user,
+            share_count=2,
         )
 
         # callback از سمت "درگاه"
@@ -133,7 +140,9 @@ class TestVerifyEndpointGET:
         )
         user = UserFactory()
         _participation, payment = _initiate_via_api(
-            campaign=campaign, user=user, share_count=3,
+            campaign=campaign,
+            user=user,
+            share_count=3,
         )
 
         # قبل از verify
@@ -156,7 +165,9 @@ class TestVerifyEndpointGET:
         campaign = PublishedCampaignFactory()
         user = UserFactory()
         _p, payment = _initiate_via_api(
-            campaign=campaign, user=user, share_count=1,
+            campaign=campaign,
+            user=user,
+            share_count=1,
         )
 
         client = APIClient()
@@ -167,10 +178,7 @@ class TestVerifyEndpointGET:
             client.get(url, {"authority": payment.authority})
 
         # حداقل یک بار با action SUCCESS فراخوانی شده
-        actions_called = [
-            call.kwargs.get("action")
-            for call in mock_task.delay.call_args_list
-        ]
+        actions_called = [call.kwargs.get("action") for call in mock_task.delay.call_args_list]
         assert audit_actions.MADADKAR_PAYMENT_SUCCESS in actions_called
 
     def test_verify_404_for_unknown_authority(self):
@@ -201,7 +209,9 @@ class TestVerifyEndpointPOST:
         campaign = PublishedCampaignFactory()
         user = UserFactory()
         _p, payment = _initiate_via_api(
-            campaign=campaign, user=user, share_count=1,
+            campaign=campaign,
+            user=user,
+            share_count=1,
         )
 
         client = APIClient()
@@ -233,7 +243,9 @@ class TestVerifyIdempotency:
         )
         user = UserFactory()
         _p, payment = _initiate_via_api(
-            campaign=campaign, user=user, share_count=2,
+            campaign=campaign,
+            user=user,
+            share_count=2,
         )
 
         client = APIClient()
@@ -267,7 +279,9 @@ class TestVerifyIdempotency:
         campaign = PublishedCampaignFactory()
         user = UserFactory()
         _p, payment = _initiate_via_api(
-            campaign=campaign, user=user, share_count=1,
+            campaign=campaign,
+            user=user,
+            share_count=1,
         )
 
         client = APIClient()
@@ -278,9 +292,12 @@ class TestVerifyIdempotency:
             client.get(url, {"authority": payment.authority})
 
         # دومین verify — provider.verify_payment نباید فراخوانی شود
-        with patch(
-            "apps.madadkar.payment_providers.sandbox.SandboxProvider.verify_payment"
-        ) as mock_verify, patch(_AUDIT_TASK_PATH):
+        with (
+            patch(
+                "apps.madadkar.payment_providers.sandbox.SandboxProvider.verify_payment"
+            ) as mock_verify,
+            patch(_AUDIT_TASK_PATH),
+        ):
             client.get(url, {"authority": payment.authority})
 
         mock_verify.assert_not_called()
@@ -301,7 +318,9 @@ class TestVerifyAmountTampering:
         )
         user = UserFactory()
         participation, payment = _initiate_via_api(
-            campaign=campaign, user=user, share_count=2,
+            campaign=campaign,
+            user=user,
+            share_count=2,
         )
 
         original_amount = payment.amount
@@ -314,10 +333,13 @@ class TestVerifyAmountTampering:
             gateway_status="100",
         )
 
-        with patch(
-            "apps.madadkar.payment_providers.sandbox.SandboxProvider.verify_payment",
-            return_value=fake_verify,
-        ), patch(_AUDIT_TASK_PATH):
+        with (
+            patch(
+                "apps.madadkar.payment_providers.sandbox.SandboxProvider.verify_payment",
+                return_value=fake_verify,
+            ),
+            patch(_AUDIT_TASK_PATH),
+        ):
             response = verify_payment_via_api(payment.authority)
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
@@ -341,7 +363,9 @@ class TestVerifyAmountTampering:
         )
         user = UserFactory()
         _participation, payment = _initiate_via_api(
-            campaign=campaign, user=user, share_count=1,
+            campaign=campaign,
+            user=user,
+            share_count=1,
         )
 
         fake_verify = PaymentVerifyResult(
@@ -350,10 +374,13 @@ class TestVerifyAmountTampering:
             ref_id="X",
         )
 
-        with patch(
-            "apps.madadkar.payment_providers.sandbox.SandboxProvider.verify_payment",
-            return_value=fake_verify,
-        ), pytest.raises(PaymentAmountMismatchError):
+        with (
+            patch(
+                "apps.madadkar.payment_providers.sandbox.SandboxProvider.verify_payment",
+                return_value=fake_verify,
+            ),
+            pytest.raises(PaymentAmountMismatchError),
+        ):
             verify_payment(authority=payment.authority)
 
 
@@ -380,7 +407,9 @@ class TestVerifyFailureReleasesShares:
         )
         user = UserFactory()
         participation, payment = _initiate_via_api(
-            campaign=campaign, user=user, share_count=3,
+            campaign=campaign,
+            user=user,
+            share_count=3,
         )
 
         # قبل از verify: 3 سهم رزرو شده
@@ -394,10 +423,13 @@ class TestVerifyFailureReleasesShares:
             error_message="user canceled",
         )
 
-        with patch(
-            "apps.madadkar.payment_providers.sandbox.SandboxProvider.verify_payment",
-            return_value=fake_verify,
-        ), patch(_AUDIT_TASK_PATH):
+        with (
+            patch(
+                "apps.madadkar.payment_providers.sandbox.SandboxProvider.verify_payment",
+                return_value=fake_verify,
+            ),
+            patch(_AUDIT_TASK_PATH),
+        ):
             response = verify_payment_via_api(payment.authority)
 
         assert response.status_code == status.HTTP_200_OK
@@ -431,7 +463,9 @@ class TestAutoComplete:
         user = UserFactory()
 
         _p, payment = _initiate_via_api(
-            campaign=campaign, user=user, share_count=5,
+            campaign=campaign,
+            user=user,
+            share_count=5,
         )
 
         # هنوز PUBLISHED
@@ -455,7 +489,9 @@ class TestAutoComplete:
         user = UserFactory()
 
         _p, payment = _initiate_via_api(
-            campaign=campaign, user=user, share_count=5,
+            campaign=campaign,
+            user=user,
+            share_count=5,
         )
 
         with patch(_AUDIT_TASK_PATH):
@@ -484,10 +520,14 @@ class TestParticipantCountSync:
 
         # دو initiate جداگانه برای همان کاربر
         _p1, payment1 = _initiate_via_api(
-            campaign=campaign, user=user, share_count=2,
+            campaign=campaign,
+            user=user,
+            share_count=2,
         )
         _p2, payment2 = _initiate_via_api(
-            campaign=campaign, user=user, share_count=3,
+            campaign=campaign,
+            user=user,
+            share_count=3,
         )
 
         with patch(_AUDIT_TASK_PATH):
@@ -510,7 +550,9 @@ class TestParticipantCountSync:
 
         for user in (user_a, user_b, user_c):
             _p, payment = _initiate_via_api(
-                campaign=campaign, user=user, share_count=1,
+                campaign=campaign,
+                user=user,
+                share_count=1,
             )
             with patch(_AUDIT_TASK_PATH):
                 verify_payment_via_api(payment.authority)
@@ -534,6 +576,7 @@ class TestVerifyPaymentServiceLayer:
     def test_idempotent_on_already_success_payment(self):
         """Payment که قبلاً SUCCESS بوده، بدون تماس برمی‌گردد."""
         from tests.factories.madadkar import SuccessPaymentFactory
+
         payment = SuccessPaymentFactory()
 
         # provider نباید فراخوانی شود
@@ -562,7 +605,9 @@ class TestExpireStaleParticipation:
         )
         user = UserFactory()
         _p, payment = _initiate_via_api(
-            campaign=campaign, user=user, share_count=3,
+            campaign=campaign,
+            user=user,
+            share_count=3,
         )
 
         # رزرو شد
@@ -654,6 +699,7 @@ class TestCloseCampaignDueToDeadline:
     def test_draft_campaign_not_closed(self):
         """campaign DRAFT حتی با deadline گذشته نباید بسته شود."""
         from tests.factories.madadkar import CampaignFactory
+
         campaign = CampaignFactory()  # DRAFT
 
         result = close_campaign_due_to_deadline(campaign=campaign)

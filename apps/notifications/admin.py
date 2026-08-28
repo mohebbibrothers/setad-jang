@@ -23,7 +23,14 @@ class NotificationTemplateAdmin(admin.ModelAdmin):
 class NotificationEventAdmin(admin.ModelAdmin):
     """Admin notification event inspection."""
 
-    list_display = ("event_type", "status", "priority", "aggregate_type", "aggregate_id", "created_at")
+    list_display = (
+        "event_type",
+        "status",
+        "priority",
+        "aggregate_type",
+        "aggregate_id",
+        "created_at",
+    )
     list_filter = ("status", "priority", "event_type")
     search_fields = ("event_type", "aggregate_type", "aggregate_id")
     readonly_fields = ("uuid", "created_at", "updated_at")

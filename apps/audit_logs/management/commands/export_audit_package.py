@@ -53,7 +53,9 @@ class Command(BaseCommand):
                 method=options["method"],
                 path=options["path"],
                 created_after=_parse_optional_datetime(options["created_after"], "created-after"),
-                created_before=_parse_optional_datetime(options["created_before"], "created-before"),
+                created_before=_parse_optional_datetime(
+                    options["created_before"], "created-before"
+                ),
                 search=options["search"],
             )
             package = export_audit_package_to_path(

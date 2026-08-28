@@ -87,9 +87,7 @@ def _build_filters_signature(request: Request) -> str:
     این امضا در ساخت cache key استفاده می‌شود تا درخواست‌های با
     فیلترهای متفاوت، cache جداگانه داشته باشند.
     """
-    relevant_keys = sorted(
-        k for k in request.query_params.keys() if k not in {"page", "page_size"}
-    )
+    relevant_keys = sorted(k for k in request.query_params.keys() if k not in {"page", "page_size"})
     if not relevant_keys:
         return "no_filters"
 

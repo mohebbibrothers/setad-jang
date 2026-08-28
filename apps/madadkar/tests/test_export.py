@@ -197,7 +197,8 @@ class TestExcelDataRows:
             total_shares=10,  # 10 میلیون per share
         )
         _make_paid_participation_with_payment(
-            campaign=campaign, share_count=3,
+            campaign=campaign,
+            share_count=3,
         )
 
         buffer = generate_campaign_participants_excel(campaign=campaign)
@@ -205,9 +206,9 @@ class TestExcelDataRows:
         ws = wb.active
 
         # ردیف 2 = اولین داده
-        assert ws.cell(row=2, column=5).value == 3              # share_count
-        assert ws.cell(row=2, column=6).value == 10_000_000     # share_price
-        assert ws.cell(row=2, column=7).value == 30_000_000     # total_amount
+        assert ws.cell(row=2, column=5).value == 3  # share_count
+        assert ws.cell(row=2, column=6).value == 10_000_000  # share_price
+        assert ws.cell(row=2, column=7).value == 30_000_000  # total_amount
 
     def test_includes_user_email(self):
         """ایمیل کاربر باید در ستون 3 باشد."""
@@ -320,14 +321,20 @@ class TestExcelSummaryRow:
         user_b = UserFactory()
         # user_a دو مشارکت دارد
         _make_paid_participation_with_payment(
-            campaign=campaign, user=user_a, share_count=1,
+            campaign=campaign,
+            user=user_a,
+            share_count=1,
         )
         _make_paid_participation_with_payment(
-            campaign=campaign, user=user_a, share_count=2,
+            campaign=campaign,
+            user=user_a,
+            share_count=2,
         )
         # user_b یک مشارکت دارد
         _make_paid_participation_with_payment(
-            campaign=campaign, user=user_b, share_count=3,
+            campaign=campaign,
+            user=user_b,
+            share_count=3,
         )
 
         buffer = generate_campaign_participants_excel(campaign=campaign)
@@ -401,14 +408,16 @@ class TestExcelFilename:
         # فرمت: madadkar-{id}-{slug}-YYYYMMDD-HHMMSS.xlsx
         # حداقل باید 4 رقم برای سال داشته باشد
         import re
+
         assert re.search(r"\d{8}-\d{6}", filename) is not None
 
     def test_filename_includes_sanitized_slug(self):
         campaign = PublishedCampaignFactory(title="حرکت تست")
         filename = build_excel_filename(campaign=campaign)
         # slug فارسی است، اما در filename باید همان slug پاکسازی شده باشد
-        assert campaign.slug.replace("-", "") in filename.replace("-", "") \
-            or len(filename) > 20  # حداقل نام معنادار باشد
+        assert (
+            campaign.slug.replace("-", "") in filename.replace("-", "") or len(filename) > 20
+        )  # حداقل نام معنادار باشد
 
 
 # ============================================================

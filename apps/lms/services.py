@@ -118,7 +118,9 @@ def ensure_user_can_enroll(user: Any) -> None:
 
 
 @transaction.atomic
-def create_category(*, title: str, description: str = "", icon: str = "", order: int = 0) -> LMSCategory:
+def create_category(
+    *, title: str, description: str = "", icon: str = "", order: int = 0
+) -> LMSCategory:
     """Create an admin-managed LMS category."""
     return LMSCategory.objects.create(title=title, description=description, icon=icon, order=order)
 
@@ -312,6 +314,7 @@ def create_skill_for_certificate(*, certificate) -> LMSUserSkill:
 # Learning activity statements (xAPI-like foundation)
 # ============================================================
 
+
 def record_learning_activity_statement(
     *,
     actor: Any,
@@ -363,12 +366,17 @@ def record_learning_activity_statement(
 # Video processing jobs
 # ============================================================
 
+
 @transaction.atomic
-def request_lesson_video_processing(*, lesson: Lesson, requested_by: Any | None = None) -> LessonVideoProcessingJob:
+def request_lesson_video_processing(
+    *, lesson: Lesson, requested_by: Any | None = None
+) -> LessonVideoProcessingJob:
     """Queue an idempotent video processing job for an uploaded lesson video."""
     if not lesson.video_file:
         raise VideoProcessingJobError("برای این جلسه فایل ویدئویی آپلود نشده است.")
-    existing = lesson.video_processing_jobs.filter(status__in=[VideoProcessingStatus.QUEUED, VideoProcessingStatus.PROCESSING]).first()
+    existing = lesson.video_processing_jobs.filter(
+        status__in=[VideoProcessingStatus.QUEUED, VideoProcessingStatus.PROCESSING]
+    ).first()
     if existing is not None:
         return existing
     return LessonVideoProcessingJob.objects.create(
@@ -383,7 +391,9 @@ def request_lesson_video_processing(*, lesson: Lesson, requested_by: Any | None 
 @transaction.atomic
 def process_lesson_video_job(*, job: LessonVideoProcessingJob) -> LessonVideoProcessingJob:
     """Process a lesson video job with a safe no-op/local provider contract."""
-    locked = LessonVideoProcessingJob.objects.select_for_update().select_related("lesson").get(pk=job.pk)
+    locked = (
+        LessonVideoProcessingJob.objects.select_for_update().select_related("lesson").get(pk=job.pk)
+    )
     if locked.status == VideoProcessingStatus.COMPLETED:
         return locked
     if locked.status not in {VideoProcessingStatus.QUEUED, VideoProcessingStatus.FAILED}:
@@ -403,12 +413,25 @@ def process_lesson_video_job(*, job: LessonVideoProcessingJob) -> LessonVideoPro
         "output_video_url_source": "lesson.video_file.url",
     }
     locked.error_message = ""
-    locked.save(update_fields=["output_video_url", "thumbnail_url", "duration_seconds", "status", "completed_at", "metadata", "error_message", "updated_at"])
+    locked.save(
+        update_fields=[
+            "output_video_url",
+            "thumbnail_url",
+            "duration_seconds",
+            "status",
+            "completed_at",
+            "metadata",
+            "error_message",
+            "updated_at",
+        ]
+    )
     return locked
 
 
 @transaction.atomic
-def fail_lesson_video_job(*, job: LessonVideoProcessingJob, error_message: str) -> LessonVideoProcessingJob:
+def fail_lesson_video_job(
+    *, job: LessonVideoProcessingJob, error_message: str
+) -> LessonVideoProcessingJob:
     """Mark a video processing job as failed with a safe error message."""
     locked = LessonVideoProcessingJob.objects.select_for_update().get(pk=job.pk)
     locked.status = VideoProcessingStatus.FAILED
@@ -435,7 +458,9 @@ def build_lesson_media_access(*, lesson: Lesson, user: Any, media_kind: str) -> 
         status__in=[EnrollmentStatus.ACTIVE, EnrollmentStatus.COMPLETED],
     ).first()
     if enrollment is None and not lesson.is_preview:
-        raise LessonMediaAccessError("برای دسترسی به رسانه این جلسه باید در کلاس ثبت‌نام کرده باشید.")
+        raise LessonMediaAccessError(
+            "برای دسترسی به رسانه این جلسه باید در کلاس ثبت‌نام کرده باشید."
+        )
     if media_kind == "video":
         if lesson.video_file:
             return {
@@ -447,9 +472,23 @@ def build_lesson_media_access(*, lesson: Lesson, user: Any, media_kind: str) -> 
                 "course_id": lesson.course_id,
             }
         if lesson.video_url:
-            return {"media_kind": "video", "provider": "direct_url", "url": lesson.video_url, "expires_in_seconds": None, "lesson_id": lesson.pk, "course_id": lesson.course_id}
+            return {
+                "media_kind": "video",
+                "provider": "direct_url",
+                "url": lesson.video_url,
+                "expires_in_seconds": None,
+                "lesson_id": lesson.pk,
+                "course_id": lesson.course_id,
+            }
         if lesson.embed_url:
-            return {"media_kind": "video", "provider": "embed", "url": lesson.embed_url, "expires_in_seconds": None, "lesson_id": lesson.pk, "course_id": lesson.course_id}
+            return {
+                "media_kind": "video",
+                "provider": "embed",
+                "url": lesson.embed_url,
+                "expires_in_seconds": None,
+                "lesson_id": lesson.pk,
+                "course_id": lesson.course_id,
+            }
     if media_kind == "attachment" and lesson.attachment_file:
         return {
             "media_kind": "attachment",
@@ -527,9 +566,7 @@ def update_lesson_progress(
     represents current playback position and may move backwards for rewinds.
     """
     locked_enrollment = (
-        Enrollment.objects.select_for_update()
-        .select_related("course")
-        .get(pk=enrollment.pk)
+        Enrollment.objects.select_for_update().select_related("course").get(pk=enrollment.pk)
     )
     if locked_enrollment.status not in {EnrollmentStatus.ACTIVE, EnrollmentStatus.COMPLETED}:
         raise EnrollmentNotActiveError("ثبت‌نام شما برای ثبت پیشرفت فعال نیست.")
@@ -549,13 +586,17 @@ def update_lesson_progress(
     )
 
     normalized_watched = max(0, watched_seconds)
-    capped_watched = min(normalized_watched, duration_snapshot) if duration_snapshot else normalized_watched
+    capped_watched = (
+        min(normalized_watched, duration_snapshot) if duration_snapshot else normalized_watched
+    )
     progress.watched_seconds = max(progress.watched_seconds, capped_watched)
     progress.duration_seconds_snapshot = duration_snapshot
     if last_position_seconds is not None:
         normalized_position = max(0, last_position_seconds)
         progress.last_position_seconds = (
-            min(normalized_position, duration_snapshot) if duration_snapshot else normalized_position
+            min(normalized_position, duration_snapshot)
+            if duration_snapshot
+            else normalized_position
         )
     else:
         progress.last_position_seconds = progress.watched_seconds
@@ -595,7 +636,9 @@ def update_lesson_progress(
         course=synced_enrollment.course,
         lesson=locked_lesson,
         enrollment=synced_enrollment,
-        verb=LearningStatementVerb.COMPLETED if progress.is_completed else LearningStatementVerb.PROGRESSED,
+        verb=LearningStatementVerb.COMPLETED
+        if progress.is_completed
+        else LearningStatementVerb.PROGRESSED,
         object_type="lesson",
         object_id=locked_lesson.pk,
         result={
@@ -630,7 +673,9 @@ def ensure_user_enrolled_for_lesson(*, user: Any, lesson: Lesson) -> Enrollment:
         status__in=[EnrollmentStatus.ACTIVE, EnrollmentStatus.COMPLETED],
     ).first()
     if enrollment is None:
-        raise LMSDiscussionAccessError("برای مشارکت در پرسش‌وپاسخ باید در این کلاس ثبت‌نام کرده باشید.")
+        raise LMSDiscussionAccessError(
+            "برای مشارکت در پرسش‌وپاسخ باید در این کلاس ثبت‌نام کرده باشید."
+        )
     return enrollment
 
 
@@ -677,7 +722,11 @@ def accept_lesson_answer(*, question, answer, user: Any):
     """Mark an answer as accepted by question owner or admin/staff."""
     if answer.question_id != question.pk:
         raise LMSDiscussionModerationError("این پاسخ متعلق به سؤال انتخاب‌شده نیست.")
-    is_admin = bool(getattr(user, "is_staff", False) or getattr(user, "is_superuser", False) or getattr(user, "role", "") == "admin")
+    is_admin = bool(
+        getattr(user, "is_staff", False)
+        or getattr(user, "is_superuser", False)
+        or getattr(user, "role", "") == "admin"
+    )
     if question.user_id != user.pk and not is_admin:
         raise LMSDiscussionAccessError("فقط صاحب سؤال یا ادمین می‌تواند پاسخ را تأیید کند.")
     question.answers.update(is_accepted=False)
@@ -825,7 +874,9 @@ def create_or_update_quiz(*, course: Course, **fields: Any):
 
 
 @transaction.atomic
-def create_quiz_question(*, quiz, text: str, explanation: str = "", order: int = 1, weight: Decimal | int | str = 1):
+def create_quiz_question(
+    *, quiz, text: str, explanation: str = "", order: int = 1, weight: Decimal | int | str = 1
+):
     """Create a weighted single-choice question for an admin-managed quiz."""
     from apps.lms.models import QuizQuestion
 
@@ -901,7 +952,9 @@ def _build_attempt_snapshots(*, quiz) -> tuple[list[int], dict[str, list[int]]]:
     """Build randomized question and option order snapshots."""
     import random
 
-    questions = list(quiz.questions.filter(is_active=True).prefetch_related("options").order_by("order", "id"))
+    questions = list(
+        quiz.questions.filter(is_active=True).prefetch_related("options").order_by("order", "id")
+    )
     question_ids = [question.pk for question in questions]
     if quiz.shuffle_questions:
         random.shuffle(question_ids)
@@ -909,7 +962,9 @@ def _build_attempt_snapshots(*, quiz) -> tuple[list[int], dict[str, list[int]]]:
     option_order: dict[str, list[int]] = {}
     question_by_id = {question.pk: question for question in questions}
     for question_id in question_ids:
-        options = list(question_by_id[question_id].options.filter(is_active=True).order_by("order", "id"))
+        options = list(
+            question_by_id[question_id].options.filter(is_active=True).order_by("order", "id")
+        )
         option_ids = [option.pk for option in options]
         if quiz.shuffle_options:
             random.shuffle(option_ids)
@@ -933,11 +988,15 @@ def start_quiz_attempt(*, quiz, user: Any):
     if enrollment is None:
         raise QuizNotAvailableError("برای شرکت در آزمون باید در کلاس ثبت‌نام کرده باشید.")
 
-    existing_in_progress = QuizAttempt.objects.filter(
-        quiz=quiz,
-        user=user,
-        status=QuizAttemptStatus.IN_PROGRESS,
-    ).order_by("-started_at").first()
+    existing_in_progress = (
+        QuizAttempt.objects.filter(
+            quiz=quiz,
+            user=user,
+            status=QuizAttemptStatus.IN_PROGRESS,
+        )
+        .order_by("-started_at")
+        .first()
+    )
     now = timezone.now()
     if existing_in_progress is not None:
         if existing_in_progress.expires_at and existing_in_progress.expires_at <= now:
@@ -957,12 +1016,16 @@ def start_quiz_attempt(*, quiz, user: Any):
     if attempt_number > allowed_attempts:
         raise QuizAttemptLockedError("تعداد تلاش‌های مجاز شما برای این آزمون به پایان رسیده است.")
 
-    last_failed = terminal_attempts.filter(status=QuizAttemptStatus.FAILED).order_by("-submitted_at").first()
+    last_failed = (
+        terminal_attempts.filter(status=QuizAttemptStatus.FAILED).order_by("-submitted_at").first()
+    )
     if last_failed is not None and attempt_number <= quiz.max_attempts:
         unlocks = _valid_unlocks_count(quiz=quiz, user=user)
         retry_at = last_failed.submitted_at + timezone.timedelta(days=quiz.retake_delay_days)
         if unlocks <= 0 and now < retry_at:
-            raise QuizAttemptLockedError("تلاش بعدی شما هنوز فعال نشده است. لطفاً در زمان تعیین‌شده مراجعه کنید.")
+            raise QuizAttemptLockedError(
+                "تلاش بعدی شما هنوز فعال نشده است. لطفاً در زمان تعیین‌شده مراجعه کنید."
+            )
 
     validate_quiz_publishable(quiz=quiz)
     question_snapshot, option_order_snapshot = _build_attempt_snapshots(quiz=quiz)
@@ -1001,9 +1064,7 @@ def submit_quiz_attempt(*, attempt, answers: list[dict[str, int]]):
     from apps.lms.models import QuizAnswer, QuizOption, QuizQuestion
 
     locked_attempt = (
-        attempt.__class__.objects.select_for_update()
-        .select_related("quiz")
-        .get(pk=attempt.pk)
+        attempt.__class__.objects.select_for_update().select_related("quiz").get(pk=attempt.pk)
     )
     if locked_attempt.status != QuizAttemptStatus.IN_PROGRESS:
         raise QuizAttemptSubmissionError("این تلاش آزمون قابل ثبت پاسخ نیست.")
@@ -1023,8 +1084,12 @@ def submit_quiz_attempt(*, attempt, answers: list[dict[str, int]]):
     if set(answer_map) != set(question_ids):
         raise QuizAttemptSubmissionError("باید به تمام سؤال‌های آزمون پاسخ دهید.")
 
-    questions = {question.pk: question for question in QuizQuestion.objects.filter(pk__in=question_ids)}
-    options = {option.pk: option for option in QuizOption.objects.filter(pk__in=answer_map.values())}
+    questions = {
+        question.pk: question for question in QuizQuestion.objects.filter(pk__in=question_ids)
+    }
+    options = {
+        option.pk: option for option in QuizOption.objects.filter(pk__in=answer_map.values())
+    }
 
     total_weight = sum(Decimal(questions[qid].weight) for qid in question_ids)
     awarded_weight = Decimal("0.00")
@@ -1047,8 +1112,12 @@ def submit_quiz_attempt(*, attempt, answers: list[dict[str, int]]):
             score_awarded=score_awarded,
         )
 
-    score_percent = (awarded_weight / total_weight * Decimal("100.00")) if total_weight else Decimal("0.00")
-    score_out_of_20 = (awarded_weight / total_weight * Decimal("20.00")) if total_weight else Decimal("0.00")
+    score_percent = (
+        (awarded_weight / total_weight * Decimal("100.00")) if total_weight else Decimal("0.00")
+    )
+    score_out_of_20 = (
+        (awarded_weight / total_weight * Decimal("20.00")) if total_weight else Decimal("0.00")
+    )
     score_percent = score_percent.quantize(Decimal("0.01"))
     score_out_of_20 = score_out_of_20.quantize(Decimal("0.01"))
     is_passed = score_out_of_20 >= locked_attempt.quiz.passing_score
@@ -1092,7 +1161,9 @@ def submit_quiz_attempt(*, attempt, answers: list[dict[str, int]]):
 
 
 @transaction.atomic
-def unlock_quiz_for_user(*, quiz, user: Any, unlocked_by: Any, reason: str, extra_attempts: int = 1, valid_until=None):
+def unlock_quiz_for_user(
+    *, quiz, user: Any, unlocked_by: Any, reason: str, extra_attempts: int = 1, valid_until=None
+):
     """Grant manual extra attempts for a locked quiz user."""
     from apps.lms.models import QuizUnlock
 
@@ -1161,7 +1232,10 @@ def issue_certificate_for_attempt(*, attempt) -> Certificate:
         verb=LearningStatementVerb.CERTIFICATE_ISSUED,
         object_type="certificate",
         object_id=certificate.pk,
-        result={"certificate_code": certificate.certificate_code, "score_out_of_20": float(certificate.score_out_of_20)},
+        result={
+            "certificate_code": certificate.certificate_code,
+            "score_out_of_20": float(certificate.score_out_of_20),
+        },
         context={"source": "certificate_issue"},
         idempotency_key=f"certificate-issued:{certificate.pk}",
     )
@@ -1181,7 +1255,9 @@ def revoke_certificate(*, certificate: Certificate, revoked_by: Any, reason: str
     certificate.revoked_by = revoked_by
     certificate.revoked_at = timezone.now()
     certificate.revocation_reason = reason
-    certificate.save(update_fields=["status", "revoked_by", "revoked_at", "revocation_reason", "updated_at"])
+    certificate.save(
+        update_fields=["status", "revoked_by", "revoked_at", "revocation_reason", "updated_at"]
+    )
     if hasattr(certificate, "skill"):
         certificate.skill.soft_delete()
     return certificate

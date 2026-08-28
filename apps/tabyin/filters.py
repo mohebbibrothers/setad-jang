@@ -45,7 +45,11 @@ class PublicTabyinContentFilter(django_filters.FilterSet):
         return apply_smart_search(
             queryset,
             search_term=value,
-            fields=[SearchField("title", "A"), SearchField("description", "B"), SearchField("author_username", "C")],
+            fields=[
+                SearchField("title", "A"),
+                SearchField("description", "B"),
+                SearchField("author_username", "C"),
+            ],
             trigram_fields=["title", "description"],
         )
 
@@ -101,6 +105,10 @@ class AdminTabyinContentFilter(django_filters.FilterSet):
         return apply_smart_search(
             queryset,
             search_term=value,
-            fields=[SearchField("title", "A"), SearchField("description", "B"), SearchField("author_username", "C")],
+            fields=[
+                SearchField("title", "A"),
+                SearchField("description", "B"),
+                SearchField("author_username", "C"),
+            ],
             trigram_fields=["title", "description"],
         )

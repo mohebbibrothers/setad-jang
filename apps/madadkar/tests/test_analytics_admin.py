@@ -495,11 +495,7 @@ class TestAdminCampaignExport:
         raw_disposition = response["Content-Disposition"]
         decoded_parts = decode_header(raw_disposition)
         decoded = "".join(
-            (
-                part.decode(charset or "utf-8")
-                if isinstance(part, bytes)
-                else part
-            )
+            (part.decode(charset or "utf-8") if isinstance(part, bytes) else part)
             for part, charset in decoded_parts
         )
 

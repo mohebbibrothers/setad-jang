@@ -32,7 +32,9 @@ def get_public_category_by_slug(slug: str) -> LMSCategory | None:
 
 def get_admin_categories() -> QuerySet[LMSCategory]:
     """Return all categories for admin management."""
-    return LMSCategory.all_objects.annotate(courses_count=Count("courses")).order_by("order", "title")
+    return LMSCategory.all_objects.annotate(courses_count=Count("courses")).order_by(
+        "order", "title"
+    )
 
 
 def get_admin_category_by_id(category_id: int) -> LMSCategory | None:
@@ -73,9 +75,13 @@ def get_course_lessons(*, course: Course, public_only: bool = True) -> QuerySet[
     return queryset.ordered()
 
 
-def get_lesson_by_slug(*, course: Course, lesson_slug: str, public_only: bool = True) -> Lesson | None:
+def get_lesson_by_slug(
+    *, course: Course, lesson_slug: str, public_only: bool = True
+) -> Lesson | None:
     """Return one lesson by course and slug."""
-    return get_course_lessons(course=course, public_only=public_only).filter(slug=lesson_slug).first()
+    return (
+        get_course_lessons(course=course, public_only=public_only).filter(slug=lesson_slug).first()
+    )
 
 
 def get_admin_lesson_by_id(*, lesson_id: int) -> Lesson | None:
@@ -162,7 +168,11 @@ def get_lesson_answer_by_id(*, answer_id: int):
     """Return an answer by id with question/lesson relations."""
     from apps.lms.models import LessonAnswer
 
-    return LessonAnswer.objects.select_related("question", "question__lesson", "user").filter(pk=answer_id).first()
+    return (
+        LessonAnswer.objects.select_related("question", "question__lesson", "user")
+        .filter(pk=answer_id)
+        .first()
+    )
 
 
 def get_admin_discussion_reports() -> QuerySet:
@@ -195,7 +205,9 @@ def get_admin_quiz_by_course_id(*, course_id: int):
     """Return quiz for a course in admin scope."""
     from apps.lms.models import Quiz
 
-    return Quiz.all_objects.filter(course_id=course_id).prefetch_related("questions__options").first()
+    return (
+        Quiz.all_objects.filter(course_id=course_id).prefetch_related("questions__options").first()
+    )
 
 
 def get_quiz_attempt_by_id(*, user_id: int, attempt_id: int):
@@ -213,14 +225,22 @@ def get_admin_quiz_question_by_id(*, question_id: int):
     """Return quiz question for admin scope."""
     from apps.lms.models import QuizQuestion
 
-    return QuizQuestion.all_objects.select_related("quiz", "quiz__course").filter(pk=question_id).first()
+    return (
+        QuizQuestion.all_objects.select_related("quiz", "quiz__course")
+        .filter(pk=question_id)
+        .first()
+    )
 
 
 def get_user_certificates(*, user_id: int) -> QuerySet:
     """Return certificates owned by a user."""
     from apps.lms.models import Certificate
 
-    return Certificate.objects.select_related("course", "user").filter(user_id=user_id).order_by("-issued_at")
+    return (
+        Certificate.objects.select_related("course", "user")
+        .filter(user_id=user_id)
+        .order_by("-issued_at")
+    )
 
 
 def get_user_certificate_by_id(*, user_id: int, certificate_id: int):
@@ -232,14 +252,20 @@ def get_certificate_by_verification_slug(*, verification_slug: str):
     """Return a certificate by public verification slug."""
     from apps.lms.models import Certificate
 
-    return Certificate.objects.select_related("course", "user").filter(verification_slug=verification_slug).first()
+    return (
+        Certificate.objects.select_related("course", "user")
+        .filter(verification_slug=verification_slug)
+        .first()
+    )
 
 
 def get_admin_certificate_by_id(*, certificate_id: int):
     """Return one certificate for admin actions."""
     from apps.lms.models import Certificate
 
-    return Certificate.all_objects.select_related("course", "user").filter(pk=certificate_id).first()
+    return (
+        Certificate.all_objects.select_related("course", "user").filter(pk=certificate_id).first()
+    )
 
 
 def get_course_analytics(*, course: Course) -> dict:
@@ -251,13 +277,17 @@ def get_course_analytics(*, course: Course) -> dict:
 
     enrollments = Enrollment.objects.filter(course=course)
     attempts = QuizAttempt.objects.filter(course=course)
-    avg_score = attempts.exclude(submitted_at__isnull=True).aggregate(avg=Avg("score_out_of_20"))["avg"]
+    avg_score = attempts.exclude(submitted_at__isnull=True).aggregate(avg=Avg("score_out_of_20"))[
+        "avg"
+    ]
     return {
         "participants_count": enrollments.count(),
         "active_count": enrollments.filter(status=EnrollmentStatus.ACTIVE).count(),
         "completed_count": enrollments.filter(status=EnrollmentStatus.COMPLETED).count(),
         "graduates_count": Certificate.objects.filter(course=course, is_active=True).count(),
-        "average_progress_percent": float(enrollments.aggregate(avg=Avg("progress_percent"))["avg"] or 0),
+        "average_progress_percent": float(
+            enrollments.aggregate(avg=Avg("progress_percent"))["avg"] or 0
+        ),
         "quiz_attempts_count": attempts.count(),
         "quiz_passed_count": attempts.filter(status=QuizAttemptStatus.PASSED).count(),
         "quiz_failed_count": attempts.filter(status=QuizAttemptStatus.FAILED).count(),
@@ -285,9 +315,13 @@ def get_course_leaderboard(*, course: Course) -> list[dict]:
                 "full_name": getattr(enrollment.user, "full_name", "") or str(enrollment.user),
                 "email": getattr(enrollment.user, "email", "") or "",
                 "progress_percent": float(enrollment.progress_percent or 0),
-                "best_score_out_of_20": float(enrollment.best_score) if enrollment.best_score is not None else None,
+                "best_score_out_of_20": float(enrollment.best_score)
+                if enrollment.best_score is not None
+                else None,
                 "badge_level": getattr(skill, "badge_level", "") if skill else "",
-                "certificate_code": getattr(certificate, "certificate_code", "") if certificate else "",
+                "certificate_code": getattr(certificate, "certificate_code", "")
+                if certificate
+                else "",
             }
         )
     return rows
@@ -338,7 +372,9 @@ def get_user_learning_recommendations(*, user_id: int, limit: int = 10) -> list[
         for course in candidates
     ]
     scored = [item for item in scored if item["score"] > 0]
-    scored.sort(key=lambda item: (-item["score"], -item["course"].enrollments_count, item["course"].title))
+    scored.sort(
+        key=lambda item: (-item["score"], -item["course"].enrollments_count, item["course"].title)
+    )
     return scored[:safe_limit]
 
 
@@ -376,7 +412,9 @@ def _build_lms_category_affinity(*, enrollments: list[Enrollment], user_id: int)
             affinity[category_id] += 20
         if enrollment.progress_percent >= 50:
             affinity[category_id] += 10
-    for category_id in LMSUserSkill.objects.filter(user_id=user_id).values_list("course__category_id", flat=True):
+    for category_id in LMSUserSkill.objects.filter(user_id=user_id).values_list(
+        "course__category_id", flat=True
+    ):
         affinity[category_id] = affinity.get(category_id, 0) + 25
     return affinity
 
@@ -385,7 +423,9 @@ def _preferred_next_course_level(*, enrollments: list[Enrollment]) -> str | None
     """Infer next recommended course level from learner history."""
     if not enrollments:
         return CourseLevel.BEGINNER
-    max_level_value = max(_LEVEL_ORDER.get(enrollment.course.level, 1) for enrollment in enrollments)
+    max_level_value = max(
+        _LEVEL_ORDER.get(enrollment.course.level, 1) for enrollment in enrollments
+    )
     for level, order in _LEVEL_ORDER.items():
         if order == min(max_level_value + 1, max(_LEVEL_ORDER.values())):
             return level
@@ -429,10 +469,9 @@ def _score_recommended_course(
 # Learning activity statements — admin scope
 # ---------------------------------------------------------------------------
 
+
 def get_admin_learning_activity_statements() -> QuerySet[LearningActivityStatement]:
     """Return xAPI-like LMS learning statements for admin analytics/export."""
-    return (
-        LearningActivityStatement.objects
-        .select_related("actor", "course", "lesson", "enrollment", "quiz_attempt", "certificate")
-        .order_by("-occurred_at", "-created_at")
-    )
+    return LearningActivityStatement.objects.select_related(
+        "actor", "course", "lesson", "enrollment", "quiz_attempt", "certificate"
+    ).order_by("-occurred_at", "-created_at")

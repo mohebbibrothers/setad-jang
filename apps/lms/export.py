@@ -31,7 +31,9 @@ _ENROLLMENT_COLUMNS: list[ExcelColumn] = [
 ]
 
 
-def build_course_enrollments_workbook(*, course: Course, enrollments: Iterable[Enrollment]) -> BytesIO:
+def build_course_enrollments_workbook(
+    *, course: Course, enrollments: Iterable[Enrollment]
+) -> BytesIO:
     """Build an RTL Excel workbook for a course participant report."""
     sheet = StreamingExcelSheet(
         title=course.title,
@@ -70,4 +72,3 @@ def _format_dt(value) -> str:
     if value is None:
         return ""
     return timezone.localtime(value).strftime("%Y-%m-%d %H:%M")
-

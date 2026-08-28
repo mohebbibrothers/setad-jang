@@ -119,7 +119,6 @@ AUDIT_LOG_LIST_PARAMETERS = [
         location=OpenApiParameter.QUERY,
         description="فیلتر بر اساس آدرس IP",
     ),
-
     OpenApiParameter(
         name="method",
         type=OpenApiTypes.STR,

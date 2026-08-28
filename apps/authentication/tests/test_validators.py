@@ -169,40 +169,28 @@ class TestValidateEmailDomainHasMx:
 
     def test_accepts_when_domain_has_mx(self, fake_dns_resolver: _FakeResolver) -> None:
         fake_dns_resolver.configure("ok")
-        validators.validate_email_domain_has_mx(
-            "user@example.com", use_cache=False
-        )
+        validators.validate_email_domain_has_mx("user@example.com", use_cache=False)
 
     def test_rejects_when_domain_nxdomain(self, fake_dns_resolver: _FakeResolver) -> None:
         fake_dns_resolver.configure("nxdomain")
         with pytest.raises(ValidationError, match="دامنه ایمیل"):
-            validators.validate_email_domain_has_mx(
-                "user@nonexistent.example", use_cache=False
-            )
+            validators.validate_email_domain_has_mx("user@nonexistent.example", use_cache=False)
 
     def test_rejects_when_domain_no_mx(self, fake_dns_resolver: _FakeResolver) -> None:
         fake_dns_resolver.configure("noanswer")
         with pytest.raises(ValidationError, match="دامنه ایمیل"):
-            validators.validate_email_domain_has_mx(
-                "user@nomx.example", use_cache=False
-            )
+            validators.validate_email_domain_has_mx("user@nomx.example", use_cache=False)
 
     def test_fails_open_on_dns_timeout(self, fake_dns_resolver: _FakeResolver) -> None:
         """در صورت DNS timeout، باید عبور دهد (fail-open)."""
         fake_dns_resolver.configure("timeout")
         # نباید raise کند
-        validators.validate_email_domain_has_mx(
-            "user@example.com", use_cache=False
-        )
+        validators.validate_email_domain_has_mx("user@example.com", use_cache=False)
 
-    def test_fails_open_on_nameserver_failure(
-        self, fake_dns_resolver: _FakeResolver
-    ) -> None:
+    def test_fails_open_on_nameserver_failure(self, fake_dns_resolver: _FakeResolver) -> None:
         """در صورت ناتوانی nameserver، باید عبور دهد."""
         fake_dns_resolver.configure("nameserver_fail")
-        validators.validate_email_domain_has_mx(
-            "user@example.com", use_cache=False
-        )
+        validators.validate_email_domain_has_mx("user@example.com", use_cache=False)
 
 
 # ============================================================
@@ -220,9 +208,7 @@ class TestValidateEmailForSignup:
     ) -> None:
         fake_dns_resolver.configure("ok")
         with pytest.raises(ValidationError, match="ایمیل موقت"):
-            validators.validate_email_for_signup(
-                "attacker@mailinator.com", use_mx_cache=False
-            )
+            validators.validate_email_for_signup("attacker@mailinator.com", use_mx_cache=False)
 
     def test_rejects_if_dns_says_no_mx(
         self,
@@ -231,9 +217,7 @@ class TestValidateEmailForSignup:
     ) -> None:
         fake_dns_resolver.configure("nxdomain")
         with pytest.raises(ValidationError, match="دامنه ایمیل"):
-            validators.validate_email_for_signup(
-                "user@nonexistent.example", use_mx_cache=False
-            )
+            validators.validate_email_for_signup("user@nonexistent.example", use_mx_cache=False)
 
     def test_accepts_legitimate_email(
         self,
@@ -242,9 +226,7 @@ class TestValidateEmailForSignup:
     ) -> None:
         fake_dns_resolver.configure("ok")
         # نباید raise کند
-        validators.validate_email_for_signup(
-            "real.user@gmail.com", use_mx_cache=False
-        )
+        validators.validate_email_for_signup("real.user@gmail.com", use_mx_cache=False)
 
 
 # ============================================================

@@ -61,7 +61,9 @@ class TestAuthenticationDjangoAdminUX:
     def test_user_change_page_shows_inline_security_context(self, client):
         admin_user = AdminUserFactory()
         client.force_login(admin_user)
-        user = UserFactory(email="inline-user@test.local", is_email_verified=True, is_phone_verified=False)
+        user = UserFactory(
+            email="inline-user@test.local", is_email_verified=True, is_phone_verified=False
+        )
         profile, _ = Profile.objects.get_or_create(user=user)
         profile.national_code = "1234567890"
         profile.province = "تهران"

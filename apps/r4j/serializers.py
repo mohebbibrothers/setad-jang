@@ -144,9 +144,7 @@ class R4JPublicCriminalListSerializer(serializers.ModelSerializer):
         return {
             "id": primary.pk,
             "image": (
-                request.build_absolute_uri(primary.image.url)
-                if request
-                else primary.image.url
+                request.build_absolute_uri(primary.image.url) if request else primary.image.url
             ),
         }
 
@@ -523,7 +521,16 @@ class R4JReportPhoneSuggestionSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = R4JReportPhoneSuggestion
-        fields = ("id", "label", "number", "is_public", "notes", "status", "admin_note", "applied_phone")
+        fields = (
+            "id",
+            "label",
+            "number",
+            "is_public",
+            "notes",
+            "status",
+            "admin_note",
+            "applied_phone",
+        )
         read_only_fields = fields
 
 
@@ -532,7 +539,15 @@ class R4JReportSocialSuggestionSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = R4JReportSocialSuggestion
-        fields = ("id", "platform", "handle_or_url", "is_public", "status", "admin_note", "applied_social")
+        fields = (
+            "id",
+            "platform",
+            "handle_or_url",
+            "is_public",
+            "status",
+            "admin_note",
+            "applied_social",
+        )
         read_only_fields = fields
 
 
@@ -541,7 +556,15 @@ class R4JReportAttachmentSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = R4JReportAttachment
-        fields = ("id", "file", "title", "kind", "status", "admin_note", "promoted_criminal_attachment")
+        fields = (
+            "id",
+            "file",
+            "title",
+            "kind",
+            "status",
+            "admin_note",
+            "promoted_criminal_attachment",
+        )
         read_only_fields = fields
 
 
@@ -898,7 +921,6 @@ class R4JReportSubmitSerializer(serializers.Serializer):
         ),
     )
 
-
     alias_suggestions = R4JFlexibleAliasSuggestionsField(required=False, default=list)
     phone_suggestions = R4JFlexiblePhoneSuggestionsField(required=False, default=list)
     social_suggestions = R4JFlexibleSocialSuggestionsField(required=False, default=list)
@@ -911,7 +933,9 @@ class R4JReportSubmitSerializer(serializers.Serializer):
         phone_suggestions = attrs.get("phone_suggestions", [])
         social_suggestions = attrs.get("social_suggestions", [])
 
-        if not any([notes, field_changes, alias_suggestions, phone_suggestions, social_suggestions]):
+        if not any(
+            [notes, field_changes, alias_suggestions, phone_suggestions, social_suggestions]
+        ):
             raise serializers.ValidationError(
                 "گزارش باید حداقل یک یادداشت، پیشنهاد اصلاح فیلد، نام مستعار، شماره تماس یا شبکه اجتماعی داشته باشد.",
             )
@@ -1102,9 +1126,7 @@ class R4JBountySetSerializer(serializers.Serializer):
     amount_toman = serializers.IntegerField(
         min_value=R4J_BOUNTY_MIN_TOMAN,
         error_messages={
-            "min_value": (
-                f"حداقل مبلغ جایزه {R4J_BOUNTY_MIN_TOMAN:,} تومان است."
-            ),
+            "min_value": (f"حداقل مبلغ جایزه {R4J_BOUNTY_MIN_TOMAN:,} تومان است."),
             "invalid": "مبلغ جایزه باید یک عدد صحیح باشد.",
         },
     )

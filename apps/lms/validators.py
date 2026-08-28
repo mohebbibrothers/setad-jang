@@ -35,7 +35,9 @@ def validate_lesson_file_size(file) -> None:
     """Validate lesson handout/attachment size."""
     max_bytes = MAX_LESSON_ATTACHMENT_MB * 1024 * 1024
     if file.size > max_bytes:
-        raise ValidationError(f"حجم فایل جزوه نباید بیشتر از {MAX_LESSON_ATTACHMENT_MB} مگابایت باشد.")
+        raise ValidationError(
+            f"حجم فایل جزوه نباید بیشتر از {MAX_LESSON_ATTACHMENT_MB} مگابایت باشد."
+        )
 
 
 def validate_lesson_video_file_size(file) -> None:

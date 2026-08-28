@@ -6,7 +6,17 @@ from django.core.exceptions import ValidationError
 
 from apps.core.file_security import validate_uploaded_file_security
 
-ALLOWED_ATTACHMENT_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".pdf", ".txt", ".doc", ".docx", ".xlsx"}
+ALLOWED_ATTACHMENT_EXTENSIONS = {
+    ".jpg",
+    ".jpeg",
+    ".png",
+    ".webp",
+    ".pdf",
+    ".txt",
+    ".doc",
+    ".docx",
+    ".xlsx",
+}
 MAX_ATTACHMENT_SIZE_BYTES = 10 * 1024 * 1024
 
 

@@ -132,10 +132,16 @@ def _kindness_summary() -> dict[str, int]:
     # ``objects`` و ``all_objects`` دو manager متفاوت‌اند (soft-delete)، پس
     # این دو شمارنده قابل ادغام در یک کوئری نیستند.
     return {
-        "pending_listings": KindnessListing.all_objects.filter(status=ListingStatus.PENDING_REVIEW).count(),
+        "pending_listings": KindnessListing.all_objects.filter(
+            status=ListingStatus.PENDING_REVIEW
+        ).count(),
         "published_listings": KindnessListing.objects.published().count(),
-        "pending_reports": KindnessListingReport.objects.filter(status=ReportStatus.PENDING).count(),
-        "active_duplicate_candidates": KindnessDuplicateCandidate.objects.filter(status=DuplicateStatus.ACTIVE).count(),
+        "pending_reports": KindnessListingReport.objects.filter(
+            status=ReportStatus.PENDING
+        ).count(),
+        "active_duplicate_candidates": KindnessDuplicateCandidate.objects.filter(
+            status=DuplicateStatus.ACTIVE
+        ).count(),
         "contact_reveals_total": KindnessContactReveal.objects.count(),
         "open_risk_signals": KindnessRiskSignal.objects.filter(status="open").count(),
     }
@@ -149,11 +155,16 @@ def _tabyin_summary() -> dict[str, int]:
     submissions = TabyinContent.all_objects.aggregate(
         pending_user_submissions=Count(
             "pk",
-            filter=Q(origin=ContentOrigin.USER_SUBMITTED, submission_status=SubmissionStatus.PENDING_REVIEW),
+            filter=Q(
+                origin=ContentOrigin.USER_SUBMITTED,
+                submission_status=SubmissionStatus.PENDING_REVIEW,
+            ),
         ),
         rejected_user_submissions=Count(
             "pk",
-            filter=Q(origin=ContentOrigin.USER_SUBMITTED, submission_status=SubmissionStatus.REJECTED),
+            filter=Q(
+                origin=ContentOrigin.USER_SUBMITTED, submission_status=SubmissionStatus.REJECTED
+            ),
         ),
         deleted_in_source=Count("pk", filter=Q(is_deleted_in_source=True)),
     )
@@ -218,7 +229,9 @@ def _madadkar_summary() -> dict[str, int]:
     return {
         **campaigns,
         **payments,
-        "open_risk_signals": MadadkarRiskSignal.objects.filter(status=MadadkarRiskStatus.OPEN).count(),
+        "open_risk_signals": MadadkarRiskSignal.objects.filter(
+            status=MadadkarRiskStatus.OPEN
+        ).count(),
         "reconciliation_batches": reconciliation["reconciliation_batches"],
         "reconciliation_mismatches": reconciliation["reconciliation_mismatches"] or 0,
     }
@@ -286,5 +299,8 @@ def _health_summary() -> dict[str, object]:
     checks = build_readiness_checks()
     return {
         "status": aggregate_status(checks),
-        "checks": {name: {"status": value.get("status"), "latency_ms": value.get("latency_ms")} for name, value in checks.items()},
+        "checks": {
+            name: {"status": value.get("status"), "latency_ms": value.get("latency_ms")}
+            for name, value in checks.items()
+        },
     }

@@ -39,10 +39,14 @@ class TestPublicCriminalList:
 
     def test_list_returns_only_published_criminals(self, api_client) -> None:
         published = R4JCriminalFactory(
-            first_name="منتشر", last_name="شده", is_published=True,
+            first_name="منتشر",
+            last_name="شده",
+            is_published=True,
         )
         draft = R4JCriminalFactory(
-            first_name="دراف", last_name="ت", is_published=False,
+            first_name="دراف",
+            last_name="ت",
+            is_published=False,
         )
 
         # publish manually تا published_at هم set شود
@@ -133,7 +137,9 @@ class TestPublicCriminalDetail:
         criminal.publish()
 
         R4JCriminalFieldVisibility.objects.create(
-            criminal=criminal, field_name="national_code", is_public=True,
+            criminal=criminal,
+            field_name="national_code",
+            is_public=True,
         )
 
         response = api_client.get(f"/api/v1/r4j/criminals/{criminal.pk}/")

@@ -20,7 +20,9 @@ class IsLMSAdminUser(BasePermission):
         return bool(
             user
             and user.is_authenticated
-            and (user.is_staff or user.is_superuser or getattr(user, "role", None) == UserRole.ADMIN)
+            and (
+                user.is_staff or user.is_superuser or getattr(user, "role", None) == UserRole.ADMIN
+            )
         )
 
 
@@ -30,4 +32,6 @@ class IsEnrollmentOwner(BasePermission):
     message = "شما به این ثبت‌نام دسترسی ندارید."
 
     def has_object_permission(self, request, view, obj) -> bool:
-        return bool(request.user and request.user.is_authenticated and obj.user_id == request.user.pk)
+        return bool(
+            request.user and request.user.is_authenticated and obj.user_id == request.user.pk
+        )

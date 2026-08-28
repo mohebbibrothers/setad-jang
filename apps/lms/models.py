@@ -155,8 +155,12 @@ class Course(BaseModel):
         verbose_name="تصویر استاد",
     )
 
-    level = models.CharField(max_length=20, choices=CourseLevel.choices, default=CourseLevel.BEGINNER)
-    status = models.CharField(max_length=20, choices=CourseStatus.choices, default=CourseStatus.DRAFT)
+    level = models.CharField(
+        max_length=20, choices=CourseLevel.choices, default=CourseLevel.BEGINNER
+    )
+    status = models.CharField(
+        max_length=20, choices=CourseStatus.choices, default=CourseStatus.DRAFT
+    )
     language = models.CharField(max_length=30, default="fa", verbose_name="زبان")
     is_featured = models.BooleanField(default=False, verbose_name="ویژه")
 
@@ -221,7 +225,9 @@ class Lesson(BaseModel):
         null=True,
         validators=[validate_lesson_video_file_size],
     )
-    duration_seconds = models.PositiveIntegerField(default=0, validators=[validate_duration_seconds])
+    duration_seconds = models.PositiveIntegerField(
+        default=0, validators=[validate_duration_seconds]
+    )
 
     transcript = models.TextField(blank=True)
     summary = models.TextField(blank=True)
@@ -248,8 +254,12 @@ class Lesson(BaseModel):
             models.Index(fields=["course", "is_active", "order"]),
         ]
         constraints = [
-            models.UniqueConstraint(fields=["course", "order"], name="uniq_lms_lesson_order_per_course"),
-            models.UniqueConstraint(fields=["course", "slug"], name="uniq_lms_lesson_slug_per_course"),
+            models.UniqueConstraint(
+                fields=["course", "order"], name="uniq_lms_lesson_order_per_course"
+            ),
+            models.UniqueConstraint(
+                fields=["course", "slug"], name="uniq_lms_lesson_slug_per_course"
+            ),
         ]
 
     def __str__(self) -> str:
@@ -272,12 +282,34 @@ class LearningActivityStatement(BaseModel):
 
     statement_id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     idempotency_key = models.CharField(max_length=180, unique=True, null=True, blank=True)
-    actor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="lms_activity_statements")
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="lms_activity_statements"
+    )
     course = models.ForeignKey(Course, on_delete=models.PROTECT, related_name="activity_statements")
-    lesson = models.ForeignKey(Lesson, on_delete=models.PROTECT, null=True, blank=True, related_name="activity_statements")
-    enrollment = models.ForeignKey("Enrollment", on_delete=models.PROTECT, null=True, blank=True, related_name="activity_statements")
-    quiz_attempt = models.ForeignKey("QuizAttempt", on_delete=models.PROTECT, null=True, blank=True, related_name="activity_statements")
-    certificate = models.ForeignKey("Certificate", on_delete=models.PROTECT, null=True, blank=True, related_name="activity_statements")
+    lesson = models.ForeignKey(
+        Lesson, on_delete=models.PROTECT, null=True, blank=True, related_name="activity_statements"
+    )
+    enrollment = models.ForeignKey(
+        "Enrollment",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="activity_statements",
+    )
+    quiz_attempt = models.ForeignKey(
+        "QuizAttempt",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="activity_statements",
+    )
+    certificate = models.ForeignKey(
+        "Certificate",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="activity_statements",
+    )
     verb = models.CharField(max_length=40, choices=LearningStatementVerb.choices, db_index=True)
     object_type = models.CharField(max_length=40)
     object_id = models.CharField(max_length=80)
@@ -292,8 +324,12 @@ class LearningActivityStatement(BaseModel):
         verbose_name_plural = "Learning activity statements"
         ordering = ["-occurred_at", "-created_at"]
         indexes = [
-            models.Index(fields=["actor", "verb", "-occurred_at"], name="lms_stmt_actor_verb_time_idx"),
-            models.Index(fields=["course", "verb", "-occurred_at"], name="lms_stmt_course_verb_time_idx"),
+            models.Index(
+                fields=["actor", "verb", "-occurred_at"], name="lms_stmt_actor_verb_time_idx"
+            ),
+            models.Index(
+                fields=["course", "verb", "-occurred_at"], name="lms_stmt_course_verb_time_idx"
+            ),
             models.Index(fields=["verb", "-occurred_at"], name="lms_stmt_verb_time_idx"),
         ]
 
@@ -314,9 +350,22 @@ class LearningActivityStatement(BaseModel):
 class LessonVideoProcessingJob(BaseModel):
     """Asynchronous processing job for uploaded lesson videos."""
 
-    lesson = models.ForeignKey(Lesson, on_delete=models.CASCADE, related_name="video_processing_jobs")
-    requested_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="lms_video_jobs_requested")
-    status = models.CharField(max_length=20, choices=VideoProcessingStatus.choices, default=VideoProcessingStatus.QUEUED, db_index=True)
+    lesson = models.ForeignKey(
+        Lesson, on_delete=models.CASCADE, related_name="video_processing_jobs"
+    )
+    requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="lms_video_jobs_requested",
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=VideoProcessingStatus.choices,
+        default=VideoProcessingStatus.QUEUED,
+        db_index=True,
+    )
     provider = models.CharField(max_length=50, default="noop")
     source_file_name = models.CharField(max_length=500, blank=True)
     output_video_url = models.URLField(max_length=1024, blank=True)
@@ -332,7 +381,9 @@ class LessonVideoProcessingJob(BaseModel):
         verbose_name_plural = "Jobهای پردازش ویدئوی LMS"
         ordering = ["-created_at"]
         indexes = [
-            models.Index(fields=["lesson", "status", "-created_at"], name="lms_vjob_lesson_status_idx"),
+            models.Index(
+                fields=["lesson", "status", "-created_at"], name="lms_vjob_lesson_status_idx"
+            ),
             models.Index(fields=["status", "-created_at"], name="lms_video_job_status_time_idx"),
         ]
 
@@ -344,8 +395,12 @@ class Enrollment(BaseModel):
     """A user's free registration in a course."""
 
     course = models.ForeignKey(Course, on_delete=models.PROTECT, related_name="enrollments")
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="lms_enrollments")
-    status = models.CharField(max_length=20, choices=EnrollmentStatus.choices, default=EnrollmentStatus.ACTIVE)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="lms_enrollments"
+    )
+    status = models.CharField(
+        max_length=20, choices=EnrollmentStatus.choices, default=EnrollmentStatus.ACTIVE
+    )
     enrolled_at = models.DateTimeField(default=timezone.now)
     completed_at = models.DateTimeField(null=True, blank=True)
     last_accessed_lesson = models.ForeignKey(
@@ -368,7 +423,9 @@ class Enrollment(BaseModel):
             models.Index(fields=["course", "status", "-enrolled_at"]),
         ]
         constraints = [
-            models.UniqueConstraint(fields=["course", "user"], name="uniq_lms_enrollment_user_course"),
+            models.UniqueConstraint(
+                fields=["course", "user"], name="uniq_lms_enrollment_user_course"
+            ),
         ]
 
     def __str__(self) -> str:
@@ -378,7 +435,9 @@ class Enrollment(BaseModel):
 class LessonProgress(BaseModel):
     """Per-lesson progress for an enrollment."""
 
-    enrollment = models.ForeignKey(Enrollment, on_delete=models.CASCADE, related_name="lesson_progress")
+    enrollment = models.ForeignKey(
+        Enrollment, on_delete=models.CASCADE, related_name="lesson_progress"
+    )
     lesson = models.ForeignKey(Lesson, on_delete=models.PROTECT, related_name="progress_records")
     watched_seconds = models.PositiveIntegerField(default=0)
     duration_seconds_snapshot = models.PositiveIntegerField(default=0)
@@ -394,7 +453,9 @@ class LessonProgress(BaseModel):
         verbose_name_plural = "پیشرفت جلسات"
         indexes = [models.Index(fields=["enrollment", "lesson"])]
         constraints = [
-            models.UniqueConstraint(fields=["enrollment", "lesson"], name="uniq_lms_progress_enrollment_lesson"),
+            models.UniqueConstraint(
+                fields=["enrollment", "lesson"], name="uniq_lms_progress_enrollment_lesson"
+            ),
         ]
 
 
@@ -407,10 +468,14 @@ class LessonQuestion(BaseModel):
     """A user question under a lesson."""
 
     lesson = models.ForeignKey(Lesson, on_delete=models.CASCADE, related_name="questions")
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="lms_questions")
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="lms_questions"
+    )
     title = models.CharField(max_length=255)
     body = models.TextField()
-    status = models.CharField(max_length=20, choices=DiscussionStatus.choices, default=DiscussionStatus.VISIBLE)
+    status = models.CharField(
+        max_length=20, choices=DiscussionStatus.choices, default=DiscussionStatus.VISIBLE
+    )
     is_pinned = models.BooleanField(default=False)
     is_answered = models.BooleanField(default=False)
     answer_count = models.PositiveIntegerField(default=0)
@@ -430,9 +495,13 @@ class LessonAnswer(BaseModel):
     """A threaded answer for a lesson question."""
 
     question = models.ForeignKey(LessonQuestion, on_delete=models.CASCADE, related_name="answers")
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="lms_answers")
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="lms_answers"
+    )
     body = models.TextField()
-    status = models.CharField(max_length=20, choices=DiscussionStatus.choices, default=DiscussionStatus.VISIBLE)
+    status = models.CharField(
+        max_length=20, choices=DiscussionStatus.choices, default=DiscussionStatus.VISIBLE
+    )
     is_instructor_answer = models.BooleanField(default=False)
     is_accepted = models.BooleanField(default=False)
 
@@ -544,7 +613,9 @@ class QuizQuestion(BaseModel):
         verbose_name = "سؤال آزمون"
         verbose_name_plural = "سؤالات آزمون"
         ordering = ["order", "id"]
-        constraints = [models.UniqueConstraint(fields=["quiz", "order"], name="uniq_lms_quiz_question_order")]
+        constraints = [
+            models.UniqueConstraint(fields=["quiz", "order"], name="uniq_lms_quiz_question_order")
+        ]
 
 
 class QuizOption(BaseModel):
@@ -559,7 +630,9 @@ class QuizOption(BaseModel):
         verbose_name = "گزینه آزمون"
         verbose_name_plural = "گزینه‌های آزمون"
         ordering = ["order", "id"]
-        constraints = [models.UniqueConstraint(fields=["question", "order"], name="uniq_lms_quiz_option_order")]
+        constraints = [
+            models.UniqueConstraint(fields=["question", "order"], name="uniq_lms_quiz_option_order")
+        ]
 
 
 class QuizAttempt(BaseModel):
@@ -567,10 +640,16 @@ class QuizAttempt(BaseModel):
 
     quiz = models.ForeignKey(Quiz, on_delete=models.PROTECT, related_name="attempts")
     course = models.ForeignKey(Course, on_delete=models.PROTECT, related_name="quiz_attempts")
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="lms_quiz_attempts")
-    enrollment = models.ForeignKey(Enrollment, on_delete=models.PROTECT, related_name="quiz_attempts")
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="lms_quiz_attempts"
+    )
+    enrollment = models.ForeignKey(
+        Enrollment, on_delete=models.PROTECT, related_name="quiz_attempts"
+    )
     attempt_number = models.PositiveSmallIntegerField(default=1)
-    status = models.CharField(max_length=20, choices=QuizAttemptStatus.choices, default=QuizAttemptStatus.IN_PROGRESS)
+    status = models.CharField(
+        max_length=20, choices=QuizAttemptStatus.choices, default=QuizAttemptStatus.IN_PROGRESS
+    )
     started_at = models.DateTimeField(default=timezone.now)
     submitted_at = models.DateTimeField(null=True, blank=True)
     expires_at = models.DateTimeField(null=True, blank=True)
@@ -591,7 +670,9 @@ class QuizAttempt(BaseModel):
             models.Index(fields=["enrollment", "status"]),
         ]
         constraints = [
-            models.UniqueConstraint(fields=["quiz", "user", "attempt_number"], name="uniq_lms_quiz_user_attempt_number"),
+            models.UniqueConstraint(
+                fields=["quiz", "user", "attempt_number"], name="uniq_lms_quiz_user_attempt_number"
+            ),
         ]
 
 
@@ -609,7 +690,11 @@ class QuizAnswer(BaseModel):
     class Meta:
         verbose_name = "پاسخ آزمون"
         verbose_name_plural = "پاسخ‌های آزمون"
-        constraints = [models.UniqueConstraint(fields=["attempt", "question"], name="uniq_lms_attempt_question_answer")]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["attempt", "question"], name="uniq_lms_attempt_question_answer"
+            )
+        ]
 
 
 class QuizUnlock(BaseModel):
@@ -617,7 +702,9 @@ class QuizUnlock(BaseModel):
 
     quiz = models.ForeignKey(Quiz, on_delete=models.PROTECT, related_name="unlocks")
     course = models.ForeignKey(Course, on_delete=models.PROTECT, related_name="quiz_unlocks")
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="lms_quiz_unlocks")
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="lms_quiz_unlocks"
+    )
     unlocked_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,
@@ -641,13 +728,21 @@ class QuizUnlock(BaseModel):
 class Certificate(BaseModel):
     """Verifiable certificate issued after passing a course quiz."""
 
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="lms_certificates")
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="lms_certificates"
+    )
     course = models.ForeignKey(Course, on_delete=models.PROTECT, related_name="certificates")
-    enrollment = models.OneToOneField(Enrollment, on_delete=models.PROTECT, related_name="certificate")
-    quiz_attempt = models.OneToOneField(QuizAttempt, on_delete=models.PROTECT, related_name="certificate")
+    enrollment = models.OneToOneField(
+        Enrollment, on_delete=models.PROTECT, related_name="certificate"
+    )
+    quiz_attempt = models.OneToOneField(
+        QuizAttempt, on_delete=models.PROTECT, related_name="certificate"
+    )
     certificate_code = models.CharField(max_length=40, unique=True, blank=True)
     verification_slug = models.SlugField(max_length=80, unique=True, blank=True)
-    status = models.CharField(max_length=20, choices=CertificateStatus.choices, default=CertificateStatus.ISSUED)
+    status = models.CharField(
+        max_length=20, choices=CertificateStatus.choices, default=CertificateStatus.ISSUED
+    )
     full_name_snapshot = models.CharField(max_length=255)
     gender_snapshot = models.CharField(max_length=20, blank=True)
     national_code_snapshot = models.CharField(max_length=20)
@@ -675,7 +770,9 @@ class Certificate(BaseModel):
             models.Index(fields=["user", "status", "-issued_at"]),
         ]
         constraints = [
-            models.UniqueConstraint(fields=["user", "course"], name="uniq_lms_certificate_user_course"),
+            models.UniqueConstraint(
+                fields=["user", "course"], name="uniq_lms_certificate_user_course"
+            ),
         ]
 
     def save(self, *args: Any, **kwargs: Any) -> None:
@@ -690,7 +787,9 @@ class Certificate(BaseModel):
 class LMSUserSkill(BaseModel):
     """Skill/badge added to user profile after graduation."""
 
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="lms_skills")
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="lms_skills"
+    )
     course = models.ForeignKey(Course, on_delete=models.PROTECT, related_name="awarded_skills")
     certificate = models.OneToOneField(Certificate, on_delete=models.PROTECT, related_name="skill")
     title = models.CharField(max_length=255)
@@ -705,7 +804,9 @@ class LMSUserSkill(BaseModel):
             models.Index(fields=["user", "badge_level", "-issued_at"]),
             models.Index(fields=["course", "badge_level"]),
         ]
-        constraints = [models.UniqueConstraint(fields=["user", "course"], name="uniq_lms_user_skill_course")]
+        constraints = [
+            models.UniqueConstraint(fields=["user", "course"], name="uniq_lms_user_skill_course")
+        ]
 
     def save(self, *args: Any, **kwargs: Any) -> None:
         """Generate skill slug if needed."""
@@ -724,7 +825,11 @@ def _generate_unique_slug(*, model: type[models.Model], base_value: str, max_len
     base = slugify(base_value, allow_unicode=True)[:max_length] or "item"
     candidate = base
     suffix = 2
-    while model.all_objects.filter(slug=candidate).exists() if hasattr(model, "all_objects") else model.objects.filter(slug=candidate).exists():
+    while (
+        model.all_objects.filter(slug=candidate).exists()
+        if hasattr(model, "all_objects")
+        else model.objects.filter(slug=candidate).exists()
+    ):
         suffix_text = f"-{suffix}"
         candidate = f"{base[: max_length - len(suffix_text)]}{suffix_text}"
         suffix += 1

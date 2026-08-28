@@ -37,6 +37,7 @@ pytestmark = pytest.mark.django_db
 # Sponsor tests
 # ---------------------------------------------------------------------------
 
+
 class TestSponsorModel:
     """تست‌های مدل Sponsor."""
 
@@ -93,6 +94,7 @@ class TestSponsorModel:
 # ---------------------------------------------------------------------------
 # Campaign tests
 # ---------------------------------------------------------------------------
+
 
 class TestCampaignModel:
     """تست‌های مدل Campaign."""
@@ -237,6 +239,7 @@ class TestCampaignModel:
 # Campaign Managers tests
 # ---------------------------------------------------------------------------
 
+
 class TestCampaignManagers:
     """تست‌های manager‌های Campaign (visible, accepting)."""
 
@@ -279,6 +282,7 @@ class TestCampaignManagers:
 # CampaignImage tests
 # ---------------------------------------------------------------------------
 
+
 class TestCampaignImageModel:
     """تست‌های مدل CampaignImage."""
 
@@ -316,6 +320,7 @@ class TestCampaignImageModel:
 # ---------------------------------------------------------------------------
 # Participation tests
 # ---------------------------------------------------------------------------
+
 
 class TestParticipationModel:
     """تست‌های مدل Participation."""
@@ -370,6 +375,7 @@ class TestParticipationModel:
 # ---------------------------------------------------------------------------
 # Payment tests
 # ---------------------------------------------------------------------------
+
 
 class TestPaymentModel:
     """تست‌های مدل Payment."""
@@ -434,6 +440,7 @@ class TestPaymentModel:
         p = PaidParticipationFactory()
         assert p.status == ParticipationStatus.PAID
         assert p.paid_at is not None
+
 
 class TestCampaignSlugGeneration:
     """Campaign slug generation should be admin-friendly and collision-safe."""

@@ -132,7 +132,7 @@ def sanitize_sheet_title(value: str, *, fallback: str = "گزارش") -> str:
     اکسل نام sheet را حداکثر ۳۱ کاراکتر می‌پذیرد و کاراکترهای
     ``: \\ / ? * [ ]`` را ممنوع کرده است.
     """
-    forbidden = set(':\\/?*[]')
+    forbidden = set(":\\/?*[]")
     cleaned = "".join("-" if char in forbidden else char for char in (value or "")).strip()
     return cleaned[:31] or fallback
 
@@ -189,7 +189,9 @@ class StreamingExcelSheet:
         """Number of data rows written so far, excluding header and summary."""
         return self._row_count
 
-    def _styled_cell(self, value: Any, *, kind: str, header: bool = False, summary: bool = False) -> Any:
+    def _styled_cell(
+        self, value: Any, *, kind: str, header: bool = False, summary: bool = False
+    ) -> Any:
         """Build one styled write-only cell.
 
         datetimeهای آگاه از منطقهٔ زمانی همین‌جا به وقت محلی naive تبدیل
@@ -202,8 +204,15 @@ class StreamingExcelSheet:
         cell = WriteOnlyCell(self._sheet, value=value)
         theme = self._theme
         if header:
-            cell.fill = PatternFill(start_color=theme.header_color, end_color=theme.header_color, fill_type="solid")
-            cell.font = Font(name=theme.font_name, size=theme.header_font_size, bold=True, color=theme.header_font_color)
+            cell.fill = PatternFill(
+                start_color=theme.header_color, end_color=theme.header_color, fill_type="solid"
+            )
+            cell.font = Font(
+                name=theme.font_name,
+                size=theme.header_font_size,
+                bold=True,
+                color=theme.header_font_color,
+            )
             cell.alignment = _ALIGN_HEADER
             cell.border = _THIN_BORDER
             return cell
@@ -211,7 +220,9 @@ class StreamingExcelSheet:
         cell.font = Font(name=theme.font_name, size=theme.body_font_size, bold=summary)
         cell.border = _THIN_BORDER
         if summary:
-            cell.fill = PatternFill(start_color=theme.summary_color, end_color=theme.summary_color, fill_type="solid")
+            cell.fill = PatternFill(
+                start_color=theme.summary_color, end_color=theme.summary_color, fill_type="solid"
+            )
 
         if kind == "int":
             cell.alignment = _ALIGN_NUMBER
@@ -231,7 +242,10 @@ class StreamingExcelSheet:
     def _write_header(self) -> None:
         """Write the styled header row."""
         self._sheet.append(
-            [self._styled_cell(column.header, kind="center", header=True) for column in self._columns],
+            [
+                self._styled_cell(column.header, kind="center", header=True)
+                for column in self._columns
+            ],
         )
 
     def append(self, values: Sequence[Any]) -> None:
@@ -270,7 +284,9 @@ class StreamingExcelSheet:
         """
         self._sheet.append(
             [
-                self._styled_cell(value, kind=column.kind if value is not None else "center", summary=True)
+                self._styled_cell(
+                    value, kind=column.kind if value is not None else "center", summary=True
+                )
                 for value, column in zip(values, self._columns, strict=False)
             ],
         )

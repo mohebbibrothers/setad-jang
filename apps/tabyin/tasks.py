@@ -271,10 +271,7 @@ def sync_tabyin_incremental_task(
     max_retries = int(self.max_retries or 0)
 
     logger.info(
-        (
-            "Incremental tabyin sync task triggered "
-            "task_id=%s retries=%s triggered_by_user_id=%s"
-        ),
+        ("Incremental tabyin sync task triggered task_id=%s retries=%s triggered_by_user_id=%s"),
         task_id,
         retries,
         triggered_by_user_id,

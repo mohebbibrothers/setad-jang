@@ -41,7 +41,18 @@ class NotificationTemplateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = NotificationTemplate
-        fields = ("id", "code", "title", "channel", "subject_template", "body_template", "description", "is_active", "created_at", "updated_at")
+        fields = (
+            "id",
+            "code",
+            "title",
+            "channel",
+            "subject_template",
+            "body_template",
+            "description",
+            "is_active",
+            "created_at",
+            "updated_at",
+        )
         read_only_fields = fields
 
 
@@ -52,5 +63,18 @@ class NotificationEventSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = NotificationEvent
-        fields = ("id", "uuid", "event_type", "aggregate_type", "aggregate_id", "priority", "status", "attempt_count", "processed_at", "last_error", "deliveries_count", "created_at")
+        fields = (
+            "id",
+            "uuid",
+            "event_type",
+            "aggregate_type",
+            "aggregate_id",
+            "priority",
+            "status",
+            "attempt_count",
+            "processed_at",
+            "last_error",
+            "deliveries_count",
+            "created_at",
+        )
         read_only_fields = fields

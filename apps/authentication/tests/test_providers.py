@@ -1,4 +1,4 @@
-﻿"""
+"""
 Tests — apps.authentication.providers
 
 این تست‌ها contract لایه‌ی provider را پوشش می‌دهند:

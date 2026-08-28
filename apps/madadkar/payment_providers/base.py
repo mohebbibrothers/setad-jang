@@ -29,6 +29,7 @@ from typing import Any
 # Result dataclasses
 # ---------------------------------------------------------------------------
 
+
 @dataclass(frozen=True)
 class PaymentRequestResult:
     """
@@ -78,6 +79,7 @@ class PaymentVerifyResult:
 # ---------------------------------------------------------------------------
 # Abstract provider
 # ---------------------------------------------------------------------------
+
 
 class AbstractPaymentProvider(ABC):
     """

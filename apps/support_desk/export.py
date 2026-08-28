@@ -68,7 +68,9 @@ _CSAT_COLUMNS: list[ExcelColumn] = [
 
 def build_tickets_workbook(*, tickets: Iterable[SupportTicket]) -> BytesIO:
     """Build an RTL Excel workbook for support ticket queue/export."""
-    sheet = StreamingExcelSheet(title="تیکت‌ها", columns=_TICKET_COLUMNS, auto_filter=True, theme=_THEME)
+    sheet = StreamingExcelSheet(
+        title="تیکت‌ها", columns=_TICKET_COLUMNS, auto_filter=True, theme=_THEME
+    )
 
     total_messages = 0
     breached = 0
@@ -104,7 +106,9 @@ def build_tickets_workbook(*, tickets: Iterable[SupportTicket]) -> BytesIO:
 
 def build_messages_workbook(*, messages: Iterable[SupportTicketMessage]) -> BytesIO:
     """Build an RTL Excel workbook for ticket timeline messages."""
-    sheet = StreamingExcelSheet(title="پیام‌ها", columns=_MESSAGE_COLUMNS, auto_filter=True, theme=_THEME)
+    sheet = StreamingExcelSheet(
+        title="پیام‌ها", columns=_MESSAGE_COLUMNS, auto_filter=True, theme=_THEME
+    )
     for message in stream_rows(messages):
         sheet.append(
             [
@@ -140,7 +144,9 @@ def build_sla_workbook(*, tickets: Iterable[SupportTicket]) -> BytesIO:
 
 def build_csat_workbook(*, ratings: Iterable[SupportTicketSatisfaction]) -> BytesIO:
     """Build an RTL Excel workbook for CSAT ratings."""
-    sheet = StreamingExcelSheet(title="رضایت‌سنجی", columns=_CSAT_COLUMNS, auto_filter=True, theme=_THEME)
+    sheet = StreamingExcelSheet(
+        title="رضایت‌سنجی", columns=_CSAT_COLUMNS, auto_filter=True, theme=_THEME
+    )
     total = 0
     count = 0
     for rating in stream_rows(ratings):

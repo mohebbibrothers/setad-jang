@@ -117,7 +117,9 @@ def _draw_background(draw: ImageDraw.ImageDraw, width: int, height: int) -> None
     draw.rectangle([margin, margin, width - margin, margin + 26], fill=_TEAL)
     draw.rectangle([margin, height - margin - 26, width - margin, height - margin], fill=_TEAL)
     draw.ellipse([width - 360, 120, width - 120, 360], fill=(250, 231, 190), outline=_GOLD, width=4)
-    draw.ellipse([120, height - 360, 330, height - 150], fill=(232, 246, 246), outline=_TEAL, width=3)
+    draw.ellipse(
+        [120, height - 360, 330, height - 150], fill=(232, 246, 246), outline=_TEAL, width=3
+    )
 
 
 def _draw_logo(canvas: Image.Image) -> None:
@@ -132,7 +134,9 @@ def _draw_logo(canvas: Image.Image) -> None:
     canvas.paste(logo, (x, y))
 
 
-def _draw_certificate_text(draw: ImageDraw.ImageDraw, certificate: Certificate, width: int, height: int) -> None:
+def _draw_certificate_text(
+    draw: ImageDraw.ImageDraw, certificate: Certificate, width: int, height: int
+) -> None:
     """Draw all certificate text using RTL-aware rendering."""
     title_font = _font(64, bold=True)
     subtitle_font = _font(34, bold=True)
@@ -155,7 +159,13 @@ def _draw_certificate_text(draw: ImageDraw.ImageDraw, certificate: Certificate, 
     issue_text = f"تاریخ صدور: {certificate.issued_at:%Y-%m-%d}"
 
     info_y = height - 320
-    draw.rounded_rectangle([230, info_y - 40, width - 230, info_y + 160], radius=20, fill=(248, 250, 250), outline=(220, 230, 230), width=2)
+    draw.rounded_rectangle(
+        [230, info_y - 40, width - 230, info_y + 160],
+        radius=20,
+        fill=(248, 250, 250),
+        outline=(220, 230, 230),
+        width=2,
+    )
     _text(draw, (width - 300, info_y), score_text, label_font, fill=_TEAL, anchor="ra")
     _text(draw, (width - 300, info_y + 56), code_text, label_font, fill=_DARK, anchor="ra")
     _text(draw, (width - 300, info_y + 112), issue_text, small_font, fill=_MUTED, anchor="ra")

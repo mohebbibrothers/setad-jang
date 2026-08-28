@@ -40,7 +40,9 @@ def normalize_paths(paths: Iterable[str] | None) -> list[str]:
     return result[:50]
 
 
-def revalidate_frontend(*, tags: Iterable[str] | None = None, paths: Iterable[str] | None = None) -> None:
+def revalidate_frontend(
+    *, tags: Iterable[str] | None = None, paths: Iterable[str] | None = None
+) -> None:
     """Best-effort dispatch of a frontend revalidation request."""
     clean_tags = normalize_tags(tags)
     clean_paths = normalize_paths(paths)
@@ -62,4 +64,6 @@ def revalidate_frontend(*, tags: Iterable[str] | None = None, paths: Iterable[st
         revalidate_frontend_task.delay(tags=clean_tags, paths=clean_paths)
         logger.info("Frontend revalidation queued tags=%s paths=%s", clean_tags, clean_paths)
     except Exception:
-        logger.exception("Failed to queue frontend revalidation tags=%s paths=%s", clean_tags, clean_paths)
+        logger.exception(
+            "Failed to queue frontend revalidation tags=%s paths=%s", clean_tags, clean_paths
+        )

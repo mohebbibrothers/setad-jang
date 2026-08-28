@@ -42,12 +42,24 @@ def resolve_performance_contract(*, method: str, path: str) -> PerformanceContra
     )
     for key in candidates:
         if key in contracts:
-            return PerformanceContract(method=method_upper, normalized_path=normalized, budget_ms=int(contracts[key]), contract_key=key)
+            return PerformanceContract(
+                method=method_upper,
+                normalized_path=normalized,
+                budget_ms=int(contracts[key]),
+                contract_key=key,
+            )
     prefix_match = _resolve_prefix_contract(contracts=contracts, normalized_path=normalized)
     if prefix_match is not None:
         key, budget = prefix_match
-        return PerformanceContract(method=method_upper, normalized_path=normalized, budget_ms=int(budget), contract_key=key)
-    return PerformanceContract(method=method_upper, normalized_path=normalized, budget_ms=default_budget, contract_key="default")
+        return PerformanceContract(
+            method=method_upper, normalized_path=normalized, budget_ms=int(budget), contract_key=key
+        )
+    return PerformanceContract(
+        method=method_upper,
+        normalized_path=normalized,
+        budget_ms=default_budget,
+        contract_key="default",
+    )
 
 
 def is_slow_request(*, duration_ms: float, contract: PerformanceContract) -> bool:
@@ -55,7 +67,9 @@ def is_slow_request(*, duration_ms: float, contract: PerformanceContract) -> boo
     return duration_ms > contract.budget_ms
 
 
-def log_slow_request(*, contract: PerformanceContract, duration_ms: float, status_code: int) -> None:
+def log_slow_request(
+    *, contract: PerformanceContract, duration_ms: float, status_code: int
+) -> None:
     """Emit safe structured slow-request warning without leaking query strings or payload."""
     logger.warning(
         "Slow request detected method=%s path=%s status=%s duration_ms=%.2f budget_ms=%s contract=%s",
@@ -68,7 +82,9 @@ def log_slow_request(*, contract: PerformanceContract, duration_ms: float, statu
     )
 
 
-def _resolve_prefix_contract(*, contracts: dict[str, Any], normalized_path: str) -> tuple[str, int] | None:
+def _resolve_prefix_contract(
+    *, contracts: dict[str, Any], normalized_path: str
+) -> tuple[str, int] | None:
     """Resolve longest prefix contract keys ending with `*`."""
     matches: list[tuple[str, int]] = []
     for key, budget in contracts.items():

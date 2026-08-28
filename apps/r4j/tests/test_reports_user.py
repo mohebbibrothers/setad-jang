@@ -374,9 +374,11 @@ class TestReportSubmitWithAttachments:
     ) -> None:
         """در multipart، field_changes به‌صورت JSON string باید درست parse شود."""
         pdf = _make_minimal_pdf()
-        field_changes_json = json.dumps([
-            {"field_name": "city", "suggested_value": "Shiraz"},
-        ])
+        field_changes_json = json.dumps(
+            [
+                {"field_name": "city", "suggested_value": "Shiraz"},
+            ]
+        )
 
         with patch(_TASK_PATCH_PATH):
             response = auth_client.post(
@@ -401,9 +403,11 @@ class TestReportSubmitWithAttachments:
     ) -> None:
         """ارسال هر سه: notes + field_changes + attachments در multipart."""
         pdf = _make_minimal_pdf()
-        field_changes_json = json.dumps([
-            {"field_name": "country", "suggested_value": "Germany"},
-        ])
+        field_changes_json = json.dumps(
+            [
+                {"field_name": "country", "suggested_value": "Germany"},
+            ]
+        )
 
         with patch(_TASK_PATCH_PATH):
             response = auth_client.post(
@@ -484,9 +488,11 @@ class TestReportSubmitWithAttachments:
         published_criminal_simple,
     ) -> None:
         """field_name نامعتبر در JSON string باید 400 برگرداند."""
-        field_changes_json = json.dumps([
-            {"field_name": "total_bounty_toman", "suggested_value": "99999"},
-        ])
+        field_changes_json = json.dumps(
+            [
+                {"field_name": "total_bounty_toman", "suggested_value": "99999"},
+            ]
+        )
 
         response = auth_client.post(
             f"/api/v1/r4j/criminals/{published_criminal_simple.pk}/reports/",

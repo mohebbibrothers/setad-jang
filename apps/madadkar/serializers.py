@@ -58,6 +58,7 @@ from apps.madadkar.validators import (
 # Sponsor serializers
 # ===========================================================================
 
+
 class SponsorPublicSerializer(serializers.ModelSerializer):
     """نمایش عمومی مددکار — فقط فیلدهای امن."""
 
@@ -124,6 +125,7 @@ class SponsorUpdateSerializer(serializers.Serializer):
 # CampaignImage serializers
 # ===========================================================================
 
+
 class CampaignImageReadSerializer(serializers.ModelSerializer):
     """نمایش تصویر گالری."""
 
@@ -161,6 +163,7 @@ class CampaignImageCreateSerializer(serializers.Serializer):
 # ===========================================================================
 # Campaign serializers — public
 # ===========================================================================
+
 
 class CampaignPublicListSerializer(serializers.ModelSerializer):
     """نمایش حرکت در لیست عمومی — سبک‌وزن."""
@@ -223,6 +226,7 @@ class CampaignPublicDetailSerializer(CampaignPublicListSerializer):
 # ===========================================================================
 # Campaign serializers — admin
 # ===========================================================================
+
 
 class CampaignAdminListSerializer(serializers.ModelSerializer):
     """لیست حرکت‌ها برای ادمین — همه فیلدهای کلیدی."""
@@ -314,23 +318,29 @@ class CampaignAdminCreateSerializer(serializers.Serializer):
         deadline = attrs.get("deadline")
 
         if has_deadline and deadline is None:
-            raise serializers.ValidationError({
-                "deadline": "در صورت فعال بودن مهلت زمانی، تاریخ پایان الزامی است.",
-            })
+            raise serializers.ValidationError(
+                {
+                    "deadline": "در صورت فعال بودن مهلت زمانی، تاریخ پایان الزامی است.",
+                }
+            )
         if not has_deadline and deadline is not None:
-            raise serializers.ValidationError({
-                "deadline": "اگر مهلت زمانی فعال نیست، تاریخ پایان نباید مقداردهی شود.",
-            })
+            raise serializers.ValidationError(
+                {
+                    "deadline": "اگر مهلت زمانی فعال نیست، تاریخ پایان نباید مقداردهی شود.",
+                }
+            )
 
         total_amount = attrs["total_amount"]
         total_shares = attrs["total_shares"]
         if total_amount % total_shares != 0:
-            raise serializers.ValidationError({
-                "total_amount": (
-                    f"مبلغ کل ({total_amount:,}) باید بر تعداد سهم "
-                    f"({total_shares:,}) بدون باقیمانده تقسیم شود."
-                ),
-            })
+            raise serializers.ValidationError(
+                {
+                    "total_amount": (
+                        f"مبلغ کل ({total_amount:,}) باید بر تعداد سهم "
+                        f"({total_shares:,}) بدون باقیمانده تقسیم شود."
+                    ),
+                }
+            )
 
         return attrs
 
@@ -374,17 +384,15 @@ class CampaignAdminUpdateSerializer(serializers.Serializer):
                 "total_shares",
                 campaign.total_shares if campaign else None,
             )
-            if (
-                new_amount is not None
-                and new_shares is not None
-                and new_amount % new_shares != 0
-            ):
-                raise serializers.ValidationError({
-                    "total_amount": (
-                        f"مبلغ کل ({new_amount:,}) باید بر تعداد سهم "
-                        f"({new_shares:,}) بدون باقیمانده تقسیم شود."
-                    ),
-                })
+            if new_amount is not None and new_shares is not None and new_amount % new_shares != 0:
+                raise serializers.ValidationError(
+                    {
+                        "total_amount": (
+                            f"مبلغ کل ({new_amount:,}) باید بر تعداد سهم "
+                            f"({new_shares:,}) بدون باقیمانده تقسیم شود."
+                        ),
+                    }
+                )
 
         return attrs
 
@@ -392,6 +400,7 @@ class CampaignAdminUpdateSerializer(serializers.Serializer):
 # ===========================================================================
 # Status display helper
 # ===========================================================================
+
 
 class CampaignStatusChoiceSerializer(serializers.Serializer):
     """نمایش choiceهای CampaignStatus برای کمک به UI."""
@@ -402,15 +411,13 @@ class CampaignStatusChoiceSerializer(serializers.Serializer):
     @classmethod
     def get_all_choices(cls) -> list[dict[str, str]]:
         """لیست تمام choiceها برای استفاده در API kit."""
-        return [
-            {"value": value, "label": label}
-            for value, label in CampaignStatus.choices
-        ]
+        return [{"value": value, "label": label} for value, label in CampaignStatus.choices]
 
 
 # ===========================================================================
 # Participation serializers
 # ===========================================================================
+
 
 class ParticipationInitiateSerializer(serializers.Serializer):
     """
@@ -552,6 +559,7 @@ class ParticipationInitiatedResponseSerializer(serializers.Serializer):
 # Payment Verify Callback serializer
 # ===========================================================================
 
+
 class PaymentVerifyCallbackSerializer(serializers.Serializer):
     """
     ورودی callback تأیید پرداخت از سمت درگاه.
@@ -594,6 +602,7 @@ class PaymentVerifyResultSerializer(serializers.Serializer):
 # Admin Analytics serializers
 # ===========================================================================
 
+
 class AdminUserSummarySerializer(serializers.Serializer):
     """خلاصه‌ای از User برای نمایش در analytics ادمین."""
 
@@ -614,11 +623,7 @@ class AdminUserSummarySerializer(serializers.Serializer):
         return getattr(obj, "email", "") or "—"
 
     def get_mobile(self, obj) -> str:
-        return (
-            getattr(obj, "phone_number", "")
-            or getattr(obj, "mobile", "")
-            or ""
-        )
+        return getattr(obj, "phone_number", "") or getattr(obj, "mobile", "") or ""
 
 
 class AdminParticipantDetailSerializer(serializers.ModelSerializer):
@@ -682,6 +687,7 @@ class AdminCampaignAnalyticsSerializer(serializers.Serializer):
 # Admin Payment serializers (همه پرداخت‌ها — برای ادمین)
 # ===========================================================================
 
+
 class AdminPaymentCampaignSummarySerializer(serializers.ModelSerializer):
     """خلاصه‌ای از Campaign برای نمایش در داخل Payment ادمین."""
 
@@ -735,11 +741,14 @@ class AdminPaymentListSerializer(serializers.ModelSerializer):
 # Refund / adjustment serializers — admin financial controls
 # ===========================================================================
 
+
 class PaymentRefundSerializer(serializers.ModelSerializer):
     """Read serializer for refund workflow rows."""
 
     payment_authority = serializers.CharField(source="payment.authority", read_only=True)
-    campaign_id = serializers.IntegerField(source="payment.participation.campaign_id", read_only=True)
+    campaign_id = serializers.IntegerField(
+        source="payment.participation.campaign_id", read_only=True
+    )
     status_display = serializers.CharField(source="get_status_display", read_only=True)
     reason_display = serializers.CharField(source="get_reason_display", read_only=True)
     requested_by = AdminUserSummarySerializer(read_only=True)
@@ -799,11 +808,15 @@ class FinancialAdjustmentSerializer(serializers.ModelSerializer):
     """Read serializer for campaign financial adjustment workflow rows."""
 
     campaign_title = serializers.CharField(source="campaign.title", read_only=True)
-    payment_authority = serializers.CharField(source="payment.authority", read_only=True, allow_null=True)
+    payment_authority = serializers.CharField(
+        source="payment.authority", read_only=True, allow_null=True
+    )
     requested_by = AdminUserSummarySerializer(read_only=True)
     reviewed_by = AdminUserSummarySerializer(read_only=True)
     status_display = serializers.CharField(source="get_status_display", read_only=True)
-    adjustment_type_display = serializers.CharField(source="get_adjustment_type_display", read_only=True)
+    adjustment_type_display = serializers.CharField(
+        source="get_adjustment_type_display", read_only=True
+    )
     signed_amount = serializers.IntegerField(read_only=True)
 
     class Meta:
@@ -867,12 +880,15 @@ class CampaignFinancialControlSummarySerializer(serializers.Serializer):
 # Risk signal serializers — admin financial safety
 # ===========================================================================
 
+
 class MadadkarRiskSignalSerializer(serializers.ModelSerializer):
     """Read serializer for Madadkar financial risk signals."""
 
     user = AdminUserSummarySerializer(read_only=True)
     campaign_title = serializers.CharField(source="campaign.title", read_only=True, allow_null=True)
-    payment_authority = serializers.CharField(source="payment.authority", read_only=True, allow_null=True)
+    payment_authority = serializers.CharField(
+        source="payment.authority", read_only=True, allow_null=True
+    )
     signal_type_display = serializers.CharField(source="get_signal_type_display", read_only=True)
     severity_display = serializers.CharField(source="get_severity_display", read_only=True)
     status_display = serializers.CharField(source="get_status_display", read_only=True)
@@ -934,6 +950,7 @@ class MadadkarRiskSignalFilterSerializer(serializers.Serializer):
 # Campaign intelligence serializers — admin decision support
 # ===========================================================================
 
+
 class CampaignDailyTrendSerializer(serializers.Serializer):
     """One day in campaign intelligence trend."""
 
@@ -974,6 +991,7 @@ class MadadkarIntelligenceOverviewSerializer(serializers.Serializer):
 # ===========================================================================
 # Donation receipt serializers — user/public/admin
 # ===========================================================================
+
 
 class DonationReceiptSerializer(serializers.ModelSerializer):
     """Read serializer for user-owned verifiable donation receipts."""
@@ -1035,6 +1053,7 @@ class DonationReceiptResendSerializer(serializers.Serializer):
 # ===========================================================================
 # Reconciliation serializers — admin settlement operations
 # ===========================================================================
+
 
 class PaymentReconciliationBatchSerializer(serializers.ModelSerializer):
     """Read serializer for provider settlement reconciliation batches."""
@@ -1106,6 +1125,7 @@ class PaymentReconciliationImportSerializer(serializers.Serializer):
 # ===========================================================================
 # Disbursement serializers — admin allocation ledger
 # ===========================================================================
+
 
 class CampaignDisbursementSerializer(serializers.ModelSerializer):
     """Read serializer for campaign fund disbursement workflow rows."""
@@ -1208,6 +1228,7 @@ class CampaignTransparencySerializer(serializers.Serializer):
 # ===========================================================================
 # Financial control serializers — admin ops automation
 # ===========================================================================
+
 
 class MadadkarFinancialControlSnapshotSerializer(serializers.ModelSerializer):
     """Read serializer for automated finance-ops control snapshots."""

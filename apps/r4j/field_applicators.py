@@ -57,9 +57,7 @@ class FieldApplicationError(Exception):
         self.field_name = field_name
         self.raw_value = raw_value
         self.reason = reason
-        super().__init__(
-            f"Cannot apply field '{field_name}': {reason} (value={raw_value!r})"
-        )
+        super().__init__(f"Cannot apply field '{field_name}': {reason} (value={raw_value!r})")
 
 
 # ============================================================
@@ -154,10 +152,7 @@ def _apply_gender_field(
         raise FieldApplicationError(
             field_name=field_name,
             raw_value=raw_value,
-            reason=(
-                f"مقدار جنسیت نامعتبر است. "
-                f"مقادیر مجاز: {', '.join(sorted(valid_values))}"
-            ),
+            reason=(f"مقدار جنسیت نامعتبر است. مقادیر مجاز: {', '.join(sorted(valid_values))}"),
         )
 
     setattr(criminal, field_name, stripped)

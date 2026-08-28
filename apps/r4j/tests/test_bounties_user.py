@@ -536,6 +536,7 @@ class TestBountySetFailures:
     ) -> None:
         """مجرم draft نباید قابل bounty گذاشتن باشد."""
         from tests.factories.r4j import R4JCriminalFactory
+
         draft = R4JCriminalFactory(is_published=False)
         response = verified_client.post(
             f"/api/v1/r4j/criminals/{draft.pk}/bounty/",

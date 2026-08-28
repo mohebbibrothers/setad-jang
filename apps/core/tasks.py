@@ -30,7 +30,9 @@ logger = logging.getLogger("apps.core.tasks")
     max_retries=5,
     ignore_result=True,
 )
-def revalidate_frontend_task(self, *, tags: list[str] | None = None, paths: list[str] | None = None) -> None:
+def revalidate_frontend_task(
+    self, *, tags: list[str] | None = None, paths: list[str] | None = None
+) -> None:
     """Call the Next.js /api/revalidate endpoint with tags/paths."""
     if not getattr(settings, "FRONTEND_REVALIDATION_ENABLED", False):
         logger.debug("Frontend revalidation task skipped: disabled")
@@ -69,15 +71,21 @@ def revalidate_frontend_task(self, *, tags: list[str] | None = None, paths: list
     except requests.RequestException:
         outcome = "request_error"
         FRONTEND_REVALIDATIONS_TOTAL.labels(outcome=outcome).inc()
-        FRONTEND_REVALIDATION_DURATION_SECONDS.labels(outcome=outcome).observe(monotonic_time() - started)
-        logger.exception("Frontend revalidation request failed tags=%s paths=%s", clean_tags, clean_paths)
+        FRONTEND_REVALIDATION_DURATION_SECONDS.labels(outcome=outcome).observe(
+            monotonic_time() - started
+        )
+        logger.exception(
+            "Frontend revalidation request failed tags=%s paths=%s", clean_tags, clean_paths
+        )
         raise
 
     body = response.text[:500]
     if response.status_code >= 500:
         outcome = "server_error"
         FRONTEND_REVALIDATIONS_TOTAL.labels(outcome=outcome).inc()
-        FRONTEND_REVALIDATION_DURATION_SECONDS.labels(outcome=outcome).observe(monotonic_time() - started)
+        FRONTEND_REVALIDATION_DURATION_SECONDS.labels(outcome=outcome).observe(
+            monotonic_time() - started
+        )
         logger.warning(
             "Frontend revalidation server error status=%s tags=%s paths=%s body=%s",
             response.status_code,
@@ -90,7 +98,9 @@ def revalidate_frontend_task(self, *, tags: list[str] | None = None, paths: list
     if response.status_code >= 400:
         outcome = "rejected"
         FRONTEND_REVALIDATIONS_TOTAL.labels(outcome=outcome).inc()
-        FRONTEND_REVALIDATION_DURATION_SECONDS.labels(outcome=outcome).observe(monotonic_time() - started)
+        FRONTEND_REVALIDATION_DURATION_SECONDS.labels(outcome=outcome).observe(
+            monotonic_time() - started
+        )
         logger.warning(
             "Frontend revalidation rejected status=%s tags=%s paths=%s body=%s",
             response.status_code,
@@ -101,7 +111,9 @@ def revalidate_frontend_task(self, *, tags: list[str] | None = None, paths: list
         return
 
     FRONTEND_REVALIDATIONS_TOTAL.labels(outcome=outcome).inc()
-    FRONTEND_REVALIDATION_DURATION_SECONDS.labels(outcome=outcome).observe(monotonic_time() - started)
+    FRONTEND_REVALIDATION_DURATION_SECONDS.labels(outcome=outcome).observe(
+        monotonic_time() - started
+    )
     logger.info(
         "Frontend revalidation completed status=%s tags=%s paths=%s body=%s",
         response.status_code,
@@ -132,8 +144,13 @@ def process_cache_invalidation_event_task(self, *, event_id: int) -> None:
         logger.warning("Cache invalidation event not found id=%s", event_id)
         return
 
-    if event.status in {CacheInvalidationEvent.STATUS_SUCCEEDED, CacheInvalidationEvent.STATUS_DEAD}:
-        logger.debug("Cache invalidation event already terminal id=%s status=%s", event_id, event.status)
+    if event.status in {
+        CacheInvalidationEvent.STATUS_SUCCEEDED,
+        CacheInvalidationEvent.STATUS_DEAD,
+    }:
+        logger.debug(
+            "Cache invalidation event already terminal id=%s status=%s", event_id, event.status
+        )
         return
 
     max_attempts = getattr(settings, "CACHE_INVALIDATION_MAX_ATTEMPTS", 10)
@@ -151,7 +168,11 @@ def process_cache_invalidation_event_task(self, *, event_id: int) -> None:
     try:
         revalidate_frontend_task.run(tags=event.tags, paths=event.paths)
     except Exception as exc:
-        event.status = CacheInvalidationEvent.STATUS_DEAD if event.attempts >= max_attempts else CacheInvalidationEvent.STATUS_FAILED
+        event.status = (
+            CacheInvalidationEvent.STATUS_DEAD
+            if event.attempts >= max_attempts
+            else CacheInvalidationEvent.STATUS_FAILED
+        )
         event.last_error = str(exc)[:4000]
         event.next_attempt_at = timezone.now()
         event.save(update_fields=["status", "last_error", "next_attempt_at", "updated_at"])
@@ -185,7 +206,9 @@ def process_pending_cache_invalidation_events_task(*, limit: int | None = None) 
         | Q(status=CacheInvalidationEvent.STATUS_FAILED, next_attempt_at__isnull=True)
     )
     events = list(
-        CacheInvalidationEvent.all_objects.filter(due_query, attempts__lt=max_attempts).order_by("created_at")[:batch_limit]
+        CacheInvalidationEvent.all_objects.filter(due_query, attempts__lt=max_attempts).order_by(
+            "created_at"
+        )[:batch_limit]
     )
 
     for event in events:
@@ -215,7 +238,10 @@ def _update_outbox_metrics() -> None:
 
     oldest = (
         CacheInvalidationEvent.all_objects.filter(
-            status__in=[CacheInvalidationEvent.STATUS_PENDING, CacheInvalidationEvent.STATUS_FAILED],
+            status__in=[
+                CacheInvalidationEvent.STATUS_PENDING,
+                CacheInvalidationEvent.STATUS_FAILED,
+            ],
         )
         .order_by("created_at")
         .first()

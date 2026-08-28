@@ -28,9 +28,7 @@ class IsR4JAdminUser(BasePermission):
     def has_permission(self, request: Request, view: Any) -> bool:
         user = request.user
         return bool(
-            user
-            and user.is_authenticated
-            and getattr(user, "role", None) == UserRole.ADMIN,
+            user and user.is_authenticated and getattr(user, "role", None) == UserRole.ADMIN,
         )
 
 
@@ -57,9 +55,7 @@ class IsFullyVerifiedUser(BasePermission):
             return False
 
         if not getattr(user, "is_phone_verified", False):
-            self.message = (
-                "برای این عملیات باید ابتدا شماره موبایل خود را تأیید کنید."
-            )
+            self.message = "برای این عملیات باید ابتدا شماره موبایل خود را تأیید کنید."
             return False
 
         profile = getattr(user, "profile", None)

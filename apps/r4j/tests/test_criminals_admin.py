@@ -113,7 +113,9 @@ class TestAdminCriminalCRUD:
     """رفتار CRUD criminals در admin."""
 
     def test_create_returns_201_and_dispatches_audit(
-        self, admin_client, admin_user,
+        self,
+        admin_client,
+        admin_user,
     ) -> None:
         with patch(_TASK_PATCH_PATH) as mock_task:
             mock_task.delay = MagicMock()
@@ -172,7 +174,9 @@ class TestAdminCriminalCRUD:
         assert kwargs["action"] == audit_actions.R4J_CRIMINAL_UPDATED
 
     def test_delete_soft_deletes_and_audits_sync(
-        self, admin_client, admin_user,
+        self,
+        admin_client,
+        admin_user,
     ) -> None:
         criminal = R4JCriminalFactory(is_published=True)
         criminal.publish()
@@ -263,7 +267,8 @@ class TestAdminAliases:
         )
         assert response.status_code == status.HTTP_201_CREATED
         assert R4JCriminalAlias.objects.filter(
-            criminal=criminal, alias="Big T",
+            criminal=criminal,
+            alias="Big T",
         ).exists()
 
     def test_list_aliases(self, admin_client) -> None:
@@ -312,7 +317,8 @@ class TestAdminPhones:
     def test_update_phone(self, admin_client) -> None:
         criminal = R4JCriminalFactory()
         phone = R4JCriminalPhone.objects.create(
-            criminal=criminal, number="+989120000000",
+            criminal=criminal,
+            number="+989120000000",
         )
         response = admin_client.patch(
             f"/api/v1/r4j/admin/criminals/{criminal.pk}/phones/{phone.pk}/",
@@ -326,7 +332,8 @@ class TestAdminPhones:
     def test_delete_phone(self, admin_client) -> None:
         criminal = R4JCriminalFactory()
         phone = R4JCriminalPhone.objects.create(
-            criminal=criminal, number="+989120000000",
+            criminal=criminal,
+            number="+989120000000",
         )
         response = admin_client.delete(
             f"/api/v1/r4j/admin/criminals/{criminal.pk}/phones/{phone.pk}/",
@@ -389,7 +396,9 @@ class TestAdminFieldVisibility:
             )
         assert response.status_code == status.HTTP_200_OK
         assert R4JCriminalFieldVisibility.objects.filter(
-            criminal=criminal, field_name="national_code", is_public=True,
+            criminal=criminal,
+            field_name="national_code",
+            is_public=True,
         ).exists()
 
         kwargs = mock_task.delay.call_args.kwargs
@@ -398,7 +407,9 @@ class TestAdminFieldVisibility:
     def test_upsert_updates_existing(self, admin_client) -> None:
         criminal = R4JCriminalFactory()
         R4JCriminalFieldVisibility.objects.create(
-            criminal=criminal, field_name="national_code", is_public=False,
+            criminal=criminal,
+            field_name="national_code",
+            is_public=False,
         )
         response = admin_client.patch(
             f"/api/v1/r4j/admin/criminals/{criminal.pk}/visibility/",
@@ -407,9 +418,7 @@ class TestAdminFieldVisibility:
         )
         assert response.status_code == status.HTTP_200_OK
         # تعداد record باید همان یکی باقی بماند
-        assert (
-            R4JCriminalFieldVisibility.objects.filter(criminal=criminal).count() == 1
-        )
+        assert R4JCriminalFieldVisibility.objects.filter(criminal=criminal).count() == 1
 
 
 # ============================================================

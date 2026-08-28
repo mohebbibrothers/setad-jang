@@ -227,7 +227,9 @@ class HTTPAPIOTPProvider(OTPDeliveryProvider):
                 timeout=timeout,
             )
         except requests.RequestException as exc:
-            logger.warning("SMS HTTP provider network failure recipient=%s error=%s", recipient, exc)
+            logger.warning(
+                "SMS HTTP provider network failure recipient=%s error=%s", recipient, exc
+            )
             raise OTPDeliveryFailedError("SMS HTTP provider request failed.") from exc
         if response.status_code >= 400:
             logger.warning(
@@ -237,7 +239,12 @@ class HTTPAPIOTPProvider(OTPDeliveryProvider):
                 response.text[:200],
             )
             raise OTPDeliveryFailedError("SMS HTTP provider rejected request.")
-        logger.info("OTP SMS delivered recipient=%s purpose=%s provider=%s", recipient, purpose, self.provider_name)
+        logger.info(
+            "OTP SMS delivered recipient=%s purpose=%s provider=%s",
+            recipient,
+            purpose,
+            self.provider_name,
+        )
         return True
 
 

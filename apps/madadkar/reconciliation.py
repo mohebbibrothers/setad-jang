@@ -65,19 +65,23 @@ def build_reconciliation_discrepancy_csv(*, batch: PaymentReconciliationBatch) -
     ]
     writer = csv.DictWriter(output, fieldnames=fieldnames)
     writer.writeheader()
-    for item in batch.items.exclude(status=ReconciliationItemStatus.MATCHED).order_by("created_at", "id"):
-        writer.writerow({
-            "item_id": item.pk,
-            "status": item.status,
-            "reason": item.reason,
-            "authority": item.authority,
-            "provider_ref_id": item.provider_ref_id,
-            "provider_amount": item.provider_amount,
-            "provider_status": item.provider_status,
-            "internal_amount": item.internal_amount,
-            "internal_status": item.internal_status,
-            "payment_id": item.payment_id,
-        })
+    for item in batch.items.exclude(status=ReconciliationItemStatus.MATCHED).order_by(
+        "created_at", "id"
+    ):
+        writer.writerow(
+            {
+                "item_id": item.pk,
+                "status": item.status,
+                "reason": item.reason,
+                "authority": item.authority,
+                "provider_ref_id": item.provider_ref_id,
+                "provider_amount": item.provider_amount,
+                "provider_status": item.provider_status,
+                "internal_amount": item.internal_amount,
+                "internal_status": item.internal_status,
+                "payment_id": item.payment_id,
+            }
+        )
     return output.getvalue().encode("utf-8-sig")
 
 
@@ -145,7 +149,11 @@ def _normalize_cell(*, value: Any, key: str) -> Any:
 
 def _validate_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Validate parsed rows and strip fully empty rows."""
-    cleaned = [row for row in rows if row.get("authority") or row.get("ref_id") or row.get("amount") or row.get("status")]
+    cleaned = [
+        row
+        for row in rows
+        if row.get("authority") or row.get("ref_id") or row.get("amount") or row.get("status")
+    ]
     for row in cleaned:
         if not row.get("authority") and not row.get("ref_id"):
             raise ReconciliationImportError("هر ردیف باید authority یا ref_id داشته باشد.")

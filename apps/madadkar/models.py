@@ -60,6 +60,7 @@ from apps.madadkar.validators import (
 # Upload path helpers
 # ---------------------------------------------------------------------------
 
+
 def sponsor_logo_upload_path(instance: Sponsor, filename: str) -> str:
     """مسیر آپلود لوگوی مددکار."""
     return f"madadkar/sponsors/{instance.pk or 'new'}/logo/{filename}"
@@ -78,6 +79,7 @@ def campaign_gallery_upload_path(instance: CampaignImage, filename: str) -> str:
 # ---------------------------------------------------------------------------
 # Sponsor (مددکار)
 # ---------------------------------------------------------------------------
+
 
 class Sponsor(BaseModel):
     """
@@ -130,6 +132,7 @@ class Sponsor(BaseModel):
 # ---------------------------------------------------------------------------
 # Campaign (حرکت)
 # ---------------------------------------------------------------------------
+
 
 class Campaign(BaseModel):
     """
@@ -385,6 +388,7 @@ class Campaign(BaseModel):
 # CampaignImage (گالری تصاویر اضافی)
 # ---------------------------------------------------------------------------
 
+
 class CampaignImage(BaseModel):
     """
     تصاویر اضافی گالری یک حرکت (علاوه بر cover_image اصلی).
@@ -432,6 +436,7 @@ class CampaignImage(BaseModel):
 # ---------------------------------------------------------------------------
 # Participation (مشارکت)
 # ---------------------------------------------------------------------------
+
 
 class Participation(BaseModel):
     """
@@ -525,6 +530,7 @@ class Participation(BaseModel):
 # ---------------------------------------------------------------------------
 # Payment (پرداخت)
 # ---------------------------------------------------------------------------
+
 
 class Payment(BaseModel):
     """
@@ -643,6 +649,7 @@ class Payment(BaseModel):
 # PaymentEvent (ledger رویدادهای مالی)
 # ---------------------------------------------------------------------------
 
+
 class PaymentEventQuerySet(models.QuerySet):
     """QuerySet append-only برای جلوگیری از تغییر bulk در ledger پرداخت."""
 
@@ -732,6 +739,7 @@ class PaymentEvent(BaseModel):
 # Refund / Adjustment Workflow
 # ---------------------------------------------------------------------------
 
+
 class PaymentRefund(BaseModel):
     """Controlled refund workflow for successful Madadkar payments."""
 
@@ -767,7 +775,9 @@ class PaymentRefund(BaseModel):
         verbose_name="وضعیت",
     )
     idempotency_key = models.CharField(max_length=120, null=True, blank=True, unique=True)
-    provider_ref_id = models.CharField(max_length=120, blank=True, verbose_name="شناسه بازپرداخت درگاه")
+    provider_ref_id = models.CharField(
+        max_length=120, blank=True, verbose_name="شناسه بازپرداخت درگاه"
+    )
     note = models.TextField(blank=True, verbose_name="یادداشت")
     rejection_reason = models.TextField(blank=True, verbose_name="دلیل رد")
     reviewed_at = models.DateTimeField(null=True, blank=True)
@@ -782,7 +792,9 @@ class PaymentRefund(BaseModel):
             models.Index(fields=["status", "-created_at"], name="madadkar_ref_status_time_idx"),
         ]
         constraints = [
-            models.CheckConstraint(condition=models.Q(amount__gte=1), name="madadkar_ref_amount_min"),
+            models.CheckConstraint(
+                condition=models.Q(amount__gte=1), name="madadkar_ref_amount_min"
+            ),
         ]
 
     def __str__(self) -> str:
@@ -848,7 +860,9 @@ class CampaignFinancialAdjustment(BaseModel):
             models.Index(fields=["status", "-created_at"], name="madadkar_adj_status_time_idx"),
         ]
         constraints = [
-            models.CheckConstraint(condition=models.Q(amount__gte=1), name="madadkar_adj_amount_min"),
+            models.CheckConstraint(
+                condition=models.Q(amount__gte=1), name="madadkar_adj_amount_min"
+            ),
         ]
 
     def __str__(self) -> str:
@@ -865,6 +879,7 @@ class CampaignFinancialAdjustment(BaseModel):
 # ---------------------------------------------------------------------------
 # Financial Control Snapshots
 # ---------------------------------------------------------------------------
+
 
 class MadadkarFinancialControlSnapshot(BaseModel):
     """Automated finance-ops control report for Madadkar operational safety."""
@@ -886,7 +901,9 @@ class MadadkarFinancialControlSnapshot(BaseModel):
         verbose_name_plural = "Snapshotهای کنترل مالی مددکار"
         ordering = ["-generated_for_date", "-created_at"]
         indexes = [
-            models.Index(fields=["generated_for_date", "severity"], name="madadkar_ctrl_date_sev_idx"),
+            models.Index(
+                fields=["generated_for_date", "severity"], name="madadkar_ctrl_date_sev_idx"
+            ),
             models.Index(fields=["severity", "-created_at"], name="madadkar_ctrl_sev_time_idx"),
         ]
 
@@ -897,6 +914,7 @@ class MadadkarFinancialControlSnapshot(BaseModel):
 # ---------------------------------------------------------------------------
 # Disbursement / Allocation Ledger
 # ---------------------------------------------------------------------------
+
 
 class CampaignDisbursement(BaseModel):
     """Auditable workflow for allocating collected campaign funds to recipients."""
@@ -928,11 +946,20 @@ class CampaignDisbursement(BaseModel):
         blank=True,
         related_name="madadkar_disbursements_paid",
     )
-    status = models.CharField(max_length=20, choices=DisbursementStatus.choices, default=DisbursementStatus.REQUESTED, db_index=True)
+    status = models.CharField(
+        max_length=20,
+        choices=DisbursementStatus.choices,
+        default=DisbursementStatus.REQUESTED,
+        db_index=True,
+    )
     amount = models.PositiveBigIntegerField(verbose_name="مبلغ تخصیص")
     recipient_name = models.CharField(max_length=220, verbose_name="نام گیرنده")
-    recipient_identifier = models.CharField(max_length=120, blank=True, verbose_name="شناسه/کد گیرنده")
-    recipient_bank_account = models.CharField(max_length=120, blank=True, verbose_name="حساب/شبا مقصد")
+    recipient_identifier = models.CharField(
+        max_length=120, blank=True, verbose_name="شناسه/کد گیرنده"
+    )
+    recipient_bank_account = models.CharField(
+        max_length=120, blank=True, verbose_name="حساب/شبا مقصد"
+    )
     recipient_snapshot = models.JSONField(default=dict, blank=True)
     purpose = models.CharField(max_length=260, verbose_name="هدف تخصیص")
     note = models.TextField(blank=True)
@@ -948,11 +975,15 @@ class CampaignDisbursement(BaseModel):
         verbose_name_plural = "تخصیص‌های مالی مددکار"
         ordering = ["-created_at"]
         indexes = [
-            models.Index(fields=["campaign", "status", "-created_at"], name="md_disb_camp_status_idx"),
+            models.Index(
+                fields=["campaign", "status", "-created_at"], name="md_disb_camp_status_idx"
+            ),
             models.Index(fields=["status", "-created_at"], name="madadkar_disb_status_time_idx"),
         ]
         constraints = [
-            models.CheckConstraint(condition=models.Q(amount__gte=1), name="madadkar_disb_amount_min"),
+            models.CheckConstraint(
+                condition=models.Q(amount__gte=1), name="madadkar_disb_amount_min"
+            ),
         ]
 
     def __str__(self) -> str:
@@ -962,6 +993,7 @@ class CampaignDisbursement(BaseModel):
 # ---------------------------------------------------------------------------
 # Donation Receipts
 # ---------------------------------------------------------------------------
+
 
 class DonationReceipt(BaseModel):
     """Verifiable donation receipt issued for a successful Madadkar payment."""
@@ -1004,7 +1036,9 @@ class DonationReceipt(BaseModel):
             models.Index(fields=["campaign", "-issued_at"], name="md_receipt_camp_time_idx"),
         ]
         constraints = [
-            models.CheckConstraint(condition=models.Q(amount__gte=1), name="madadkar_receipt_amount_min"),
+            models.CheckConstraint(
+                condition=models.Q(amount__gte=1), name="madadkar_receipt_amount_min"
+            ),
         ]
 
     def __str__(self) -> str:
@@ -1027,7 +1061,9 @@ class DonationReceipt(BaseModel):
 
     def compute_receipt_hash(self) -> str:
         """Compute deterministic SHA-256 hash for receipt verification."""
-        encoded = json.dumps(self.build_hash_payload(), ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        encoded = json.dumps(
+            self.build_hash_payload(), ensure_ascii=False, sort_keys=True, separators=(",", ":")
+        ).encode("utf-8")
         return hashlib.sha256(encoded).hexdigest()
 
     def save(self, *args, **kwargs) -> None:
@@ -1048,10 +1084,13 @@ class DonationReceipt(BaseModel):
 # Risk Signals
 # ---------------------------------------------------------------------------
 
+
 class MadadkarRiskSignal(BaseModel):
     """Financial risk/abuse signal generated from Madadkar behavior."""
 
-    signal_type = models.CharField(max_length=60, choices=MadadkarRiskSignalType.choices, db_index=True)
+    signal_type = models.CharField(
+        max_length=60, choices=MadadkarRiskSignalType.choices, db_index=True
+    )
     severity = models.CharField(
         max_length=20,
         choices=MadadkarRiskSeverity.choices,
@@ -1117,11 +1156,22 @@ class MadadkarRiskSignal(BaseModel):
         verbose_name_plural = "سیگنال‌های ریسک مددکار"
         ordering = ["-created_at"]
         indexes = [
-            models.Index(fields=["signal_type", "status", "-created_at"], name="madadkar_risk_type_status_idx"),
-            models.Index(fields=["severity", "status", "-created_at"], name="madadkar_risk_sev_status_idx"),
-            models.Index(fields=["user", "status", "-created_at"], name="madadkar_risk_user_status_idx"),
-            models.Index(fields=["campaign", "status", "-created_at"], name="md_risk_camp_status_idx"),
-            models.Index(fields=["ip_address", "status", "-created_at"], name="madadkar_risk_ip_status_idx"),
+            models.Index(
+                fields=["signal_type", "status", "-created_at"],
+                name="madadkar_risk_type_status_idx",
+            ),
+            models.Index(
+                fields=["severity", "status", "-created_at"], name="madadkar_risk_sev_status_idx"
+            ),
+            models.Index(
+                fields=["user", "status", "-created_at"], name="madadkar_risk_user_status_idx"
+            ),
+            models.Index(
+                fields=["campaign", "status", "-created_at"], name="md_risk_camp_status_idx"
+            ),
+            models.Index(
+                fields=["ip_address", "status", "-created_at"], name="madadkar_risk_ip_status_idx"
+            ),
         ]
 
     def __str__(self) -> str:
@@ -1132,12 +1182,15 @@ class MadadkarRiskSignal(BaseModel):
 # Payment Reconciliation
 # ---------------------------------------------------------------------------
 
+
 class PaymentReconciliationBatch(BaseModel):
     """Batch report comparing external provider rows with internal payments."""
 
     provider_name = models.CharField(max_length=50, verbose_name="نام درگاه")
     source_name = models.CharField(max_length=180, blank=True, verbose_name="نام فایل/گزارش")
-    status = models.CharField(max_length=20, choices=ReconciliationStatus.choices, default=ReconciliationStatus.DRAFT)
+    status = models.CharField(
+        max_length=20, choices=ReconciliationStatus.choices, default=ReconciliationStatus.DRAFT
+    )
     total_rows = models.PositiveIntegerField(default=0)
     matched_count = models.PositiveIntegerField(default=0)
     mismatch_count = models.PositiveIntegerField(default=0)
@@ -1159,8 +1212,16 @@ class PaymentReconciliationBatch(BaseModel):
 class PaymentReconciliationItem(BaseModel):
     """One provider row reconciliation result."""
 
-    batch = models.ForeignKey(PaymentReconciliationBatch, on_delete=models.CASCADE, related_name="items")
-    payment = models.ForeignKey(Payment, on_delete=models.SET_NULL, null=True, blank=True, related_name="reconciliation_items")
+    batch = models.ForeignKey(
+        PaymentReconciliationBatch, on_delete=models.CASCADE, related_name="items"
+    )
+    payment = models.ForeignKey(
+        Payment,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="reconciliation_items",
+    )
     authority = models.CharField(max_length=100, blank=True)
     provider_ref_id = models.CharField(max_length=100, blank=True)
     provider_amount = models.PositiveBigIntegerField(default=0)

@@ -73,7 +73,9 @@ class TestTabyinDjangoAdminUX:
         submission = _user_submission(title="ارسال کاربر برای بررسی")
         TabyinAttachmentFactory(content=submission)
 
-        response = client.get(reverse("admin:tabyin_tabyinusersubmission_change", args=[submission.pk]))
+        response = client.get(
+            reverse("admin:tabyin_tabyinusersubmission_change", args=[submission.pk])
+        )
 
         assert response.status_code == 200
         html = response.content.decode("utf-8")
@@ -139,11 +141,17 @@ class TestTabyinDjangoAdminUX:
             captured.update(kwargs)
             return "tabyin-admin-sync-task-id"
 
-        monkeypatch.setattr("apps.tabyin.admin.services.dispatch_sync_task", fake_dispatch_sync_task)
-        monkeypatch.setattr("apps.tabyin.admin.messages.success", lambda request, message: messages.append(message))
+        monkeypatch.setattr(
+            "apps.tabyin.admin.services.dispatch_sync_task", fake_dispatch_sync_task
+        )
+        monkeypatch.setattr(
+            "apps.tabyin.admin.messages.success", lambda request, message: messages.append(message)
+        )
         with patch(_TASK_PATCH_PATH) as mock_task:
             mock_task.delay = MagicMock()
-            admin.site._registry[TabyinContent].dispatch_incremental_sync(request, TabyinContent.objects.none())
+            admin.site._registry[TabyinContent].dispatch_incremental_sync(
+                request, TabyinContent.objects.none()
+            )
 
         assert captured["mode"] == "incremental"
         assert captured["triggered_by_user_id"] == request.user.pk

@@ -37,7 +37,9 @@ def get_public_listings() -> QuerySet[KindnessListing]:
     return (
         KindnessListing.objects.published()
         .select_related("category", "category__parent", "owner")
-        .prefetch_related(Prefetch("images", queryset=KindnessListingImage.objects.order_by("order", "id")))
+        .prefetch_related(
+            Prefetch("images", queryset=KindnessListingImage.objects.order_by("order", "id"))
+        )
     )
 
 
@@ -48,7 +50,11 @@ def get_public_listing_by_slug(slug: str) -> KindnessListing | None:
 
 def get_user_listings(*, user_id: int) -> QuerySet[KindnessListing]:
     """Return listings owned by a user."""
-    return KindnessListing.objects.filter(owner_id=user_id).select_related("category").prefetch_related("images")
+    return (
+        KindnessListing.objects.filter(owner_id=user_id)
+        .select_related("category")
+        .prefetch_related("images")
+    )
 
 
 def get_user_bookmarks(*, user_id: int) -> QuerySet[KindnessBookmark]:
@@ -56,7 +62,11 @@ def get_user_bookmarks(*, user_id: int) -> QuerySet[KindnessBookmark]:
     return (
         KindnessBookmark.objects.filter(user_id=user_id)
         .select_related("listing", "listing__category")
-        .prefetch_related(Prefetch("listing__images", queryset=KindnessListingImage.objects.order_by("order", "id")))
+        .prefetch_related(
+            Prefetch(
+                "listing__images", queryset=KindnessListingImage.objects.order_by("order", "id")
+            )
+        )
         .order_by("-created_at")
     )
 
@@ -66,7 +76,12 @@ def get_listing_matches(*, listing: KindnessListing) -> QuerySet[KindnessMatch]:
     return (
         KindnessMatch.objects.filter(source_listing=listing, status=MatchStatus.ACTIVE)
         .select_related("target_listing", "target_listing__category")
-        .prefetch_related(Prefetch("target_listing__images", queryset=KindnessListingImage.objects.order_by("order", "id")))
+        .prefetch_related(
+            Prefetch(
+                "target_listing__images",
+                queryset=KindnessListingImage.objects.order_by("order", "id"),
+            )
+        )
         .order_by("-score", "-generated_at")
     )
 
@@ -78,7 +93,9 @@ def get_public_category_by_slug(slug: str) -> KindnessCategory | None:
 
 def get_admin_listings() -> QuerySet[KindnessListing]:
     """Return all listings for admin moderation."""
-    return KindnessListing.all_objects.select_related("category", "owner", "reviewed_by").prefetch_related("images")
+    return KindnessListing.all_objects.select_related(
+        "category", "owner", "reviewed_by"
+    ).prefetch_related("images")
 
 
 def get_admin_listing_by_id(listing_id: int) -> KindnessListing | None:
@@ -94,7 +111,9 @@ def get_user_listing_by_id(*, user_id: int, listing_id: int) -> KindnessListing 
 def get_match_by_id(*, match_id: int) -> KindnessMatch | None:
     """Return one match with listing owners loaded."""
     return (
-        KindnessMatch.objects.select_related("source_listing", "target_listing", "source_listing__owner")
+        KindnessMatch.objects.select_related(
+            "source_listing", "target_listing", "source_listing__owner"
+        )
         .filter(pk=match_id)
         .first()
     )
@@ -105,7 +124,12 @@ def get_user_matches(*, user_id: int) -> QuerySet[KindnessMatch]:
     return (
         KindnessMatch.objects.filter(source_listing__owner_id=user_id, status=MatchStatus.ACTIVE)
         .select_related("source_listing", "target_listing", "target_listing__category")
-        .prefetch_related(Prefetch("target_listing__images", queryset=KindnessListingImage.objects.order_by("order", "id")))
+        .prefetch_related(
+            Prefetch(
+                "target_listing__images",
+                queryset=KindnessListingImage.objects.order_by("order", "id"),
+            )
+        )
         .order_by("-score", "-generated_at")
     )
 
@@ -136,7 +160,9 @@ def get_admin_match_by_id(*, match_id: int) -> KindnessMatch | None:
 
 def get_admin_reports() -> QuerySet[KindnessListingReport]:
     """Return listing reports for admin review."""
-    return KindnessListingReport.objects.select_related("listing", "reported_by", "reviewed_by").order_by("-created_at")
+    return KindnessListingReport.objects.select_related(
+        "listing", "reported_by", "reviewed_by"
+    ).order_by("-created_at")
 
 
 def get_admin_report_by_id(*, report_id: int) -> KindnessListingReport | None:

@@ -98,7 +98,6 @@ urlpatterns = [
         MadadkarPublicSponsorDetailView.as_view(),
         name="public-sponsor-detail",
     ),
-
     # ====================================================
     # User — Participation Initiate (روی campaign)
     # ====================================================
@@ -109,7 +108,6 @@ urlpatterns = [
         MadadkarUserParticipateView.as_view(),
         name="user-participate",
     ),
-
     # ====================================================
     # Public — Campaigns
     # ====================================================
@@ -128,7 +126,6 @@ urlpatterns = [
         MadadkarPublicCampaignDetailView.as_view(),
         name="public-campaign-detail",
     ),
-
     # ====================================================
     # User — Payment Verify Callback (از سمت درگاه)
     # ====================================================
@@ -142,7 +139,6 @@ urlpatterns = [
         MadadkarPublicReceiptVerifyView.as_view(),
         name="public-receipt-verify",
     ),
-
     # ====================================================
     # User — My Participations
     # ====================================================
@@ -166,7 +162,6 @@ urlpatterns = [
         MadadkarUserReceiptDetailView.as_view(),
         name="user-receipt-detail",
     ),
-
     # ====================================================
     # Admin — Sponsors CRUD
     # ====================================================
@@ -180,7 +175,6 @@ urlpatterns = [
         MadadkarAdminSponsorDetailView.as_view(),
         name="admin-sponsor-detail",
     ),
-
     # ====================================================
     # Admin — Campaigns CRUD
     # ====================================================
@@ -204,7 +198,6 @@ urlpatterns = [
         MadadkarAdminCampaignCloseView.as_view(),
         name="admin-campaign-close",
     ),
-
     # ====================================================
     # Admin — Campaign Gallery
     # ====================================================
@@ -218,7 +211,6 @@ urlpatterns = [
         MadadkarAdminCampaignImageDeleteView.as_view(),
         name="admin-campaign-image-delete",
     ),
-
     # ====================================================
     # Admin — Campaign Analytics & Reports
     # ====================================================
@@ -262,7 +254,6 @@ urlpatterns = [
         MadadkarAdminIntelligenceOverviewView.as_view(),
         name="admin-intelligence-overview",
     ),
-
     # ====================================================
     # Admin — Refunds / Adjustments
     # ====================================================
@@ -301,7 +292,6 @@ urlpatterns = [
         MadadkarAdminReceiptResendView.as_view(),
         name="admin-receipt-resend",
     ),
-
     # ====================================================
     # Admin — Reconciliation
     # ====================================================
@@ -360,7 +350,6 @@ urlpatterns = [
         MadadkarAdminReconciliationDiscrepancyExportView.as_view(),
         name="admin-reconciliation-discrepancy-export",
     ),
-
     # ====================================================
     # Admin — All Payments
     # ====================================================

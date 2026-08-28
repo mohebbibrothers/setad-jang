@@ -135,7 +135,8 @@ class TestParticipateHappyPath:
 
         # DB checks
         participation = Participation.objects.filter(
-            user=user, campaign=campaign,
+            user=user,
+            campaign=campaign,
         ).first()
         assert participation is not None
         assert participation.share_count == 3
@@ -322,7 +323,9 @@ class TestParticipateValidation:
 
         with patch(_AUDIT_TASK_PATH):
             response = client.post(
-                url, data={"share_count": 11}, format="json",
+                url,
+                data={"share_count": 11},
+                format="json",
             )
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
@@ -428,7 +431,9 @@ class TestShareReservation:
         # درخواست اول — تمام 10 سهم
         with patch(_AUDIT_TASK_PATH):
             response_a = client.post(
-                url, data={"share_count": 10}, format="json",
+                url,
+                data={"share_count": 10},
+                format="json",
             )
         assert response_a.status_code == status.HTTP_201_CREATED
 
@@ -437,7 +442,9 @@ class TestShareReservation:
         _auth(client2, UserFactory())
         with patch(_AUDIT_TASK_PATH):
             response_b = client2.post(
-                url, data={"share_count": 1}, format="json",
+                url,
+                data={"share_count": 1},
+                format="json",
             )
         assert response_b.status_code == status.HTTP_400_BAD_REQUEST
 
@@ -628,6 +635,7 @@ class TestMyParticipationDetail:
         participation = PaidParticipationFactory(user=user)
         # ساخت Payment مرتبط
         from tests.factories.madadkar import SuccessPaymentFactory
+
         SuccessPaymentFactory(participation=participation, user=user)
 
         client = APIClient()

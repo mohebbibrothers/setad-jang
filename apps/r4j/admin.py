@@ -52,8 +52,6 @@ class HiddenFromAdminIndexMixin:
         return {}
 
 
-
-
 class R4JCriminalFieldVisibilityAdminForm(forms.ModelForm):
     """Persian, dropdown-based form for per-criminal public field visibility rules."""
 
@@ -159,21 +157,43 @@ class R4JCriminalAdmin(admin.ModelAdmin):
     search_fields = ("first_name", "last_name", "slug", "national_code", "city")
     readonly_fields = ("slug", "total_bounty_toman", "bounties_count", "published_at")
     fieldsets = (
-        ("هویت", {
-            "fields": ("first_name", "last_name", "slug", "national_code", "birth_date", "gender"),
-        }),
-        ("موقعیت", {
-            "fields": ("country", "province", "city"),
-        }),
-        ("توضیحات", {
-            "fields": ("description", "crimes_summary", "other_info"),
-        }),
-        ("انتشار و وضعیت", {
-            "fields": ("is_published", "published_at", "is_active"),
-        }),
-        ("خلاصه جوایز", {
-            "fields": ("total_bounty_toman", "bounties_count"),
-        }),
+        (
+            "هویت",
+            {
+                "fields": (
+                    "first_name",
+                    "last_name",
+                    "slug",
+                    "national_code",
+                    "birth_date",
+                    "gender",
+                ),
+            },
+        ),
+        (
+            "موقعیت",
+            {
+                "fields": ("country", "province", "city"),
+            },
+        ),
+        (
+            "توضیحات",
+            {
+                "fields": ("description", "crimes_summary", "other_info"),
+            },
+        ),
+        (
+            "انتشار و وضعیت",
+            {
+                "fields": ("is_published", "published_at", "is_active"),
+            },
+        ),
+        (
+            "خلاصه جوایز",
+            {
+                "fields": ("total_bounty_toman", "bounties_count"),
+            },
+        ),
     )
     inlines = [
         R4JCriminalAliasInline,
@@ -248,7 +268,13 @@ class R4JCriminalAttachmentAdmin(HiddenFromAdminIndexMixin, admin.ModelAdmin):
 
     list_display = ("id", "criminal", "kind", "title", "is_public", "uploaded_by", "file_size")
     list_filter = ("kind", "is_public", "is_active")
-    search_fields = ("title", "description", "file_sha256", "criminal__first_name", "criminal__last_name")
+    search_fields = (
+        "title",
+        "description",
+        "file_sha256",
+        "criminal__first_name",
+        "criminal__last_name",
+    )
     readonly_fields = ("file_sha256", "file_size", "created_at", "updated_at")
     raw_id_fields = ("criminal", "uploaded_by")
 
@@ -297,7 +323,8 @@ class R4JReportAliasSuggestionInline(admin.TabularInline):
     fields = ("alias", "status", "admin_note", "applied_alias")
     readonly_fields = fields
 
-    def has_add_permission(self, request, obj=None) -> bool: return False
+    def has_add_permission(self, request, obj=None) -> bool:
+        return False
 
 
 class R4JReportPhoneSuggestionInline(admin.TabularInline):
@@ -309,7 +336,8 @@ class R4JReportPhoneSuggestionInline(admin.TabularInline):
     fields = ("label", "number", "is_public", "notes", "status", "admin_note", "applied_phone")
     readonly_fields = fields
 
-    def has_add_permission(self, request, obj=None) -> bool: return False
+    def has_add_permission(self, request, obj=None) -> bool:
+        return False
 
 
 class R4JReportSocialSuggestionInline(admin.TabularInline):
@@ -321,7 +349,8 @@ class R4JReportSocialSuggestionInline(admin.TabularInline):
     fields = ("platform", "handle_or_url", "is_public", "status", "admin_note", "applied_social")
     readonly_fields = fields
 
-    def has_add_permission(self, request, obj=None) -> bool: return False
+    def has_add_permission(self, request, obj=None) -> bool:
+        return False
 
 
 class R4JReportAttachmentInline(admin.TabularInline):
@@ -330,7 +359,17 @@ class R4JReportAttachmentInline(admin.TabularInline):
     model = R4JReportAttachment
     extra = 0
     can_delete = False
-    fields = ("file", "title", "kind", "status", "admin_note", "file_sha256", "file_size", "promoted_criminal_attachment", "created_at")
+    fields = (
+        "file",
+        "title",
+        "kind",
+        "status",
+        "admin_note",
+        "file_sha256",
+        "file_size",
+        "promoted_criminal_attachment",
+        "created_at",
+    )
     readonly_fields = fields
     show_change_link = True
 
@@ -369,18 +408,36 @@ class R4JReportAdmin(admin.ModelAdmin):
         "review_decision_panel",
     )
     fieldsets = (
-        ("اطلاعات گزارش", {
-            "fields": ("criminal", "submitted_by", "status", "notes"),
-        }),
-        ("بررسی رسمی", {
-            "fields": ("review_decision_panel",),
-        }),
-        ("نتیجه بررسی", {
-            "fields": ("admin_note", "reviewed_by", "reviewed_at", "cancel_requested_at", "canceled_at"),
-        }),
-        ("زمان‌ها", {
-            "fields": ("created_at", "updated_at"),
-        }),
+        (
+            "اطلاعات گزارش",
+            {
+                "fields": ("criminal", "submitted_by", "status", "notes"),
+            },
+        ),
+        (
+            "بررسی رسمی",
+            {
+                "fields": ("review_decision_panel",),
+            },
+        ),
+        (
+            "نتیجه بررسی",
+            {
+                "fields": (
+                    "admin_note",
+                    "reviewed_by",
+                    "reviewed_at",
+                    "cancel_requested_at",
+                    "canceled_at",
+                ),
+            },
+        ),
+        (
+            "زمان‌ها",
+            {
+                "fields": ("created_at", "updated_at"),
+            },
+        ),
     )
     inlines = [
         R4JReportFieldChangeInline,
@@ -411,60 +468,66 @@ class R4JReportAdmin(admin.ModelAdmin):
         phone_suggestions = list(obj.phone_suggestions.all().order_by("id"))
         social_suggestions = list(obj.social_suggestions.all().order_by("id"))
         attachments = list(obj.attachments.all().order_by("id"))
-        has_decision_items = any([field_changes, alias_suggestions, phone_suggestions, social_suggestions, attachments])
+        has_decision_items = any(
+            [field_changes, alias_suggestions, phone_suggestions, social_suggestions, attachments]
+        )
         admin_note_input = format_html(
             '<div style="margin-top: 1rem;">'
             '<label for="id_r4j_report_admin_note"><strong>یادداشت کلی ادمین</strong></label><br>'
             '<textarea id="id_r4j_report_admin_note" name="r4j_report_admin_note" rows="3" '
             'style="width: min(100%, 980px);"></textarea>'
-            '</div>{}',
+            "</div>{}",
             "",
         )
         submit_button = format_html(
             '<div style="margin-top: 1rem;">'
             '<button type="submit" class="default" name="_r4j_review_report" value="1">'
-            'ثبت بررسی از مسیر امن سرویس'
-            '</button>'
-            '</div>{}',
+            "ثبت بررسی از مسیر امن سرویس"
+            "</button>"
+            "</div>{}",
             "",
         )
 
         if not has_decision_items:
             return format_html(
                 '<div class="module aligned">'
-                '<p>این گزارش فقط شامل یادداشت آزاد است. با ثبت بررسی، گزارش از مسیر رسمی سرویس تأیید می‌شود.</p>'
-                '{}{}'
-                '</div>',
+                "<p>این گزارش فقط شامل یادداشت آزاد است. با ثبت بررسی، گزارش از مسیر رسمی سرویس تأیید می‌شود.</p>"
+                "{}{}"
+                "</div>",
                 admin_note_input,
                 submit_button,
             )
 
         rows = []
 
-        def append_decision_row(kind: str, label: str, current: str, suggested: str, input_name: str, note_name: str) -> None:
-            rows.append(format_html(
-                '<tr>'
-                '<td><strong>{}</strong><br><code>{}</code></td>'
-                '<td style="white-space: pre-wrap; max-width: 280px;">{}</td>'
-                '<td style="white-space: pre-wrap; max-width: 320px;">{}</td>'
-                '<td>'
-                '<select name="{}" required>'
-                '<option value="">انتخاب کنید</option>'
-                '<option value="{}">تأیید و اعمال</option>'
-                '<option value="{}">رد</option>'
-                '</select>'
-                '</td>'
-                '<td><input type="text" name="{}" style="width: 100%;" title="یادداشت اختیاری برای این مورد"></td>'
-                '</tr>',
-                kind,
-                label,
-                current,
-                suggested,
-                input_name,
-                ReportFieldChangeStatus.APPROVED,
-                ReportFieldChangeStatus.REJECTED,
-                note_name,
-            ))
+        def append_decision_row(
+            kind: str, label: str, current: str, suggested: str, input_name: str, note_name: str
+        ) -> None:
+            rows.append(
+                format_html(
+                    "<tr>"
+                    "<td><strong>{}</strong><br><code>{}</code></td>"
+                    '<td style="white-space: pre-wrap; max-width: 280px;">{}</td>'
+                    '<td style="white-space: pre-wrap; max-width: 320px;">{}</td>'
+                    "<td>"
+                    '<select name="{}" required>'
+                    '<option value="">انتخاب کنید</option>'
+                    '<option value="{}">تأیید و اعمال</option>'
+                    '<option value="{}">رد</option>'
+                    "</select>"
+                    "</td>"
+                    '<td><input type="text" name="{}" style="width: 100%;" title="یادداشت اختیاری برای این مورد"></td>'
+                    "</tr>",
+                    kind,
+                    label,
+                    current,
+                    suggested,
+                    input_name,
+                    ReportFieldChangeStatus.APPROVED,
+                    ReportFieldChangeStatus.REJECTED,
+                    note_name,
+                )
+            )
 
         for fc in field_changes:
             append_decision_row(
@@ -476,24 +539,52 @@ class R4JReportAdmin(admin.ModelAdmin):
                 f"r4j_note_{fc.pk}",
             )
         for item in alias_suggestions:
-            append_decision_row("نام مستعار", f"alias#{item.pk}", "—", item.alias, f"r4j_alias_decision_{item.pk}", f"r4j_alias_note_{item.pk}")
+            append_decision_row(
+                "نام مستعار",
+                f"alias#{item.pk}",
+                "—",
+                item.alias,
+                f"r4j_alias_decision_{item.pk}",
+                f"r4j_alias_note_{item.pk}",
+            )
         for item in phone_suggestions:
-            append_decision_row("شماره تماس", f"phone#{item.pk}", item.label or "—", item.number, f"r4j_phone_decision_{item.pk}", f"r4j_phone_note_{item.pk}")
+            append_decision_row(
+                "شماره تماس",
+                f"phone#{item.pk}",
+                item.label or "—",
+                item.number,
+                f"r4j_phone_decision_{item.pk}",
+                f"r4j_phone_note_{item.pk}",
+            )
         for item in social_suggestions:
-            append_decision_row("شبکه اجتماعی", f"social#{item.pk}", item.platform, item.handle_or_url, f"r4j_social_decision_{item.pk}", f"r4j_social_note_{item.pk}")
+            append_decision_row(
+                "شبکه اجتماعی",
+                f"social#{item.pk}",
+                item.platform,
+                item.handle_or_url,
+                f"r4j_social_decision_{item.pk}",
+                f"r4j_social_note_{item.pk}",
+            )
         for item in attachments:
-            append_decision_row("ضمیمه/مدرک", f"attachment#{item.pk}", item.kind, item.title or item.file.name, f"r4j_attachment_decision_{item.pk}", f"r4j_attachment_note_{item.pk}")
+            append_decision_row(
+                "ضمیمه/مدرک",
+                f"attachment#{item.pk}",
+                item.kind,
+                item.title or item.file.name,
+                f"r4j_attachment_decision_{item.pk}",
+                f"r4j_attachment_note_{item.pk}",
+            )
 
         return format_html(
             '<div class="module">'
             '<p class="help">هر پیشنهاد اصلاح را تأیید یا رد کنید. تأییدها فقط از مسیر '
-            '<code>services.review_report</code> اعمال می‌شوند تا state machine، تبدیل نوع، audit و cache درست بمانند.</p>'
+            "<code>services.review_report</code> اعمال می‌شوند تا state machine، تبدیل نوع، audit و cache درست بمانند.</p>"
             '<table style="width: 100%;">'
-            '<thead><tr><th>فیلد</th><th>مقدار فعلی هنگام گزارش</th><th>مقدار پیشنهادی</th><th>تصمیم</th><th>یادداشت فیلد</th></tr></thead>'
-            '<tbody>{}</tbody>'
-            '</table>'
-            '{}{}'
-            '</div>',
+            "<thead><tr><th>فیلد</th><th>مقدار فعلی هنگام گزارش</th><th>مقدار پیشنهادی</th><th>تصمیم</th><th>یادداشت فیلد</th></tr></thead>"
+            "<tbody>{}</tbody>"
+            "</table>"
+            "{}{}"
+            "</div>",
             format_html_join("", "{}", ((row,) for row in rows)),
             admin_note_input,
             submit_button,
@@ -514,7 +605,16 @@ class R4JReportAdmin(admin.ModelAdmin):
             return self._handle_review_request(request, obj)
         return super().changeform_view(request, object_id, form_url, extra_context)
 
-    def _collect_report_decisions(self, *, request, items, post_prefix: str, id_key: str, missing_decisions: list[str], label_getter) -> list[dict[str, str | int]]:
+    def _collect_report_decisions(
+        self,
+        *,
+        request,
+        items,
+        post_prefix: str,
+        id_key: str,
+        missing_decisions: list[str],
+        label_getter,
+    ) -> list[dict[str, str | int]]:
         """Collect approve/reject decisions for non-field report suggestions."""
         collected = []
         for item in items:
@@ -522,16 +622,24 @@ class R4JReportAdmin(admin.ModelAdmin):
             if decision not in {ReportFieldChangeStatus.APPROVED, ReportFieldChangeStatus.REJECTED}:
                 missing_decisions.append(label_getter(item))
                 continue
-            collected.append({
-                id_key: item.pk,
-                "status": decision,
-                "admin_note": request.POST.get(f"{post_prefix}_note_{item.pk}", ""),
-            })
+            collected.append(
+                {
+                    id_key: item.pk,
+                    "status": decision,
+                    "admin_note": request.POST.get(f"{post_prefix}_note_{item.pk}", ""),
+                }
+            )
         return collected
 
     def _handle_review_request(self, request, obj: R4JReport):
         """Run the official review service from the Django admin workspace."""
-        obj = R4JReport.objects.prefetch_related("field_changes", "alias_suggestions", "phone_suggestions", "social_suggestions", "attachments").get(pk=obj.pk)
+        obj = R4JReport.objects.prefetch_related(
+            "field_changes",
+            "alias_suggestions",
+            "phone_suggestions",
+            "social_suggestions",
+            "attachments",
+        ).get(pk=obj.pk)
         if obj.status != ReportStatus.PENDING:
             messages.error(request, "فقط گزارش‌های در انتظار بررسی قابل بررسی هستند.")
             return HttpResponseRedirect(request.path)
@@ -543,11 +651,13 @@ class R4JReportAdmin(admin.ModelAdmin):
             if decision not in {ReportFieldChangeStatus.APPROVED, ReportFieldChangeStatus.REJECTED}:
                 missing_decisions.append(field_change.field_name)
                 continue
-            decisions.append({
-                "field_change_id": field_change.pk,
-                "status": decision,
-                "admin_note": request.POST.get(f"r4j_note_{field_change.pk}", ""),
-            })
+            decisions.append(
+                {
+                    "field_change_id": field_change.pk,
+                    "status": decision,
+                    "admin_note": request.POST.get(f"r4j_note_{field_change.pk}", ""),
+                }
+            )
 
         alias_decisions = self._collect_report_decisions(
             request=request,
@@ -624,7 +734,14 @@ class R4JReportFieldChangeAdmin(HiddenFromAdminIndexMixin, admin.ModelAdmin):
     list_display = ("id", "report", "field_name", "status")
     list_filter = ("status", "field_name")
     search_fields = ("field_name", "suggested_value", "current_value_snapshot")
-    readonly_fields = ("report", "field_name", "suggested_value", "current_value_snapshot", "status", "admin_note")
+    readonly_fields = (
+        "report",
+        "field_name",
+        "suggested_value",
+        "current_value_snapshot",
+        "status",
+        "admin_note",
+    )
     raw_id_fields = ("report",)
 
     def has_add_permission(self, request) -> bool:
@@ -639,7 +756,16 @@ class R4JReportAttachmentAdmin(HiddenFromAdminIndexMixin, admin.ModelAdmin):
     list_display = ("id", "report", "kind", "title", "file_size")
     list_filter = ("kind",)
     search_fields = ("title", "file_sha256")
-    readonly_fields = ("report", "file", "title", "kind", "file_sha256", "file_size", "created_at", "updated_at")
+    readonly_fields = (
+        "report",
+        "file",
+        "title",
+        "kind",
+        "file_sha256",
+        "file_size",
+        "created_at",
+        "updated_at",
+    )
     raw_id_fields = ("report",)
 
     def has_add_permission(self, request) -> bool:

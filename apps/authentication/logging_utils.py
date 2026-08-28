@@ -32,9 +32,7 @@ def mask_identifier(identifier: str | None, *, identifier_kind: str | None = Non
     if not value:
         return "<blank>"
 
-    if identifier_kind == PrimaryIdentifierKind.EMAIL or (
-        identifier_kind is None and "@" in value
-    ):
+    if identifier_kind == PrimaryIdentifierKind.EMAIL or (identifier_kind is None and "@" in value):
         return _mask_email(value)
 
     if identifier_kind == PrimaryIdentifierKind.PHONE or (

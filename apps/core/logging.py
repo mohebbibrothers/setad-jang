@@ -31,6 +31,8 @@ class JSONLogFormatter(logging.Formatter):
             payload["exception"] = {
                 "type": getattr(exc_type, "__name__", str(exc_type)),
                 "message": str(exc_value),
-                "stacktrace": "".join(traceback.format_exception(exc_type, exc_value, exc_tb))[-6000:],
+                "stacktrace": "".join(traceback.format_exception(exc_type, exc_value, exc_tb))[
+                    -6000:
+                ],
             }
         return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))

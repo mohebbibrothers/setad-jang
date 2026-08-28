@@ -61,6 +61,7 @@ _DB_CHUNK_SIZE = 2_000
 # Helpers
 # ===========================================================================
 
+
 def _sanitize_sheet_name(name: str, max_length: int = 31) -> str:
     r"""
     پاکسازی نام sheet برای Excel.
@@ -90,16 +91,13 @@ def _get_user_display_name(user) -> str:
 
 def _get_user_mobile(user) -> str:
     """شماره موبایل کاربر — defensive lookup."""
-    return (
-        getattr(user, "phone_number", "")
-        or getattr(user, "mobile", "")
-        or "—"
-    )
+    return getattr(user, "phone_number", "") or getattr(user, "mobile", "") or "—"
 
 
 # ===========================================================================
 # Main export function
 # ===========================================================================
+
 
 def generate_campaign_participants_excel(*, campaign: Campaign) -> io.BytesIO:
     """
@@ -145,7 +143,9 @@ def generate_campaign_participants_excel(*, campaign: Campaign) -> io.BytesIO:
     total_amount = 0
     unique_users: set[int] = set()
 
-    for index, participation in enumerate(participations.iterator(chunk_size=_DB_CHUNK_SIZE), start=1):
+    for index, participation in enumerate(
+        participations.iterator(chunk_size=_DB_CHUNK_SIZE), start=1
+    ):
         user = participation.user
         payment = participation.payment
 

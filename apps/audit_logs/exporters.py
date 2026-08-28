@@ -277,7 +277,10 @@ def _json_bytes(payload: Any) -> bytes:
 
 def _render_jsonl(records: list[dict[str, Any]]) -> bytes:
     """Render newline-delimited JSON for SIEM and incident-response tooling."""
-    lines = [json.dumps(record, ensure_ascii=False, sort_keys=True, separators=(",", ":")) for record in records]
+    lines = [
+        json.dumps(record, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        for record in records
+    ]
     return ("\n".join(lines) + ("\n" if lines else "")).encode("utf-8")
 
 

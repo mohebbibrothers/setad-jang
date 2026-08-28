@@ -99,39 +99,108 @@ TAG_LMS_USER = "آموزش — کاربر"
 TAG_LMS_ADMIN = "آموزش — مدیریت"
 
 LMS_ERROR_RESPONSE = build_error_response_serializer(name="LMSErrorResponse")
-CATEGORY_RESPONSE = build_success_response_serializer(name="LMSCategoryResponse", data_serializer=LMSCategorySerializer)
-CATEGORY_LIST_RESPONSE = build_success_response_serializer(name="LMSCategoryListResponse", data_serializer=LMSCategorySerializer, many=True)
-COURSE_RESPONSE = build_success_response_serializer(name="LMSCourseResponse", data_serializer=CourseDetailSerializer)
-COURSE_LIST_RESPONSE = build_paginated_success_response_serializer(name="LMSCourseListResponse", item_serializer=CourseSummarySerializer)
-LESSON_RESPONSE = build_success_response_serializer(name="LMSLessonResponse", data_serializer=LessonSummarySerializer)
-LESSON_MEDIA_RESPONSE = build_success_response_serializer(name="LMSLessonMediaAccessResponse", data_serializer=LessonMediaAccessSerializer)
-LESSON_LIST_RESPONSE = build_success_response_serializer(name="LMSLessonListResponse", data_serializer=LessonSummarySerializer, many=True)
-ENROLLMENT_RESPONSE = build_success_response_serializer(name="LMSEnrollmentResponse", data_serializer=EnrollmentSerializer)
-ENROLLMENT_DETAIL_RESPONSE = build_success_response_serializer(name="LMSEnrollmentDetailResponse", data_serializer=EnrollmentDetailSerializer)
-ENROLLMENT_LIST_RESPONSE = build_paginated_success_response_serializer(name="LMSEnrollmentListResponse", item_serializer=EnrollmentSerializer)
-LESSON_PROGRESS_RESPONSE = build_success_response_serializer(name="LMSLessonProgressResponse", data_serializer=LessonProgressSerializer)
-QUESTION_RESPONSE = build_success_response_serializer(name="LMSLessonQuestionResponse", data_serializer=LessonQuestionSerializer)
-QUESTION_LIST_RESPONSE = build_paginated_success_response_serializer(name="LMSLessonQuestionListResponse", item_serializer=LessonQuestionSerializer)
-ANSWER_RESPONSE = build_success_response_serializer(name="LMSLessonAnswerResponse", data_serializer=LessonAnswerSerializer)
-DISCUSSION_REPORT_RESPONSE = build_success_response_serializer(name="LMSDiscussionReportResponse", data_serializer=DiscussionReportSerializer)
-DISCUSSION_REPORT_LIST_RESPONSE = build_paginated_success_response_serializer(name="LMSDiscussionReportListResponse", item_serializer=DiscussionReportSerializer)
-QUIZ_PUBLIC_RESPONSE = build_success_response_serializer(name="LMSQuizPublicResponse", data_serializer=QuizPublicSerializer)
-QUIZ_ADMIN_RESPONSE = build_success_response_serializer(name="LMSQuizAdminResponse", data_serializer=QuizAdminSerializer)
-QUIZ_QUESTION_RESPONSE = build_success_response_serializer(name="LMSQuizQuestionResponse", data_serializer=QuizQuestionAdminSerializer)
-QUIZ_OPTION_RESPONSE = build_success_response_serializer(name="LMSQuizOptionResponse", data_serializer=QuizOptionAdminSerializer)
-QUIZ_ATTEMPT_RESPONSE = build_success_response_serializer(name="LMSQuizAttemptResponse", data_serializer=QuizAttemptDetailSerializer)
-QUIZ_UNLOCK_RESPONSE = build_success_response_serializer(name="LMSQuizUnlockResponse", data_serializer=QuizUnlockSerializer)
-CERTIFICATE_RESPONSE = build_success_response_serializer(name="LMSCertificateResponse", data_serializer=CertificateSerializer)
-CERTIFICATE_VERIFY_RESPONSE = build_success_response_serializer(name="LMSCertificateVerifyResponse", data_serializer=CertificateVerifySerializer)
-CERTIFICATE_LIST_RESPONSE = build_paginated_success_response_serializer(name="LMSCertificateListResponse", item_serializer=CertificateSerializer)
-SKILL_LIST_RESPONSE = build_success_response_serializer(name="LMSSkillListResponse", data_serializer=LMSUserSkillSerializer, many=True)
-COURSE_REPORT_RESPONSE = build_success_response_serializer(name="LMSCourseReportResponse", data_serializer=CourseReportSerializer)
-COURSE_ANALYTICS_RESPONSE = build_success_response_serializer(name="LMSCourseAnalyticsResponse", data_serializer=CourseAnalyticsSerializer)
-COURSE_LEADERBOARD_RESPONSE = build_success_response_serializer(name="LMSCourseLeaderboardResponse", data_serializer=CourseLeaderboardItemSerializer, many=True)
-VIDEO_PROCESSING_JOB_RESPONSE = build_success_response_serializer(name="LMSVideoProcessingJobResponse", data_serializer=LessonVideoProcessingJobSerializer)
-LEARNING_RECOMMENDATION_RESPONSE = build_success_response_serializer(name="LMSLearningRecommendationResponse", data_serializer=LearningRecommendationItemSerializer, many=True)
-LEARNING_RECOMMENDATION_OVERVIEW_RESPONSE = build_success_response_serializer(name="LMSLearningRecommendationOverviewResponse", data_serializer=LearningRecommendationOverviewSerializer)
-LEARNING_STATEMENT_LIST_RESPONSE = build_paginated_success_response_serializer(name="LMSLearningStatementListResponse", item_serializer=LearningActivityStatementSerializer)
+CATEGORY_RESPONSE = build_success_response_serializer(
+    name="LMSCategoryResponse", data_serializer=LMSCategorySerializer
+)
+CATEGORY_LIST_RESPONSE = build_success_response_serializer(
+    name="LMSCategoryListResponse", data_serializer=LMSCategorySerializer, many=True
+)
+COURSE_RESPONSE = build_success_response_serializer(
+    name="LMSCourseResponse", data_serializer=CourseDetailSerializer
+)
+COURSE_LIST_RESPONSE = build_paginated_success_response_serializer(
+    name="LMSCourseListResponse", item_serializer=CourseSummarySerializer
+)
+LESSON_RESPONSE = build_success_response_serializer(
+    name="LMSLessonResponse", data_serializer=LessonSummarySerializer
+)
+LESSON_MEDIA_RESPONSE = build_success_response_serializer(
+    name="LMSLessonMediaAccessResponse", data_serializer=LessonMediaAccessSerializer
+)
+LESSON_LIST_RESPONSE = build_success_response_serializer(
+    name="LMSLessonListResponse", data_serializer=LessonSummarySerializer, many=True
+)
+ENROLLMENT_RESPONSE = build_success_response_serializer(
+    name="LMSEnrollmentResponse", data_serializer=EnrollmentSerializer
+)
+ENROLLMENT_DETAIL_RESPONSE = build_success_response_serializer(
+    name="LMSEnrollmentDetailResponse", data_serializer=EnrollmentDetailSerializer
+)
+ENROLLMENT_LIST_RESPONSE = build_paginated_success_response_serializer(
+    name="LMSEnrollmentListResponse", item_serializer=EnrollmentSerializer
+)
+LESSON_PROGRESS_RESPONSE = build_success_response_serializer(
+    name="LMSLessonProgressResponse", data_serializer=LessonProgressSerializer
+)
+QUESTION_RESPONSE = build_success_response_serializer(
+    name="LMSLessonQuestionResponse", data_serializer=LessonQuestionSerializer
+)
+QUESTION_LIST_RESPONSE = build_paginated_success_response_serializer(
+    name="LMSLessonQuestionListResponse", item_serializer=LessonQuestionSerializer
+)
+ANSWER_RESPONSE = build_success_response_serializer(
+    name="LMSLessonAnswerResponse", data_serializer=LessonAnswerSerializer
+)
+DISCUSSION_REPORT_RESPONSE = build_success_response_serializer(
+    name="LMSDiscussionReportResponse", data_serializer=DiscussionReportSerializer
+)
+DISCUSSION_REPORT_LIST_RESPONSE = build_paginated_success_response_serializer(
+    name="LMSDiscussionReportListResponse", item_serializer=DiscussionReportSerializer
+)
+QUIZ_PUBLIC_RESPONSE = build_success_response_serializer(
+    name="LMSQuizPublicResponse", data_serializer=QuizPublicSerializer
+)
+QUIZ_ADMIN_RESPONSE = build_success_response_serializer(
+    name="LMSQuizAdminResponse", data_serializer=QuizAdminSerializer
+)
+QUIZ_QUESTION_RESPONSE = build_success_response_serializer(
+    name="LMSQuizQuestionResponse", data_serializer=QuizQuestionAdminSerializer
+)
+QUIZ_OPTION_RESPONSE = build_success_response_serializer(
+    name="LMSQuizOptionResponse", data_serializer=QuizOptionAdminSerializer
+)
+QUIZ_ATTEMPT_RESPONSE = build_success_response_serializer(
+    name="LMSQuizAttemptResponse", data_serializer=QuizAttemptDetailSerializer
+)
+QUIZ_UNLOCK_RESPONSE = build_success_response_serializer(
+    name="LMSQuizUnlockResponse", data_serializer=QuizUnlockSerializer
+)
+CERTIFICATE_RESPONSE = build_success_response_serializer(
+    name="LMSCertificateResponse", data_serializer=CertificateSerializer
+)
+CERTIFICATE_VERIFY_RESPONSE = build_success_response_serializer(
+    name="LMSCertificateVerifyResponse", data_serializer=CertificateVerifySerializer
+)
+CERTIFICATE_LIST_RESPONSE = build_paginated_success_response_serializer(
+    name="LMSCertificateListResponse", item_serializer=CertificateSerializer
+)
+SKILL_LIST_RESPONSE = build_success_response_serializer(
+    name="LMSSkillListResponse", data_serializer=LMSUserSkillSerializer, many=True
+)
+COURSE_REPORT_RESPONSE = build_success_response_serializer(
+    name="LMSCourseReportResponse", data_serializer=CourseReportSerializer
+)
+COURSE_ANALYTICS_RESPONSE = build_success_response_serializer(
+    name="LMSCourseAnalyticsResponse", data_serializer=CourseAnalyticsSerializer
+)
+COURSE_LEADERBOARD_RESPONSE = build_success_response_serializer(
+    name="LMSCourseLeaderboardResponse", data_serializer=CourseLeaderboardItemSerializer, many=True
+)
+VIDEO_PROCESSING_JOB_RESPONSE = build_success_response_serializer(
+    name="LMSVideoProcessingJobResponse", data_serializer=LessonVideoProcessingJobSerializer
+)
+LEARNING_RECOMMENDATION_RESPONSE = build_success_response_serializer(
+    name="LMSLearningRecommendationResponse",
+    data_serializer=LearningRecommendationItemSerializer,
+    many=True,
+)
+LEARNING_RECOMMENDATION_OVERVIEW_RESPONSE = build_success_response_serializer(
+    name="LMSLearningRecommendationOverviewResponse",
+    data_serializer=LearningRecommendationOverviewSerializer,
+)
+LEARNING_STATEMENT_LIST_RESPONSE = build_paginated_success_response_serializer(
+    name="LMSLearningStatementListResponse", item_serializer=LearningActivityStatementSerializer
+)
 
 
 class LMSCategoryPublicListView(APIView):
@@ -139,14 +208,20 @@ class LMSCategoryPublicListView(APIView):
 
     permission_classes = [AllowAny]
 
-    @extend_schema(operation_id="lms_public_categories_list", tags=[TAG_LMS_PUBLIC], responses={200: CATEGORY_LIST_RESPONSE})
+    @extend_schema(
+        operation_id="lms_public_categories_list",
+        tags=[TAG_LMS_PUBLIC],
+        responses={200: CATEGORY_LIST_RESPONSE},
+    )
     def get(self, request: Request) -> SuccessResponse:
         """Return active categories."""
         payload = cached_public_payload(
             domain="lms",
             namespace="lms:categories",
             parts=("categories",),
-            factory=lambda: LMSCategorySerializer(selectors.get_public_categories(), many=True).data,
+            factory=lambda: LMSCategorySerializer(
+                selectors.get_public_categories(), many=True
+            ).data,
         )
         return SuccessResponse(data=payload)
 
@@ -156,9 +231,14 @@ class LMSCategoryPublicDetailView(APIView):
 
     permission_classes = [AllowAny]
 
-    @extend_schema(operation_id="lms_public_categories_retrieve", tags=[TAG_LMS_PUBLIC], responses={200: CATEGORY_RESPONSE, 404: LMS_ERROR_RESPONSE})
+    @extend_schema(
+        operation_id="lms_public_categories_retrieve",
+        tags=[TAG_LMS_PUBLIC],
+        responses={200: CATEGORY_RESPONSE, 404: LMS_ERROR_RESPONSE},
+    )
     def get(self, request: Request, slug: str) -> SuccessResponse | ErrorResponse:
         """Return one public category."""
+
         def build_payload() -> dict | None:
             category = selectors.get_public_category_by_slug(slug)
             if category is None:
@@ -172,7 +252,9 @@ class LMSCategoryPublicDetailView(APIView):
             factory=build_payload,
         )
         if payload is None:
-            return ErrorResponse(message="دسته‌بندی یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+            return ErrorResponse(
+                message="دسته‌بندی یافت نشد.", status_code=status.HTTP_404_NOT_FOUND
+            )
         return SuccessResponse(data=payload)
 
 
@@ -181,7 +263,11 @@ class LMSCoursePublicListView(APIView):
 
     permission_classes = [AllowAny]
 
-    @extend_schema(operation_id="lms_public_courses_list", tags=[TAG_LMS_PUBLIC], responses={200: COURSE_LIST_RESPONSE})
+    @extend_schema(
+        operation_id="lms_public_courses_list",
+        tags=[TAG_LMS_PUBLIC],
+        responses={200: COURSE_LIST_RESPONSE},
+    )
     def get(self, request: Request) -> Response:
         """Return paginated public course catalog."""
         base_queryset = selectors.get_public_courses()
@@ -192,7 +278,9 @@ class LMSCoursePublicListView(APIView):
             paginator = StandardPagination()
             page = paginator.paginate_queryset(queryset, request, view=self)
             serializer = CourseSummarySerializer(page, many=True)
-            response = paginator.get_paginated_response(serializer.data, message="لیست کلاس‌ها با موفقیت دریافت شد.")
+            response = paginator.get_paginated_response(
+                serializer.data, message="لیست کلاس‌ها با موفقیت دریافت شد."
+            )
             return response.data["data"]
 
         payload = cached_public_payload(
@@ -200,7 +288,9 @@ class LMSCoursePublicListView(APIView):
             namespace="lms:public_list",
             parts=(
                 "courses",
-                *build_cache_variant(request, filterset=filterset, pagination_class=StandardPagination),
+                *build_cache_variant(
+                    request, filterset=filterset, pagination_class=StandardPagination
+                ),
             ),
             factory=build_payload,
         )
@@ -212,9 +302,14 @@ class LMSCoursePublicDetailView(APIView):
 
     permission_classes = [AllowAny]
 
-    @extend_schema(operation_id="lms_public_courses_retrieve", tags=[TAG_LMS_PUBLIC], responses={200: COURSE_RESPONSE, 404: LMS_ERROR_RESPONSE})
+    @extend_schema(
+        operation_id="lms_public_courses_retrieve",
+        tags=[TAG_LMS_PUBLIC],
+        responses={200: COURSE_RESPONSE, 404: LMS_ERROR_RESPONSE},
+    )
     def get(self, request: Request, slug: str) -> SuccessResponse | ErrorResponse:
         """Return one published course."""
+
         def build_payload() -> dict | None:
             course = selectors.get_public_course_by_slug(slug)
             if course is None:
@@ -228,7 +323,9 @@ class LMSCoursePublicDetailView(APIView):
             factory=build_payload,
         )
         if payload is None:
-            return ErrorResponse(message="کلاسی با این شناسه یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+            return ErrorResponse(
+                message="کلاسی با این شناسه یافت نشد.", status_code=status.HTTP_404_NOT_FOUND
+            )
         return SuccessResponse(data=payload)
 
 
@@ -237,9 +334,14 @@ class LMSCourseLessonsPublicView(APIView):
 
     permission_classes = [AllowAny]
 
-    @extend_schema(operation_id="lms_public_course_lessons_list", tags=[TAG_LMS_PUBLIC], responses={200: LESSON_LIST_RESPONSE, 404: LMS_ERROR_RESPONSE})
+    @extend_schema(
+        operation_id="lms_public_course_lessons_list",
+        tags=[TAG_LMS_PUBLIC],
+        responses={200: LESSON_LIST_RESPONSE, 404: LMS_ERROR_RESPONSE},
+    )
     def get(self, request: Request, slug: str) -> SuccessResponse | ErrorResponse:
         """Return public lessons for a course."""
+
         def build_payload() -> list | None:
             course = selectors.get_public_course_by_slug(slug)
             if course is None:
@@ -263,9 +365,14 @@ class LMSLessonPublicDetailView(APIView):
 
     permission_classes = [AllowAny]
 
-    @extend_schema(operation_id="lms_public_lessons_retrieve", tags=[TAG_LMS_PUBLIC], responses={200: LESSON_RESPONSE, 404: LMS_ERROR_RESPONSE})
+    @extend_schema(
+        operation_id="lms_public_lessons_retrieve",
+        tags=[TAG_LMS_PUBLIC],
+        responses={200: LESSON_RESPONSE, 404: LMS_ERROR_RESPONSE},
+    )
     def get(self, request: Request, slug: str, lesson_slug: str) -> SuccessResponse | ErrorResponse:
         """Return one public lesson."""
+
         def build_payload() -> dict | None:
             course = selectors.get_public_course_by_slug(slug)
             if course is None:
@@ -292,12 +399,26 @@ class LMSUserEnrollView(APIView):
     permission_classes = [IsAuthenticated]
     throttle_classes = [LMSEnrollThrottle]
 
-    @extend_schema(operation_id="lms_user_course_enroll", tags=[TAG_LMS_USER], request=None, responses={200: ENROLLMENT_RESPONSE, 201: ENROLLMENT_RESPONSE, 403: LMS_ERROR_RESPONSE, 404: LMS_ERROR_RESPONSE})
-    def post(self, request: Request, slug: str) -> SuccessResponse | CreatedResponse | ErrorResponse:
+    @extend_schema(
+        operation_id="lms_user_course_enroll",
+        tags=[TAG_LMS_USER],
+        request=None,
+        responses={
+            200: ENROLLMENT_RESPONSE,
+            201: ENROLLMENT_RESPONSE,
+            403: LMS_ERROR_RESPONSE,
+            404: LMS_ERROR_RESPONSE,
+        },
+    )
+    def post(
+        self, request: Request, slug: str
+    ) -> SuccessResponse | CreatedResponse | ErrorResponse:
         """Enroll current user in a course."""
         course = selectors.get_public_course_by_slug(slug)
         if course is None:
-            return ErrorResponse(message="کلاس قابل ثبت‌نام یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+            return ErrorResponse(
+                message="کلاس قابل ثبت‌نام یافت نشد.", status_code=status.HTTP_404_NOT_FOUND
+            )
         try:
             enrollment, created = services.enroll_user_in_course(user=request.user, course=course)
         except (LMSProfileIncompleteError, CourseNotEnrollabeError) as exc:
@@ -312,8 +433,13 @@ class LMSUserEnrollView(APIView):
                 extra_data={"course_id": course.pk},
                 **metadata,
             )
-            return CreatedResponse(data=EnrollmentSerializer(enrollment).data, message="ثبت‌نام شما با موفقیت انجام شد.")
-        return SuccessResponse(data=EnrollmentSerializer(enrollment).data, message="شما قبلاً در این کلاس ثبت‌نام کرده‌اید.")
+            return CreatedResponse(
+                data=EnrollmentSerializer(enrollment).data, message="ثبت‌نام شما با موفقیت انجام شد."
+            )
+        return SuccessResponse(
+            data=EnrollmentSerializer(enrollment).data,
+            message="شما قبلاً در این کلاس ثبت‌نام کرده‌اید.",
+        )
 
 
 class LMSUserEnrollmentListView(APIView):
@@ -321,14 +447,20 @@ class LMSUserEnrollmentListView(APIView):
 
     permission_classes = [IsAuthenticated]
 
-    @extend_schema(operation_id="lms_user_enrollments_list", tags=[TAG_LMS_USER], responses={200: ENROLLMENT_LIST_RESPONSE})
+    @extend_schema(
+        operation_id="lms_user_enrollments_list",
+        tags=[TAG_LMS_USER],
+        responses={200: ENROLLMENT_LIST_RESPONSE},
+    )
     def get(self, request: Request) -> Response:
         """Return current user's enrollments."""
         queryset = selectors.get_user_enrollments(user_id=request.user.pk)
         paginator = StandardPagination()
         page = paginator.paginate_queryset(queryset, request, view=self)
         serializer = EnrollmentSerializer(page, many=True)
-        return paginator.get_paginated_response(serializer.data, message="لیست ثبت‌نام‌های شما دریافت شد.")
+        return paginator.get_paginated_response(
+            serializer.data, message="لیست ثبت‌نام‌های شما دریافت شد."
+        )
 
 
 class LMSUserEnrollmentDetailView(APIView):
@@ -336,7 +468,11 @@ class LMSUserEnrollmentDetailView(APIView):
 
     permission_classes = [IsAuthenticated]
 
-    @extend_schema(operation_id="lms_user_enrollments_retrieve", tags=[TAG_LMS_USER], responses={200: ENROLLMENT_DETAIL_RESPONSE, 404: LMS_ERROR_RESPONSE})
+    @extend_schema(
+        operation_id="lms_user_enrollments_retrieve",
+        tags=[TAG_LMS_USER],
+        responses={200: ENROLLMENT_DETAIL_RESPONSE, 404: LMS_ERROR_RESPONSE},
+    )
     def get(self, request: Request, enrollment_id: int) -> SuccessResponse | ErrorResponse:
         """Return one owned enrollment."""
         enrollment = selectors.get_user_enrollment_by_id(
@@ -344,7 +480,9 @@ class LMSUserEnrollmentDetailView(APIView):
             enrollment_id=enrollment_id,
         )
         if enrollment is None:
-            return ErrorResponse(message="ثبت‌نامی با این شناسه یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+            return ErrorResponse(
+                message="ثبت‌نامی با این شناسه یافت نشد.", status_code=status.HTTP_404_NOT_FOUND
+            )
         return SuccessResponse(data=EnrollmentDetailSerializer(enrollment).data)
 
 
@@ -354,7 +492,17 @@ class LMSLessonProgressUpdateView(APIView):
     permission_classes = [IsAuthenticated]
     throttle_classes = [LMSProgressThrottle]
 
-    @extend_schema(operation_id="lms_user_lessons_progress_update", tags=[TAG_LMS_USER], request=LessonProgressUpdateSerializer, responses={200: LESSON_PROGRESS_RESPONSE, 400: LMS_ERROR_RESPONSE, 403: LMS_ERROR_RESPONSE, 404: LMS_ERROR_RESPONSE})
+    @extend_schema(
+        operation_id="lms_user_lessons_progress_update",
+        tags=[TAG_LMS_USER],
+        request=LessonProgressUpdateSerializer,
+        responses={
+            200: LESSON_PROGRESS_RESPONSE,
+            400: LMS_ERROR_RESPONSE,
+            403: LMS_ERROR_RESPONSE,
+            404: LMS_ERROR_RESPONSE,
+        },
+    )
     def post(self, request: Request, lesson_id: int) -> SuccessResponse | ErrorResponse:
         """Update lesson watch progress monotonically."""
         lesson = selectors.get_lesson_for_progress(lesson_id=lesson_id)
@@ -366,7 +514,10 @@ class LMSLessonProgressUpdateView(APIView):
             course_id=lesson.course_id,
         )
         if enrollment is None:
-            return ErrorResponse(message="برای ثبت پیشرفت ابتدا باید در کلاس ثبت‌نام کنید.", status_code=status.HTTP_403_FORBIDDEN)
+            return ErrorResponse(
+                message="برای ثبت پیشرفت ابتدا باید در کلاس ثبت‌نام کنید.",
+                status_code=status.HTTP_403_FORBIDDEN,
+            )
 
         serializer = LessonProgressUpdateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -415,7 +566,9 @@ class LMSUserLearningRecommendationView(APIView):
             limit = int(raw_limit)
         except (TypeError, ValueError):
             limit = 10
-        recommendations = selectors.get_user_learning_recommendations(user_id=request.user.pk, limit=limit)
+        recommendations = selectors.get_user_learning_recommendations(
+            user_id=request.user.pk, limit=limit
+        )
         return SuccessResponse(
             data=LearningRecommendationItemSerializer(recommendations, many=True).data,
             message="پیشنهادهای یادگیری با موفقیت دریافت شد.",
@@ -448,7 +601,11 @@ class LMSUserSkillListView(APIView):
 
     permission_classes = [IsAuthenticated]
 
-    @extend_schema(operation_id="lms_user_skills_list", tags=[TAG_LMS_USER], responses={200: SKILL_LIST_RESPONSE})
+    @extend_schema(
+        operation_id="lms_user_skills_list",
+        tags=[TAG_LMS_USER],
+        responses={200: SKILL_LIST_RESPONSE},
+    )
     def get(self, request: Request) -> SuccessResponse:
         """Return LMS skills for the current user."""
         skills = selectors.get_user_skills(user_id=request.user.pk)
@@ -461,19 +618,34 @@ class LMSLessonMediaAccessView(APIView):
     permission_classes = [IsAuthenticated]
     serializer_class = LessonMediaAccessSerializer
 
-    @extend_schema(operation_id="lms_user_lessons_media_access", tags=[TAG_LMS_USER], responses={200: LESSON_MEDIA_RESPONSE, 403: LMS_ERROR_RESPONSE, 404: LMS_ERROR_RESPONSE})
-    def get(self, request: Request, lesson_id: int, media_kind: str) -> SuccessResponse | ErrorResponse:
+    @extend_schema(
+        operation_id="lms_user_lessons_media_access",
+        tags=[TAG_LMS_USER],
+        responses={200: LESSON_MEDIA_RESPONSE, 403: LMS_ERROR_RESPONSE, 404: LMS_ERROR_RESPONSE},
+    )
+    def get(
+        self, request: Request, lesson_id: int, media_kind: str
+    ) -> SuccessResponse | ErrorResponse:
         """Return access payload for lesson video or attachment."""
         lesson = selectors.get_lesson_for_progress(lesson_id=lesson_id)
         if lesson is None:
             return ErrorResponse(message="جلسه یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
         try:
-            payload = services.build_lesson_media_access(lesson=lesson, user=request.user, media_kind=media_kind)
+            payload = services.build_lesson_media_access(
+                lesson=lesson, user=request.user, media_kind=media_kind
+            )
         except LessonMediaAccessError as exc:
             return ErrorResponse(message=str(exc), status_code=status.HTTP_403_FORBIDDEN)
         except LessonMediaUnavailableError as exc:
             return ErrorResponse(message=str(exc), status_code=status.HTTP_404_NOT_FOUND)
-        log_action_async(user_id=request.user.pk, action=audit_actions.LMS_LESSON_MEDIA_ACCESSED, resource_type="lms_lesson", resource_id=str(lesson.pk), extra_data={"course_id": lesson.course_id, "media_kind": media_kind}, **extract_audit_metadata(request))
+        log_action_async(
+            user_id=request.user.pk,
+            action=audit_actions.LMS_LESSON_MEDIA_ACCESSED,
+            resource_type="lms_lesson",
+            resource_id=str(lesson.pk),
+            extra_data={"course_id": lesson.course_id, "media_kind": media_kind},
+            **extract_audit_metadata(request),
+        )
         return SuccessResponse(data=payload, message="دسترسی رسانه جلسه صادر شد.")
 
 
@@ -483,7 +655,11 @@ class LMSLessonQuestionListCreateView(APIView):
     permission_classes = [IsAuthenticated]
     throttle_classes = [LMSDiscussionThrottle]
 
-    @extend_schema(operation_id="lms_lesson_questions_list", tags=[TAG_LMS_USER], responses={200: QUESTION_LIST_RESPONSE, 403: LMS_ERROR_RESPONSE, 404: LMS_ERROR_RESPONSE})
+    @extend_schema(
+        operation_id="lms_lesson_questions_list",
+        tags=[TAG_LMS_USER],
+        responses={200: QUESTION_LIST_RESPONSE, 403: LMS_ERROR_RESPONSE, 404: LMS_ERROR_RESPONSE},
+    )
     def get(self, request: Request, lesson_id: int) -> Response:
         """Return lesson questions for enrolled users."""
         lesson = selectors.get_lesson_for_progress(lesson_id=lesson_id)
@@ -497,9 +673,21 @@ class LMSLessonQuestionListCreateView(APIView):
         paginator = StandardPagination()
         page = paginator.paginate_queryset(queryset, request, view=self)
         serializer = LessonQuestionSerializer(page, many=True)
-        return paginator.get_paginated_response(serializer.data, message="پرسش‌های جلسه با موفقیت دریافت شد.")
+        return paginator.get_paginated_response(
+            serializer.data, message="پرسش‌های جلسه با موفقیت دریافت شد."
+        )
 
-    @extend_schema(operation_id="lms_lesson_questions_create", tags=[TAG_LMS_USER], request=LessonQuestionCreateSerializer, responses={201: QUESTION_RESPONSE, 400: LMS_ERROR_RESPONSE, 403: LMS_ERROR_RESPONSE, 404: LMS_ERROR_RESPONSE})
+    @extend_schema(
+        operation_id="lms_lesson_questions_create",
+        tags=[TAG_LMS_USER],
+        request=LessonQuestionCreateSerializer,
+        responses={
+            201: QUESTION_RESPONSE,
+            400: LMS_ERROR_RESPONSE,
+            403: LMS_ERROR_RESPONSE,
+            404: LMS_ERROR_RESPONSE,
+        },
+    )
     def post(self, request: Request, lesson_id: int) -> CreatedResponse | ErrorResponse:
         """Create a visible question under a lesson."""
         lesson = selectors.get_lesson_for_progress(lesson_id=lesson_id)
@@ -516,8 +704,17 @@ class LMSLessonQuestionListCreateView(APIView):
             )
         except LMSDiscussionAccessError as exc:
             return ErrorResponse(message=str(exc), status_code=status.HTTP_403_FORBIDDEN)
-        log_action_async(user_id=request.user.pk, action=audit_actions.LMS_QUESTION_CREATED, resource_type="lms_lesson_question", resource_id=str(question.pk), extra_data={"lesson_id": lesson.pk, "course_id": lesson.course_id}, **extract_audit_metadata(request))
-        return CreatedResponse(data=LessonQuestionSerializer(question).data, message="سؤال شما با موفقیت ثبت شد.")
+        log_action_async(
+            user_id=request.user.pk,
+            action=audit_actions.LMS_QUESTION_CREATED,
+            resource_type="lms_lesson_question",
+            resource_id=str(question.pk),
+            extra_data={"lesson_id": lesson.pk, "course_id": lesson.course_id},
+            **extract_audit_metadata(request),
+        )
+        return CreatedResponse(
+            data=LessonQuestionSerializer(question).data, message="سؤال شما با موفقیت ثبت شد."
+        )
 
 
 class LMSQuestionAnswerCreateView(APIView):
@@ -526,7 +723,17 @@ class LMSQuestionAnswerCreateView(APIView):
     permission_classes = [IsAuthenticated]
     throttle_classes = [LMSDiscussionThrottle]
 
-    @extend_schema(operation_id="lms_question_answers_create", tags=[TAG_LMS_USER], request=LessonAnswerCreateSerializer, responses={201: ANSWER_RESPONSE, 400: LMS_ERROR_RESPONSE, 403: LMS_ERROR_RESPONSE, 404: LMS_ERROR_RESPONSE})
+    @extend_schema(
+        operation_id="lms_question_answers_create",
+        tags=[TAG_LMS_USER],
+        request=LessonAnswerCreateSerializer,
+        responses={
+            201: ANSWER_RESPONSE,
+            400: LMS_ERROR_RESPONSE,
+            403: LMS_ERROR_RESPONSE,
+            404: LMS_ERROR_RESPONSE,
+        },
+    )
     def post(self, request: Request, question_id: int) -> CreatedResponse | ErrorResponse:
         """Create an answer under an existing question."""
         question = selectors.get_lesson_question_by_id(question_id=question_id)
@@ -543,8 +750,17 @@ class LMSQuestionAnswerCreateView(APIView):
             )
         except LMSDiscussionAccessError as exc:
             return ErrorResponse(message=str(exc), status_code=status.HTTP_403_FORBIDDEN)
-        log_action_async(user_id=request.user.pk, action=audit_actions.LMS_ANSWER_CREATED, resource_type="lms_lesson_answer", resource_id=str(answer.pk), extra_data={"question_id": question.pk}, **extract_audit_metadata(request))
-        return CreatedResponse(data=LessonAnswerSerializer(answer).data, message="پاسخ با موفقیت ثبت شد.")
+        log_action_async(
+            user_id=request.user.pk,
+            action=audit_actions.LMS_ANSWER_CREATED,
+            resource_type="lms_lesson_answer",
+            resource_id=str(answer.pk),
+            extra_data={"question_id": question.pk},
+            **extract_audit_metadata(request),
+        )
+        return CreatedResponse(
+            data=LessonAnswerSerializer(answer).data, message="پاسخ با موفقیت ثبت شد."
+        )
 
 
 class LMSQuestionAcceptAnswerView(APIView):
@@ -552,18 +768,31 @@ class LMSQuestionAcceptAnswerView(APIView):
 
     permission_classes = [IsAuthenticated]
 
-    @extend_schema(operation_id="lms_question_answers_accept", tags=[TAG_LMS_USER], request=None, responses={200: ANSWER_RESPONSE, 403: LMS_ERROR_RESPONSE, 404: LMS_ERROR_RESPONSE})
-    def post(self, request: Request, question_id: int, answer_id: int) -> SuccessResponse | ErrorResponse:
+    @extend_schema(
+        operation_id="lms_question_answers_accept",
+        tags=[TAG_LMS_USER],
+        request=None,
+        responses={200: ANSWER_RESPONSE, 403: LMS_ERROR_RESPONSE, 404: LMS_ERROR_RESPONSE},
+    )
+    def post(
+        self, request: Request, question_id: int, answer_id: int
+    ) -> SuccessResponse | ErrorResponse:
         """Mark answer as accepted."""
         question = selectors.get_lesson_question_by_id(question_id=question_id)
         answer = selectors.get_lesson_answer_by_id(answer_id=answer_id)
         if question is None or answer is None:
-            return ErrorResponse(message="سؤال یا پاسخ یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+            return ErrorResponse(
+                message="سؤال یا پاسخ یافت نشد.", status_code=status.HTTP_404_NOT_FOUND
+            )
         try:
-            answer = services.accept_lesson_answer(question=question, answer=answer, user=request.user)
+            answer = services.accept_lesson_answer(
+                question=question, answer=answer, user=request.user
+            )
         except (LMSDiscussionAccessError, LMSDiscussionModerationError) as exc:
             return ErrorResponse(message=str(exc), status_code=status.HTTP_403_FORBIDDEN)
-        return SuccessResponse(data=LessonAnswerSerializer(answer).data, message="پاسخ به‌عنوان پاسخ پذیرفته‌شده ثبت شد.")
+        return SuccessResponse(
+            data=LessonAnswerSerializer(answer).data, message="پاسخ به‌عنوان پاسخ پذیرفته‌شده ثبت شد."
+        )
 
 
 class LMSQuestionReportView(APIView):
@@ -572,7 +801,16 @@ class LMSQuestionReportView(APIView):
     permission_classes = [IsAuthenticated]
     throttle_classes = [LMSDiscussionThrottle]
 
-    @extend_schema(operation_id="lms_questions_report", tags=[TAG_LMS_USER], request=DiscussionReportCreateSerializer, responses={201: DISCUSSION_REPORT_RESPONSE, 403: LMS_ERROR_RESPONSE, 404: LMS_ERROR_RESPONSE})
+    @extend_schema(
+        operation_id="lms_questions_report",
+        tags=[TAG_LMS_USER],
+        request=DiscussionReportCreateSerializer,
+        responses={
+            201: DISCUSSION_REPORT_RESPONSE,
+            403: LMS_ERROR_RESPONSE,
+            404: LMS_ERROR_RESPONSE,
+        },
+    )
     def post(self, request: Request, question_id: int) -> CreatedResponse | ErrorResponse:
         """Report a question."""
         question = selectors.get_lesson_question_by_id(question_id=question_id)
@@ -581,11 +819,23 @@ class LMSQuestionReportView(APIView):
         serializer = DiscussionReportCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         try:
-            report = services.report_lesson_question(question=question, reported_by=request.user, **serializer.validated_data)
+            report = services.report_lesson_question(
+                question=question, reported_by=request.user, **serializer.validated_data
+            )
         except LMSDiscussionAccessError as exc:
             return ErrorResponse(message=str(exc), status_code=status.HTTP_403_FORBIDDEN)
-        log_action_async(user_id=request.user.pk, action=audit_actions.LMS_DISCUSSION_REPORTED, resource_type="lms_discussion_report", resource_id=str(report.pk), extra_data={"question_id": question.pk}, **extract_audit_metadata(request))
-        return CreatedResponse(data=DiscussionReportSerializer(report).data, message="گزارش شما ثبت شد و توسط ادمین بررسی می‌شود.")
+        log_action_async(
+            user_id=request.user.pk,
+            action=audit_actions.LMS_DISCUSSION_REPORTED,
+            resource_type="lms_discussion_report",
+            resource_id=str(report.pk),
+            extra_data={"question_id": question.pk},
+            **extract_audit_metadata(request),
+        )
+        return CreatedResponse(
+            data=DiscussionReportSerializer(report).data,
+            message="گزارش شما ثبت شد و توسط ادمین بررسی می‌شود.",
+        )
 
 
 class LMSAnswerReportView(APIView):
@@ -594,7 +844,16 @@ class LMSAnswerReportView(APIView):
     permission_classes = [IsAuthenticated]
     throttle_classes = [LMSDiscussionThrottle]
 
-    @extend_schema(operation_id="lms_answers_report", tags=[TAG_LMS_USER], request=DiscussionReportCreateSerializer, responses={201: DISCUSSION_REPORT_RESPONSE, 403: LMS_ERROR_RESPONSE, 404: LMS_ERROR_RESPONSE})
+    @extend_schema(
+        operation_id="lms_answers_report",
+        tags=[TAG_LMS_USER],
+        request=DiscussionReportCreateSerializer,
+        responses={
+            201: DISCUSSION_REPORT_RESPONSE,
+            403: LMS_ERROR_RESPONSE,
+            404: LMS_ERROR_RESPONSE,
+        },
+    )
     def post(self, request: Request, answer_id: int) -> CreatedResponse | ErrorResponse:
         """Report an answer."""
         answer = selectors.get_lesson_answer_by_id(answer_id=answer_id)
@@ -603,11 +862,23 @@ class LMSAnswerReportView(APIView):
         serializer = DiscussionReportCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         try:
-            report = services.report_lesson_answer(answer=answer, reported_by=request.user, **serializer.validated_data)
+            report = services.report_lesson_answer(
+                answer=answer, reported_by=request.user, **serializer.validated_data
+            )
         except LMSDiscussionAccessError as exc:
             return ErrorResponse(message=str(exc), status_code=status.HTTP_403_FORBIDDEN)
-        log_action_async(user_id=request.user.pk, action=audit_actions.LMS_DISCUSSION_REPORTED, resource_type="lms_discussion_report", resource_id=str(report.pk), extra_data={"answer_id": answer.pk}, **extract_audit_metadata(request))
-        return CreatedResponse(data=DiscussionReportSerializer(report).data, message="گزارش شما ثبت شد و توسط ادمین بررسی می‌شود.")
+        log_action_async(
+            user_id=request.user.pk,
+            action=audit_actions.LMS_DISCUSSION_REPORTED,
+            resource_type="lms_discussion_report",
+            resource_id=str(report.pk),
+            extra_data={"answer_id": answer.pk},
+            **extract_audit_metadata(request),
+        )
+        return CreatedResponse(
+            data=DiscussionReportSerializer(report).data,
+            message="گزارش شما ثبت شد و توسط ادمین بررسی می‌شود.",
+        )
 
 
 class LMSAdminQuestionModerationView(APIView):
@@ -615,7 +886,12 @@ class LMSAdminQuestionModerationView(APIView):
 
     permission_classes = [IsLMSAdminUser]
 
-    @extend_schema(operation_id="lms_admin_questions_moderate", tags=[TAG_LMS_ADMIN], request=DiscussionModerationSerializer, responses={200: QUESTION_RESPONSE, 400: LMS_ERROR_RESPONSE, 404: LMS_ERROR_RESPONSE})
+    @extend_schema(
+        operation_id="lms_admin_questions_moderate",
+        tags=[TAG_LMS_ADMIN],
+        request=DiscussionModerationSerializer,
+        responses={200: QUESTION_RESPONSE, 400: LMS_ERROR_RESPONSE, 404: LMS_ERROR_RESPONSE},
+    )
     def patch(self, request: Request, question_id: int) -> SuccessResponse | ErrorResponse:
         """Moderate one question."""
         question = selectors.get_lesson_question_by_id(question_id=question_id)
@@ -623,8 +899,14 @@ class LMSAdminQuestionModerationView(APIView):
             return ErrorResponse(message="سؤال یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
         serializer = DiscussionModerationSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        question = services.moderate_lesson_question(question=question, status=serializer.validated_data["status"], is_pinned=serializer.validated_data.get("is_pinned"))
-        return SuccessResponse(data=LessonQuestionSerializer(question).data, message="وضعیت سؤال بروزرسانی شد.")
+        question = services.moderate_lesson_question(
+            question=question,
+            status=serializer.validated_data["status"],
+            is_pinned=serializer.validated_data.get("is_pinned"),
+        )
+        return SuccessResponse(
+            data=LessonQuestionSerializer(question).data, message="وضعیت سؤال بروزرسانی شد."
+        )
 
 
 class LMSAdminAnswerModerationView(APIView):
@@ -632,7 +914,12 @@ class LMSAdminAnswerModerationView(APIView):
 
     permission_classes = [IsLMSAdminUser]
 
-    @extend_schema(operation_id="lms_admin_answers_moderate", tags=[TAG_LMS_ADMIN], request=DiscussionModerationSerializer, responses={200: ANSWER_RESPONSE, 400: LMS_ERROR_RESPONSE, 404: LMS_ERROR_RESPONSE})
+    @extend_schema(
+        operation_id="lms_admin_answers_moderate",
+        tags=[TAG_LMS_ADMIN],
+        request=DiscussionModerationSerializer,
+        responses={200: ANSWER_RESPONSE, 400: LMS_ERROR_RESPONSE, 404: LMS_ERROR_RESPONSE},
+    )
     def patch(self, request: Request, answer_id: int) -> SuccessResponse | ErrorResponse:
         """Moderate one answer."""
         answer = selectors.get_lesson_answer_by_id(answer_id=answer_id)
@@ -640,8 +927,14 @@ class LMSAdminAnswerModerationView(APIView):
             return ErrorResponse(message="پاسخ یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
         serializer = DiscussionModerationSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        answer = services.moderate_lesson_answer(answer=answer, status=serializer.validated_data["status"], is_accepted=serializer.validated_data.get("is_accepted"))
-        return SuccessResponse(data=LessonAnswerSerializer(answer).data, message="وضعیت پاسخ بروزرسانی شد.")
+        answer = services.moderate_lesson_answer(
+            answer=answer,
+            status=serializer.validated_data["status"],
+            is_accepted=serializer.validated_data.get("is_accepted"),
+        )
+        return SuccessResponse(
+            data=LessonAnswerSerializer(answer).data, message="وضعیت پاسخ بروزرسانی شد."
+        )
 
 
 class LMSAdminDiscussionReportListView(APIView):
@@ -649,7 +942,11 @@ class LMSAdminDiscussionReportListView(APIView):
 
     permission_classes = [IsLMSAdminUser]
 
-    @extend_schema(operation_id="lms_admin_discussion_reports_list", tags=[TAG_LMS_ADMIN], responses={200: DISCUSSION_REPORT_LIST_RESPONSE})
+    @extend_schema(
+        operation_id="lms_admin_discussion_reports_list",
+        tags=[TAG_LMS_ADMIN],
+        responses={200: DISCUSSION_REPORT_LIST_RESPONSE},
+    )
     def get(self, request: Request) -> Response:
         """Return paginated discussion reports."""
         queryset = selectors.get_admin_discussion_reports()
@@ -664,7 +961,16 @@ class LMSAdminDiscussionReportReviewView(APIView):
 
     permission_classes = [IsLMSAdminUser]
 
-    @extend_schema(operation_id="lms_admin_discussion_reports_review", tags=[TAG_LMS_ADMIN], request=DiscussionReportReviewSerializer, responses={200: DISCUSSION_REPORT_RESPONSE, 400: LMS_ERROR_RESPONSE, 404: LMS_ERROR_RESPONSE})
+    @extend_schema(
+        operation_id="lms_admin_discussion_reports_review",
+        tags=[TAG_LMS_ADMIN],
+        request=DiscussionReportReviewSerializer,
+        responses={
+            200: DISCUSSION_REPORT_RESPONSE,
+            400: LMS_ERROR_RESPONSE,
+            404: LMS_ERROR_RESPONSE,
+        },
+    )
     def patch(self, request: Request, report_id: int) -> SuccessResponse | ErrorResponse:
         """Review one discussion report."""
         report = selectors.get_admin_discussion_report_by_id(report_id=report_id)
@@ -672,8 +978,12 @@ class LMSAdminDiscussionReportReviewView(APIView):
             return ErrorResponse(message="گزارش یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
         serializer = DiscussionReportReviewSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        report = services.review_discussion_report(report=report, reviewed_by=request.user, status=serializer.validated_data["status"])
-        return SuccessResponse(data=DiscussionReportSerializer(report).data, message="گزارش گفتگو بررسی شد.")
+        report = services.review_discussion_report(
+            report=report, reviewed_by=request.user, status=serializer.validated_data["status"]
+        )
+        return SuccessResponse(
+            data=DiscussionReportSerializer(report).data, message="گزارش گفتگو بررسی شد."
+        )
 
 
 class LMSCourseQuizPublicView(APIView):
@@ -681,7 +991,11 @@ class LMSCourseQuizPublicView(APIView):
 
     permission_classes = [IsAuthenticated]
 
-    @extend_schema(operation_id="lms_user_course_quiz_retrieve", tags=[TAG_LMS_USER], responses={200: QUIZ_PUBLIC_RESPONSE, 403: LMS_ERROR_RESPONSE, 404: LMS_ERROR_RESPONSE})
+    @extend_schema(
+        operation_id="lms_user_course_quiz_retrieve",
+        tags=[TAG_LMS_USER],
+        responses={200: QUIZ_PUBLIC_RESPONSE, 403: LMS_ERROR_RESPONSE, 404: LMS_ERROR_RESPONSE},
+    )
     def get(self, request: Request, slug: str) -> SuccessResponse | ErrorResponse:
         """Return quiz metadata without correct answers."""
         course = selectors.get_public_course_by_slug(slug)
@@ -689,7 +1003,10 @@ class LMSCourseQuizPublicView(APIView):
             return ErrorResponse(message="کلاس یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
         quiz = selectors.get_published_quiz_for_course(course=course)
         if quiz is None:
-            return ErrorResponse(message="برای این کلاس آزمونی منتشر نشده است.", status_code=status.HTTP_404_NOT_FOUND)
+            return ErrorResponse(
+                message="برای این کلاس آزمونی منتشر نشده است.",
+                status_code=status.HTTP_404_NOT_FOUND,
+            )
         return SuccessResponse(data=QuizPublicSerializer(quiz).data)
 
 
@@ -698,24 +1015,52 @@ class LMSQuizAttemptStartView(APIView):
 
     permission_classes = [IsAuthenticated]
 
-    @extend_schema(operation_id="lms_user_quiz_attempt_start", tags=[TAG_LMS_USER], request=None, responses={200: QUIZ_ATTEMPT_RESPONSE, 201: QUIZ_ATTEMPT_RESPONSE, 400: LMS_ERROR_RESPONSE, 403: LMS_ERROR_RESPONSE, 404: LMS_ERROR_RESPONSE})
-    def post(self, request: Request, slug: str) -> SuccessResponse | CreatedResponse | ErrorResponse:
+    @extend_schema(
+        operation_id="lms_user_quiz_attempt_start",
+        tags=[TAG_LMS_USER],
+        request=None,
+        responses={
+            200: QUIZ_ATTEMPT_RESPONSE,
+            201: QUIZ_ATTEMPT_RESPONSE,
+            400: LMS_ERROR_RESPONSE,
+            403: LMS_ERROR_RESPONSE,
+            404: LMS_ERROR_RESPONSE,
+        },
+    )
+    def post(
+        self, request: Request, slug: str
+    ) -> SuccessResponse | CreatedResponse | ErrorResponse:
         """Start a snapshot-based quiz attempt."""
         course = selectors.get_public_course_by_slug(slug)
         if course is None:
             return ErrorResponse(message="کلاس یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
         quiz = selectors.get_published_quiz_for_course(course=course)
         if quiz is None:
-            return ErrorResponse(message="برای این کلاس آزمونی منتشر نشده است.", status_code=status.HTTP_404_NOT_FOUND)
+            return ErrorResponse(
+                message="برای این کلاس آزمونی منتشر نشده است.",
+                status_code=status.HTTP_404_NOT_FOUND,
+            )
         try:
             attempt, created = services.start_quiz_attempt(quiz=quiz, user=request.user)
         except (QuizNotAvailableError, QuizAttemptLockedError, QuizValidationError) as exc:
             return ErrorResponse(message=str(exc), status_code=status.HTTP_403_FORBIDDEN)
         action = audit_actions.LMS_QUIZ_ATTEMPT_STARTED
-        log_action_async(user_id=request.user.pk, action=action, resource_type="lms_quiz_attempt", resource_id=str(attempt.pk), extra_data={"quiz_id": quiz.pk, "course_id": course.pk}, **extract_audit_metadata(request))
+        log_action_async(
+            user_id=request.user.pk,
+            action=action,
+            resource_type="lms_quiz_attempt",
+            resource_id=str(attempt.pk),
+            extra_data={"quiz_id": quiz.pk, "course_id": course.pk},
+            **extract_audit_metadata(request),
+        )
         if created:
-            return CreatedResponse(data=QuizAttemptDetailSerializer(attempt).data, message="آزمون برای شما آغاز شد.")
-        return SuccessResponse(data=QuizAttemptDetailSerializer(attempt).data, message="تلاش در حال انجام قبلی شما بازیابی شد.")
+            return CreatedResponse(
+                data=QuizAttemptDetailSerializer(attempt).data, message="آزمون برای شما آغاز شد."
+            )
+        return SuccessResponse(
+            data=QuizAttemptDetailSerializer(attempt).data,
+            message="تلاش در حال انجام قبلی شما بازیابی شد.",
+        )
 
 
 class LMSQuizAttemptDetailView(APIView):
@@ -723,12 +1068,18 @@ class LMSQuizAttemptDetailView(APIView):
 
     permission_classes = [IsAuthenticated]
 
-    @extend_schema(operation_id="lms_user_quiz_attempt_retrieve", tags=[TAG_LMS_USER], responses={200: QUIZ_ATTEMPT_RESPONSE, 404: LMS_ERROR_RESPONSE})
+    @extend_schema(
+        operation_id="lms_user_quiz_attempt_retrieve",
+        tags=[TAG_LMS_USER],
+        responses={200: QUIZ_ATTEMPT_RESPONSE, 404: LMS_ERROR_RESPONSE},
+    )
     def get(self, request: Request, attempt_id: int) -> SuccessResponse | ErrorResponse:
         """Return attempt questions and submitted answers without leaking correct answers before pass."""
         attempt = selectors.get_quiz_attempt_by_id(user_id=request.user.pk, attempt_id=attempt_id)
         if attempt is None:
-            return ErrorResponse(message="تلاش آزمون یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+            return ErrorResponse(
+                message="تلاش آزمون یافت نشد.", status_code=status.HTTP_404_NOT_FOUND
+            )
         return SuccessResponse(data=QuizAttemptDetailSerializer(attempt).data)
 
 
@@ -737,21 +1088,54 @@ class LMSQuizAttemptSubmitView(APIView):
 
     permission_classes = [IsAuthenticated]
 
-    @extend_schema(operation_id="lms_user_quiz_attempt_submit", tags=[TAG_LMS_USER], request=QuizAttemptSubmitSerializer, responses={200: QUIZ_ATTEMPT_RESPONSE, 400: LMS_ERROR_RESPONSE, 404: LMS_ERROR_RESPONSE})
+    @extend_schema(
+        operation_id="lms_user_quiz_attempt_submit",
+        tags=[TAG_LMS_USER],
+        request=QuizAttemptSubmitSerializer,
+        responses={200: QUIZ_ATTEMPT_RESPONSE, 400: LMS_ERROR_RESPONSE, 404: LMS_ERROR_RESPONSE},
+    )
     def post(self, request: Request, attempt_id: int) -> SuccessResponse | ErrorResponse:
         """Submit attempt answers and calculate weighted score."""
         attempt = selectors.get_quiz_attempt_by_id(user_id=request.user.pk, attempt_id=attempt_id)
         if attempt is None:
-            return ErrorResponse(message="تلاش آزمون یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+            return ErrorResponse(
+                message="تلاش آزمون یافت نشد.", status_code=status.HTTP_404_NOT_FOUND
+            )
         serializer = QuizAttemptSubmitSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         try:
-            attempt = services.submit_quiz_attempt(attempt=attempt, answers=serializer.validated_data["answers"])
+            attempt = services.submit_quiz_attempt(
+                attempt=attempt, answers=serializer.validated_data["answers"]
+            )
         except QuizAttemptSubmissionError as exc:
             return ErrorResponse(message=str(exc), status_code=status.HTTP_400_BAD_REQUEST)
-        log_action_async(user_id=request.user.pk, action=audit_actions.LMS_QUIZ_ATTEMPT_SUBMITTED, resource_type="lms_quiz_attempt", resource_id=str(attempt.pk), extra_data={"score_out_of_20": str(attempt.score_out_of_20), "is_passed": attempt.is_passed}, **extract_audit_metadata(request))
-        log_action_async(user_id=request.user.pk, action=(audit_actions.LMS_QUIZ_ATTEMPT_PASSED if attempt.is_passed else audit_actions.LMS_QUIZ_ATTEMPT_FAILED), resource_type="lms_quiz_attempt", resource_id=str(attempt.pk), extra_data={"quiz_id": attempt.quiz_id}, **extract_audit_metadata(request))
-        return SuccessResponse(data=QuizAttemptDetailSerializer(attempt).data, message="پاسخ‌های آزمون با موفقیت ثبت شد.")
+        log_action_async(
+            user_id=request.user.pk,
+            action=audit_actions.LMS_QUIZ_ATTEMPT_SUBMITTED,
+            resource_type="lms_quiz_attempt",
+            resource_id=str(attempt.pk),
+            extra_data={
+                "score_out_of_20": str(attempt.score_out_of_20),
+                "is_passed": attempt.is_passed,
+            },
+            **extract_audit_metadata(request),
+        )
+        log_action_async(
+            user_id=request.user.pk,
+            action=(
+                audit_actions.LMS_QUIZ_ATTEMPT_PASSED
+                if attempt.is_passed
+                else audit_actions.LMS_QUIZ_ATTEMPT_FAILED
+            ),
+            resource_type="lms_quiz_attempt",
+            resource_id=str(attempt.pk),
+            extra_data={"quiz_id": attempt.quiz_id},
+            **extract_audit_metadata(request),
+        )
+        return SuccessResponse(
+            data=QuizAttemptDetailSerializer(attempt).data,
+            message="پاسخ‌های آزمون با موفقیت ثبت شد.",
+        )
 
 
 class LMSAdminQuizDetailCreateView(APIView):
@@ -759,16 +1143,34 @@ class LMSAdminQuizDetailCreateView(APIView):
 
     permission_classes = [IsLMSAdminUser]
 
-    @extend_schema(operation_id="lms_admin_quiz_retrieve", tags=[TAG_LMS_ADMIN], responses={200: QUIZ_ADMIN_RESPONSE, 404: LMS_ERROR_RESPONSE})
+    @extend_schema(
+        operation_id="lms_admin_quiz_retrieve",
+        tags=[TAG_LMS_ADMIN],
+        responses={200: QUIZ_ADMIN_RESPONSE, 404: LMS_ERROR_RESPONSE},
+    )
     def get(self, request: Request, course_id: int) -> SuccessResponse | ErrorResponse:
         """Return quiz config for a course."""
         quiz = selectors.get_admin_quiz_by_course_id(course_id=course_id)
         if quiz is None:
-            return ErrorResponse(message="آزمونی برای این کلاس یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+            return ErrorResponse(
+                message="آزمونی برای این کلاس یافت نشد.", status_code=status.HTTP_404_NOT_FOUND
+            )
         return SuccessResponse(data=QuizAdminSerializer(quiz).data)
 
-    @extend_schema(operation_id="lms_admin_quiz_create_or_update", tags=[TAG_LMS_ADMIN], request=QuizCreateUpdateSerializer, responses={200: QUIZ_ADMIN_RESPONSE, 201: QUIZ_ADMIN_RESPONSE, 400: LMS_ERROR_RESPONSE, 404: LMS_ERROR_RESPONSE})
-    def post(self, request: Request, course_id: int) -> SuccessResponse | CreatedResponse | ErrorResponse:
+    @extend_schema(
+        operation_id="lms_admin_quiz_create_or_update",
+        tags=[TAG_LMS_ADMIN],
+        request=QuizCreateUpdateSerializer,
+        responses={
+            200: QUIZ_ADMIN_RESPONSE,
+            201: QUIZ_ADMIN_RESPONSE,
+            400: LMS_ERROR_RESPONSE,
+            404: LMS_ERROR_RESPONSE,
+        },
+    )
+    def post(
+        self, request: Request, course_id: int
+    ) -> SuccessResponse | CreatedResponse | ErrorResponse:
         """Create or update a draft quiz for a course."""
         course = selectors.get_admin_course_by_id(course_id)
         if course is None:
@@ -776,10 +1178,21 @@ class LMSAdminQuizDetailCreateView(APIView):
         serializer = QuizCreateUpdateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         quiz, created = services.create_or_update_quiz(course=course, **serializer.validated_data)
-        log_action_async(user_id=request.user.pk, action=audit_actions.LMS_QUIZ_CREATED, resource_type="lms_quiz", resource_id=str(quiz.pk), extra_data={"course_id": course.pk}, **extract_audit_metadata(request))
+        log_action_async(
+            user_id=request.user.pk,
+            action=audit_actions.LMS_QUIZ_CREATED,
+            resource_type="lms_quiz",
+            resource_id=str(quiz.pk),
+            extra_data={"course_id": course.pk},
+            **extract_audit_metadata(request),
+        )
         if created:
-            return CreatedResponse(data=QuizAdminSerializer(quiz).data, message="آزمون کلاس ساخته شد.")
-        return SuccessResponse(data=QuizAdminSerializer(quiz).data, message="آزمون کلاس بروزرسانی شد.")
+            return CreatedResponse(
+                data=QuizAdminSerializer(quiz).data, message="آزمون کلاس ساخته شد."
+            )
+        return SuccessResponse(
+            data=QuizAdminSerializer(quiz).data, message="آزمون کلاس بروزرسانی شد."
+        )
 
 
 class LMSAdminQuizPublishView(APIView):
@@ -787,7 +1200,12 @@ class LMSAdminQuizPublishView(APIView):
 
     permission_classes = [IsLMSAdminUser]
 
-    @extend_schema(operation_id="lms_admin_quiz_publish", tags=[TAG_LMS_ADMIN], request=None, responses={200: QUIZ_ADMIN_RESPONSE, 400: LMS_ERROR_RESPONSE, 404: LMS_ERROR_RESPONSE})
+    @extend_schema(
+        operation_id="lms_admin_quiz_publish",
+        tags=[TAG_LMS_ADMIN],
+        request=None,
+        responses={200: QUIZ_ADMIN_RESPONSE, 400: LMS_ERROR_RESPONSE, 404: LMS_ERROR_RESPONSE},
+    )
     def post(self, request: Request, course_id: int) -> SuccessResponse | ErrorResponse:
         """Publish quiz."""
         quiz = selectors.get_admin_quiz_by_course_id(course_id=course_id)
@@ -797,8 +1215,16 @@ class LMSAdminQuizPublishView(APIView):
             quiz = services.publish_quiz(quiz=quiz)
         except QuizValidationError as exc:
             return ErrorResponse(message=str(exc), status_code=status.HTTP_400_BAD_REQUEST)
-        log_action_async(user_id=request.user.pk, action=audit_actions.LMS_QUIZ_PUBLISHED, resource_type="lms_quiz", resource_id=str(quiz.pk), **extract_audit_metadata(request))
-        return SuccessResponse(data=QuizAdminSerializer(quiz).data, message="آزمون با موفقیت منتشر شد.")
+        log_action_async(
+            user_id=request.user.pk,
+            action=audit_actions.LMS_QUIZ_PUBLISHED,
+            resource_type="lms_quiz",
+            resource_id=str(quiz.pk),
+            **extract_audit_metadata(request),
+        )
+        return SuccessResponse(
+            data=QuizAdminSerializer(quiz).data, message="آزمون با موفقیت منتشر شد."
+        )
 
 
 class LMSAdminQuizQuestionCreateView(APIView):
@@ -806,7 +1232,12 @@ class LMSAdminQuizQuestionCreateView(APIView):
 
     permission_classes = [IsLMSAdminUser]
 
-    @extend_schema(operation_id="lms_admin_quiz_questions_create", tags=[TAG_LMS_ADMIN], request=QuizQuestionCreateSerializer, responses={201: QUIZ_QUESTION_RESPONSE, 404: LMS_ERROR_RESPONSE})
+    @extend_schema(
+        operation_id="lms_admin_quiz_questions_create",
+        tags=[TAG_LMS_ADMIN],
+        request=QuizQuestionCreateSerializer,
+        responses={201: QUIZ_QUESTION_RESPONSE, 404: LMS_ERROR_RESPONSE},
+    )
     def post(self, request: Request, course_id: int) -> CreatedResponse | ErrorResponse:
         """Create quiz question."""
         quiz = selectors.get_admin_quiz_by_course_id(course_id=course_id)
@@ -815,7 +1246,9 @@ class LMSAdminQuizQuestionCreateView(APIView):
         serializer = QuizQuestionCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         question = services.create_quiz_question(quiz=quiz, **serializer.validated_data)
-        return CreatedResponse(data=QuizQuestionAdminSerializer(question).data, message="سؤال آزمون ساخته شد.")
+        return CreatedResponse(
+            data=QuizQuestionAdminSerializer(question).data, message="سؤال آزمون ساخته شد."
+        )
 
 
 class LMSAdminQuizOptionCreateView(APIView):
@@ -823,16 +1256,25 @@ class LMSAdminQuizOptionCreateView(APIView):
 
     permission_classes = [IsLMSAdminUser]
 
-    @extend_schema(operation_id="lms_admin_quiz_options_create", tags=[TAG_LMS_ADMIN], request=QuizOptionCreateSerializer, responses={201: QUIZ_OPTION_RESPONSE, 404: LMS_ERROR_RESPONSE})
+    @extend_schema(
+        operation_id="lms_admin_quiz_options_create",
+        tags=[TAG_LMS_ADMIN],
+        request=QuizOptionCreateSerializer,
+        responses={201: QUIZ_OPTION_RESPONSE, 404: LMS_ERROR_RESPONSE},
+    )
     def post(self, request: Request, question_id: int) -> CreatedResponse | ErrorResponse:
         """Create quiz option."""
         question = selectors.get_admin_quiz_question_by_id(question_id=question_id)
         if question is None:
-            return ErrorResponse(message="سؤال آزمون یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+            return ErrorResponse(
+                message="سؤال آزمون یافت نشد.", status_code=status.HTTP_404_NOT_FOUND
+            )
         serializer = QuizOptionCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         option = services.create_quiz_option(question=question, **serializer.validated_data)
-        return CreatedResponse(data=QuizOptionAdminSerializer(option).data, message="گزینه آزمون ساخته شد.")
+        return CreatedResponse(
+            data=QuizOptionAdminSerializer(option).data, message="گزینه آزمون ساخته شد."
+        )
 
 
 class LMSAdminQuizUnlockView(APIView):
@@ -840,7 +1282,12 @@ class LMSAdminQuizUnlockView(APIView):
 
     permission_classes = [IsLMSAdminUser]
 
-    @extend_schema(operation_id="lms_admin_quiz_unlock", tags=[TAG_LMS_ADMIN], request=QuizUnlockCreateSerializer, responses={201: QUIZ_UNLOCK_RESPONSE, 404: LMS_ERROR_RESPONSE})
+    @extend_schema(
+        operation_id="lms_admin_quiz_unlock",
+        tags=[TAG_LMS_ADMIN],
+        request=QuizUnlockCreateSerializer,
+        responses={201: QUIZ_UNLOCK_RESPONSE, 404: LMS_ERROR_RESPONSE},
+    )
     def post(self, request: Request, course_id: int) -> CreatedResponse | ErrorResponse:
         """Grant extra quiz attempts to a user."""
         quiz = selectors.get_admin_quiz_by_course_id(course_id=course_id)
@@ -860,8 +1307,17 @@ class LMSAdminQuizUnlockView(APIView):
             extra_attempts=serializer.validated_data.get("extra_attempts", 1),
             valid_until=serializer.validated_data.get("valid_until"),
         )
-        log_action_async(user_id=request.user.pk, action=audit_actions.LMS_QUIZ_UNLOCKED, resource_type="lms_quiz_unlock", resource_id=str(unlock.pk), extra_data={"quiz_id": quiz.pk, "user_id": user.pk}, **extract_audit_metadata(request))
-        return CreatedResponse(data=QuizUnlockSerializer(unlock).data, message="آزمون برای کاربر بازگشایی شد.")
+        log_action_async(
+            user_id=request.user.pk,
+            action=audit_actions.LMS_QUIZ_UNLOCKED,
+            resource_type="lms_quiz_unlock",
+            resource_id=str(unlock.pk),
+            extra_data={"quiz_id": quiz.pk, "user_id": user.pk},
+            **extract_audit_metadata(request),
+        )
+        return CreatedResponse(
+            data=QuizUnlockSerializer(unlock).data, message="آزمون برای کاربر بازگشایی شد."
+        )
 
 
 class LMSUserCertificateListView(APIView):
@@ -869,14 +1325,20 @@ class LMSUserCertificateListView(APIView):
 
     permission_classes = [IsAuthenticated]
 
-    @extend_schema(operation_id="lms_user_certificates_list", tags=[TAG_LMS_USER], responses={200: CERTIFICATE_LIST_RESPONSE})
+    @extend_schema(
+        operation_id="lms_user_certificates_list",
+        tags=[TAG_LMS_USER],
+        responses={200: CERTIFICATE_LIST_RESPONSE},
+    )
     def get(self, request: Request) -> Response:
         """Return paginated user certificates."""
         queryset = selectors.get_user_certificates(user_id=request.user.pk)
         paginator = StandardPagination()
         page = paginator.paginate_queryset(queryset, request, view=self)
         serializer = CertificateSerializer(page, many=True, context={"request": request})
-        return paginator.get_paginated_response(serializer.data, message="لیست مدارک شما دریافت شد.")
+        return paginator.get_paginated_response(
+            serializer.data, message="لیست مدارک شما دریافت شد."
+        )
 
 
 class LMSUserCertificateDetailView(APIView):
@@ -884,7 +1346,11 @@ class LMSUserCertificateDetailView(APIView):
 
     permission_classes = [IsAuthenticated]
 
-    @extend_schema(operation_id="lms_user_certificates_retrieve", tags=[TAG_LMS_USER], responses={200: CERTIFICATE_RESPONSE, 404: LMS_ERROR_RESPONSE})
+    @extend_schema(
+        operation_id="lms_user_certificates_retrieve",
+        tags=[TAG_LMS_USER],
+        responses={200: CERTIFICATE_RESPONSE, 404: LMS_ERROR_RESPONSE},
+    )
     def get(self, request: Request, certificate_id: int) -> SuccessResponse | ErrorResponse:
         """Return one owned certificate."""
         certificate = selectors.get_user_certificate_by_id(
@@ -892,8 +1358,12 @@ class LMSUserCertificateDetailView(APIView):
             certificate_id=certificate_id,
         )
         if certificate is None:
-            return ErrorResponse(message="مدرکی با این شناسه یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
-        return SuccessResponse(data=CertificateSerializer(certificate, context={"request": request}).data)
+            return ErrorResponse(
+                message="مدرکی با این شناسه یافت نشد.", status_code=status.HTTP_404_NOT_FOUND
+            )
+        return SuccessResponse(
+            data=CertificateSerializer(certificate, context={"request": request}).data
+        )
 
 
 class LMSCertificateVerifyView(APIView):
@@ -901,12 +1371,20 @@ class LMSCertificateVerifyView(APIView):
 
     permission_classes = [AllowAny]
 
-    @extend_schema(operation_id="lms_public_certificates_verify", tags=[TAG_LMS_PUBLIC], responses={200: CERTIFICATE_VERIFY_RESPONSE, 404: LMS_ERROR_RESPONSE})
+    @extend_schema(
+        operation_id="lms_public_certificates_verify",
+        tags=[TAG_LMS_PUBLIC],
+        responses={200: CERTIFICATE_VERIFY_RESPONSE, 404: LMS_ERROR_RESPONSE},
+    )
     def get(self, request: Request, verification_slug: str) -> SuccessResponse | ErrorResponse:
         """Verify certificate validity publicly."""
-        certificate = selectors.get_certificate_by_verification_slug(verification_slug=verification_slug)
+        certificate = selectors.get_certificate_by_verification_slug(
+            verification_slug=verification_slug
+        )
         if certificate is None or certificate.status != "issued" or not certificate.is_active:
-            return ErrorResponse(message="مدرک معتبر یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+            return ErrorResponse(
+                message="مدرک معتبر یافت نشد.", status_code=status.HTTP_404_NOT_FOUND
+            )
         return SuccessResponse(
             data=CertificateVerifySerializer(certificate, context={"request": request}).data,
             message="اعتبار مدرک با موفقیت تأیید شد.",
@@ -918,7 +1396,12 @@ class LMSAdminCertificateRevokeView(APIView):
 
     permission_classes = [IsLMSAdminUser]
 
-    @extend_schema(operation_id="lms_admin_certificates_revoke", tags=[TAG_LMS_ADMIN], request=CertificateRevokeSerializer, responses={200: CERTIFICATE_RESPONSE, 400: LMS_ERROR_RESPONSE, 404: LMS_ERROR_RESPONSE})
+    @extend_schema(
+        operation_id="lms_admin_certificates_revoke",
+        tags=[TAG_LMS_ADMIN],
+        request=CertificateRevokeSerializer,
+        responses={200: CERTIFICATE_RESPONSE, 400: LMS_ERROR_RESPONSE, 404: LMS_ERROR_RESPONSE},
+    )
     def post(self, request: Request, certificate_id: int) -> SuccessResponse | ErrorResponse:
         """Revoke one certificate and derived skill."""
         certificate = selectors.get_admin_certificate_by_id(certificate_id=certificate_id)
@@ -939,7 +1422,10 @@ class LMSAdminCertificateRevokeView(APIView):
             extra_data={"course_id": certificate.course_id, "user_id": certificate.user_id},
             **extract_audit_metadata(request),
         )
-        return SuccessResponse(data=CertificateSerializer(certificate, context={"request": request}).data, message="مدرک با موفقیت باطل شد.")
+        return SuccessResponse(
+            data=CertificateSerializer(certificate, context={"request": request}).data,
+            message="مدرک با موفقیت باطل شد.",
+        )
 
 
 class LMSAdminCategoryListCreateView(APIView):
@@ -947,7 +1433,11 @@ class LMSAdminCategoryListCreateView(APIView):
 
     permission_classes = [IsLMSAdminUser]
 
-    @extend_schema(operation_id="lms_admin_categories_list", tags=[TAG_LMS_ADMIN], responses={200: CATEGORY_LIST_RESPONSE, 403: LMS_ERROR_RESPONSE})
+    @extend_schema(
+        operation_id="lms_admin_categories_list",
+        tags=[TAG_LMS_ADMIN],
+        responses={200: CATEGORY_LIST_RESPONSE, 403: LMS_ERROR_RESPONSE},
+    )
     def get(self, request: Request) -> SuccessResponse:
         """Return all categories for admin."""
         queryset = selectors.get_admin_categories()
@@ -956,7 +1446,12 @@ class LMSAdminCategoryListCreateView(APIView):
             queryset = filterset.qs
         return SuccessResponse(data=LMSCategorySerializer(queryset, many=True).data)
 
-    @extend_schema(operation_id="lms_admin_categories_create", tags=[TAG_LMS_ADMIN], request=LMSCategoryCreateUpdateSerializer, responses={201: CATEGORY_RESPONSE, 400: LMS_ERROR_RESPONSE, 403: LMS_ERROR_RESPONSE})
+    @extend_schema(
+        operation_id="lms_admin_categories_create",
+        tags=[TAG_LMS_ADMIN],
+        request=LMSCategoryCreateUpdateSerializer,
+        responses={201: CATEGORY_RESPONSE, 400: LMS_ERROR_RESPONSE, 403: LMS_ERROR_RESPONSE},
+    )
     def post(self, request: Request) -> CreatedResponse:
         """Create a category."""
         serializer = LMSCategoryCreateUpdateSerializer(data=request.data)
@@ -969,7 +1464,9 @@ class LMSAdminCategoryListCreateView(APIView):
             resource_id=str(category.pk),
             **extract_audit_metadata(request),
         )
-        return CreatedResponse(data=LMSCategorySerializer(category).data, message="دسته‌بندی با موفقیت ساخته شد.")
+        return CreatedResponse(
+            data=LMSCategorySerializer(category).data, message="دسته‌بندی با موفقیت ساخته شد."
+        )
 
 
 class LMSAdminCategoryDetailView(APIView):
@@ -977,7 +1474,11 @@ class LMSAdminCategoryDetailView(APIView):
 
     permission_classes = [IsLMSAdminUser]
 
-    @extend_schema(operation_id="lms_admin_categories_retrieve", tags=[TAG_LMS_ADMIN], responses={200: CATEGORY_RESPONSE, 404: LMS_ERROR_RESPONSE})
+    @extend_schema(
+        operation_id="lms_admin_categories_retrieve",
+        tags=[TAG_LMS_ADMIN],
+        responses={200: CATEGORY_RESPONSE, 404: LMS_ERROR_RESPONSE},
+    )
     def get(self, request: Request, category_id: int) -> SuccessResponse | ErrorResponse:
         """Return one category for admin."""
         category = selectors.get_admin_category_by_id(category_id)
@@ -985,7 +1486,12 @@ class LMSAdminCategoryDetailView(APIView):
             return ErrorResponse(message="دسته‌بندی یافت نشد.", status_code=404)
         return SuccessResponse(data=LMSCategorySerializer(category).data)
 
-    @extend_schema(operation_id="lms_admin_categories_update", tags=[TAG_LMS_ADMIN], request=LMSCategoryCreateUpdateSerializer, responses={200: CATEGORY_RESPONSE, 400: LMS_ERROR_RESPONSE, 404: LMS_ERROR_RESPONSE})
+    @extend_schema(
+        operation_id="lms_admin_categories_update",
+        tags=[TAG_LMS_ADMIN],
+        request=LMSCategoryCreateUpdateSerializer,
+        responses={200: CATEGORY_RESPONSE, 400: LMS_ERROR_RESPONSE, 404: LMS_ERROR_RESPONSE},
+    )
     def patch(self, request: Request, category_id: int) -> SuccessResponse | ErrorResponse:
         """Update category."""
         category = selectors.get_admin_category_by_id(category_id)
@@ -994,9 +1500,18 @@ class LMSAdminCategoryDetailView(APIView):
         serializer = LMSCategoryCreateUpdateSerializer(data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         category = services.update_category(category=category, **serializer.validated_data)
-        return SuccessResponse(data=LMSCategorySerializer(category).data, message="دسته‌بندی بروزرسانی شد.")
+        return SuccessResponse(
+            data=LMSCategorySerializer(category).data, message="دسته‌بندی بروزرسانی شد."
+        )
 
-    @extend_schema(operation_id="lms_admin_categories_delete", tags=[TAG_LMS_ADMIN], responses={200: build_success_response_serializer(name="LMSCategoryDeletedResponse"), 404: LMS_ERROR_RESPONSE})
+    @extend_schema(
+        operation_id="lms_admin_categories_delete",
+        tags=[TAG_LMS_ADMIN],
+        responses={
+            200: build_success_response_serializer(name="LMSCategoryDeletedResponse"),
+            404: LMS_ERROR_RESPONSE,
+        },
+    )
     def delete(self, request: Request, category_id: int) -> DeletedResponse | ErrorResponse:
         """Soft-delete category."""
         category = selectors.get_admin_category_by_id(category_id)
@@ -1011,7 +1526,11 @@ class LMSAdminCourseListCreateView(APIView):
 
     permission_classes = [IsLMSAdminUser]
 
-    @extend_schema(operation_id="lms_admin_courses_list", tags=[TAG_LMS_ADMIN], responses={200: COURSE_LIST_RESPONSE})
+    @extend_schema(
+        operation_id="lms_admin_courses_list",
+        tags=[TAG_LMS_ADMIN],
+        responses={200: COURSE_LIST_RESPONSE},
+    )
     def get(self, request: Request) -> Response:
         """Return admin course list."""
         queryset = selectors.get_admin_courses()
@@ -1023,7 +1542,12 @@ class LMSAdminCourseListCreateView(APIView):
         serializer = CourseSummarySerializer(page, many=True)
         return paginator.get_paginated_response(serializer.data)
 
-    @extend_schema(operation_id="lms_admin_courses_create", tags=[TAG_LMS_ADMIN], request=CourseCreateUpdateSerializer, responses={201: COURSE_RESPONSE, 400: LMS_ERROR_RESPONSE})
+    @extend_schema(
+        operation_id="lms_admin_courses_create",
+        tags=[TAG_LMS_ADMIN],
+        request=CourseCreateUpdateSerializer,
+        responses={201: COURSE_RESPONSE, 400: LMS_ERROR_RESPONSE},
+    )
     def post(self, request: Request) -> CreatedResponse:
         """Create draft course."""
         serializer = CourseCreateUpdateSerializer(data=request.data)
@@ -1036,7 +1560,9 @@ class LMSAdminCourseListCreateView(APIView):
             resource_id=str(course.pk),
             **extract_audit_metadata(request),
         )
-        return CreatedResponse(data=CourseDetailSerializer(course).data, message="کلاس با موفقیت ساخته شد.")
+        return CreatedResponse(
+            data=CourseDetailSerializer(course).data, message="کلاس با موفقیت ساخته شد."
+        )
 
 
 class LMSAdminCourseDetailView(APIView):
@@ -1044,7 +1570,11 @@ class LMSAdminCourseDetailView(APIView):
 
     permission_classes = [IsLMSAdminUser]
 
-    @extend_schema(operation_id="lms_admin_courses_retrieve", tags=[TAG_LMS_ADMIN], responses={200: COURSE_RESPONSE, 404: LMS_ERROR_RESPONSE})
+    @extend_schema(
+        operation_id="lms_admin_courses_retrieve",
+        tags=[TAG_LMS_ADMIN],
+        responses={200: COURSE_RESPONSE, 404: LMS_ERROR_RESPONSE},
+    )
     def get(self, request: Request, course_id: int) -> SuccessResponse | ErrorResponse:
         """Return one course for admin."""
         course = selectors.get_admin_course_by_id(course_id)
@@ -1052,7 +1582,12 @@ class LMSAdminCourseDetailView(APIView):
             return ErrorResponse(message="کلاس یافت نشد.", status_code=404)
         return SuccessResponse(data=CourseDetailSerializer(course).data)
 
-    @extend_schema(operation_id="lms_admin_courses_update", tags=[TAG_LMS_ADMIN], request=CourseCreateUpdateSerializer, responses={200: COURSE_RESPONSE, 400: LMS_ERROR_RESPONSE, 404: LMS_ERROR_RESPONSE})
+    @extend_schema(
+        operation_id="lms_admin_courses_update",
+        tags=[TAG_LMS_ADMIN],
+        request=CourseCreateUpdateSerializer,
+        responses={200: COURSE_RESPONSE, 400: LMS_ERROR_RESPONSE, 404: LMS_ERROR_RESPONSE},
+    )
     def patch(self, request: Request, course_id: int) -> SuccessResponse | ErrorResponse:
         """Update course."""
         course = selectors.get_admin_course_by_id(course_id)
@@ -1061,9 +1596,18 @@ class LMSAdminCourseDetailView(APIView):
         serializer = CourseCreateUpdateSerializer(data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         course = services.update_course(course=course, **serializer.validated_data)
-        return SuccessResponse(data=CourseDetailSerializer(course).data, message="کلاس بروزرسانی شد.")
+        return SuccessResponse(
+            data=CourseDetailSerializer(course).data, message="کلاس بروزرسانی شد."
+        )
 
-    @extend_schema(operation_id="lms_admin_courses_delete", tags=[TAG_LMS_ADMIN], responses={200: build_success_response_serializer(name="LMSCourseDeletedResponse"), 404: LMS_ERROR_RESPONSE})
+    @extend_schema(
+        operation_id="lms_admin_courses_delete",
+        tags=[TAG_LMS_ADMIN],
+        responses={
+            200: build_success_response_serializer(name="LMSCourseDeletedResponse"),
+            404: LMS_ERROR_RESPONSE,
+        },
+    )
     def delete(self, request: Request, course_id: int) -> DeletedResponse | ErrorResponse:
         """Soft-delete course."""
         course = selectors.get_admin_course_by_id(course_id)
@@ -1078,14 +1622,25 @@ class LMSAdminCoursePublishView(APIView):
 
     permission_classes = [IsLMSAdminUser]
 
-    @extend_schema(operation_id="lms_admin_courses_publish", tags=[TAG_LMS_ADMIN], request=None, responses={200: COURSE_RESPONSE, 404: LMS_ERROR_RESPONSE})
+    @extend_schema(
+        operation_id="lms_admin_courses_publish",
+        tags=[TAG_LMS_ADMIN],
+        request=None,
+        responses={200: COURSE_RESPONSE, 404: LMS_ERROR_RESPONSE},
+    )
     def post(self, request: Request, course_id: int) -> SuccessResponse | ErrorResponse:
         """Publish course."""
         course = selectors.get_admin_course_by_id(course_id)
         if course is None:
             return ErrorResponse(message="کلاس یافت نشد.", status_code=404)
         course = services.publish_course(course=course)
-        log_action_async(user_id=request.user.pk, action=audit_actions.LMS_COURSE_PUBLISHED, resource_type="lms_course", resource_id=str(course.pk), **extract_audit_metadata(request))
+        log_action_async(
+            user_id=request.user.pk,
+            action=audit_actions.LMS_COURSE_PUBLISHED,
+            resource_type="lms_course",
+            resource_id=str(course.pk),
+            **extract_audit_metadata(request),
+        )
         return SuccessResponse(data=CourseDetailSerializer(course).data, message="کلاس منتشر شد.")
 
 
@@ -1094,14 +1649,25 @@ class LMSAdminCourseArchiveView(APIView):
 
     permission_classes = [IsLMSAdminUser]
 
-    @extend_schema(operation_id="lms_admin_courses_archive", tags=[TAG_LMS_ADMIN], request=None, responses={200: COURSE_RESPONSE, 404: LMS_ERROR_RESPONSE})
+    @extend_schema(
+        operation_id="lms_admin_courses_archive",
+        tags=[TAG_LMS_ADMIN],
+        request=None,
+        responses={200: COURSE_RESPONSE, 404: LMS_ERROR_RESPONSE},
+    )
     def post(self, request: Request, course_id: int) -> SuccessResponse | ErrorResponse:
         """Archive course."""
         course = selectors.get_admin_course_by_id(course_id)
         if course is None:
             return ErrorResponse(message="کلاس یافت نشد.", status_code=404)
         course = services.archive_course(course=course)
-        log_action_async(user_id=request.user.pk, action=audit_actions.LMS_COURSE_ARCHIVED, resource_type="lms_course", resource_id=str(course.pk), **extract_audit_metadata(request))
+        log_action_async(
+            user_id=request.user.pk,
+            action=audit_actions.LMS_COURSE_ARCHIVED,
+            resource_type="lms_course",
+            resource_id=str(course.pk),
+            **extract_audit_metadata(request),
+        )
         return SuccessResponse(data=CourseDetailSerializer(course).data, message="کلاس آرشیو شد.")
 
 
@@ -1110,7 +1676,11 @@ class LMSAdminLessonListCreateView(APIView):
 
     permission_classes = [IsLMSAdminUser]
 
-    @extend_schema(operation_id="lms_admin_lessons_list", tags=[TAG_LMS_ADMIN], responses={200: LESSON_LIST_RESPONSE, 404: LMS_ERROR_RESPONSE})
+    @extend_schema(
+        operation_id="lms_admin_lessons_list",
+        tags=[TAG_LMS_ADMIN],
+        responses={200: LESSON_LIST_RESPONSE, 404: LMS_ERROR_RESPONSE},
+    )
     def get(self, request: Request, course_id: int) -> SuccessResponse | ErrorResponse:
         """Return all lessons for admin."""
         course = selectors.get_admin_course_by_id(course_id)
@@ -1119,7 +1689,12 @@ class LMSAdminLessonListCreateView(APIView):
         lessons = selectors.get_course_lessons(course=course, public_only=False)
         return SuccessResponse(data=LessonSummarySerializer(lessons, many=True).data)
 
-    @extend_schema(operation_id="lms_admin_lessons_create", tags=[TAG_LMS_ADMIN], request=LessonCreateUpdateSerializer, responses={201: LESSON_RESPONSE, 400: LMS_ERROR_RESPONSE, 404: LMS_ERROR_RESPONSE})
+    @extend_schema(
+        operation_id="lms_admin_lessons_create",
+        tags=[TAG_LMS_ADMIN],
+        request=LessonCreateUpdateSerializer,
+        responses={201: LESSON_RESPONSE, 400: LMS_ERROR_RESPONSE, 404: LMS_ERROR_RESPONSE},
+    )
     def post(self, request: Request, course_id: int) -> CreatedResponse | ErrorResponse:
         """Create lesson."""
         course = selectors.get_admin_course_by_id(course_id)
@@ -1128,7 +1703,14 @@ class LMSAdminLessonListCreateView(APIView):
         serializer = LessonCreateUpdateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         lesson = services.create_lesson(course=course, **serializer.validated_data)
-        log_action_async(user_id=request.user.pk, action=audit_actions.LMS_LESSON_CREATED, resource_type="lms_lesson", resource_id=str(lesson.pk), extra_data={"course_id": course.pk}, **extract_audit_metadata(request))
+        log_action_async(
+            user_id=request.user.pk,
+            action=audit_actions.LMS_LESSON_CREATED,
+            resource_type="lms_lesson",
+            resource_id=str(lesson.pk),
+            extra_data={"course_id": course.pk},
+            **extract_audit_metadata(request),
+        )
         return CreatedResponse(data=LessonSummarySerializer(lesson).data, message="جلسه ساخته شد.")
 
 
@@ -1137,7 +1719,12 @@ class LMSAdminLessonDetailView(APIView):
 
     permission_classes = [IsLMSAdminUser]
 
-    @extend_schema(operation_id="lms_admin_lessons_update", tags=[TAG_LMS_ADMIN], request=LessonCreateUpdateSerializer, responses={200: LESSON_RESPONSE, 400: LMS_ERROR_RESPONSE, 404: LMS_ERROR_RESPONSE})
+    @extend_schema(
+        operation_id="lms_admin_lessons_update",
+        tags=[TAG_LMS_ADMIN],
+        request=LessonCreateUpdateSerializer,
+        responses={200: LESSON_RESPONSE, 400: LMS_ERROR_RESPONSE, 404: LMS_ERROR_RESPONSE},
+    )
     def patch(self, request: Request, lesson_id: int) -> SuccessResponse | ErrorResponse:
         """Update lesson."""
         lesson = selectors.get_admin_lesson_by_id(lesson_id=lesson_id)
@@ -1146,9 +1733,18 @@ class LMSAdminLessonDetailView(APIView):
         serializer = LessonCreateUpdateSerializer(data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         lesson = services.update_lesson(lesson=lesson, **serializer.validated_data)
-        return SuccessResponse(data=LessonSummarySerializer(lesson).data, message="جلسه بروزرسانی شد.")
+        return SuccessResponse(
+            data=LessonSummarySerializer(lesson).data, message="جلسه بروزرسانی شد."
+        )
 
-    @extend_schema(operation_id="lms_admin_lessons_delete", tags=[TAG_LMS_ADMIN], responses={200: build_success_response_serializer(name="LMSLessonDeletedResponse"), 404: LMS_ERROR_RESPONSE})
+    @extend_schema(
+        operation_id="lms_admin_lessons_delete",
+        tags=[TAG_LMS_ADMIN],
+        responses={
+            200: build_success_response_serializer(name="LMSLessonDeletedResponse"),
+            404: LMS_ERROR_RESPONSE,
+        },
+    )
     def delete(self, request: Request, lesson_id: int) -> DeletedResponse | ErrorResponse:
         """Soft-delete lesson."""
         lesson = selectors.get_admin_lesson_by_id(lesson_id=lesson_id)
@@ -1168,7 +1764,11 @@ class LMSAdminLessonVideoProcessingView(APIView):
         operation_id="lms_admin_lessons_video_processing_create",
         tags=[TAG_LMS_ADMIN],
         request=None,
-        responses={201: VIDEO_PROCESSING_JOB_RESPONSE, 400: LMS_ERROR_RESPONSE, 404: LMS_ERROR_RESPONSE},
+        responses={
+            201: VIDEO_PROCESSING_JOB_RESPONSE,
+            400: LMS_ERROR_RESPONSE,
+            404: LMS_ERROR_RESPONSE,
+        },
     )
     def post(self, request: Request, lesson_id: int) -> CreatedResponse | ErrorResponse:
         """Queue video processing for an uploaded lesson video."""
@@ -1187,10 +1787,17 @@ class LMSAdminLessonVideoProcessingView(APIView):
             action=audit_actions.LMS_VIDEO_PROCESSING_REQUESTED,
             resource_type="lms_lesson_video_processing_job",
             resource_id=str(job.pk),
-            extra_data={"lesson_id": lesson.pk, "course_id": lesson.course_id, "status": job.status},
+            extra_data={
+                "lesson_id": lesson.pk,
+                "course_id": lesson.course_id,
+                "status": job.status,
+            },
             **extract_audit_metadata(request),
         )
-        return CreatedResponse(data=LessonVideoProcessingJobSerializer(job).data, message="پردازش ویدئوی جلسه در صف قرار گرفت.")
+        return CreatedResponse(
+            data=LessonVideoProcessingJobSerializer(job).data,
+            message="پردازش ویدئوی جلسه در صف قرار گرفت.",
+        )
 
 
 class LMSAdminLessonVideoProcessingStatusView(APIView):
@@ -1211,8 +1818,14 @@ class LMSAdminLessonVideoProcessingStatusView(APIView):
             return ErrorResponse(message="جلسه یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
         job = lesson.video_processing_jobs.order_by("-created_at").first()
         if job is None:
-            return ErrorResponse(message="برای این جلسه job پردازش ویدئو ثبت نشده است.", status_code=status.HTTP_404_NOT_FOUND)
-        return SuccessResponse(data=LessonVideoProcessingJobSerializer(job).data, message="وضعیت پردازش ویدئو دریافت شد.")
+            return ErrorResponse(
+                message="برای این جلسه job پردازش ویدئو ثبت نشده است.",
+                status_code=status.HTTP_404_NOT_FOUND,
+            )
+        return SuccessResponse(
+            data=LessonVideoProcessingJobSerializer(job).data,
+            message="وضعیت پردازش ویدئو دریافت شد.",
+        )
 
 
 class LMSAdminLearningActivityStatementListView(APIView):
@@ -1237,7 +1850,9 @@ class LMSAdminLearningActivityStatementListView(APIView):
         paginator = StandardPagination()
         page = paginator.paginate_queryset(queryset, request, view=self)
         serializer = LearningActivityStatementSerializer(page, many=True)
-        return paginator.get_paginated_response(serializer.data, message="Statementهای یادگیری با موفقیت دریافت شد.")
+        return paginator.get_paginated_response(
+            serializer.data, message="Statementهای یادگیری با موفقیت دریافت شد."
+        )
 
 
 class LMSAdminCourseReportView(APIView):
@@ -1245,7 +1860,11 @@ class LMSAdminCourseReportView(APIView):
 
     permission_classes = [IsLMSAdminUser]
 
-    @extend_schema(operation_id="lms_admin_courses_report", tags=[TAG_LMS_ADMIN], responses={200: COURSE_REPORT_RESPONSE, 404: LMS_ERROR_RESPONSE})
+    @extend_schema(
+        operation_id="lms_admin_courses_report",
+        tags=[TAG_LMS_ADMIN],
+        responses={200: COURSE_REPORT_RESPONSE, 404: LMS_ERROR_RESPONSE},
+    )
     def get(self, request: Request, course_id: int) -> SuccessResponse | ErrorResponse:
         """Return course report rows and summary."""
         course = selectors.get_admin_course_by_id(course_id)
@@ -1261,7 +1880,9 @@ class LMSAdminCourseReportView(APIView):
             "active_count": enrollments.filter(status="active").count(),
         }
         return SuccessResponse(
-            data=CourseReportSerializer({"course": course, "summary": summary, "enrollments": enrollments}).data,
+            data=CourseReportSerializer(
+                {"course": course, "summary": summary, "enrollments": enrollments}
+            ).data,
             message="گزارش کلاس با موفقیت دریافت شد.",
         )
 
@@ -1271,13 +1892,20 @@ class LMSAdminCourseAnalyticsView(APIView):
 
     permission_classes = [IsLMSAdminUser]
 
-    @extend_schema(operation_id="lms_admin_courses_analytics", tags=[TAG_LMS_ADMIN], responses={200: COURSE_ANALYTICS_RESPONSE, 404: LMS_ERROR_RESPONSE})
+    @extend_schema(
+        operation_id="lms_admin_courses_analytics",
+        tags=[TAG_LMS_ADMIN],
+        responses={200: COURSE_ANALYTICS_RESPONSE, 404: LMS_ERROR_RESPONSE},
+    )
     def get(self, request: Request, course_id: int) -> SuccessResponse | ErrorResponse:
         """Return aggregate analytics for a course."""
         course = selectors.get_admin_course_by_id(course_id)
         if course is None:
             return ErrorResponse(message="کلاس یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
-        return SuccessResponse(data=selectors.get_course_analytics(course=course), message="تحلیل کلاس با موفقیت دریافت شد.")
+        return SuccessResponse(
+            data=selectors.get_course_analytics(course=course),
+            message="تحلیل کلاس با موفقیت دریافت شد.",
+        )
 
 
 class LMSAdminCourseLeaderboardView(APIView):
@@ -1285,13 +1913,20 @@ class LMSAdminCourseLeaderboardView(APIView):
 
     permission_classes = [IsLMSAdminUser]
 
-    @extend_schema(operation_id="lms_admin_courses_leaderboard", tags=[TAG_LMS_ADMIN], responses={200: COURSE_LEADERBOARD_RESPONSE, 404: LMS_ERROR_RESPONSE})
+    @extend_schema(
+        operation_id="lms_admin_courses_leaderboard",
+        tags=[TAG_LMS_ADMIN],
+        responses={200: COURSE_LEADERBOARD_RESPONSE, 404: LMS_ERROR_RESPONSE},
+    )
     def get(self, request: Request, course_id: int) -> SuccessResponse | ErrorResponse:
         """Return top learners ranked by score/progress/badge."""
         course = selectors.get_admin_course_by_id(course_id)
         if course is None:
             return ErrorResponse(message="کلاس یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
-        return SuccessResponse(data=selectors.get_course_leaderboard(course=course), message="رتبه‌بندی کلاس با موفقیت دریافت شد.")
+        return SuccessResponse(
+            data=selectors.get_course_leaderboard(course=course),
+            message="رتبه‌بندی کلاس با موفقیت دریافت شد.",
+        )
 
 
 class LMSAdminCourseExportView(APIView):
@@ -1299,7 +1934,11 @@ class LMSAdminCourseExportView(APIView):
 
     permission_classes = [IsLMSAdminUser]
 
-    @extend_schema(operation_id="lms_admin_courses_export", tags=[TAG_LMS_ADMIN], responses={200: None, 404: LMS_ERROR_RESPONSE})
+    @extend_schema(
+        operation_id="lms_admin_courses_export",
+        tags=[TAG_LMS_ADMIN],
+        responses={200: None, 404: LMS_ERROR_RESPONSE},
+    )
     def get(self, request: Request, course_id: int) -> HttpResponse | ErrorResponse:
         """Export course enrollment report as Excel."""
         course = selectors.get_admin_course_by_id(course_id)

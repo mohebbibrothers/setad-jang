@@ -41,6 +41,7 @@ class HiddenFromAdminIndexMixin:
 # Sponsor
 # ---------------------------------------------------------------------------
 
+
 @admin.register(Sponsor)
 class SponsorAdmin(admin.ModelAdmin):
     """ادمین مددکاران."""
@@ -56,6 +57,7 @@ class SponsorAdmin(admin.ModelAdmin):
 # CampaignImage inline
 # ---------------------------------------------------------------------------
 
+
 class CampaignImageInline(admin.TabularInline):
     """نمایش inline تصاویر گالری در صفحه ویرایش Campaign."""
 
@@ -68,6 +70,7 @@ class CampaignImageInline(admin.TabularInline):
 # ---------------------------------------------------------------------------
 # Campaign
 # ---------------------------------------------------------------------------
+
 
 @admin.register(Campaign)
 class CampaignAdmin(admin.ModelAdmin):
@@ -101,34 +104,52 @@ class CampaignAdmin(admin.ModelAdmin):
     ordering = ("-created_at",)
 
     fieldsets = (
-        ("اطلاعات اصلی", {
-            "fields": ("sponsor", "title", "slug", "description", "cover_image"),
-        }),
-        ("مالی", {
-            "fields": ("total_amount", "total_shares", "share_price"),
-        }),
-        ("وضعیت و نمایش", {
-            "fields": ("status", "is_visible", "is_active"),
-        }),
-        ("مهلت زمانی", {
-            "fields": ("has_deadline", "deadline"),
-        }),
-        ("شمارنده‌ها (خودکار)", {
-            "fields": (
-                "purchased_shares",
-                "purchased_amount",
-                "participant_count",
-            ),
-        }),
-        ("Timeline", {
-            "fields": (
-                "published_at",
-                "completed_at",
-                "closed_at",
-                "created_at",
-                "updated_at",
-            ),
-        }),
+        (
+            "اطلاعات اصلی",
+            {
+                "fields": ("sponsor", "title", "slug", "description", "cover_image"),
+            },
+        ),
+        (
+            "مالی",
+            {
+                "fields": ("total_amount", "total_shares", "share_price"),
+            },
+        ),
+        (
+            "وضعیت و نمایش",
+            {
+                "fields": ("status", "is_visible", "is_active"),
+            },
+        ),
+        (
+            "مهلت زمانی",
+            {
+                "fields": ("has_deadline", "deadline"),
+            },
+        ),
+        (
+            "شمارنده‌ها (خودکار)",
+            {
+                "fields": (
+                    "purchased_shares",
+                    "purchased_amount",
+                    "participant_count",
+                ),
+            },
+        ),
+        (
+            "Timeline",
+            {
+                "fields": (
+                    "published_at",
+                    "completed_at",
+                    "closed_at",
+                    "created_at",
+                    "updated_at",
+                ),
+            },
+        ),
     )
 
     @admin.display(description="پیشرفت")
@@ -147,6 +168,7 @@ class CampaignAdmin(admin.ModelAdmin):
 # CampaignImage
 # ---------------------------------------------------------------------------
 
+
 @admin.register(CampaignImage)
 class CampaignImageAdmin(HiddenFromAdminIndexMixin, admin.ModelAdmin):
     """ادمین مستقل تصاویر گالری."""
@@ -161,6 +183,7 @@ class CampaignImageAdmin(HiddenFromAdminIndexMixin, admin.ModelAdmin):
 # ---------------------------------------------------------------------------
 # Participation
 # ---------------------------------------------------------------------------
+
 
 @admin.register(Participation)
 class ParticipationAdmin(admin.ModelAdmin):
@@ -212,6 +235,7 @@ class ParticipationAdmin(admin.ModelAdmin):
 # PaymentEvent inline
 # ---------------------------------------------------------------------------
 
+
 class PaymentEventInline(admin.TabularInline):
     """Read-only payment event ledger embedded in the Payment workspace."""
 
@@ -247,6 +271,7 @@ class PaymentEventInline(admin.TabularInline):
 # ---------------------------------------------------------------------------
 # Payment
 # ---------------------------------------------------------------------------
+
 
 @admin.register(Payment)
 class PaymentAdmin(admin.ModelAdmin):
@@ -300,6 +325,7 @@ class PaymentAdmin(admin.ModelAdmin):
 # ---------------------------------------------------------------------------
 # PaymentEvent
 # ---------------------------------------------------------------------------
+
 
 @admin.register(PaymentEvent)
 class PaymentEventAdmin(HiddenFromAdminIndexMixin, admin.ModelAdmin):
@@ -384,7 +410,14 @@ class PaymentReconciliationItemInline(admin.TabularInline):
 class PaymentReconciliationBatchAdmin(admin.ModelAdmin):
     """Admin inspection for payment reconciliation batches."""
 
-    list_display = ("provider_name", "status", "total_rows", "matched_count", "mismatch_count", "created_at")
+    list_display = (
+        "provider_name",
+        "status",
+        "total_rows",
+        "matched_count",
+        "mismatch_count",
+        "created_at",
+    )
     list_filter = ("provider_name", "status")
     search_fields = ("provider_name", "source_name")
     readonly_fields = [field.name for field in PaymentReconciliationBatch._meta.fields]
@@ -396,7 +429,15 @@ class PaymentReconciliationBatchAdmin(admin.ModelAdmin):
 class PaymentReconciliationItemAdmin(HiddenFromAdminIndexMixin, admin.ModelAdmin):
     """Admin inspection for payment reconciliation items."""
 
-    list_display = ("batch", "payment", "authority", "provider_ref_id", "provider_amount", "internal_amount", "status")
+    list_display = (
+        "batch",
+        "payment",
+        "authority",
+        "provider_ref_id",
+        "provider_amount",
+        "internal_amount",
+        "status",
+    )
     list_filter = ("status", "batch__provider_name")
     search_fields = ("authority", "provider_ref_id", "payment__authority", "payment__ref_id")
     raw_id_fields = ("batch", "payment")
@@ -407,11 +448,21 @@ class PaymentReconciliationItemAdmin(HiddenFromAdminIndexMixin, admin.ModelAdmin
 # Refund / financial adjustment controls
 # ---------------------------------------------------------------------------
 
+
 @admin.register(PaymentRefund)
 class PaymentRefundAdmin(admin.ModelAdmin):
     """Read-oriented admin for refund workflow evidence."""
 
-    list_display = ("id", "payment", "amount", "reason", "status", "requested_by", "reviewed_by", "created_at")
+    list_display = (
+        "id",
+        "payment",
+        "amount",
+        "reason",
+        "status",
+        "requested_by",
+        "reviewed_by",
+        "created_at",
+    )
     list_filter = ("status", "reason")
     search_fields = ("payment__authority", "payment__ref_id", "provider_ref_id")
     readonly_fields = (
@@ -449,7 +500,16 @@ class PaymentRefundAdmin(admin.ModelAdmin):
 class CampaignFinancialAdjustmentAdmin(admin.ModelAdmin):
     """Read-oriented admin for financial adjustment workflow evidence."""
 
-    list_display = ("id", "campaign", "adjustment_type", "amount", "status", "requested_by", "reviewed_by", "created_at")
+    list_display = (
+        "id",
+        "campaign",
+        "adjustment_type",
+        "amount",
+        "status",
+        "requested_by",
+        "reviewed_by",
+        "created_at",
+    )
     list_filter = ("status", "adjustment_type")
     search_fields = ("campaign__title", "payment__authority", "reason")
     readonly_fields = (
@@ -487,7 +547,16 @@ class CampaignFinancialAdjustmentAdmin(admin.ModelAdmin):
 class MadadkarRiskSignalAdmin(admin.ModelAdmin):
     """Read-oriented admin for Madadkar risk signals."""
 
-    list_display = ("id", "signal_type", "severity", "status", "user", "campaign", "ip_address", "created_at")
+    list_display = (
+        "id",
+        "signal_type",
+        "severity",
+        "status",
+        "user",
+        "campaign",
+        "ip_address",
+        "created_at",
+    )
     list_filter = ("signal_type", "severity", "status")
     search_fields = ("user__email", "campaign__title", "payment__authority", "ip_address")
     readonly_fields = (
@@ -566,9 +635,24 @@ class DonationReceiptAdmin(admin.ModelAdmin):
 class CampaignDisbursementAdmin(admin.ModelAdmin):
     """Read-oriented admin for campaign disbursement workflow evidence."""
 
-    list_display = ("id", "campaign", "amount", "recipient_name", "status", "requested_by", "reviewed_by", "paid_by", "created_at")
+    list_display = (
+        "id",
+        "campaign",
+        "amount",
+        "recipient_name",
+        "status",
+        "requested_by",
+        "reviewed_by",
+        "paid_by",
+        "created_at",
+    )
     list_filter = ("status", "campaign")
-    search_fields = ("campaign__title", "recipient_name", "recipient_identifier", "bank_tracking_reference")
+    search_fields = (
+        "campaign__title",
+        "recipient_name",
+        "recipient_identifier",
+        "bank_tracking_reference",
+    )
     readonly_fields = [field.name for field in CampaignDisbursement._meta.fields]
     ordering = ("-created_at",)
 

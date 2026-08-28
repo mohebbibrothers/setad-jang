@@ -10,7 +10,9 @@ from apps.core.responses import SuccessResponse
 from apps.core.schemas import build_success_response_serializer
 
 TAG_COMMAND_CENTER = "مرکز فرماندهی مدیریت"
-COMMAND_CENTER_RESPONSE = build_success_response_serializer(name="CommandCenterSummaryResponse", data_serializer=CommandCenterSummarySerializer)
+COMMAND_CENTER_RESPONSE = build_success_response_serializer(
+    name="CommandCenterSummaryResponse", data_serializer=CommandCenterSummarySerializer
+)
 
 
 class CommandCenterSummaryView(APIView):
@@ -19,7 +21,13 @@ class CommandCenterSummaryView(APIView):
     permission_classes = [IsCommandCenterAdminUser]
     serializer_class = CommandCenterSummarySerializer
 
-    @extend_schema(operation_id="admin_command_center_summary", tags=[TAG_COMMAND_CENTER], responses={200: COMMAND_CENTER_RESPONSE})
+    @extend_schema(
+        operation_id="admin_command_center_summary",
+        tags=[TAG_COMMAND_CENTER],
+        responses={200: COMMAND_CENTER_RESPONSE},
+    )
     def get(self, request) -> SuccessResponse:
         """Return cross-app operational summary."""
-        return SuccessResponse(data=get_command_center_summary(), message="خلاصه مرکز فرماندهی دریافت شد.")
+        return SuccessResponse(
+            data=get_command_center_summary(), message="خلاصه مرکز فرماندهی دریافت شد."
+        )

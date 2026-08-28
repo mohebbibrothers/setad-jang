@@ -156,9 +156,16 @@ _TERMINAL_STATUSES = {TicketStatus.CLOSED, TicketStatus.ARCHIVED, TicketStatus.S
 
 
 @transaction.atomic
-def create_department(*, title: str, description: str = "", default_assignee: Any | None = None, order: int = 0) -> SupportDepartment:
+def create_department(
+    *, title: str, description: str = "", default_assignee: Any | None = None, order: int = 0
+) -> SupportDepartment:
     """Create an admin-managed support department."""
-    return SupportDepartment.objects.create(title=title.strip(), description=description.strip(), default_assignee=default_assignee, order=order)
+    return SupportDepartment.objects.create(
+        title=title.strip(),
+        description=description.strip(),
+        default_assignee=default_assignee,
+        order=order,
+    )
 
 
 @transaction.atomic
@@ -191,9 +198,23 @@ def deactivate_department(*, department: SupportDepartment) -> SupportDepartment
 
 
 @transaction.atomic
-def create_business_calendar(*, title: str, department: SupportDepartment | None = None, timezone_name: str = "Asia/Tehran", workday_start=None, workday_end=None, active_weekdays: list[int] | None = None, is_default: bool = False) -> SupportBusinessCalendar:
+def create_business_calendar(
+    *,
+    title: str,
+    department: SupportDepartment | None = None,
+    timezone_name: str = "Asia/Tehran",
+    workday_start=None,
+    workday_end=None,
+    active_weekdays: list[int] | None = None,
+    is_default: bool = False,
+) -> SupportBusinessCalendar:
     """Create a business-hours calendar for SLA calculation."""
-    fields = {"title": title.strip(), "department": department, "timezone_name": timezone_name, "is_default": is_default}
+    fields = {
+        "title": title.strip(),
+        "department": department,
+        "timezone_name": timezone_name,
+        "is_default": is_default,
+    }
     if workday_start is not None:
         fields["workday_start"] = workday_start
     if workday_end is not None:
@@ -204,9 +225,20 @@ def create_business_calendar(*, title: str, department: SupportDepartment | None
 
 
 @transaction.atomic
-def update_business_calendar(*, calendar: SupportBusinessCalendar, **fields: Any) -> SupportBusinessCalendar:
+def update_business_calendar(
+    *, calendar: SupportBusinessCalendar, **fields: Any
+) -> SupportBusinessCalendar:
     """Update business-hours calendar metadata."""
-    allowed = {"title", "department", "timezone_name", "workday_start", "workday_end", "active_weekdays", "is_default", "is_active"}
+    allowed = {
+        "title",
+        "department",
+        "timezone_name",
+        "workday_start",
+        "workday_end",
+        "active_weekdays",
+        "is_default",
+        "is_active",
+    }
     update_fields: list[str] = []
     for field, value in fields.items():
         if field not in allowed:
@@ -247,7 +279,12 @@ def update_holiday(*, holiday: SupportHoliday, **fields: Any) -> SupportHoliday:
     return holiday
 
 
-def _assert_valid_category_parent(*, category: SupportCategory | None = None, parent: SupportCategory | None = None, department: SupportDepartment | None = None) -> None:
+def _assert_valid_category_parent(
+    *,
+    category: SupportCategory | None = None,
+    parent: SupportCategory | None = None,
+    department: SupportDepartment | None = None,
+) -> None:
     """Prevent self-parenting, cross-department moves and tree cycles."""
     if parent is None:
         return
@@ -262,7 +299,15 @@ def _assert_valid_category_parent(*, category: SupportCategory | None = None, pa
 
 
 @transaction.atomic
-def create_category(*, department: SupportDepartment, title: str, parent: SupportCategory | None = None, description: str = "", icon: str = "", order: int = 0) -> SupportCategory:
+def create_category(
+    *,
+    department: SupportDepartment,
+    title: str,
+    parent: SupportCategory | None = None,
+    description: str = "",
+    icon: str = "",
+    order: int = 0,
+) -> SupportCategory:
     """Create an admin-managed support category with tree safety checks."""
     _assert_valid_category_parent(parent=parent, department=department)
     return SupportCategory.all_objects.create(
@@ -309,7 +354,9 @@ def update_category(*, category: SupportCategory, **fields: Any) -> SupportCateg
 def deactivate_category(*, category: SupportCategory) -> SupportCategory:
     """Deactivate a category only when no active child/open ticket depends on it."""
     if SupportCategory.all_objects.filter(parent=category, is_active=True).exists():
-        raise SupportTaxonomyTreeError("برای غیرفعال‌سازی این دسته ابتدا زیرشاخه‌های فعال آن را غیرفعال کنید.")
+        raise SupportTaxonomyTreeError(
+            "برای غیرفعال‌سازی این دسته ابتدا زیرشاخه‌های فعال آن را غیرفعال کنید."
+        )
     if SupportTicket.objects.open_queue().filter(category=category).exists():
         raise SupportTaxonomyTreeError("دسته‌ای که تیکت باز دارد قابل غیرفعال‌سازی نیست.")
     category.is_active = False
@@ -322,25 +369,46 @@ def deactivate_category(*, category: SupportCategory) -> SupportCategory:
 # ---------------------------------------------------------------------------
 
 
-def resolve_sla_policy(*, department: SupportDepartment | None, ticket_type: SupportTicketType | None, priority: str, severity: str) -> SupportSLAPolicy | None:
+def resolve_sla_policy(
+    *,
+    department: SupportDepartment | None,
+    ticket_type: SupportTicketType | None,
+    priority: str,
+    severity: str,
+) -> SupportSLAPolicy | None:
     """Resolve the best active SLA policy for department/type/priority/severity."""
     if ticket_type and ticket_type.default_sla_policy_id:
         return ticket_type.default_sla_policy
     candidates = SupportSLAPolicy.objects.filter(priority=priority, severity=severity)
     if department is not None:
-        department_policy = candidates.filter(department=department).order_by("order", "title").first()
+        department_policy = (
+            candidates.filter(department=department).order_by("order", "title").first()
+        )
         if department_policy is not None:
             return department_policy
-    return candidates.filter(department__isnull=True).order_by("order", "title").first() or SupportSLAPolicy.objects.order_by("order", "title").first()
+    return (
+        candidates.filter(department__isnull=True).order_by("order", "title").first()
+        or SupportSLAPolicy.objects.order_by("order", "title").first()
+    )
 
 
-def get_business_calendar_for_department(*, department: SupportDepartment | None) -> SupportBusinessCalendar | None:
+def get_business_calendar_for_department(
+    *, department: SupportDepartment | None
+) -> SupportBusinessCalendar | None:
     """Resolve the best active business calendar for a department."""
     if department is not None:
-        calendar = SupportBusinessCalendar.objects.filter(department=department, is_active=True).order_by("-is_default", "title").first()
+        calendar = (
+            SupportBusinessCalendar.objects.filter(department=department, is_active=True)
+            .order_by("-is_default", "title")
+            .first()
+        )
         if calendar is not None:
             return calendar
-    return SupportBusinessCalendar.objects.filter(department__isnull=True, is_active=True).order_by("-is_default", "title").first()
+    return (
+        SupportBusinessCalendar.objects.filter(department__isnull=True, is_active=True)
+        .order_by("-is_default", "title")
+        .first()
+    )
 
 
 def add_business_minutes(*, start_at, minutes: int, calendar: SupportBusinessCalendar) -> Any:
@@ -352,29 +420,39 @@ def add_business_minutes(*, start_at, minutes: int, calendar: SupportBusinessCal
     remaining = minutes
     active_weekdays = set(calendar.active_weekdays or [5, 6, 0, 1, 2])
     while remaining > 0:
-        current = _next_working_instant(current=current, calendar=calendar, active_weekdays=active_weekdays, tz=tz)
+        current = _next_working_instant(
+            current=current, calendar=calendar, active_weekdays=active_weekdays, tz=tz
+        )
         end_of_day = datetime.combine(current.date(), calendar.workday_end, tzinfo=tz)
         available = max(0, int((end_of_day - current).total_seconds() // 60))
         if available >= remaining:
             return current + timedelta(minutes=remaining)
         remaining -= available
-        current = datetime.combine(current.date() + timedelta(days=1), calendar.workday_start, tzinfo=tz)
+        current = datetime.combine(
+            current.date() + timedelta(days=1), calendar.workday_start, tzinfo=tz
+        )
     return current
 
 
-def _next_working_instant(*, current, calendar: SupportBusinessCalendar, active_weekdays: set[int], tz: ZoneInfo):
+def _next_working_instant(
+    *, current, calendar: SupportBusinessCalendar, active_weekdays: set[int], tz: ZoneInfo
+):
     """Move current datetime to the next valid working instant."""
     while True:
         start = datetime.combine(current.date(), calendar.workday_start, tzinfo=tz)
         end = datetime.combine(current.date(), calendar.workday_end, tzinfo=tz)
         is_active_weekday = current.weekday() in active_weekdays
-        is_holiday = SupportHoliday.objects.filter(calendar=calendar, date=current.date(), is_active=True).exists()
+        is_holiday = SupportHoliday.objects.filter(
+            calendar=calendar, date=current.date(), is_active=True
+        ).exists()
         if is_active_weekday and not is_holiday:
             if current < start:
                 return start
             if start <= current < end:
                 return current
-        current = datetime.combine(current.date() + timedelta(days=1), calendar.workday_start, tzinfo=tz)
+        current = datetime.combine(
+            current.date() + timedelta(days=1), calendar.workday_start, tzinfo=tz
+        )
 
 
 def _calculate_sla_due_at(*, ticket: SupportTicket, policy: SupportSLAPolicy, minutes: int, now):
@@ -393,14 +471,29 @@ def _apply_sla(*, ticket: SupportTicket, policy: SupportSLAPolicy | None, now=No
     if policy is None:
         return
     ticket.applied_sla_policy = policy
-    ticket.first_response_due_at = _calculate_sla_due_at(ticket=ticket, policy=policy, minutes=policy.first_response_minutes, now=now)
-    ticket.resolution_due_at = _calculate_sla_due_at(ticket=ticket, policy=policy, minutes=policy.resolution_minutes, now=now)
-    ticket.save(update_fields=["applied_sla_policy", "first_response_due_at", "resolution_due_at", "updated_at"])
+    ticket.first_response_due_at = _calculate_sla_due_at(
+        ticket=ticket, policy=policy, minutes=policy.first_response_minutes, now=now
+    )
+    ticket.resolution_due_at = _calculate_sla_due_at(
+        ticket=ticket, policy=policy, minutes=policy.resolution_minutes, now=now
+    )
+    ticket.save(
+        update_fields=[
+            "applied_sla_policy",
+            "first_response_due_at",
+            "resolution_due_at",
+            "updated_at",
+        ]
+    )
     SupportSLAEvent.objects.create(
         ticket=ticket,
         event_type=SLAEventType.POLICY_APPLIED,
         occurred_at=now,
-        metadata={"policy_id": policy.pk, "first_response_minutes": policy.first_response_minutes, "resolution_minutes": policy.resolution_minutes},
+        metadata={
+            "policy_id": policy.pk,
+            "first_response_minutes": policy.first_response_minutes,
+            "resolution_minutes": policy.resolution_minutes,
+        },
     )
 
 
@@ -436,7 +529,19 @@ def create_sla_policy(
 @transaction.atomic
 def update_sla_policy(*, policy: SupportSLAPolicy, **fields: Any) -> SupportSLAPolicy:
     """Update an SLA policy through the service layer."""
-    allowed = {"title", "department", "priority", "severity", "first_response_minutes", "resolution_minutes", "business_hours_only", "pause_when_waiting_for_user", "escalate_on_breach", "order", "is_active"}
+    allowed = {
+        "title",
+        "department",
+        "priority",
+        "severity",
+        "first_response_minutes",
+        "resolution_minutes",
+        "business_hours_only",
+        "pause_when_waiting_for_user",
+        "escalate_on_breach",
+        "order",
+        "is_active",
+    }
     update_fields: list[str] = []
     for field, value in fields.items():
         if field not in allowed:
@@ -466,7 +571,11 @@ def create_ticket_type(
     order: int = 0,
 ) -> SupportTicketType:
     """Create an admin-managed dynamic ticket type."""
-    if default_category is not None and default_department is not None and default_category.department_id != default_department.pk:
+    if (
+        default_category is not None
+        and default_department is not None
+        and default_category.department_id != default_department.pk
+    ):
         raise SupportDeskServiceError("دسته پیش‌فرض باید متعلق به دپارتمان پیش‌فرض باشد.")
     return SupportTicketType.objects.create(
         code=code.strip(),
@@ -484,10 +593,25 @@ def create_ticket_type(
 @transaction.atomic
 def update_ticket_type(*, ticket_type: SupportTicketType, **fields: Any) -> SupportTicketType:
     """Update a dynamic ticket type through service layer."""
-    allowed = {"code", "title", "description", "default_department", "default_category", "default_priority", "default_severity", "default_sla_policy", "order", "is_active"}
+    allowed = {
+        "code",
+        "title",
+        "description",
+        "default_department",
+        "default_category",
+        "default_priority",
+        "default_severity",
+        "default_sla_policy",
+        "order",
+        "is_active",
+    }
     next_department = fields.get("default_department", ticket_type.default_department)
     next_category = fields.get("default_category", ticket_type.default_category)
-    if next_category is not None and next_department is not None and next_category.department_id != next_department.pk:
+    if (
+        next_category is not None
+        and next_department is not None
+        and next_category.department_id != next_department.pk
+    ):
         raise SupportDeskServiceError("دسته پیش‌فرض باید متعلق به دپارتمان پیش‌فرض باشد.")
     update_fields: list[str] = []
     for field, value in fields.items():
@@ -504,7 +628,9 @@ def update_ticket_type(*, ticket_type: SupportTicketType, **fields: Any) -> Supp
     return ticket_type
 
 
-def generate_smart_reply_suggestions(*, ticket: SupportTicket, limit: int = 5) -> SupportSmartReplyBundle:
+def generate_smart_reply_suggestions(
+    *, ticket: SupportTicket, limit: int = 5
+) -> SupportSmartReplyBundle:
     """Generate safe admin reply drafts from public timeline, KB and canned responses."""
     context_text = _build_public_ticket_context(ticket=ticket)
     suggestions: list[SupportSmartReplySuggestion] = []
@@ -516,7 +642,9 @@ def generate_smart_reply_suggestions(*, ticket: SupportTicket, limit: int = 5) -
         limit=limit,
     ):
         suggestions.append(_smart_reply_from_article(article=article, ticket=ticket))
-    suggestions.extend(_smart_replies_from_canned_responses(ticket=ticket, context_text=context_text, limit=limit))
+    suggestions.extend(
+        _smart_replies_from_canned_responses(ticket=ticket, context_text=context_text, limit=limit)
+    )
     suggestions.append(_fallback_smart_reply(ticket=ticket))
     deduped = _dedupe_smart_replies(suggestions=suggestions)
     deduped.sort(key=lambda item: (-item.confidence, item.source_type, item.title))
@@ -539,7 +667,9 @@ def _build_public_ticket_context(*, ticket: SupportTicket) -> str:
     return f"{ticket.subject} {ticket.description_snapshot} {message_text}"
 
 
-def _smart_reply_from_article(*, article: SupportKnowledgeArticle, ticket: SupportTicket) -> SupportSmartReplySuggestion:
+def _smart_reply_from_article(
+    *, article: SupportKnowledgeArticle, ticket: SupportTicket
+) -> SupportSmartReplySuggestion:
     """Create a reply draft backed by one knowledge base article."""
     body = (
         f"سلام،\n\nبرای موضوع «{ticket.subject}» این راهنما می‌تواند کمک کند:\n"
@@ -561,7 +691,9 @@ def _smart_reply_from_article(*, article: SupportKnowledgeArticle, ticket: Suppo
     )
 
 
-def _smart_replies_from_canned_responses(*, ticket: SupportTicket, context_text: str, limit: int) -> list[SupportSmartReplySuggestion]:
+def _smart_replies_from_canned_responses(
+    *, ticket: SupportTicket, context_text: str, limit: int
+) -> list[SupportSmartReplySuggestion]:
     """Create reply drafts from relevant canned responses."""
     context_tokens = set(_tokenize(context_text))
     suggestions: list[SupportSmartReplySuggestion] = []
@@ -574,7 +706,11 @@ def _smart_replies_from_canned_responses(*, ticket: SupportTicket, context_text:
             continue
         canned_tokens = set(_tokenize(f"{canned.title} {canned.body}"))
         overlap = len(context_tokens & canned_tokens)
-        if overlap <= 0 and canned.department_id != ticket.department_id and canned.category_id != ticket.category_id:
+        if (
+            overlap <= 0
+            and canned.department_id != ticket.department_id
+            and canned.category_id != ticket.category_id
+        ):
             continue
         confidence = 55 + min(overlap * 5, 25)
         if canned.category_id == ticket.category_id:
@@ -610,7 +746,9 @@ def _fallback_smart_reply(*, ticket: SupportTicket) -> SupportSmartReplySuggesti
     )
 
 
-def _dedupe_smart_replies(*, suggestions: list[SupportSmartReplySuggestion]) -> list[SupportSmartReplySuggestion]:
+def _dedupe_smart_replies(
+    *, suggestions: list[SupportSmartReplySuggestion]
+) -> list[SupportSmartReplySuggestion]:
     """Remove duplicate suggestion bodies while keeping first/highest confidence copy."""
     seen: set[str] = set()
     deduped: list[SupportSmartReplySuggestion] = []
@@ -653,12 +791,27 @@ def create_knowledge_article(
 
 
 @transaction.atomic
-def update_knowledge_article(*, article: SupportKnowledgeArticle, **fields: Any) -> SupportKnowledgeArticle:
+def update_knowledge_article(
+    *, article: SupportKnowledgeArticle, **fields: Any
+) -> SupportKnowledgeArticle:
     """Update knowledge article metadata/content through service layer."""
-    allowed = {"title", "body", "summary", "department", "category", "ticket_type", "keywords", "is_active"}
+    allowed = {
+        "title",
+        "body",
+        "summary",
+        "department",
+        "category",
+        "ticket_type",
+        "keywords",
+        "is_active",
+    }
     next_department = fields.get("department", article.department)
     next_category = fields.get("category", article.category)
-    if next_category is not None and next_department is not None and next_category.department_id != next_department.pk:
+    if (
+        next_category is not None
+        and next_department is not None
+        and next_category.department_id != next_department.pk
+    ):
         raise SupportDeskServiceError("دسته مقاله باید متعلق به همان دپارتمان باشد.")
     update_fields: list[str] = []
     for field, value in fields.items():
@@ -711,7 +864,9 @@ def recommend_knowledge_articles(
     scored: list[tuple[int, SupportKnowledgeArticle]] = []
     for article in get_published_knowledge_articles():
         score = 0
-        article_tokens = set(_tokenize(f"{article.title} {article.summary} {' '.join(article.keywords or [])}"))
+        article_tokens = set(
+            _tokenize(f"{article.title} {article.summary} {' '.join(article.keywords or [])}")
+        )
         score += len(tokens & article_tokens) * 15
         if department is not None and article.department_id == department.pk:
             score += 20
@@ -747,13 +902,21 @@ def record_knowledge_article_use(
 
 
 @transaction.atomic
-def create_canned_response(*, title: str, body: str, department: SupportDepartment | None = None, category: SupportCategory | None = None) -> Any:
+def create_canned_response(
+    *,
+    title: str,
+    body: str,
+    department: SupportDepartment | None = None,
+    category: SupportCategory | None = None,
+) -> Any:
     """Create an admin-managed canned response."""
     if category is not None and department is not None and category.department_id != department.pk:
         raise SupportDeskServiceError("دسته پاسخ آماده باید متعلق به همان دپارتمان باشد.")
     from apps.support_desk.models import SupportCannedResponse
 
-    return SupportCannedResponse.objects.create(title=title.strip(), body=body.strip(), department=department, category=category)
+    return SupportCannedResponse.objects.create(
+        title=title.strip(), body=body.strip(), department=department, category=category
+    )
 
 
 @transaction.atomic
@@ -762,7 +925,11 @@ def update_canned_response(*, canned_response: Any, **fields: Any) -> Any:
     allowed = {"title", "body", "department", "category", "is_active"}
     next_department = fields.get("department", canned_response.department)
     next_category = fields.get("category", canned_response.category)
-    if next_category is not None and next_department is not None and next_category.department_id != next_department.pk:
+    if (
+        next_category is not None
+        and next_department is not None
+        and next_category.department_id != next_department.pk
+    ):
         raise SupportDeskServiceError("دسته پاسخ آماده باید متعلق به همان دپارتمان باشد.")
     update_fields: list[str] = []
     for field, value in fields.items():
@@ -805,7 +972,9 @@ def create_ticket(
     department = department or ticket_type.default_department
     category = category or ticket_type.default_category
     if department is None or category is None:
-        raise SupportDeskServiceError("نوع تیکت باید دپارتمان و دسته‌بندی پیش‌فرض یا ورودی معتبر داشته باشد.")
+        raise SupportDeskServiceError(
+            "نوع تیکت باید دپارتمان و دسته‌بندی پیش‌فرض یا ورودی معتبر داشته باشد."
+        )
     if category.department_id != department.pk:
         raise SupportDeskServiceError("دسته‌بندی انتخاب‌شده متعلق به دپارتمان تیکت نیست.")
     priority = priority or ticket_type.default_priority or TicketPriority.NORMAL
@@ -832,9 +1001,22 @@ def create_ticket(
     )
     sync_ticket_counters(ticket=ticket)
     sync_category_counters(category=category)
-    SupportTicketStatusHistory.objects.create(ticket=ticket, changed_by=owner, from_status="", to_status=TicketStatus.DRAFT, reason="ساخت پیش‌نویس تیکت")
+    SupportTicketStatusHistory.objects.create(
+        ticket=ticket,
+        changed_by=owner,
+        from_status="",
+        to_status=TicketStatus.DRAFT,
+        reason="ساخت پیش‌نویس تیکت",
+    )
     if ticket.assigned_to_id:
-        SupportTicketAssignment.objects.create(ticket=ticket, assigned_by=owner, from_assignee=None, assigned_to=ticket.assigned_to, department=department, reason="ارجاع خودکار بر اساس دپارتمان")
+        SupportTicketAssignment.objects.create(
+            ticket=ticket,
+            assigned_by=owner,
+            from_assignee=None,
+            assigned_to=ticket.assigned_to,
+            department=department,
+            reason="ارجاع خودکار بر اساس دپارتمان",
+        )
     _auto_tag_ticket(ticket=ticket, text=f"{ticket.subject} {message.body}")
     detect_duplicate_candidates(ticket=ticket)
     return ticket
@@ -888,12 +1070,25 @@ def submit_ticket(*, ticket: SupportTicket, user: Any, now=None) -> SupportTicke
     if ticket.status != TicketStatus.DRAFT:
         raise SupportTicketStateError("فقط تیکت پیش‌نویس قابل ارسال است.")
     now = now or timezone.now()
-    _change_status(ticket=ticket, actor=user, to_status=TicketStatus.SUBMITTED, reason="ارسال تیکت برای بررسی", now=now)
+    _change_status(
+        ticket=ticket,
+        actor=user,
+        to_status=TicketStatus.SUBMITTED,
+        reason="ارسال تیکت برای بررسی",
+        now=now,
+    )
     ticket.submitted_at = now
     ticket.last_user_message_at = ticket.last_user_message_at or now
     ticket.last_activity_at = now
-    ticket.save(update_fields=["submitted_at", "last_user_message_at", "last_activity_at", "updated_at"])
-    policy = resolve_sla_policy(department=ticket.department, ticket_type=ticket.ticket_type, priority=ticket.priority, severity=ticket.severity)
+    ticket.save(
+        update_fields=["submitted_at", "last_user_message_at", "last_activity_at", "updated_at"]
+    )
+    policy = resolve_sla_policy(
+        department=ticket.department,
+        ticket_type=ticket.ticket_type,
+        priority=ticket.priority,
+        severity=ticket.severity,
+    )
     _apply_sla(ticket=ticket, policy=policy, now=now)
     return ticket
 
@@ -903,7 +1098,9 @@ def submit_ticket(*, ticket: SupportTicket, user: Any, now=None) -> SupportTicke
 # ---------------------------------------------------------------------------
 
 
-def _change_status(*, ticket: SupportTicket, actor: Any | None, to_status: str, reason: str = "", now=None) -> SupportTicket:
+def _change_status(
+    *, ticket: SupportTicket, actor: Any | None, to_status: str, reason: str = "", now=None
+) -> SupportTicket:
     """Persist a ticket status transition with history and timeline event."""
     now = now or timezone.now()
     from_status = ticket.status
@@ -924,7 +1121,13 @@ def _change_status(*, ticket: SupportTicket, actor: Any | None, to_status: str, 
     ticket.last_activity_at = now
     update_fields.append("last_activity_at")
     ticket.save(update_fields=update_fields)
-    SupportTicketStatusHistory.objects.create(ticket=ticket, changed_by=actor if getattr(actor, "pk", None) else None, from_status=from_status, to_status=to_status, reason=reason)
+    SupportTicketStatusHistory.objects.create(
+        ticket=ticket,
+        changed_by=actor if getattr(actor, "pk", None) else None,
+        from_status=from_status,
+        to_status=to_status,
+        reason=reason,
+    )
     if actor is not None:
         SupportTicketMessage.objects.create(
             ticket=ticket,
@@ -932,7 +1135,8 @@ def _change_status(*, ticket: SupportTicket, actor: Any | None, to_status: str, 
             message_type=TicketMessageType.STATUS_CHANGE,
             body=reason or f"وضعیت تیکت از {from_status} به {to_status} تغییر کرد.",
             is_internal=True,
-            is_from_staff=getattr(actor, "is_staff", False) or getattr(actor, "is_superuser", False),
+            is_from_staff=getattr(actor, "is_staff", False)
+            or getattr(actor, "is_superuser", False),
             metadata={"from_status": from_status, "to_status": to_status},
         )
         sync_ticket_counters(ticket=ticket)
@@ -962,12 +1166,27 @@ def _resume_sla_if_needed(*, ticket: SupportTicket, now=None) -> None:
     if ticket.resolution_due_at:
         ticket.resolution_due_at += timezone.timedelta(seconds=max(paused_seconds, 0))
     ticket.sla_paused_at = None
-    ticket.save(update_fields=["sla_total_paused_seconds", "first_response_due_at", "resolution_due_at", "sla_paused_at", "updated_at"])
-    SupportSLAEvent.objects.create(ticket=ticket, event_type=SLAEventType.RESUMED, occurred_at=now, metadata={"paused_seconds": paused_seconds})
+    ticket.save(
+        update_fields=[
+            "sla_total_paused_seconds",
+            "first_response_due_at",
+            "resolution_due_at",
+            "sla_paused_at",
+            "updated_at",
+        ]
+    )
+    SupportSLAEvent.objects.create(
+        ticket=ticket,
+        event_type=SLAEventType.RESUMED,
+        occurred_at=now,
+        metadata={"paused_seconds": paused_seconds},
+    )
 
 
 @transaction.atomic
-def add_user_reply(*, ticket: SupportTicket, user: Any, body: str, now=None) -> SupportTicketMessage:
+def add_user_reply(
+    *, ticket: SupportTicket, user: Any, body: str, now=None
+) -> SupportTicketMessage:
     """Add a public user reply and move the ticket to waiting-for-admin."""
     if ticket.owner_id != user.pk:
         raise SupportPermissionError("فقط مالک تیکت می‌تواند روی آن پاسخ ارسال کند.")
@@ -975,31 +1194,66 @@ def add_user_reply(*, ticket: SupportTicket, user: Any, body: str, now=None) -> 
         raise SupportTicketStateError("در وضعیت فعلی امکان ارسال پاسخ کاربر وجود ندارد.")
     now = now or timezone.now()
     _resume_sla_if_needed(ticket=ticket, now=now)
-    message = SupportTicketMessage.objects.create(ticket=ticket, author=user, message_type=TicketMessageType.USER_MESSAGE, body=body.strip(), is_internal=False, is_from_staff=False)
+    message = SupportTicketMessage.objects.create(
+        ticket=ticket,
+        author=user,
+        message_type=TicketMessageType.USER_MESSAGE,
+        body=body.strip(),
+        is_internal=False,
+        is_from_staff=False,
+    )
     ticket.last_user_message_at = now
     ticket.last_activity_at = now
     ticket.save(update_fields=["last_user_message_at", "last_activity_at", "updated_at"])
-    _change_status(ticket=ticket, actor=user, to_status=TicketStatus.WAITING_FOR_ADMIN, reason="پاسخ جدید کاربر", now=now)
+    _change_status(
+        ticket=ticket,
+        actor=user,
+        to_status=TicketStatus.WAITING_FOR_ADMIN,
+        reason="پاسخ جدید کاربر",
+        now=now,
+    )
     sync_ticket_counters(ticket=ticket)
     _auto_tag_ticket(ticket=ticket, text=body)
     return message
 
 
 @transaction.atomic
-def add_admin_reply(*, ticket: SupportTicket, admin: Any, body: str, now=None) -> SupportTicketMessage:
+def add_admin_reply(
+    *, ticket: SupportTicket, admin: Any, body: str, now=None
+) -> SupportTicketMessage:
     """Add a public admin reply and move the ticket to waiting-for-user."""
     if not _is_admin(admin):
         raise SupportPermissionError("برای پاسخ ادمین باید دسترسی پشتیبانی داشته باشید.")
     if ticket.status not in _ADMIN_REPLY_ALLOWED_STATUSES:
         raise SupportTicketStateError("در وضعیت فعلی امکان پاسخ ادمین وجود ندارد.")
     now = now or timezone.now()
-    message = SupportTicketMessage.objects.create(ticket=ticket, author=admin, message_type=TicketMessageType.ADMIN_REPLY, body=body.strip(), is_internal=False, is_from_staff=True)
+    message = SupportTicketMessage.objects.create(
+        ticket=ticket,
+        author=admin,
+        message_type=TicketMessageType.ADMIN_REPLY,
+        body=body.strip(),
+        is_internal=False,
+        is_from_staff=True,
+    )
     if ticket.first_admin_response_at is None:
         ticket.first_admin_response_at = now
     ticket.last_admin_message_at = now
     ticket.last_activity_at = now
-    ticket.save(update_fields=["first_admin_response_at", "last_admin_message_at", "last_activity_at", "updated_at"])
-    _change_status(ticket=ticket, actor=admin, to_status=TicketStatus.WAITING_FOR_USER, reason="پاسخ ادمین ارسال شد", now=now)
+    ticket.save(
+        update_fields=[
+            "first_admin_response_at",
+            "last_admin_message_at",
+            "last_activity_at",
+            "updated_at",
+        ]
+    )
+    _change_status(
+        ticket=ticket,
+        actor=admin,
+        to_status=TicketStatus.WAITING_FOR_USER,
+        reason="پاسخ ادمین ارسال شد",
+        now=now,
+    )
     _pause_sla_if_needed(ticket=ticket, now=now)
     sync_ticket_counters(ticket=ticket)
     from apps.notifications.domain import notify_support_reply
@@ -1013,7 +1267,14 @@ def add_internal_note(*, ticket: SupportTicket, admin: Any, body: str) -> Suppor
     """Add an admin-only internal note to the ticket timeline."""
     if not _is_admin(admin):
         raise SupportPermissionError("فقط ادمین می‌تواند یادداشت داخلی ثبت کند.")
-    message = SupportTicketMessage.objects.create(ticket=ticket, author=admin, message_type=TicketMessageType.INTERNAL_NOTE, body=body.strip(), is_internal=True, is_from_staff=True)
+    message = SupportTicketMessage.objects.create(
+        ticket=ticket,
+        author=admin,
+        message_type=TicketMessageType.INTERNAL_NOTE,
+        body=body.strip(),
+        is_internal=True,
+        is_from_staff=True,
+    )
     sync_ticket_counters(ticket=ticket)
     return message
 
@@ -1059,11 +1320,15 @@ def _support_admin_candidates(*, department: SupportDepartment) -> list[Any]:
         is_active=True,
     ).filter(Q(is_staff=True) | Q(is_superuser=True) | Q(role="admin"))
     if department.default_assignee_id:
-        queryset = queryset | user_model.objects.filter(pk=department.default_assignee_id, is_active=True)
+        queryset = queryset | user_model.objects.filter(
+            pk=department.default_assignee_id, is_active=True
+        )
     return list(queryset.distinct().order_by("id"))
 
 
-def _build_assignment_candidate(*, user: Any, ticket: SupportTicket, department: SupportDepartment) -> SupportAssignmentCandidate:
+def _build_assignment_candidate(
+    *, user: Any, ticket: SupportTicket, department: SupportDepartment
+) -> SupportAssignmentCandidate:
     """Calculate workload score for one support admin candidate."""
     assigned_open = SupportTicket.objects.open_queue().filter(assigned_to=user)
     department_open = assigned_open.filter(department=department).count()
@@ -1074,7 +1339,13 @@ def _build_assignment_candidate(*, user: Any, ticket: SupportTicket, department:
     breached = assigned_open.filter(sla_breached_at__isnull=False).count()
     waiting_admin = assigned_open.filter(status=TicketStatus.WAITING_FOR_ADMIN).count()
     open_count = assigned_open.count()
-    score = open_count * 10 + urgent_or_critical * 8 + breached * 12 + waiting_admin * 5 + department_open * 2
+    score = (
+        open_count * 10
+        + urgent_or_critical * 8
+        + breached * 12
+        + waiting_admin * 5
+        + department_open * 2
+    )
     reason_codes: list[str] = []
     if department.default_assignee_id == user.pk:
         score -= 4
@@ -1104,14 +1375,22 @@ def get_support_assignment_recommendation(
 ) -> SupportAssignmentRecommendation:
     """Recommend the least-loaded support admin for a ticket using transparent scoring."""
     target_department = department or ticket.department
-    candidates = [_build_assignment_candidate(user=user, ticket=ticket, department=target_department) for user in _support_admin_candidates(department=target_department)]
-    candidates = sorted(candidates, key=lambda item: (item.workload_score, item.open_tickets, item.user.pk))
+    candidates = [
+        _build_assignment_candidate(user=user, ticket=ticket, department=target_department)
+        for user in _support_admin_candidates(department=target_department)
+    ]
+    candidates = sorted(
+        candidates, key=lambda item: (item.workload_score, item.open_tickets, item.user.pk)
+    )
     reason_codes = ["least_loaded_score"]
     if target_department.default_assignee_id:
         reason_codes.append("department_default_assignee_considered")
     if ticket.sla_breached_at:
         reason_codes.append("ticket_sla_breached_priority")
-    if ticket.priority in {TicketPriority.HIGH, TicketPriority.URGENT} or ticket.severity in {TicketSeverity.CRITICAL, TicketSeverity.BLOCKER}:
+    if ticket.priority in {TicketPriority.HIGH, TicketPriority.URGENT} or ticket.severity in {
+        TicketSeverity.CRITICAL,
+        TicketSeverity.BLOCKER,
+    }:
         reason_codes.append("high_priority_ticket_weighted")
     return SupportAssignmentRecommendation(
         ticket=ticket,
@@ -1123,7 +1402,13 @@ def get_support_assignment_recommendation(
 
 
 @transaction.atomic
-def auto_assign_ticket(*, ticket: SupportTicket, admin: Any, department: SupportDepartment | None = None, reason: str = "") -> SupportTicket:
+def auto_assign_ticket(
+    *,
+    ticket: SupportTicket,
+    admin: Any,
+    department: SupportDepartment | None = None,
+    reason: str = "",
+) -> SupportTicket:
     """Assign a ticket to the current least-loaded support admin."""
     recommendation = get_support_assignment_recommendation(ticket=ticket, department=department)
     if recommendation.recommended_assignee is None:
@@ -1139,7 +1424,14 @@ def auto_assign_ticket(*, ticket: SupportTicket, admin: Any, department: Support
 
 
 @transaction.atomic
-def assign_ticket(*, ticket: SupportTicket, admin: Any, assignee: Any | None, department: SupportDepartment | None = None, reason: str = "") -> SupportTicket:
+def assign_ticket(
+    *,
+    ticket: SupportTicket,
+    admin: Any,
+    assignee: Any | None,
+    department: SupportDepartment | None = None,
+    reason: str = "",
+) -> SupportTicket:
     """Assign or reassign a ticket to an admin user/department."""
     if not _is_admin(admin):
         raise SupportPermissionError("فقط ادمین می‌تواند تیکت را ارجاع دهد.")
@@ -1149,7 +1441,14 @@ def assign_ticket(*, ticket: SupportTicket, admin: Any, assignee: Any | None, de
     ticket.assigned_to = assignee
     ticket.last_activity_at = timezone.now()
     ticket.save(update_fields=["department", "assigned_to", "last_activity_at", "updated_at"])
-    SupportTicketAssignment.objects.create(ticket=ticket, assigned_by=admin, from_assignee=previous, assigned_to=assignee, department=ticket.department, reason=reason)
+    SupportTicketAssignment.objects.create(
+        ticket=ticket,
+        assigned_by=admin,
+        from_assignee=previous,
+        assigned_to=assignee,
+        department=ticket.department,
+        reason=reason,
+    )
     SupportTicketMessage.objects.create(
         ticket=ticket,
         author=admin,
@@ -1157,14 +1456,20 @@ def assign_ticket(*, ticket: SupportTicket, admin: Any, assignee: Any | None, de
         body=reason or "مسئول تیکت تغییر کرد.",
         is_internal=True,
         is_from_staff=True,
-        metadata={"from_assignee_id": previous.pk if previous else None, "assigned_to_id": assignee.pk if assignee else None, "department_id": ticket.department_id},
+        metadata={
+            "from_assignee_id": previous.pk if previous else None,
+            "assigned_to_id": assignee.pk if assignee else None,
+            "department_id": ticket.department_id,
+        },
     )
     sync_ticket_counters(ticket=ticket)
     return ticket
 
 
 @transaction.atomic
-def change_ticket_status(*, ticket: SupportTicket, admin: Any, status: str, reason: str = "") -> SupportTicket:
+def change_ticket_status(
+    *, ticket: SupportTicket, admin: Any, status: str, reason: str = ""
+) -> SupportTicket:
     """Change ticket status by admin with state and audit history."""
     if not _is_admin(admin):
         raise SupportPermissionError("فقط ادمین می‌تواند وضعیت تیکت را تغییر دهد.")
@@ -1178,7 +1483,9 @@ def resolve_ticket(*, ticket: SupportTicket, admin: Any, reason: str = "") -> Su
     """Mark a ticket as resolved by admin."""
     if ticket.status in _TERMINAL_STATUSES:
         raise SupportTicketStateError("تیکت بسته/آرشیو/اسپم قابل حل مجدد نیست.")
-    ticket = change_ticket_status(ticket=ticket, admin=admin, status=TicketStatus.RESOLVED, reason=reason or "تیکت حل شد.")
+    ticket = change_ticket_status(
+        ticket=ticket, admin=admin, status=TicketStatus.RESOLVED, reason=reason or "تیکت حل شد."
+    )
     from apps.notifications.domain import notify_support_resolved
 
     notify_support_resolved(ticket=ticket, actor=admin)
@@ -1190,9 +1497,18 @@ def close_ticket(*, ticket: SupportTicket, actor: Any, reason: str = "") -> Supp
     """Close a ticket by owner or admin after resolution/operational decision."""
     if ticket.owner_id != actor.pk and not _is_admin(actor):
         raise SupportPermissionError("فقط مالک یا ادمین می‌تواند تیکت را ببندد.")
-    if ticket.status not in {TicketStatus.RESOLVED, TicketStatus.WAITING_FOR_USER, TicketStatus.OPEN, TicketStatus.IN_PROGRESS, TicketStatus.REOPENED, TicketStatus.ESCALATED}:
+    if ticket.status not in {
+        TicketStatus.RESOLVED,
+        TicketStatus.WAITING_FOR_USER,
+        TicketStatus.OPEN,
+        TicketStatus.IN_PROGRESS,
+        TicketStatus.REOPENED,
+        TicketStatus.ESCALATED,
+    }:
         raise SupportTicketStateError("این تیکت در وضعیت فعلی قابل بستن نیست.")
-    return _change_status(ticket=ticket, actor=actor, to_status=TicketStatus.CLOSED, reason=reason or "تیکت بسته شد.")
+    return _change_status(
+        ticket=ticket, actor=actor, to_status=TicketStatus.CLOSED, reason=reason or "تیکت بسته شد."
+    )
 
 
 @transaction.atomic
@@ -1201,9 +1517,16 @@ def reopen_ticket(*, ticket: SupportTicket, user: Any, reason: str = "") -> Supp
     if ticket.owner_id != user.pk:
         raise SupportPermissionError("فقط مالک تیکت می‌تواند آن را بازگشایی کند.")
     if not ticket.is_reopenable:
-        raise SupportTicketStateError("مهلت بازگشایی این تیکت به پایان رسیده یا وضعیت آن قابل بازگشایی نیست.")
+        raise SupportTicketStateError(
+            "مهلت بازگشایی این تیکت به پایان رسیده یا وضعیت آن قابل بازگشایی نیست."
+        )
     _resume_sla_if_needed(ticket=ticket)
-    return _change_status(ticket=ticket, actor=user, to_status=TicketStatus.REOPENED, reason=reason or "تیکت توسط کاربر بازگشایی شد.")
+    return _change_status(
+        ticket=ticket,
+        actor=user,
+        to_status=TicketStatus.REOPENED,
+        reason=reason or "تیکت توسط کاربر بازگشایی شد.",
+    )
 
 
 @transaction.atomic
@@ -1215,8 +1538,12 @@ def escalate_ticket(*, ticket: SupportTicket, admin: Any, reason: str) -> Suppor
     ticket.escalated_by = admin
     ticket.escalation_reason = reason
     ticket.save(update_fields=["escalated_at", "escalated_by", "escalation_reason", "updated_at"])
-    SupportSLAEvent.objects.create(ticket=ticket, event_type=SLAEventType.ESCALATED, metadata={"reason": reason})
-    return _change_status(ticket=ticket, actor=admin, to_status=TicketStatus.ESCALATED, reason=reason)
+    SupportSLAEvent.objects.create(
+        ticket=ticket, event_type=SLAEventType.ESCALATED, metadata={"reason": reason}
+    )
+    return _change_status(
+        ticket=ticket, actor=admin, to_status=TicketStatus.ESCALATED, reason=reason
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1225,7 +1552,9 @@ def escalate_ticket(*, ticket: SupportTicket, admin: Any, reason: str) -> Suppor
 
 
 @transaction.atomic
-def submit_satisfaction(*, ticket: SupportTicket, user: Any, rating: int, comment: str = "") -> SupportTicketSatisfaction:
+def submit_satisfaction(
+    *, ticket: SupportTicket, user: Any, rating: int, comment: str = ""
+) -> SupportTicketSatisfaction:
     """Submit a one-time CSAT rating for a resolved/closed ticket."""
     if ticket.owner_id != user.pk:
         raise SupportPermissionError("فقط مالک تیکت می‌تواند رضایت‌سنجی ثبت کند.")
@@ -1233,7 +1562,9 @@ def submit_satisfaction(*, ticket: SupportTicket, user: Any, rating: int, commen
         raise SupportTicketStateError("رضایت‌سنجی فقط پس از حل یا بستن تیکت قابل ثبت است.")
     if rating < 1 or rating > 5:
         raise SupportDeskServiceError("امتیاز رضایت باید بین ۱ تا ۵ باشد.")
-    satisfaction = SupportTicketSatisfaction.objects.create(ticket=ticket, user=user, rating=rating, comment=comment.strip())
+    satisfaction = SupportTicketSatisfaction.objects.create(
+        ticket=ticket, user=user, rating=rating, comment=comment.strip()
+    )
     ticket.satisfaction_rating_snapshot = rating
     ticket.save(update_fields=["satisfaction_rating_snapshot", "updated_at"])
     return satisfaction
@@ -1243,15 +1574,21 @@ def sync_ticket_counters(*, ticket: SupportTicket) -> SupportTicket:
     """Recalculate message/attachment/internal-note counters."""
     ticket.message_count = ticket.messages.count()
     ticket.attachment_count = ticket.attachments.count()
-    ticket.internal_note_count = ticket.messages.filter(is_internal=True, message_type=TicketMessageType.INTERNAL_NOTE).count()
-    ticket.save(update_fields=["message_count", "attachment_count", "internal_note_count", "updated_at"])
+    ticket.internal_note_count = ticket.messages.filter(
+        is_internal=True, message_type=TicketMessageType.INTERNAL_NOTE
+    ).count()
+    ticket.save(
+        update_fields=["message_count", "attachment_count", "internal_note_count", "updated_at"]
+    )
     return ticket
 
 
 def sync_category_counters(*, category: SupportCategory) -> SupportCategory:
     """Recalculate category ticket counters."""
     category.tickets_count = SupportTicket.all_objects.filter(category=category).count()
-    category.open_tickets_count = SupportTicket.objects.open_queue().filter(category=category).count()
+    category.open_tickets_count = (
+        SupportTicket.objects.open_queue().filter(category=category).count()
+    )
     category.save(update_fields=["tickets_count", "open_tickets_count", "updated_at"])
     return category
 
@@ -1260,7 +1597,23 @@ def _tokenize(value: str) -> set[str]:
     """Tokenize Persian/English text for lightweight triage and duplicates."""
     from apps.support_desk.models import _normalize_text
 
-    stopwords = {"از", "به", "در", "و", "یا", "برای", "با", "که", "این", "آن", "من", "ما", "مشکل", "سوال", "تیکت"}
+    stopwords = {
+        "از",
+        "به",
+        "در",
+        "و",
+        "یا",
+        "برای",
+        "با",
+        "که",
+        "این",
+        "آن",
+        "من",
+        "ما",
+        "مشکل",
+        "سوال",
+        "تیکت",
+    }
     return {token for token in _normalize_text(value).split() if token and token not in stopwords}
 
 
@@ -1276,16 +1629,24 @@ def _similarity_score(left: str, right: str, *, max_points: int = 100) -> int:
 def _auto_tag_ticket(*, ticket: SupportTicket, text: str) -> None:
     """Create simple normalized auto-triage tags from ticket text."""
     for token in sorted(_tokenize(text))[:12]:
-        tag, _created = SupportTag.objects.get_or_create(name=token, defaults={"normalized_name": token})
-        SupportTicketTag.objects.get_or_create(ticket=ticket, tag=tag, defaults={"source": "auto_triage"})
+        tag, _created = SupportTag.objects.get_or_create(
+            name=token, defaults={"normalized_name": token}
+        )
+        SupportTicketTag.objects.get_or_create(
+            ticket=ticket, tag=tag, defaults={"source": "auto_triage"}
+        )
         tag.usage_count = tag.ticket_tags.count()
         tag.save(update_fields=["usage_count", "updated_at"])
 
 
-def detect_duplicate_candidates(*, ticket: SupportTicket, threshold: int = 68) -> list[SupportDuplicateCandidate]:
+def detect_duplicate_candidates(
+    *, ticket: SupportTicket, threshold: int = 68
+) -> list[SupportDuplicateCandidate]:
     """Detect likely duplicate tickets for the same user/category/type."""
     candidates = (
-        SupportTicket.all_objects.filter(owner=ticket.owner, category=ticket.category, ticket_type=ticket.ticket_type)
+        SupportTicket.all_objects.filter(
+            owner=ticket.owner, category=ticket.category, ticket_type=ticket.ticket_type
+        )
         .exclude(pk=ticket.pk)
         .exclude(status__in={TicketStatus.ARCHIVED, TicketStatus.SPAM})
         .order_by("-created_at")[:50]
@@ -1293,19 +1654,31 @@ def detect_duplicate_candidates(*, ticket: SupportTicket, threshold: int = 68) -
     duplicates: list[SupportDuplicateCandidate] = []
     source_text = f"{ticket.subject} {ticket.description_snapshot}"
     for candidate in candidates:
-        score = _similarity_score(source_text, f"{candidate.subject} {candidate.description_snapshot}")
+        score = _similarity_score(
+            source_text, f"{candidate.subject} {candidate.description_snapshot}"
+        )
         if score < threshold:
             continue
         duplicate, _created = SupportDuplicateCandidate.objects.update_or_create(
             ticket=ticket,
             candidate_ticket=candidate,
-            defaults={"score": score, "reason": "شباهت بالای عنوان/توضیحات و یکسان بودن مالک، دسته و نوع تیکت"},
+            defaults={
+                "score": score,
+                "reason": "شباهت بالای عنوان/توضیحات و یکسان بودن مالک، دسته و نوع تیکت",
+            },
         )
         duplicates.append(duplicate)
     return duplicates
 
 
-def suggest_ticket_triage(*, owner: Any, subject: str, description: str, category: SupportCategory | None = None, ticket_type: SupportTicketType | None = None) -> SupportTriageSuggestion:
+def suggest_ticket_triage(
+    *,
+    owner: Any,
+    subject: str,
+    description: str,
+    category: SupportCategory | None = None,
+    ticket_type: SupportTicketType | None = None,
+) -> SupportTriageSuggestion:
     """Suggest department/category/type/priority/SLA and similar tickets before creation."""
     text = f"{subject} {description}"
     reason_codes: list[str] = []
@@ -1317,7 +1690,11 @@ def suggest_ticket_triage(*, owner: Any, subject: str, description: str, categor
         category = _suggest_category(text=text, ticket_type=ticket_type)
         if category:
             reason_codes.append("category_keyword_match")
-    department = category.department if category else (ticket_type.default_department if ticket_type else None)
+    department = (
+        category.department
+        if category
+        else (ticket_type.default_department if ticket_type else None)
+    )
     priority = ticket_type.default_priority if ticket_type else TicketPriority.NORMAL
     severity = ticket_type.default_severity if ticket_type else TicketSeverity.MINOR
     if "پرداخت" in text or "مالی" in text:
@@ -1328,8 +1705,12 @@ def suggest_ticket_triage(*, owner: Any, subject: str, description: str, categor
         priority = TicketPriority.URGENT
         severity = TicketSeverity.CRITICAL
         reason_codes.append("security_keyword_priority_boost")
-    policy = resolve_sla_policy(department=department, ticket_type=ticket_type, priority=priority, severity=severity)
-    similar_tickets = _find_similar_tickets(owner=owner, text=text, category=category, ticket_type=ticket_type)
+    policy = resolve_sla_policy(
+        department=department, ticket_type=ticket_type, priority=priority, severity=severity
+    )
+    similar_tickets = _find_similar_tickets(
+        owner=owner, text=text, category=category, ticket_type=ticket_type
+    )
     score = min(100, 20 * len(reason_codes) + (30 if similar_tickets else 0))
     return SupportTriageSuggestion(
         department=department,
@@ -1363,9 +1744,13 @@ def _suggest_ticket_type(*, text: str) -> SupportTicketType | None:
     return SupportTicketType.objects.filter(code="question").first()
 
 
-def _suggest_category(*, text: str, ticket_type: SupportTicketType | None) -> SupportCategory | None:
+def _suggest_category(
+    *, text: str, ticket_type: SupportTicketType | None
+) -> SupportCategory | None:
     """Suggest the most text-similar active category."""
-    best_category = ticket_type.default_category if ticket_type and ticket_type.default_category_id else None
+    best_category = (
+        ticket_type.default_category if ticket_type and ticket_type.default_category_id else None
+    )
     best_score = 0
     for category in SupportCategory.objects.select_related("department"):
         score = _similarity_score(text, f"{category.title} {category.description}", max_points=100)
@@ -1375,9 +1760,20 @@ def _suggest_category(*, text: str, ticket_type: SupportTicketType | None) -> Su
     return best_category
 
 
-def _find_similar_tickets(*, owner: Any, text: str, category: SupportCategory | None, ticket_type: SupportTicketType | None, threshold: int = 60) -> list[SupportTicket]:
+def _find_similar_tickets(
+    *,
+    owner: Any,
+    text: str,
+    category: SupportCategory | None,
+    ticket_type: SupportTicketType | None,
+    threshold: int = 60,
+) -> list[SupportTicket]:
     """Find similar recent tickets for duplicate warning."""
-    queryset = SupportTicket.all_objects.filter(owner=owner).exclude(status__in={TicketStatus.ARCHIVED, TicketStatus.SPAM}).order_by("-created_at")[:50]
+    queryset = (
+        SupportTicket.all_objects.filter(owner=owner)
+        .exclude(status__in={TicketStatus.ARCHIVED, TicketStatus.SPAM})
+        .order_by("-created_at")[:50]
+    )
     matches: list[SupportTicket] = []
     for ticket in queryset:
         bonus = 10 if category and ticket.category_id == category.pk else 0
@@ -1389,7 +1785,9 @@ def _find_similar_tickets(*, owner: Any, text: str, category: SupportCategory | 
 
 
 @transaction.atomic
-def review_duplicate_candidate(*, duplicate: SupportDuplicateCandidate, admin: Any, status: str, reason: str = "") -> SupportDuplicateCandidate:
+def review_duplicate_candidate(
+    *, duplicate: SupportDuplicateCandidate, admin: Any, status: str, reason: str = ""
+) -> SupportDuplicateCandidate:
     """Review a duplicate candidate generated by smart triage."""
     if not _is_admin(admin):
         raise SupportPermissionError("فقط ادمین می‌تواند کاندیدای تکراری بودن را بررسی کند.")
@@ -1407,21 +1805,38 @@ def review_duplicate_candidate(*, duplicate: SupportDuplicateCandidate, admin: A
 def mark_sla_breaches(*, now=None) -> int:
     """Mark SLA-breached tickets and optionally escalate them."""
     now = now or timezone.now()
-    queryset = SupportTicket.objects.open_queue().filter(sla_breached_at__isnull=True).filter(
-        models_Q_first_response_due(now) | models_Q_resolution_due(now)
+    queryset = (
+        SupportTicket.objects.open_queue()
+        .filter(sla_breached_at__isnull=True)
+        .filter(models_Q_first_response_due(now) | models_Q_resolution_due(now))
     )
     updated = 0
     for ticket in queryset.select_related("applied_sla_policy"):
         ticket.sla_breached_at = now
         ticket.save(update_fields=["sla_breached_at", "updated_at"])
-        event_type = SLAEventType.FIRST_RESPONSE_BREACHED if ticket.first_admin_response_at is None and ticket.first_response_due_at and ticket.first_response_due_at <= now else SLAEventType.RESOLUTION_BREACHED
+        event_type = (
+            SLAEventType.FIRST_RESPONSE_BREACHED
+            if ticket.first_admin_response_at is None
+            and ticket.first_response_due_at
+            and ticket.first_response_due_at <= now
+            else SLAEventType.RESOLUTION_BREACHED
+        )
         SupportSLAEvent.objects.create(ticket=ticket, event_type=event_type, occurred_at=now)
-        if ticket.applied_sla_policy and ticket.applied_sla_policy.escalate_on_breach and ticket.status != TicketStatus.ESCALATED:
+        if (
+            ticket.applied_sla_policy
+            and ticket.applied_sla_policy.escalate_on_breach
+            and ticket.status != TicketStatus.ESCALATED
+        ):
             ticket.status = TicketStatus.ESCALATED
             ticket.escalated_at = now
             ticket.escalation_reason = "نقض SLA"
             ticket.save(update_fields=["status", "escalated_at", "escalation_reason", "updated_at"])
-            SupportSLAEvent.objects.create(ticket=ticket, event_type=SLAEventType.ESCALATED, occurred_at=now, metadata={"reason": "sla_breach"})
+            SupportSLAEvent.objects.create(
+                ticket=ticket,
+                event_type=SLAEventType.ESCALATED,
+                occurred_at=now,
+                metadata={"reason": "sla_breach"},
+            )
         updated += 1
     return updated
 
@@ -1430,7 +1845,11 @@ def models_Q_first_response_due(now):
     """Return Q object for breached first response deadline."""
     from django.db.models import Q
 
-    return Q(first_admin_response_at__isnull=True, first_response_due_at__isnull=False, first_response_due_at__lte=now)
+    return Q(
+        first_admin_response_at__isnull=True,
+        first_response_due_at__isnull=False,
+        first_response_due_at__lte=now,
+    )
 
 
 def models_Q_resolution_due(now):
@@ -1451,7 +1870,9 @@ def _distribution(queryset, *fields: str, limit: int | None = None) -> list[dict
 def get_admin_analytics_summary() -> dict[str, Any]:
     """Return executive-grade aggregate counters for support dashboard."""
     tickets = SupportTicket.all_objects.all()
-    open_tickets = tickets.exclude(status__in=[TicketStatus.CLOSED, TicketStatus.ARCHIVED, TicketStatus.SPAM])
+    open_tickets = tickets.exclude(
+        status__in=[TicketStatus.CLOSED, TicketStatus.ARCHIVED, TicketStatus.SPAM]
+    )
     rated = SupportTicketSatisfaction.objects.all()
     total_ratings = rated.count()
     rating_sum = sum(rating.rating for rating in rated)
@@ -1469,7 +1890,9 @@ def get_admin_analytics_summary() -> dict[str, Any]:
         "reopened_tickets": reopened_count,
         "csat_average": round(rating_sum / total_ratings, 2) if total_ratings else 0,
         "csat_count": total_ratings,
-        "reopen_rate_percent": round((reopened_count / resolved_count) * 100, 2) if resolved_count else 0,
+        "reopen_rate_percent": round((reopened_count / resolved_count) * 100, 2)
+        if resolved_count
+        else 0,
         "escalation_rate_percent": round((escalated_count / max(tickets.count(), 1)) * 100, 2),
         "sla_breach_rate_percent": round((breached_count / max(tickets.count(), 1)) * 100, 2),
         "status_distribution": _distribution(tickets, "status"),
@@ -1478,7 +1901,12 @@ def get_admin_analytics_summary() -> dict[str, Any]:
         "ticket_type_distribution": _distribution(tickets, "ticket_type_id", "ticket_type__title"),
         "priority_distribution": _distribution(tickets, "priority"),
         "severity_distribution": _distribution(tickets, "severity"),
-        "assignee_distribution": _distribution(tickets.exclude(assigned_to__isnull=True), "assigned_to_id", "assigned_to__email", limit=30),
+        "assignee_distribution": _distribution(
+            tickets.exclude(assigned_to__isnull=True),
+            "assigned_to_id",
+            "assigned_to__email",
+            limit=30,
+        ),
         "csat_distribution": _distribution(rated, "rating"),
         "generated_at": timezone.now(),
     }
@@ -1486,4 +1914,12 @@ def get_admin_analytics_summary() -> dict[str, Any]:
 
 def _is_admin(user: Any) -> bool:
     """Return whether a user can perform support admin actions."""
-    return bool(user and getattr(user, "is_authenticated", False) and (getattr(user, "is_staff", False) or getattr(user, "is_superuser", False) or getattr(user, "role", "") == "admin"))
+    return bool(
+        user
+        and getattr(user, "is_authenticated", False)
+        and (
+            getattr(user, "is_staff", False)
+            or getattr(user, "is_superuser", False)
+            or getattr(user, "role", "") == "admin"
+        )
+    )

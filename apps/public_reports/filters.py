@@ -9,6 +9,7 @@ from .models import Report, ReportSubject
 
 class ReportFilter(django_filters.FilterSet):
     """ReportFilter implementation for the public_reports application."""
+
     status = django_filters.CharFilter(field_name="status", lookup_expr="iexact")
     subject = django_filters.NumberFilter(field_name="subject_id")
     created_from = django_filters.DateFilter(field_name="created_at", lookup_expr="gte")
@@ -21,6 +22,7 @@ class ReportFilter(django_filters.FilterSet):
 
 class ReportSubjectFilter(django_filters.FilterSet):
     """ReportSubjectFilter implementation for the public_reports application."""
+
     is_active = django_filters.BooleanFilter(field_name="is_active")
     title = django_filters.CharFilter(field_name="title", lookup_expr="icontains")
 

@@ -160,7 +160,12 @@ class TabyinContent(BaseModel):
         verbose_name_plural = "محتواهای تبیین"
         indexes = [
             models.Index(
-                fields=["is_active", "is_deleted_in_source", "submission_status", "-source_created_at"],
+                fields=[
+                    "is_active",
+                    "is_deleted_in_source",
+                    "submission_status",
+                    "-source_created_at",
+                ],
                 name="idx_tabyin_public_list",
             ),
             models.Index(

@@ -215,6 +215,7 @@ def _normalize_identifier_for_identifier_add(
 
 class ProfileSerializer(serializers.ModelSerializer):
     """ProfileSerializer implementation for the authentication application."""
+
     phone_number = serializers.CharField(
         source="user.phone_number",
         read_only=True,
@@ -238,6 +239,7 @@ class ProfileSerializer(serializers.ModelSerializer):
 
 class UserMeSerializer(serializers.ModelSerializer):
     """UserMeSerializer implementation for the authentication application."""
+
     profile = ProfileSerializer(read_only=True)
     full_name = serializers.CharField(read_only=True)
 
@@ -265,6 +267,7 @@ class UserMeSerializer(serializers.ModelSerializer):
 
 class UserAdminSerializer(serializers.ModelSerializer):
     """UserAdminSerializer implementation for the authentication application."""
+
     profile = ProfileSerializer(read_only=True)
     full_name = serializers.CharField(read_only=True)
 
@@ -295,6 +298,7 @@ class UserAdminSerializer(serializers.ModelSerializer):
 
 class RegisterSerializer(serializers.Serializer):
     """RegisterSerializer implementation for the authentication application."""
+
     email = serializers.EmailField()
     password = serializers.CharField(write_only=True, validators=[validate_password])
     first_name = serializers.CharField(required=False, allow_blank=True, max_length=100)
@@ -314,6 +318,7 @@ class RegisterSerializer(serializers.Serializer):
 
 class LoginSerializer(serializers.Serializer):
     """LoginSerializer implementation for the authentication application."""
+
     email = serializers.EmailField()
     password = serializers.CharField(write_only=True)
 
@@ -326,6 +331,7 @@ class LoginSerializer(serializers.Serializer):
 
 class VerifyEmailSerializer(serializers.Serializer):
     """VerifyEmailSerializer implementation for the authentication application."""
+
     email = serializers.EmailField()
     code = serializers.CharField(min_length=OTP_CODE_LENGTH, max_length=OTP_CODE_LENGTH)
 
@@ -338,6 +344,7 @@ class VerifyEmailSerializer(serializers.Serializer):
 
 class ResendVerificationSerializer(serializers.Serializer):
     """ResendVerificationSerializer implementation for the authentication application."""
+
     email = serializers.EmailField()
 
     def validate_email(self, value: str) -> str:
@@ -349,16 +356,19 @@ class ResendVerificationSerializer(serializers.Serializer):
 
 class RefreshTokenInputSerializer(serializers.Serializer):
     """RefreshTokenInputSerializer implementation for the authentication application."""
+
     refresh = serializers.CharField()
 
 
 class LogoutSerializer(serializers.Serializer):
     """LogoutSerializer implementation for the authentication application."""
+
     refresh = serializers.CharField()
 
 
 class ForgotPasswordSerializer(serializers.Serializer):
     """ForgotPasswordSerializer implementation for the authentication application."""
+
     email = serializers.EmailField()
 
     def validate_email(self, value: str) -> str:
@@ -370,6 +380,7 @@ class ForgotPasswordSerializer(serializers.Serializer):
 
 class ResetPasswordSerializer(serializers.Serializer):
     """ResetPasswordSerializer implementation for the authentication application."""
+
     email = serializers.EmailField()
     code = serializers.CharField(min_length=OTP_CODE_LENGTH, max_length=OTP_CODE_LENGTH)
     new_password = serializers.CharField(
@@ -386,6 +397,7 @@ class ResetPasswordSerializer(serializers.Serializer):
 
 class ChangePasswordSerializer(serializers.Serializer):
     """ChangePasswordSerializer implementation for the authentication application."""
+
     old_password = serializers.CharField(write_only=True)
     new_password = serializers.CharField(
         write_only=True,
@@ -570,12 +582,14 @@ class IdentifierMakePrimarySerializer(serializers.Serializer):
 
 class UpdateMeSerializer(serializers.Serializer):
     """UpdateMeSerializer implementation for the authentication application."""
+
     first_name = serializers.CharField(required=False, allow_blank=True, max_length=100)
     last_name = serializers.CharField(required=False, allow_blank=True, max_length=100)
 
 
 class UpdateProfileSerializer(serializers.Serializer):
     """UpdateProfileSerializer implementation for the authentication application."""
+
     phone_number = serializers.CharField(required=False, allow_blank=True, max_length=20)
     national_code = serializers.CharField(
         required=False,
@@ -611,6 +625,7 @@ class UpdateProfileSerializer(serializers.Serializer):
 
 class AdminUserUpdateSerializer(serializers.Serializer):
     """AdminUserUpdateSerializer implementation for the authentication application."""
+
     first_name = serializers.CharField(required=False, allow_blank=True, max_length=100)
     last_name = serializers.CharField(required=False, allow_blank=True, max_length=100)
     is_active = serializers.BooleanField(required=False)
@@ -619,6 +634,7 @@ class AdminUserUpdateSerializer(serializers.Serializer):
 
 class AdminChangeRoleSerializer(serializers.Serializer):
     """AdminChangeRoleSerializer implementation for the authentication application."""
+
     role = serializers.ChoiceField(choices=UserRole.choices)
 
 
@@ -626,10 +642,13 @@ class AdminChangeRoleSerializer(serializers.Serializer):
 # Auth Session Serializers
 # ============================================================
 
+
 class AuthSessionSerializer(serializers.ModelSerializer):
     """Read serializer for tracked user auth sessions/devices."""
 
-    revoked_by_email = serializers.EmailField(source="revoked_by.email", read_only=True, allow_null=True)
+    revoked_by_email = serializers.EmailField(
+        source="revoked_by.email", read_only=True, allow_null=True
+    )
     is_current = serializers.SerializerMethodField()
 
     class Meta:
@@ -695,11 +714,7 @@ class SessionAwareTokenRefreshSerializer(TokenRefreshSerializer):
         sid = refresh.get(SESSION_ID_CLAIM)
         session = None
         if sid is not None:
-            session = (
-                AuthSession.objects.only("is_revoked")
-                .filter(pk=sid, user_id=user_id)
-                .first()
-            )
+            session = AuthSession.objects.only("is_revoked").filter(pk=sid, user_id=user_id).first()
             if session is None or session.is_revoked:
                 raise InvalidToken(SESSION_REVOKED_MESSAGE)
 
@@ -725,11 +740,14 @@ class SessionAwareTokenRefreshSerializer(TokenRefreshSerializer):
             )
         return data
 
+
 class AuthRiskSignalSerializer(serializers.ModelSerializer):
     """Read serializer for authentication risk signals."""
 
     user_email = serializers.EmailField(source="user.email", read_only=True, allow_null=True)
-    reviewed_by_email = serializers.EmailField(source="reviewed_by.email", read_only=True, allow_null=True)
+    reviewed_by_email = serializers.EmailField(
+        source="reviewed_by.email", read_only=True, allow_null=True
+    )
     signal_type_display = serializers.CharField(source="get_signal_type_display", read_only=True)
     severity_display = serializers.CharField(source="get_severity_display", read_only=True)
     status_display = serializers.CharField(source="get_status_display", read_only=True)

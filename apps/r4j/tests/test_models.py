@@ -131,11 +131,15 @@ class TestUniqueConstraints:
             )
 
         R4JCriminalPhoto.objects.create(
-            criminal=criminal, image=_img("a.png"), is_primary=True,
+            criminal=criminal,
+            image=_img("a.png"),
+            is_primary=True,
         )
         with pytest.raises(IntegrityError):
             R4JCriminalPhoto.objects.create(
-                criminal=criminal, image=_img("b.png"), is_primary=True,
+                criminal=criminal,
+                image=_img("b.png"),
+                is_primary=True,
             )
 
 

@@ -35,6 +35,7 @@ _PUBLIC_STATUS_CHOICES = (
 # Campaign — public filter
 # ---------------------------------------------------------------------------
 
+
 class CampaignPublicFilter(filters.FilterSet):
     """
     فیلتر حرکت‌ها در endpoint عمومی.
@@ -76,7 +77,11 @@ class CampaignPublicFilter(filters.FilterSet):
         return apply_smart_search(
             queryset,
             search_term=value,
-            fields=[SearchField("title", "A"), SearchField("description", "B"), SearchField("sponsor__name", "C")],
+            fields=[
+                SearchField("title", "A"),
+                SearchField("description", "B"),
+                SearchField("sponsor__name", "C"),
+            ],
             trigram_fields=["title", "description", "sponsor__name"],
         )
 
@@ -84,6 +89,7 @@ class CampaignPublicFilter(filters.FilterSet):
 # ---------------------------------------------------------------------------
 # Campaign — admin filter
 # ---------------------------------------------------------------------------
+
 
 class CampaignAdminFilter(filters.FilterSet):
     """
@@ -163,7 +169,11 @@ class CampaignAdminFilter(filters.FilterSet):
         return apply_smart_search(
             queryset,
             search_term=value,
-            fields=[SearchField("title", "A"), SearchField("description", "B"), SearchField("sponsor__name", "C")],
+            fields=[
+                SearchField("title", "A"),
+                SearchField("description", "B"),
+                SearchField("sponsor__name", "C"),
+            ],
             trigram_fields=["title", "description", "sponsor__name"],
         )
 
@@ -171,6 +181,7 @@ class CampaignAdminFilter(filters.FilterSet):
 # ---------------------------------------------------------------------------
 # Sponsor — admin filter
 # ---------------------------------------------------------------------------
+
 
 class SponsorAdminFilter(filters.FilterSet):
     """فیلتر مددکاران برای ادمین."""

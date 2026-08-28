@@ -248,8 +248,7 @@ class TestMultiIdentifierAuthViews:
         assert response.status_code == 200
         assert response.data["success"] is True
         assert (
-            response.data["message"]
-            == "اگر حسابی با این شناسه وجود داشته باشد، کد ورود ارسال شد."
+            response.data["message"] == "اگر حسابی با این شناسه وجود داشته باشد، کد ورود ارسال شد."
         )
         assert OTPCode.objects.count() == 0
 
@@ -269,8 +268,7 @@ class TestMultiIdentifierAuthViews:
         assert response.status_code == 200
         assert response.data["success"] is True
         assert (
-            response.data["message"]
-            == "اگر حسابی با این شناسه وجود داشته باشد، کد ورود ارسال شد."
+            response.data["message"] == "اگر حسابی با این شناسه وجود داشته باشد، کد ورود ارسال شد."
         )
         assert OTPCode.objects.count() == 0
 

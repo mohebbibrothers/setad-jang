@@ -46,4 +46,3 @@ class SessionAwareJWTAuthenticationScheme(SimpleJWTScheme):
 
     target_class = "apps.authentication.jwt_auth.SessionAwareJWTAuthentication"
     name = "jwtAuth"
-

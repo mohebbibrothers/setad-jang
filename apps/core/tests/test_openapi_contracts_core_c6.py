@@ -16,9 +16,7 @@ from apps.core.api_contracts import (
 
 pytestmark = pytest.mark.django_db
 
-_ALLOWED_NON_JSON_PREFIXES = (
-    "/api/v1/metrics/",
-)
+_ALLOWED_NON_JSON_PREFIXES = ("/api/v1/metrics/",)
 
 _REQUIRED_COMPONENT_SCHEMAS = {
     "AuthenticationGenericErrorResponse",
@@ -49,7 +47,9 @@ def _iter_operations(schema: dict[str, Any]):
 def test_openapi_operation_ids_are_unique_and_non_empty(tmp_path: Path) -> None:
     """Every operation must have a stable unique operationId."""
     schema = _generate_schema(tmp_path)
-    operation_ids = [operation.get("operationId") for _path, _method, operation in _iter_operations(schema)]
+    operation_ids = [
+        operation.get("operationId") for _path, _method, operation in _iter_operations(schema)
+    ]
 
     assert all(operation_ids)
     assert len(operation_ids) == len(set(operation_ids))
@@ -100,5 +100,9 @@ def test_schema_has_no_generic_collision_enum_names(tmp_path: Path) -> None:
     schema = _generate_schema(tmp_path)
     component_schemas = set(schema.get("components", {}).get("schemas", {}))
 
-    assert not any(name.startswith("Status") and name.endswith("Enum") for name in component_schemas)
-    assert not any(name.startswith("Reason") and name.endswith("Enum") for name in component_schemas)
+    assert not any(
+        name.startswith("Status") and name.endswith("Enum") for name in component_schemas
+    )
+    assert not any(
+        name.startswith("Reason") and name.endswith("Enum") for name in component_schemas
+    )

@@ -118,35 +118,60 @@ class TabyinContentAdmin(admin.ModelAdmin):
         "updated_at",
     )
     fieldsets = (
-        ("وضعیت نمایش", {
-            "fields": ("is_active", "is_deleted_in_source"),
-        }),
-        ("محتوا", {
-            "fields": ("title", "description", "author_username"),
-        }),
-        ("منشأ و بررسی", {
-            "fields": ("origin", "submitted_by", "submission_status", "reviewed_by", "reviewed_at", "admin_note"),
-        }),
-        ("اطلاعات منبع خارجی", {
-            "fields": (
-                "external_id",
-                "source_entity_id",
-                "source_status",
-                "source_type",
-                "source_created_at",
-                "source_updated_at",
-                "source_url",
-                "content_hash",
-                "last_synced_at",
-            ),
-        }),
-        ("داده خام", {
-            "classes": ("collapse",),
-            "fields": ("raw_payload",),
-        }),
-        ("زمان‌ها", {
-            "fields": ("created_at", "updated_at"),
-        }),
+        (
+            "وضعیت نمایش",
+            {
+                "fields": ("is_active", "is_deleted_in_source"),
+            },
+        ),
+        (
+            "محتوا",
+            {
+                "fields": ("title", "description", "author_username"),
+            },
+        ),
+        (
+            "منشأ و بررسی",
+            {
+                "fields": (
+                    "origin",
+                    "submitted_by",
+                    "submission_status",
+                    "reviewed_by",
+                    "reviewed_at",
+                    "admin_note",
+                ),
+            },
+        ),
+        (
+            "اطلاعات منبع خارجی",
+            {
+                "fields": (
+                    "external_id",
+                    "source_entity_id",
+                    "source_status",
+                    "source_type",
+                    "source_created_at",
+                    "source_updated_at",
+                    "source_url",
+                    "content_hash",
+                    "last_synced_at",
+                ),
+            },
+        ),
+        (
+            "داده خام",
+            {
+                "classes": ("collapse",),
+                "fields": ("raw_payload",),
+            },
+        ),
+        (
+            "زمان‌ها",
+            {
+                "fields": ("created_at", "updated_at"),
+            },
+        ),
     )
     list_editable = ("is_active",)
     list_per_page = 30
@@ -230,18 +255,36 @@ class TabyinUserSubmissionAdmin(admin.ModelAdmin):
         "review_panel",
     )
     fieldsets = (
-        ("اطلاعات ارسال", {
-            "fields": ("title", "description", "submitted_by", "submission_status", "is_active"),
-        }),
-        ("بررسی ادمین", {
-            "fields": ("review_panel",),
-        }),
-        ("نتیجه بررسی", {
-            "fields": ("admin_note", "reviewed_by", "reviewed_at"),
-        }),
-        ("شناسه و زمان‌ها", {
-            "fields": ("external_id", "created_at", "updated_at"),
-        }),
+        (
+            "اطلاعات ارسال",
+            {
+                "fields": (
+                    "title",
+                    "description",
+                    "submitted_by",
+                    "submission_status",
+                    "is_active",
+                ),
+            },
+        ),
+        (
+            "بررسی ادمین",
+            {
+                "fields": ("review_panel",),
+            },
+        ),
+        (
+            "نتیجه بررسی",
+            {
+                "fields": ("admin_note", "reviewed_by", "reviewed_at"),
+            },
+        ),
+        (
+            "شناسه و زمان‌ها",
+            {
+                "fields": ("external_id", "created_at", "updated_at"),
+            },
+        ),
     )
     inlines = [TabyinAttachmentInline]
     list_per_page = 30
@@ -252,9 +295,13 @@ class TabyinUserSubmissionAdmin(admin.ModelAdmin):
 
     def get_queryset(self, request):
         """Show only user-submitted content in the dedicated review queue."""
-        return TabyinUserSubmission.all_objects.filter(
-            origin=ContentOrigin.USER_SUBMITTED,
-        ).select_related("submitted_by", "reviewed_by").annotate(_attachments_count=Count("attachments"))
+        return (
+            TabyinUserSubmission.all_objects.filter(
+                origin=ContentOrigin.USER_SUBMITTED,
+            )
+            .select_related("submitted_by", "reviewed_by")
+            .annotate(_attachments_count=Count("attachments"))
+        )
 
     @admin.display(description="عنوان")
     def title_short(self, obj: TabyinContent) -> str:
@@ -282,15 +329,16 @@ class TabyinUserSubmissionAdmin(admin.ModelAdmin):
             '<div style="margin-top: 1rem; display: flex; gap: .5rem;">'
             '<button type="submit" class="default" name="_tabyin_approve_submission" value="1">تأیید و انتشار</button>'
             '<button type="submit" name="_tabyin_reject_submission" value="1">رد ارسال</button>'
-            '</div>'
-            '</div>{}',
+            "</div>"
+            "</div>{}",
             "",
         )
 
     def changeform_view(self, request, object_id=None, form_url="", extra_context=None):
         """Route review submissions before default admin readonly validation."""
         if request.method == "POST" and (
-            "_tabyin_approve_submission" in request.POST or "_tabyin_reject_submission" in request.POST
+            "_tabyin_approve_submission" in request.POST
+            or "_tabyin_reject_submission" in request.POST
         ):
             obj = self.get_object(request, object_id)
             if obj is None:
@@ -305,11 +353,15 @@ class TabyinUserSubmissionAdmin(admin.ModelAdmin):
         admin_note = request.POST.get("tabyin_admin_note", "")
         try:
             if "_tabyin_approve_submission" in request.POST:
-                reviewed = services.approve_user_submission(content=obj, admin=request.user, admin_note=admin_note)
+                reviewed = services.approve_user_submission(
+                    content=obj, admin=request.user, admin_note=admin_note
+                )
                 action = audit_actions.TABYIN_USER_SUBMISSION_APPROVED
                 message = "محتوای ارسالی با موفقیت تأیید و منتشر شد."
             else:
-                reviewed = services.reject_user_submission(content=obj, admin=request.user, admin_note=admin_note)
+                reviewed = services.reject_user_submission(
+                    content=obj, admin=request.user, admin_note=admin_note
+                )
                 action = audit_actions.TABYIN_USER_SUBMISSION_REJECTED
                 message = "محتوای ارسالی رد شد."
         except services.SubmissionNotReviewable as exc:

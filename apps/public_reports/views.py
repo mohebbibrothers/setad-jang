@@ -373,8 +373,7 @@ class AdminSubjectDetailAPIView(APIView):
             resource_type="report_subject",
             resource_id=str(subject.pk),
             changes={
-                field: serializer.validated_data[field]
-                for field in serializer.validated_data
+                field: serializer.validated_data[field] for field in serializer.validated_data
             },
             **metadata,
         )
@@ -488,9 +487,7 @@ class AdminReportDetailAPIView(APIView):
         operation_id="reports_admin_report_retrieve",
         tags=[TAG_REPORTS_ADMIN_REPORTS],
         summary="جزئیات یک گزارش",
-        description=(
-            "دریافت اطلاعات کامل یک گزارش شامل پیوست‌ها و یادداشت‌های مدیریتی."
-        ),
+        description=("دریافت اطلاعات کامل یک گزارش شامل پیوست‌ها و یادداشت‌های مدیریتی."),
         responses={
             200: REPORT_DETAIL_SUCCESS_RESPONSE,
             403: GENERIC_ERROR_RESPONSE,

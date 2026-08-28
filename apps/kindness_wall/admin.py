@@ -41,7 +41,15 @@ class KindnessCategoryAdmin(admin.ModelAdmin):
     list_display = ("title", "parent", "depth", "order", "is_active", "published_listings_count")
     list_filter = ("is_active", "depth", "parent")
     search_fields = ("title", "slug", "path", "description")
-    readonly_fields = ("slug", "path", "depth", "listings_count", "published_listings_count", "created_at", "updated_at")
+    readonly_fields = (
+        "slug",
+        "path",
+        "depth",
+        "listings_count",
+        "published_listings_count",
+        "created_at",
+        "updated_at",
+    )
     ordering = ("depth", "order", "title")
 
 
@@ -49,7 +57,17 @@ class KindnessCategoryAdmin(admin.ModelAdmin):
 class KindnessListingAdmin(admin.ModelAdmin):
     """Admin moderation for kindness listings."""
 
-    list_display = ("title", "listing_type", "category", "owner", "status", "province", "city", "published_at", "expires_at")
+    list_display = (
+        "title",
+        "listing_type",
+        "category",
+        "owner",
+        "status",
+        "province",
+        "city",
+        "published_at",
+        "expires_at",
+    )
     list_filter = ("listing_type", "status", "category", "province", "city")
     search_fields = ("title", "description", "owner__email", "contact_phone_snapshot")
     readonly_fields = (
@@ -94,7 +112,14 @@ class KindnessKeywordAliasAdmin(admin.ModelAdmin):
 class KindnessMatchAdmin(admin.ModelAdmin):
     """Read-focused admin for generated matches."""
 
-    list_display = ("source_listing", "target_listing", "score", "status", "algorithm_version", "generated_at")
+    list_display = (
+        "source_listing",
+        "target_listing",
+        "score",
+        "status",
+        "algorithm_version",
+        "generated_at",
+    )
     list_filter = ("status", "algorithm_version")
     search_fields = ("source_listing__title", "target_listing__title", "explanation")
     readonly_fields = [field.name for field in KindnessMatch._meta.fields]
@@ -117,7 +142,14 @@ class KindnessMatchAdmin(admin.ModelAdmin):
 class KindnessContactRevealAdmin(admin.ModelAdmin):
     """Read-only admin for contact reveal audit records."""
 
-    list_display = ("listing", "viewer", "listing_owner", "phone_snapshot", "ip_address", "created_at")
+    list_display = (
+        "listing",
+        "viewer",
+        "listing_owner",
+        "phone_snapshot",
+        "ip_address",
+        "created_at",
+    )
     list_filter = ("created_at", "ip_address")
     search_fields = ("listing__title", "viewer__email", "listing_owner__email", "phone_snapshot")
     readonly_fields = [field.name for field in KindnessContactReveal._meta.fields]

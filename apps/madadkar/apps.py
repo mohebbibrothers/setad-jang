@@ -19,4 +19,3 @@ class MadadkarConfig(AppConfig):
     def ready(self) -> None:
         """Register public cache invalidation signal handlers."""
         from . import signals  # noqa: F401
-

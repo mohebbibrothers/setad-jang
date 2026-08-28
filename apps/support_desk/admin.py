@@ -40,7 +40,14 @@ class SupportTicketAttachmentInline(admin.TabularInline):
 
     model = SupportTicketAttachment
     extra = 0
-    fields = ("file", "original_filename", "attachment_kind", "visibility", "uploaded_by", "created_at")
+    fields = (
+        "file",
+        "original_filename",
+        "attachment_kind",
+        "visibility",
+        "uploaded_by",
+        "created_at",
+    )
     readonly_fields = ("created_at",)
     raw_id_fields = ("uploaded_by",)
 
@@ -69,10 +76,26 @@ class SupportDepartmentAdmin(admin.ModelAdmin):
 class SupportCategoryAdmin(admin.ModelAdmin):
     """Admin tree category management."""
 
-    list_display = ("title", "department", "parent", "depth", "order", "is_active", "open_tickets_count")
+    list_display = (
+        "title",
+        "department",
+        "parent",
+        "depth",
+        "order",
+        "is_active",
+        "open_tickets_count",
+    )
     list_filter = ("is_active", "department", "depth", "parent")
     search_fields = ("title", "slug", "path", "description")
-    readonly_fields = ("slug", "path", "depth", "tickets_count", "open_tickets_count", "created_at", "updated_at")
+    readonly_fields = (
+        "slug",
+        "path",
+        "depth",
+        "tickets_count",
+        "open_tickets_count",
+        "created_at",
+        "updated_at",
+    )
     raw_id_fields = ("department", "parent")
     ordering = ("depth", "order", "title")
 
@@ -81,7 +104,16 @@ class SupportCategoryAdmin(admin.ModelAdmin):
 class SupportBusinessCalendarAdmin(admin.ModelAdmin):
     """Admin business-hours calendar management."""
 
-    list_display = ("title", "department", "timezone_name", "workday_start", "workday_end", "active_weekdays", "is_default", "is_active")
+    list_display = (
+        "title",
+        "department",
+        "timezone_name",
+        "workday_start",
+        "workday_end",
+        "active_weekdays",
+        "is_default",
+        "is_active",
+    )
     list_filter = ("is_default", "is_active", "department")
     search_fields = ("title", "timezone_name")
     raw_id_fields = ("department",)
@@ -101,8 +133,23 @@ class SupportHolidayAdmin(admin.ModelAdmin):
 class SupportSLAPolicyAdmin(admin.ModelAdmin):
     """Admin SLA policy management."""
 
-    list_display = ("title", "department", "priority", "severity", "first_response_minutes", "resolution_minutes", "is_active")
-    list_filter = ("priority", "severity", "business_hours_only", "pause_when_waiting_for_user", "escalate_on_breach", "is_active")
+    list_display = (
+        "title",
+        "department",
+        "priority",
+        "severity",
+        "first_response_minutes",
+        "resolution_minutes",
+        "is_active",
+    )
+    list_filter = (
+        "priority",
+        "severity",
+        "business_hours_only",
+        "pause_when_waiting_for_user",
+        "escalate_on_breach",
+        "is_active",
+    )
     search_fields = ("title", "slug")
     readonly_fields = ("slug", "created_at", "updated_at")
     raw_id_fields = ("department",)
@@ -113,7 +160,15 @@ class SupportSLAPolicyAdmin(admin.ModelAdmin):
 class SupportTicketTypeAdmin(admin.ModelAdmin):
     """Admin dynamic ticket type/reason management."""
 
-    list_display = ("title", "code", "default_department", "default_category", "default_priority", "default_severity", "is_active")
+    list_display = (
+        "title",
+        "code",
+        "default_department",
+        "default_category",
+        "default_priority",
+        "default_severity",
+        "is_active",
+    )
     list_filter = ("default_priority", "default_severity", "is_active")
     search_fields = ("title", "code", "description")
     raw_id_fields = ("default_department", "default_category", "default_sla_policy")
@@ -124,9 +179,25 @@ class SupportTicketTypeAdmin(admin.ModelAdmin):
 class SupportTicketAdmin(admin.ModelAdmin):
     """Admin ticket queue and detail inspection."""
 
-    list_display = ("ticket_number", "subject", "owner", "department", "status", "priority", "severity", "assigned_to", "last_activity_at")
+    list_display = (
+        "ticket_number",
+        "subject",
+        "owner",
+        "department",
+        "status",
+        "priority",
+        "severity",
+        "assigned_to",
+        "last_activity_at",
+    )
     list_filter = ("status", "priority", "severity", "department", "ticket_type", "channel")
-    search_fields = ("ticket_number", "subject", "description_snapshot", "owner__email", "owner__phone_number")
+    search_fields = (
+        "ticket_number",
+        "subject",
+        "description_snapshot",
+        "owner__email",
+        "owner__phone_number",
+    )
     readonly_fields = (
         "uuid",
         "ticket_number",
@@ -155,7 +226,14 @@ class SupportTicketAdmin(admin.ModelAdmin):
 class SupportTicketMessageAdmin(admin.ModelAdmin):
     """Admin timeline message inspection."""
 
-    list_display = ("ticket", "author", "message_type", "is_internal", "is_from_staff", "created_at")
+    list_display = (
+        "ticket",
+        "author",
+        "message_type",
+        "is_internal",
+        "is_from_staff",
+        "created_at",
+    )
     list_filter = ("message_type", "is_internal", "is_from_staff")
     search_fields = ("ticket__ticket_number", "ticket__subject", "author__email", "body")
     raw_id_fields = ("ticket", "author")
@@ -165,7 +243,15 @@ class SupportTicketMessageAdmin(admin.ModelAdmin):
 class SupportTicketAttachmentAdmin(admin.ModelAdmin):
     """Admin support attachment inspection."""
 
-    list_display = ("original_filename", "ticket", "uploaded_by", "attachment_kind", "visibility", "file_size", "created_at")
+    list_display = (
+        "original_filename",
+        "ticket",
+        "uploaded_by",
+        "attachment_kind",
+        "visibility",
+        "file_size",
+        "created_at",
+    )
     list_filter = ("attachment_kind", "visibility", "content_type")
     search_fields = ("original_filename", "ticket__ticket_number", "uploaded_by__email")
     raw_id_fields = ("ticket", "message", "uploaded_by")
@@ -194,7 +280,14 @@ class SupportCannedResponseAdmin(admin.ModelAdmin):
 class SupportTicketAssignmentAdmin(admin.ModelAdmin):
     """Admin assignment history inspection."""
 
-    list_display = ("ticket", "assigned_by", "from_assignee", "assigned_to", "department", "created_at")
+    list_display = (
+        "ticket",
+        "assigned_by",
+        "from_assignee",
+        "assigned_to",
+        "department",
+        "created_at",
+    )
     search_fields = ("ticket__ticket_number", "reason")
     raw_id_fields = ("ticket", "assigned_by", "from_assignee", "assigned_to", "department")
 
@@ -243,10 +336,26 @@ class SupportDuplicateCandidateAdmin(admin.ModelAdmin):
 class SupportKnowledgeArticleAdmin(admin.ModelAdmin):
     """Admin management for support knowledge base articles."""
 
-    list_display = ("title", "department", "category", "ticket_type", "status", "usage_count", "published_at", "is_active")
+    list_display = (
+        "title",
+        "department",
+        "category",
+        "ticket_type",
+        "status",
+        "usage_count",
+        "published_at",
+        "is_active",
+    )
     list_filter = ("status", "department", "category", "ticket_type", "is_active")
     search_fields = ("title", "slug", "summary", "body")
-    readonly_fields = ("slug", "usage_count", "published_at", "archived_at", "created_at", "updated_at")
+    readonly_fields = (
+        "slug",
+        "usage_count",
+        "published_at",
+        "archived_at",
+        "created_at",
+        "updated_at",
+    )
     raw_id_fields = ("department", "category", "ticket_type")
     ordering = ("title",)
 

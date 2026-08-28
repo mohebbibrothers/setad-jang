@@ -12,6 +12,14 @@ urlpatterns = [
     path("me/read-all/", views.NotificationMarkAllReadView.as_view(), name="mark-all-read"),
     path("me/preferences/", views.NotificationPreferenceListSetView.as_view(), name="preferences"),
     path("admin/events/", views.NotificationAdminEventListView.as_view(), name="admin-event-list"),
-    path("admin/deliveries/", views.NotificationAdminDeliveryListView.as_view(), name="admin-delivery-list"),
-    path("admin/templates/", views.NotificationAdminTemplateListView.as_view(), name="admin-template-list"),
+    path(
+        "admin/deliveries/",
+        views.NotificationAdminDeliveryListView.as_view(),
+        name="admin-delivery-list",
+    ),
+    path(
+        "admin/templates/",
+        views.NotificationAdminTemplateListView.as_view(),
+        name="admin-template-list",
+    ),
 ]

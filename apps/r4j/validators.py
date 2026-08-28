@@ -67,9 +67,7 @@ PHOTO_MAX_SIZE_BYTES: Final[int] = 5 * 1024 * 1024
 ATTACHMENT_MAX_SIZE_BYTES: Final[int] = 20 * 1024 * 1024
 
 #: پسوندهای مجاز عکس
-PHOTO_ALLOWED_EXTENSIONS: Final[frozenset[str]] = frozenset(
-    {".jpg", ".jpeg", ".png", ".webp"}
-)
+PHOTO_ALLOWED_EXTENSIONS: Final[frozenset[str]] = frozenset({".jpg", ".jpeg", ".png", ".webp"})
 
 #: پسوندهای مجاز فایل پیوست
 ATTACHMENT_ALLOWED_EXTENSIONS: Final[frozenset[str]] = frozenset(
@@ -129,8 +127,7 @@ def validate_bounty_amount(value: int) -> None:
     """
     if value < R4J_BOUNTY_MIN_TOMAN:
         raise ValidationError(
-            f"حداقل مبلغ جایزه {R4J_BOUNTY_MIN_TOMAN:,} تومان است. "
-            f"مبلغ وارد شده: {value:,} تومان.",
+            f"حداقل مبلغ جایزه {R4J_BOUNTY_MIN_TOMAN:,} تومان است. مبلغ وارد شده: {value:,} تومان.",
             code="bounty_amount_too_low",
         )
 
@@ -325,8 +322,7 @@ def validate_reportable_field(field_name: str) -> None:
     if field_name not in REPORTABLE_CRIMINAL_FIELDS:
         allowed = ", ".join(sorted(REPORTABLE_CRIMINAL_FIELDS))
         raise ValidationError(
-            f"فیلد «{field_name}» قابل گزارش‌دهی نیست. "
-            f"فیلدهای مجاز: {allowed}",
+            f"فیلد «{field_name}» قابل گزارش‌دهی نیست. فیلدهای مجاز: {allowed}",
             code="field_not_reportable",
         )
 

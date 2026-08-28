@@ -7,6 +7,7 @@ from rest_framework.permissions import BasePermission
 
 class IsAdmin(BasePermission):
     """IsAdmin implementation for the core application."""
+
     message = "شما دسترسی ادمین ندارید."
 
     def has_permission(self, request, view):
@@ -15,6 +16,7 @@ class IsAdmin(BasePermission):
 
 class IsSuperAdmin(BasePermission):
     """IsSuperAdmin implementation for the core application."""
+
     message = "شما دسترسی سوپرادمین ندارید."
 
     def has_permission(self, request, view):
@@ -23,6 +25,7 @@ class IsSuperAdmin(BasePermission):
 
 class IsOwner(BasePermission):
     """IsOwner implementation for the core application."""
+
     message = "شما مالک این آبجکت نیستید."
 
     def has_object_permission(self, request, view, obj):

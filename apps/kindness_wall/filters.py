@@ -32,7 +32,11 @@ class KindnessListingPublicFilter(django_filters.FilterSet):
         return apply_smart_search(
             queryset,
             search_term=value,
-            fields=[SearchField("title", "A"), SearchField("description", "B"), SearchField("search_document", "C")],
+            fields=[
+                SearchField("title", "A"),
+                SearchField("description", "B"),
+                SearchField("search_document", "C"),
+            ],
             trigram_fields=["title", "description"],
         )
 
@@ -73,7 +77,9 @@ class KindnessMatchAdminFilter(django_filters.FilterSet):
 
     def filter_category(self, queryset, name, value):
         """Filter matches where either side belongs to a category slug."""
-        return queryset.filter(Q(source_listing__category__slug=value) | Q(target_listing__category__slug=value))
+        return queryset.filter(
+            Q(source_listing__category__slug=value) | Q(target_listing__category__slug=value)
+        )
 
 
 class KindnessContactRevealAdminFilter(django_filters.FilterSet):

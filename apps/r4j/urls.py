@@ -76,7 +76,6 @@ urlpatterns = [
         R4JPublicCriminalDetailView.as_view(),
         name="public-criminal-detail",
     ),
-
     # ====================================================
     # User — Report Submit (روی criminal)
     # ====================================================
@@ -85,7 +84,6 @@ urlpatterns = [
         R4JUserReportSubmitView.as_view(),
         name="user-report-submit",
     ),
-
     # ====================================================
     # User — Bounty Set (روی criminal)
     # ====================================================
@@ -94,7 +92,6 @@ urlpatterns = [
         R4JUserBountySetView.as_view(),
         name="user-bounty-set",
     ),
-
     # ====================================================
     # User — My Reports
     # ====================================================
@@ -113,7 +110,6 @@ urlpatterns = [
         R4JUserReportCancelView.as_view(),
         name="user-report-cancel",
     ),
-
     # ====================================================
     # User — My Bounties
     # ====================================================
@@ -127,7 +123,6 @@ urlpatterns = [
         R4JUserBountyCancelView.as_view(),
         name="user-bounty-cancel",
     ),
-
     # ====================================================
     # Admin — Evidence custody
     # ====================================================
@@ -141,7 +136,6 @@ urlpatterns = [
         R4JAdminEvidenceCustodyReviewView.as_view(),
         name="admin-evidence-custody-review",
     ),
-
     # ====================================================
     # Admin — Criminals CRUD
     # ====================================================
@@ -165,7 +159,6 @@ urlpatterns = [
         R4JAdminCriminalUnpublishView.as_view(),
         name="admin-criminal-unpublish",
     ),
-
     # ====================================================
     # Admin — Nested: Aliases
     # ====================================================
@@ -179,7 +172,6 @@ urlpatterns = [
         R4JAdminAliasDeleteView.as_view(),
         name="admin-alias-delete",
     ),
-
     # ====================================================
     # Admin — Nested: Phones
     # ====================================================
@@ -193,7 +185,6 @@ urlpatterns = [
         R4JAdminPhoneDetailView.as_view(),
         name="admin-phone-detail",
     ),
-
     # ====================================================
     # Admin — Nested: Socials
     # ====================================================
@@ -207,7 +198,6 @@ urlpatterns = [
         R4JAdminSocialDetailView.as_view(),
         name="admin-social-detail",
     ),
-
     # ====================================================
     # Admin — Nested: Photos
     # ====================================================
@@ -226,7 +216,6 @@ urlpatterns = [
         R4JAdminPhotoSetPrimaryView.as_view(),
         name="admin-photo-set-primary",
     ),
-
     # ====================================================
     # Admin — Nested: Attachments
     # ====================================================
@@ -240,7 +229,6 @@ urlpatterns = [
         R4JAdminAttachmentDetailView.as_view(),
         name="admin-attachment-detail",
     ),
-
     # ====================================================
     # Admin — Field Visibility
     # ====================================================
@@ -249,7 +237,6 @@ urlpatterns = [
         R4JAdminFieldVisibilityListUpsertView.as_view(),
         name="admin-visibility-list-upsert",
     ),
-
     # ====================================================
     # Admin — Reports
     # ====================================================
@@ -278,7 +265,6 @@ urlpatterns = [
         R4JAdminReportCancelRejectView.as_view(),
         name="admin-report-cancel-reject",
     ),
-
     # ====================================================
     # Admin — Bounties
     # ====================================================

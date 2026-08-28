@@ -293,7 +293,15 @@ class OTPCodeAdmin(admin.ModelAdmin):
 class AuthSessionAdmin(admin.ModelAdmin):
     """Read-oriented standalone security admin for tracked auth sessions/devices."""
 
-    list_display = ("id", "user", "device_label", "ip_address", "is_revoked", "last_seen_at", "expires_at")
+    list_display = (
+        "id",
+        "user",
+        "device_label",
+        "ip_address",
+        "is_revoked",
+        "last_seen_at",
+        "expires_at",
+    )
     list_filter = ("is_revoked", "device_label")
     search_fields = ("user__email", "user__phone_number", "refresh_jti", "ip_address", "user_agent")
     readonly_fields = [field.name for field in AuthSession._meta.fields]

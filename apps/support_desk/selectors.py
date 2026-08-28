@@ -27,7 +27,9 @@ def get_active_departments() -> QuerySet[SupportDepartment]:
 
 def get_admin_departments() -> QuerySet[SupportDepartment]:
     """Return all departments for admin taxonomy management."""
-    return SupportDepartment.all_objects.select_related("default_assignee").order_by("order", "title")
+    return SupportDepartment.all_objects.select_related("default_assignee").order_by(
+        "order", "title"
+    )
 
 
 def get_admin_department_by_id(*, department_id: int) -> SupportDepartment | None:
@@ -37,12 +39,16 @@ def get_admin_department_by_id(*, department_id: int) -> SupportDepartment | Non
 
 def get_active_category_tree() -> QuerySet[SupportCategory]:
     """Return active category tree with department loaded."""
-    return SupportCategory.objects.select_related("department", "parent").order_by("depth", "order", "title")
+    return SupportCategory.objects.select_related("department", "parent").order_by(
+        "depth", "order", "title"
+    )
 
 
 def get_admin_business_calendars() -> QuerySet[SupportBusinessCalendar]:
     """Return all business calendars for admin management."""
-    return SupportBusinessCalendar.objects.select_related("department").order_by("-is_default", "title")
+    return SupportBusinessCalendar.objects.select_related("department").order_by(
+        "-is_default", "title"
+    )
 
 
 def get_admin_business_calendar_by_id(*, calendar_id: int) -> SupportBusinessCalendar | None:
@@ -52,7 +58,9 @@ def get_admin_business_calendar_by_id(*, calendar_id: int) -> SupportBusinessCal
 
 def get_admin_holidays() -> QuerySet[SupportHoliday]:
     """Return all support holidays for admin management."""
-    return SupportHoliday.objects.select_related("calendar", "calendar__department").order_by("date")
+    return SupportHoliday.objects.select_related("calendar", "calendar__department").order_by(
+        "date"
+    )
 
 
 def get_admin_holiday_by_id(*, holiday_id: int) -> SupportHoliday | None:
@@ -62,7 +70,9 @@ def get_admin_holiday_by_id(*, holiday_id: int) -> SupportHoliday | None:
 
 def get_admin_category_tree() -> QuerySet[SupportCategory]:
     """Return all categories for admin tree management."""
-    return SupportCategory.all_objects.select_related("department", "parent").order_by("depth", "order", "title")
+    return SupportCategory.all_objects.select_related("department", "parent").order_by(
+        "depth", "order", "title"
+    )
 
 
 def get_admin_category_by_id(*, category_id: int) -> SupportCategory | None:
@@ -72,30 +82,24 @@ def get_admin_category_by_id(*, category_id: int) -> SupportCategory | None:
 
 def get_active_ticket_types() -> QuerySet[SupportTicketType]:
     """Return active dynamic ticket types for user ticket creation."""
-    return (
-        SupportTicketType.objects.select_related(
-            "default_department",
-            "default_category",
-            "default_category__department",
-            "default_category__parent",
-            "default_sla_policy",
-        )
-        .order_by("order", "title")
-    )
+    return SupportTicketType.objects.select_related(
+        "default_department",
+        "default_category",
+        "default_category__department",
+        "default_category__parent",
+        "default_sla_policy",
+    ).order_by("order", "title")
 
 
 def get_admin_ticket_types() -> QuerySet[SupportTicketType]:
     """Return all ticket types for admin management."""
-    return (
-        SupportTicketType.all_objects.select_related(
-            "default_department",
-            "default_category",
-            "default_category__department",
-            "default_category__parent",
-            "default_sla_policy",
-        )
-        .order_by("order", "title")
-    )
+    return SupportTicketType.all_objects.select_related(
+        "default_department",
+        "default_category",
+        "default_category__department",
+        "default_category__parent",
+        "default_sla_policy",
+    ).order_by("order", "title")
 
 
 def get_admin_ticket_type_by_id(*, ticket_type_id: int) -> SupportTicketType | None:
@@ -115,7 +119,9 @@ def get_admin_sla_policy_by_id(*, policy_id: int) -> SupportSLAPolicy | None:
 
 def get_admin_canned_responses() -> QuerySet[SupportCannedResponse]:
     """Return all canned responses for admin management."""
-    return SupportCannedResponse.all_objects.select_related("department", "category").order_by("title")
+    return SupportCannedResponse.all_objects.select_related("department", "category").order_by(
+        "title"
+    )
 
 
 def get_admin_canned_response_by_id(*, canned_response_id: int) -> SupportCannedResponse | None:
@@ -133,7 +139,9 @@ def _message_queryset(*, include_internal: bool = False) -> QuerySet[SupportTick
 
 def _attachment_queryset(*, include_internal: bool = False) -> QuerySet[SupportTicketAttachment]:
     """Return optimized attachment queryset."""
-    queryset = SupportTicketAttachment.objects.select_related("uploaded_by").order_by("created_at", "id")
+    queryset = SupportTicketAttachment.objects.select_related("uploaded_by").order_by(
+        "created_at", "id"
+    )
     if not include_internal:
         queryset = queryset.exclude(visibility="internal_only")
     return queryset
@@ -213,7 +221,9 @@ def get_admin_messages() -> QuerySet[SupportTicketMessage]:
 
 def get_admin_satisfaction_ratings() -> QuerySet[SupportTicketSatisfaction]:
     """Return CSAT ratings for admin export."""
-    return SupportTicketSatisfaction.objects.select_related("ticket", "user").order_by("-created_at")
+    return SupportTicketSatisfaction.objects.select_related("ticket", "user").order_by(
+        "-created_at"
+    )
 
 
 def get_admin_sla_tickets() -> QuerySet[SupportTicket]:
@@ -223,10 +233,9 @@ def get_admin_sla_tickets() -> QuerySet[SupportTicket]:
 
 def get_admin_duplicate_candidates() -> QuerySet[SupportDuplicateCandidate]:
     """Return duplicate candidates for admin review."""
-    return (
-        SupportDuplicateCandidate.objects.select_related("ticket", "candidate_ticket", "reviewed_by")
-        .order_by("-score", "-created_at")
-    )
+    return SupportDuplicateCandidate.objects.select_related(
+        "ticket", "candidate_ticket", "reviewed_by"
+    ).order_by("-score", "-created_at")
 
 
 def get_admin_duplicate_candidate_by_id(*, duplicate_id: int) -> SupportDuplicateCandidate | None:
@@ -237,8 +246,7 @@ def get_admin_duplicate_candidate_by_id(*, duplicate_id: int) -> SupportDuplicat
 def get_published_knowledge_articles() -> QuerySet[SupportKnowledgeArticle]:
     """Return public/help-center visible support knowledge articles."""
     return (
-        SupportKnowledgeArticle.objects
-        .select_related("department", "category", "ticket_type")
+        SupportKnowledgeArticle.objects.select_related("department", "category", "ticket_type")
         .filter(status="published", is_active=True)
         .order_by("title")
     )
@@ -251,7 +259,9 @@ def get_public_knowledge_article_by_slug(*, slug: str) -> SupportKnowledgeArticl
 
 def get_admin_knowledge_articles() -> QuerySet[SupportKnowledgeArticle]:
     """Return all knowledge articles for admin management."""
-    return SupportKnowledgeArticle.all_objects.select_related("department", "category", "ticket_type").order_by("title")
+    return SupportKnowledgeArticle.all_objects.select_related(
+        "department", "category", "ticket_type"
+    ).order_by("title")
 
 
 def get_admin_knowledge_article_by_id(*, article_id: int) -> SupportKnowledgeArticle | None:
@@ -261,4 +271,6 @@ def get_admin_knowledge_article_by_id(*, article_id: int) -> SupportKnowledgeArt
 
 def get_admin_knowledge_article_uses() -> QuerySet[SupportKnowledgeArticleUse]:
     """Return knowledge article usage events for admin analytics."""
-    return SupportKnowledgeArticleUse.objects.select_related("article", "ticket", "used_by").order_by("-created_at")
+    return SupportKnowledgeArticleUse.objects.select_related(
+        "article", "ticket", "used_by"
+    ).order_by("-created_at")

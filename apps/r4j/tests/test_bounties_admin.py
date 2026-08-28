@@ -285,9 +285,7 @@ class TestAdminBountyList:
 
         assert response.status_code == status.HTTP_200_OK
         results = response.data["data"]["results"]
-        assert all(
-            r["status"] == BountyStatus.CANCEL_REQUESTED for r in results
-        )
+        assert all(r["status"] == BountyStatus.CANCEL_REQUESTED for r in results)
 
 
 # ============================================================

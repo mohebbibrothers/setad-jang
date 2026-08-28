@@ -95,7 +95,15 @@ class LessonAdmin(admin.ModelAdmin):
 class EnrollmentAdmin(admin.ModelAdmin):
     """Read-focused admin report for course participants."""
 
-    list_display = ("id", "course", "user", "status", "progress_percent", "enrolled_at", "completed_at")
+    list_display = (
+        "id",
+        "course",
+        "user",
+        "status",
+        "progress_percent",
+        "enrolled_at",
+        "completed_at",
+    )
     list_filter = ("status", "course")
     search_fields = ("course__title", "user__email", "user__phone_number")
     readonly_fields = (
@@ -160,7 +168,14 @@ class LessonQuestionAdmin(admin.ModelAdmin):
 class LessonAnswerAdmin(admin.ModelAdmin):
     """Admin moderation for lesson answers."""
 
-    list_display = ("question", "user", "status", "is_instructor_answer", "is_accepted", "created_at")
+    list_display = (
+        "question",
+        "user",
+        "status",
+        "is_instructor_answer",
+        "is_accepted",
+        "created_at",
+    )
     list_filter = ("status", "is_instructor_answer", "is_accepted")
     search_fields = ("body", "user__email", "question__title")
 
@@ -186,7 +201,14 @@ class QuizQuestionInline(admin.TabularInline):
 class QuizAdmin(admin.ModelAdmin):
     """Admin configuration for course quizzes."""
 
-    list_display = ("title", "course", "status", "passing_score", "max_attempts", "time_limit_minutes")
+    list_display = (
+        "title",
+        "course",
+        "status",
+        "passing_score",
+        "max_attempts",
+        "time_limit_minutes",
+    )
     list_filter = ("status", "course")
     search_fields = ("title", "course__title")
     readonly_fields = ("published_at", "created_at", "updated_at")
@@ -215,7 +237,15 @@ class QuizOptionAdmin(admin.ModelAdmin):
 class QuizAttemptAdmin(admin.ModelAdmin):
     """Read-only quiz attempt report."""
 
-    list_display = ("id", "quiz", "user", "attempt_number", "status", "score_out_of_20", "is_passed")
+    list_display = (
+        "id",
+        "quiz",
+        "user",
+        "attempt_number",
+        "status",
+        "score_out_of_20",
+        "is_passed",
+    )
     list_filter = ("status", "is_passed", "quiz")
     search_fields = ("user__email", "quiz__title", "course__title")
     readonly_fields = [field.name for field in QuizAttempt._meta.fields]
@@ -312,7 +342,15 @@ class LMSUserSkillAdmin(admin.ModelAdmin):
 class LessonVideoProcessingJobAdmin(admin.ModelAdmin):
     """Read-oriented admin for LMS video processing jobs."""
 
-    list_display = ("id", "lesson", "status", "provider", "requested_by", "created_at", "completed_at")
+    list_display = (
+        "id",
+        "lesson",
+        "status",
+        "provider",
+        "requested_by",
+        "created_at",
+        "completed_at",
+    )
     list_filter = ("status", "provider")
     search_fields = ("lesson__title", "lesson__course__title", "source_file_name")
     readonly_fields = [field.name for field in LessonVideoProcessingJob._meta.fields]

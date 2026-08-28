@@ -84,19 +84,21 @@ User = get_user_model()
 #:
 #: نکته: این مقدار باید با REPORTABLE_CRIMINAL_FIELDS در validators.py
 #: هم‌راستا باشد. تغییر در یکی باید در دیگری هم اعمال شود.
-REPORTABLE_CRIMINAL_FIELDS: frozenset[str] = frozenset({
-    "first_name",
-    "last_name",
-    "national_code",
-    "birth_date",
-    "gender",
-    "country",
-    "province",
-    "city",
-    "description",
-    "crimes_summary",
-    "other_info",
-})
+REPORTABLE_CRIMINAL_FIELDS: frozenset[str] = frozenset(
+    {
+        "first_name",
+        "last_name",
+        "national_code",
+        "birth_date",
+        "gender",
+        "country",
+        "province",
+        "city",
+        "description",
+        "crimes_summary",
+        "other_info",
+    }
+)
 
 
 # ============================================================
@@ -414,7 +416,8 @@ def add_photo(
     """افزودن عکس جدید با مدیریت خودکار primary."""
     if is_primary:
         R4JCriminalPhoto.objects.filter(
-            criminal=criminal, is_primary=True,
+            criminal=criminal,
+            is_primary=True,
         ).update(is_primary=False, updated_at=timezone.now())
 
     obj = R4JCriminalPhoto.objects.create(
@@ -437,7 +440,8 @@ def add_photo(
 def set_primary_photo(*, photo: R4JCriminalPhoto) -> R4JCriminalPhoto:
     """تنظیم یک photo به‌عنوان primary — سایرین خودکار demote می‌شوند."""
     R4JCriminalPhoto.objects.filter(
-        criminal_id=photo.criminal_id, is_primary=True,
+        criminal_id=photo.criminal_id,
+        is_primary=True,
     ).exclude(pk=photo.pk).update(is_primary=False, updated_at=timezone.now())
 
     if not photo.is_primary:
@@ -520,9 +524,23 @@ def _finalize_evidence_hash(*, attachment: Any, actor: User | None) -> None:
     attachment.file_sha256 = file_hash
     attachment.file_size = file_size
     attachment.save(update_fields=["file_sha256", "file_size", "updated_at"])
-    kwargs = {"criminal_attachment": attachment} if isinstance(attachment, R4JCriminalAttachment) else {"report_attachment": attachment}
-    _create_custody_event(**kwargs, event_type=EvidenceCustodyEventType.UPLOADED, actor=actor, metadata={"file_size": file_size})
-    _create_custody_event(**kwargs, event_type=EvidenceCustodyEventType.HASHED, actor=actor, metadata={"sha256": file_hash})
+    kwargs = (
+        {"criminal_attachment": attachment}
+        if isinstance(attachment, R4JCriminalAttachment)
+        else {"report_attachment": attachment}
+    )
+    _create_custody_event(
+        **kwargs,
+        event_type=EvidenceCustodyEventType.UPLOADED,
+        actor=actor,
+        metadata={"file_size": file_size},
+    )
+    _create_custody_event(
+        **kwargs,
+        event_type=EvidenceCustodyEventType.HASHED,
+        actor=actor,
+        metadata={"sha256": file_hash},
+    )
 
 
 @transaction.atomic
@@ -742,6 +760,7 @@ def request_report_cancel(*, report: R4JReport, user: User) -> R4JReport:
 # Reports — review (توسط admin)
 # ============================================================
 
+
 def _decision_map(decisions: list[dict[str, Any]] | None, id_key: str) -> dict[int, dict[str, Any]]:
     """Build an id-indexed decision map for report review resources."""
     return {int(item[id_key]): item for item in decisions or [] if id_key in item}
@@ -797,7 +816,10 @@ def _promote_report_attachment(*, attachment: R4JReportAttachment, actor: User) 
         criminal_attachment=criminal_attachment,
         event_type=EvidenceCustodyEventType.TRANSFERRED,
         actor=actor,
-        metadata={"source_report_attachment_id": attachment.pk, "source_report_id": attachment.report_id},
+        metadata={
+            "source_report_attachment_id": attachment.pk,
+            "source_report_id": attachment.report_id,
+        },
     )
 
 
@@ -821,11 +843,12 @@ def _apply_suggestion_decisions(
         suggestion.status = new_status
         suggestion.admin_note = decision.get("admin_note", "")
         if new_status == ReportFieldChangeStatus.APPROVED:
-            apply_callback(suggestion=suggestion) if id_key != "attachment_id" else apply_callback(attachment=suggestion, actor=actor)
+            apply_callback(suggestion=suggestion) if id_key != "attachment_id" else apply_callback(
+                attachment=suggestion, actor=actor
+            )
         suggestion.save()
         final_statuses.append(suggestion.status)
     return final_statuses
-
 
 
 @transaction.atomic
@@ -873,9 +896,7 @@ def review_report(
             "برای گزارش‌های در وضعیت درخواست لغو از endpoint مربوطه استفاده کنید.",
         )
 
-    decisions_map: dict[int, dict[str, Any]] = {
-        d["field_change_id"]: d for d in field_decisions
-    }
+    decisions_map: dict[int, dict[str, Any]] = {d["field_change_id"]: d for d in field_decisions}
 
     field_changes = list(report.field_changes.all())
     approved_changes: list[R4JReportFieldChange] = []
@@ -932,10 +953,7 @@ def review_report(
     )
     final_statuses = set(all_statuses)
 
-    if (
-        not final_statuses
-        or final_statuses == {ReportFieldChangeStatus.APPROVED}
-    ):
+    if not final_statuses or final_statuses == {ReportFieldChangeStatus.APPROVED}:
         final_status = ReportStatus.APPROVED
     elif final_statuses == {ReportFieldChangeStatus.REJECTED}:
         final_status = ReportStatus.REJECTED

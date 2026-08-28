@@ -61,7 +61,9 @@ def default_workday_end() -> time:
     return time(17, 0)
 
 
-def _unique_slug(*, model: type[models.Model], value: str, max_length: int, exclude_pk: int | None = None) -> str:
+def _unique_slug(
+    *, model: type[models.Model], value: str, max_length: int, exclude_pk: int | None = None
+) -> str:
     """Generate collision-safe unicode slug for a model."""
     base = slugify(value, allow_unicode=True)[:max_length] or uuid.uuid4().hex[:12]
     candidate = base
@@ -87,7 +89,12 @@ def _build_ticket_number() -> str:
     """Build a user-friendly, low-guessability support ticket number."""
     now = timezone.now()
     prefix = f"SUP-{now:%Y%m}"
-    sequence = SupportTicket.all_objects.filter(created_at__year=now.year, created_at__month=now.month).count() + 1
+    sequence = (
+        SupportTicket.all_objects.filter(
+            created_at__year=now.year, created_at__month=now.month
+        ).count()
+        + 1
+    )
     for _attempt in range(20):
         random_part = secrets.token_hex(2).upper()
         candidate = f"{prefix}-{sequence:04d}-{random_part}"
@@ -125,7 +132,9 @@ class SupportDepartment(BaseModel):
     def save(self, *args: Any, **kwargs: Any) -> None:
         """Generate stable unique slug."""
         if not self.slug:
-            self.slug = _unique_slug(model=SupportDepartment, value=self.title, max_length=220, exclude_pk=self.pk)
+            self.slug = _unique_slug(
+                model=SupportDepartment, value=self.title, max_length=220, exclude_pk=self.pk
+            )
         super().save(*args, **kwargs)
 
 
@@ -139,7 +148,9 @@ class SupportCategory(BaseModel):
         blank=True,
         related_name="children",
     )
-    department = models.ForeignKey(SupportDepartment, on_delete=models.PROTECT, related_name="categories")
+    department = models.ForeignKey(
+        SupportDepartment, on_delete=models.PROTECT, related_name="categories"
+    )
     title = models.CharField(max_length=180)
     slug = models.SlugField(max_length=220, unique=True, allow_unicode=True, blank=True)
     path = models.CharField(max_length=700, unique=True, blank=True, db_index=True)
@@ -162,7 +173,10 @@ class SupportCategory(BaseModel):
             models.Index(fields=["path"]),
         ]
         constraints = [
-            models.UniqueConstraint(fields=["parent", "department", "title"], name="uniq_support_category_parent_department_title"),
+            models.UniqueConstraint(
+                fields=["parent", "department", "title"],
+                name="uniq_support_category_parent_department_title",
+            ),
             models.UniqueConstraint(
                 fields=["department", "title"],
                 condition=models.Q(parent__isnull=True),
@@ -176,7 +190,9 @@ class SupportCategory(BaseModel):
     def save(self, *args: Any, **kwargs: Any) -> None:
         """Generate slug/path/depth consistently for the support category tree."""
         if not self.slug:
-            self.slug = _unique_slug(model=SupportCategory, value=self.title, max_length=220, exclude_pk=self.pk)
+            self.slug = _unique_slug(
+                model=SupportCategory, value=self.title, max_length=220, exclude_pk=self.pk
+            )
         if self.parent_id:
             parent = self.parent
             self.depth = parent.depth + 1
@@ -191,7 +207,13 @@ class SupportBusinessCalendar(BaseModel):
     """Department-specific business hours calendar for SLA calculations."""
 
     title = models.CharField(max_length=180)
-    department = models.ForeignKey(SupportDepartment, on_delete=models.PROTECT, null=True, blank=True, related_name="business_calendars")
+    department = models.ForeignKey(
+        SupportDepartment,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="business_calendars",
+    )
     timezone_name = models.CharField(max_length=80, default="Asia/Tehran")
     workday_start = models.TimeField(default=default_workday_start)
     workday_end = models.TimeField(default=default_workday_end)
@@ -217,7 +239,9 @@ class SupportBusinessCalendar(BaseModel):
 class SupportHoliday(BaseModel):
     """Holiday or exceptional non-working day for support SLA calendars."""
 
-    calendar = models.ForeignKey(SupportBusinessCalendar, on_delete=models.CASCADE, related_name="holidays")
+    calendar = models.ForeignKey(
+        SupportBusinessCalendar, on_delete=models.CASCADE, related_name="holidays"
+    )
     date = models.DateField()
     title = models.CharField(max_length=180)
 
@@ -225,7 +249,11 @@ class SupportHoliday(BaseModel):
         verbose_name = "تعطیلی پشتیبانی"
         verbose_name_plural = "تعطیلی‌های پشتیبانی"
         ordering = ["date"]
-        constraints = [models.UniqueConstraint(fields=["calendar", "date"], name="uniq_support_holiday_calendar_date")]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["calendar", "date"], name="uniq_support_holiday_calendar_date"
+            )
+        ]
         indexes = [models.Index(fields=["calendar", "date"])]
 
     def __str__(self) -> str:
@@ -237,9 +265,19 @@ class SupportSLAPolicy(BaseModel):
 
     title = models.CharField(max_length=180, unique=True)
     slug = models.SlugField(max_length=220, unique=True, allow_unicode=True, blank=True)
-    department = models.ForeignKey(SupportDepartment, on_delete=models.PROTECT, null=True, blank=True, related_name="sla_policies")
-    priority = models.CharField(max_length=20, choices=TicketPriority.choices, default=TicketPriority.NORMAL)
-    severity = models.CharField(max_length=20, choices=TicketSeverity.choices, default=TicketSeverity.MINOR)
+    department = models.ForeignKey(
+        SupportDepartment,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="sla_policies",
+    )
+    priority = models.CharField(
+        max_length=20, choices=TicketPriority.choices, default=TicketPriority.NORMAL
+    )
+    severity = models.CharField(
+        max_length=20, choices=TicketSeverity.choices, default=TicketSeverity.MINOR
+    )
     first_response_minutes = models.PositiveIntegerField(default=24 * 60)
     resolution_minutes = models.PositiveIntegerField(default=72 * 60)
     business_hours_only = models.BooleanField(default=False)
@@ -259,7 +297,9 @@ class SupportSLAPolicy(BaseModel):
     def save(self, *args: Any, **kwargs: Any) -> None:
         """Generate stable unique slug."""
         if not self.slug:
-            self.slug = _unique_slug(model=SupportSLAPolicy, value=self.title, max_length=220, exclude_pk=self.pk)
+            self.slug = _unique_slug(
+                model=SupportSLAPolicy, value=self.title, max_length=220, exclude_pk=self.pk
+            )
         super().save(*args, **kwargs)
 
 
@@ -269,11 +309,33 @@ class SupportTicketType(BaseModel):
     code = models.SlugField(max_length=80, unique=True, allow_unicode=False)
     title = models.CharField(max_length=180, unique=True)
     description = models.TextField(blank=True)
-    default_department = models.ForeignKey(SupportDepartment, on_delete=models.PROTECT, null=True, blank=True, related_name="default_ticket_types")
-    default_category = models.ForeignKey(SupportCategory, on_delete=models.PROTECT, null=True, blank=True, related_name="default_ticket_types")
-    default_priority = models.CharField(max_length=20, choices=TicketPriority.choices, default=TicketPriority.NORMAL)
-    default_severity = models.CharField(max_length=20, choices=TicketSeverity.choices, default=TicketSeverity.MINOR)
-    default_sla_policy = models.ForeignKey(SupportSLAPolicy, on_delete=models.PROTECT, null=True, blank=True, related_name="ticket_types")
+    default_department = models.ForeignKey(
+        SupportDepartment,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="default_ticket_types",
+    )
+    default_category = models.ForeignKey(
+        SupportCategory,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="default_ticket_types",
+    )
+    default_priority = models.CharField(
+        max_length=20, choices=TicketPriority.choices, default=TicketPriority.NORMAL
+    )
+    default_severity = models.CharField(
+        max_length=20, choices=TicketSeverity.choices, default=TicketSeverity.MINOR
+    )
+    default_sla_policy = models.ForeignKey(
+        SupportSLAPolicy,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="ticket_types",
+    )
     order = models.PositiveIntegerField(default=0)
 
     class Meta:
@@ -291,17 +353,37 @@ class SupportTicket(BaseModel):
 
     uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     ticket_number = models.CharField(max_length=40, unique=True, blank=True, db_index=True)
-    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="support_tickets")
-    department = models.ForeignKey(SupportDepartment, on_delete=models.PROTECT, related_name="tickets")
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="support_tickets"
+    )
+    department = models.ForeignKey(
+        SupportDepartment, on_delete=models.PROTECT, related_name="tickets"
+    )
     category = models.ForeignKey(SupportCategory, on_delete=models.PROTECT, related_name="tickets")
-    ticket_type = models.ForeignKey(SupportTicketType, on_delete=models.PROTECT, related_name="tickets")
+    ticket_type = models.ForeignKey(
+        SupportTicketType, on_delete=models.PROTECT, related_name="tickets"
+    )
     subject = models.CharField(max_length=260)
     description_snapshot = models.TextField()
-    status = models.CharField(max_length=30, choices=TicketStatus.choices, default=TicketStatus.DRAFT, db_index=True)
-    priority = models.CharField(max_length=20, choices=TicketPriority.choices, default=TicketPriority.NORMAL, db_index=True)
-    severity = models.CharField(max_length=20, choices=TicketSeverity.choices, default=TicketSeverity.MINOR, db_index=True)
-    channel = models.CharField(max_length=20, choices=TicketChannel.choices, default=TicketChannel.WEB)
-    assigned_to = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="assigned_support_tickets")
+    status = models.CharField(
+        max_length=30, choices=TicketStatus.choices, default=TicketStatus.DRAFT, db_index=True
+    )
+    priority = models.CharField(
+        max_length=20, choices=TicketPriority.choices, default=TicketPriority.NORMAL, db_index=True
+    )
+    severity = models.CharField(
+        max_length=20, choices=TicketSeverity.choices, default=TicketSeverity.MINOR, db_index=True
+    )
+    channel = models.CharField(
+        max_length=20, choices=TicketChannel.choices, default=TicketChannel.WEB
+    )
+    assigned_to = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="assigned_support_tickets",
+    )
 
     submitted_at = models.DateTimeField(null=True, blank=True)
     first_admin_response_at = models.DateTimeField(null=True, blank=True)
@@ -312,10 +394,18 @@ class SupportTicket(BaseModel):
     closed_at = models.DateTimeField(null=True, blank=True)
     reopened_at = models.DateTimeField(null=True, blank=True)
     escalated_at = models.DateTimeField(null=True, blank=True)
-    escalated_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="escalated_support_tickets")
+    escalated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="escalated_support_tickets",
+    )
     escalation_reason = models.TextField(blank=True)
 
-    applied_sla_policy = models.ForeignKey(SupportSLAPolicy, on_delete=models.SET_NULL, null=True, blank=True, related_name="tickets")
+    applied_sla_policy = models.ForeignKey(
+        SupportSLAPolicy, on_delete=models.SET_NULL, null=True, blank=True, related_name="tickets"
+    )
     first_response_due_at = models.DateTimeField(null=True, blank=True)
     resolution_due_at = models.DateTimeField(null=True, blank=True)
     sla_breached_at = models.DateTimeField(null=True, blank=True, db_index=True)
@@ -378,7 +468,9 @@ class SupportTicketMessage(BaseModel):
     """A public or internal timeline entry for a support ticket."""
 
     ticket = models.ForeignKey(SupportTicket, on_delete=models.CASCADE, related_name="messages")
-    author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="support_messages")
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="support_messages"
+    )
     message_type = models.CharField(max_length=30, choices=TicketMessageType.choices)
     body = models.TextField()
     is_internal = models.BooleanField(default=False)
@@ -391,7 +483,10 @@ class SupportTicketMessage(BaseModel):
         verbose_name = "پیام تیکت پشتیبانی"
         verbose_name_plural = "پیام‌های تیکت پشتیبانی"
         ordering = ["created_at", "id"]
-        indexes = [models.Index(fields=["ticket", "created_at"]), models.Index(fields=["ticket", "is_internal", "created_at"])]
+        indexes = [
+            models.Index(fields=["ticket", "created_at"]),
+            models.Index(fields=["ticket", "is_internal", "created_at"]),
+        ]
 
     def __str__(self) -> str:
         return f"{self.ticket.ticket_number} — {self.get_message_type_display()}"
@@ -401,14 +496,29 @@ class SupportTicketAttachment(BaseModel):
     """Validated attachment connected to a ticket/message."""
 
     ticket = models.ForeignKey(SupportTicket, on_delete=models.CASCADE, related_name="attachments")
-    message = models.ForeignKey(SupportTicketMessage, on_delete=models.CASCADE, null=True, blank=True, related_name="attachments")
-    uploaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="support_attachments")
-    file = models.FileField(upload_to=support_attachment_upload_path, validators=[validate_attachment_extension, validate_attachment_size])
+    message = models.ForeignKey(
+        SupportTicketMessage,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="attachments",
+    )
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="support_attachments"
+    )
+    file = models.FileField(
+        upload_to=support_attachment_upload_path,
+        validators=[validate_attachment_extension, validate_attachment_size],
+    )
     original_filename = models.CharField(max_length=260)
     content_type = models.CharField(max_length=120, blank=True)
     file_size = models.PositiveIntegerField(default=0)
-    attachment_kind = models.CharField(max_length=30, choices=AttachmentKind.choices, default=AttachmentKind.OTHER)
-    visibility = models.CharField(max_length=30, choices=AttachmentVisibility.choices, default=AttachmentVisibility.PUBLIC)
+    attachment_kind = models.CharField(
+        max_length=30, choices=AttachmentKind.choices, default=AttachmentKind.OTHER
+    )
+    visibility = models.CharField(
+        max_length=30, choices=AttachmentVisibility.choices, default=AttachmentVisibility.PUBLIC
+    )
 
     class Meta:
         verbose_name = "ضمیمه تیکت پشتیبانی"
@@ -441,7 +551,9 @@ class SupportTag(BaseModel):
         if not self.normalized_name:
             self.normalized_name = _normalize_text(self.name)
         if not self.slug:
-            self.slug = _unique_slug(model=SupportTag, value=self.normalized_name, max_length=160, exclude_pk=self.pk)
+            self.slug = _unique_slug(
+                model=SupportTag, value=self.normalized_name, max_length=160, exclude_pk=self.pk
+            )
         super().save(*args, **kwargs)
 
 
@@ -453,8 +565,13 @@ class SupportTicketTag(BaseModel):
     source = models.CharField(max_length=30, choices=TagSource.choices, default=TagSource.ADMIN)
 
     class Meta:
-        constraints = [models.UniqueConstraint(fields=["ticket", "tag"], name="uniq_support_ticket_tag")]
-        indexes = [models.Index(fields=["tag", "source"]), models.Index(fields=["ticket", "source"])]
+        constraints = [
+            models.UniqueConstraint(fields=["ticket", "tag"], name="uniq_support_ticket_tag")
+        ]
+        indexes = [
+            models.Index(fields=["tag", "source"]),
+            models.Index(fields=["ticket", "source"]),
+        ]
 
     def __str__(self) -> str:
         return f"{self.ticket.ticket_number} — {self.tag.name}"
@@ -463,8 +580,20 @@ class SupportTicketTag(BaseModel):
 class SupportCannedResponse(BaseModel):
     """Admin-managed reusable response macro."""
 
-    department = models.ForeignKey(SupportDepartment, on_delete=models.PROTECT, null=True, blank=True, related_name="canned_responses")
-    category = models.ForeignKey(SupportCategory, on_delete=models.PROTECT, null=True, blank=True, related_name="canned_responses")
+    department = models.ForeignKey(
+        SupportDepartment,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="canned_responses",
+    )
+    category = models.ForeignKey(
+        SupportCategory,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="canned_responses",
+    )
     title = models.CharField(max_length=180, unique=True)
     body = models.TextField()
     usage_count = models.PositiveIntegerField(default=0)
@@ -482,15 +611,38 @@ class SupportCannedResponse(BaseModel):
 class SupportKnowledgeArticle(BaseModel):
     """Admin-managed knowledge base article for support self-service and replies."""
 
-    department = models.ForeignKey(SupportDepartment, on_delete=models.PROTECT, null=True, blank=True, related_name="knowledge_articles")
-    category = models.ForeignKey(SupportCategory, on_delete=models.PROTECT, null=True, blank=True, related_name="knowledge_articles")
-    ticket_type = models.ForeignKey(SupportTicketType, on_delete=models.PROTECT, null=True, blank=True, related_name="knowledge_articles")
+    department = models.ForeignKey(
+        SupportDepartment,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="knowledge_articles",
+    )
+    category = models.ForeignKey(
+        SupportCategory,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="knowledge_articles",
+    )
+    ticket_type = models.ForeignKey(
+        SupportTicketType,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="knowledge_articles",
+    )
     title = models.CharField(max_length=220, unique=True)
     slug = models.SlugField(max_length=260, unique=True, allow_unicode=True, blank=True)
     summary = models.TextField(blank=True)
     body = models.TextField()
     keywords = models.JSONField(default=list, blank=True)
-    status = models.CharField(max_length=20, choices=KnowledgeArticleStatus.choices, default=KnowledgeArticleStatus.DRAFT, db_index=True)
+    status = models.CharField(
+        max_length=20,
+        choices=KnowledgeArticleStatus.choices,
+        default=KnowledgeArticleStatus.DRAFT,
+        db_index=True,
+    )
     published_at = models.DateTimeField(null=True, blank=True)
     archived_at = models.DateTimeField(null=True, blank=True)
     usage_count = models.PositiveIntegerField(default=0)
@@ -511,16 +663,32 @@ class SupportKnowledgeArticle(BaseModel):
     def save(self, *args: Any, **kwargs: Any) -> None:
         """Generate stable slug for knowledge article."""
         if not self.slug:
-            self.slug = _unique_slug(model=SupportKnowledgeArticle, value=self.title, max_length=260, exclude_pk=self.pk)
+            self.slug = _unique_slug(
+                model=SupportKnowledgeArticle, value=self.title, max_length=260, exclude_pk=self.pk
+            )
         super().save(*args, **kwargs)
 
 
 class SupportKnowledgeArticleUse(BaseModel):
     """Audit-friendly record of a knowledge article used in support context."""
 
-    article = models.ForeignKey(SupportKnowledgeArticle, on_delete=models.PROTECT, related_name="uses")
-    ticket = models.ForeignKey(SupportTicket, on_delete=models.CASCADE, null=True, blank=True, related_name="knowledge_article_uses")
-    used_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="support_knowledge_uses")
+    article = models.ForeignKey(
+        SupportKnowledgeArticle, on_delete=models.PROTECT, related_name="uses"
+    )
+    ticket = models.ForeignKey(
+        SupportTicket,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="knowledge_article_uses",
+    )
+    used_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="support_knowledge_uses",
+    )
     context = models.CharField(max_length=40, default="reply")
     metadata = models.JSONField(default=dict, blank=True)
 
@@ -528,7 +696,10 @@ class SupportKnowledgeArticleUse(BaseModel):
         verbose_name = "استفاده از مقاله پایگاه دانش"
         verbose_name_plural = "استفاده‌های مقاله پایگاه دانش"
         ordering = ["-created_at"]
-        indexes = [models.Index(fields=["article", "-created_at"]), models.Index(fields=["ticket", "-created_at"])]
+        indexes = [
+            models.Index(fields=["article", "-created_at"]),
+            models.Index(fields=["ticket", "-created_at"]),
+        ]
 
     def __str__(self) -> str:
         return f"{self.article_id}:{self.context}"
@@ -537,28 +708,64 @@ class SupportKnowledgeArticleUse(BaseModel):
 class SupportTicketAssignment(BaseModel):
     """Immutable-ish assignment history for support tickets."""
 
-    ticket = models.ForeignKey(SupportTicket, on_delete=models.CASCADE, related_name="assignment_history")
-    assigned_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="support_assignments_made")
-    from_assignee = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="support_assignments_from")
-    assigned_to = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="support_assignments_to")
-    department = models.ForeignKey(SupportDepartment, on_delete=models.PROTECT, null=True, blank=True, related_name="assignment_history")
+    ticket = models.ForeignKey(
+        SupportTicket, on_delete=models.CASCADE, related_name="assignment_history"
+    )
+    assigned_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="support_assignments_made"
+    )
+    from_assignee = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="support_assignments_from",
+    )
+    assigned_to = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="support_assignments_to",
+    )
+    department = models.ForeignKey(
+        SupportDepartment,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="assignment_history",
+    )
     reason = models.TextField(blank=True)
 
     class Meta:
-        indexes = [models.Index(fields=["ticket", "-created_at"]), models.Index(fields=["assigned_to", "-created_at"])]
+        indexes = [
+            models.Index(fields=["ticket", "-created_at"]),
+            models.Index(fields=["assigned_to", "-created_at"]),
+        ]
 
 
 class SupportTicketStatusHistory(BaseModel):
     """Status transition history for support tickets."""
 
-    ticket = models.ForeignKey(SupportTicket, on_delete=models.CASCADE, related_name="status_history")
-    changed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name="support_status_changes")
+    ticket = models.ForeignKey(
+        SupportTicket, on_delete=models.CASCADE, related_name="status_history"
+    )
+    changed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="support_status_changes",
+    )
     from_status = models.CharField(max_length=30, choices=TicketStatus.choices, blank=True)
     to_status = models.CharField(max_length=30, choices=TicketStatus.choices)
     reason = models.TextField(blank=True)
 
     class Meta:
-        indexes = [models.Index(fields=["ticket", "-created_at"]), models.Index(fields=["to_status", "-created_at"])]
+        indexes = [
+            models.Index(fields=["ticket", "-created_at"]),
+            models.Index(fields=["to_status", "-created_at"]),
+        ]
 
 
 class SupportSLAEvent(BaseModel):
@@ -570,19 +777,33 @@ class SupportSLAEvent(BaseModel):
     metadata = models.JSONField(default=dict, blank=True)
 
     class Meta:
-        indexes = [models.Index(fields=["ticket", "occurred_at"]), models.Index(fields=["event_type", "occurred_at"])]
+        indexes = [
+            models.Index(fields=["ticket", "occurred_at"]),
+            models.Index(fields=["event_type", "occurred_at"]),
+        ]
 
 
 class SupportTicketSatisfaction(BaseModel):
     """User-submitted satisfaction rating after ticket resolution."""
 
-    ticket = models.OneToOneField(SupportTicket, on_delete=models.CASCADE, related_name="satisfaction")
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="support_satisfaction_ratings")
+    ticket = models.OneToOneField(
+        SupportTicket, on_delete=models.CASCADE, related_name="satisfaction"
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="support_satisfaction_ratings",
+    )
     rating = models.PositiveSmallIntegerField()
     comment = models.TextField(blank=True)
 
     class Meta:
-        constraints = [models.CheckConstraint(name="support_satisfaction_rating_1_5", condition=models.Q(rating__gte=1, rating__lte=5))]
+        constraints = [
+            models.CheckConstraint(
+                name="support_satisfaction_rating_1_5",
+                condition=models.Q(rating__gte=1, rating__lte=5),
+            )
+        ]
         indexes = [models.Index(fields=["rating", "-created_at"])]
 
     def __str__(self) -> str:
@@ -592,20 +813,40 @@ class SupportTicketSatisfaction(BaseModel):
 class SupportDuplicateCandidate(BaseModel):
     """Potential duplicate ticket relation surfaced by smart triage."""
 
-    ticket = models.ForeignKey(SupportTicket, on_delete=models.CASCADE, related_name="duplicate_candidates")
-    candidate_ticket = models.ForeignKey(SupportTicket, on_delete=models.CASCADE, related_name="duplicate_of_candidates")
+    ticket = models.ForeignKey(
+        SupportTicket, on_delete=models.CASCADE, related_name="duplicate_candidates"
+    )
+    candidate_ticket = models.ForeignKey(
+        SupportTicket, on_delete=models.CASCADE, related_name="duplicate_of_candidates"
+    )
     score = models.PositiveSmallIntegerField(validators=[validate_duplicate_score])
     reason = models.TextField(blank=True)
-    status = models.CharField(max_length=20, choices=DuplicateReviewStatus.choices, default=DuplicateReviewStatus.ACTIVE)
-    reviewed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="support_duplicate_reviews")
+    status = models.CharField(
+        max_length=20, choices=DuplicateReviewStatus.choices, default=DuplicateReviewStatus.ACTIVE
+    )
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="support_duplicate_reviews",
+    )
     reviewed_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         constraints = [
-            models.UniqueConstraint(fields=["ticket", "candidate_ticket"], name="uniq_support_duplicate_candidate"),
-            models.CheckConstraint(name="support_duplicate_not_self", condition=~models.Q(ticket=models.F("candidate_ticket"))),
+            models.UniqueConstraint(
+                fields=["ticket", "candidate_ticket"], name="uniq_support_duplicate_candidate"
+            ),
+            models.CheckConstraint(
+                name="support_duplicate_not_self",
+                condition=~models.Q(ticket=models.F("candidate_ticket")),
+            ),
         ]
-        indexes = [models.Index(fields=["ticket", "status", "-score"]), models.Index(fields=["status", "-created_at"])]
+        indexes = [
+            models.Index(fields=["ticket", "status", "-score"]),
+            models.Index(fields=["status", "-created_at"]),
+        ]
 
     def __str__(self) -> str:
         return f"{self.ticket.ticket_number} ~ {self.candidate_ticket.ticket_number} ({self.score})"

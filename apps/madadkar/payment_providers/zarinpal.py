@@ -79,10 +79,7 @@ class ZarinpalProvider(AbstractPaymentProvider):
         self.is_sandbox = getattr(settings, "MADADKAR_ZARINPAL_SANDBOX", True)
 
         if not self.merchant_id:
-            msg = (
-                "ZarinpalProvider نیاز به MADADKAR_ZARINPAL_MERCHANT_ID در "
-                "settings دارد."
-            )
+            msg = "ZarinpalProvider نیاز به MADADKAR_ZARINPAL_MERCHANT_ID در settings دارد."
             raise ZarinpalNotConfiguredError(msg)
 
     @property
@@ -301,11 +298,15 @@ class ZarinpalProvider(AbstractPaymentProvider):
         try:
             data = response.json()
         except ValueError:
-            logger.warning("Zarinpal %s returned invalid JSON body=%s", operation, response.text[:300])
+            logger.warning(
+                "Zarinpal %s returned invalid JSON body=%s", operation, response.text[:300]
+            )
             return {}, "درگاه پرداخت پاسخ JSON نامعتبر برگرداند."
 
         if not isinstance(data, dict):
-            logger.warning("Zarinpal %s returned non-object JSON type=%s", operation, type(data).__name__)
+            logger.warning(
+                "Zarinpal %s returned non-object JSON type=%s", operation, type(data).__name__
+            )
             return {}, "درگاه پرداخت پاسخ غیرمنتظره برگرداند."
 
         return data, ""

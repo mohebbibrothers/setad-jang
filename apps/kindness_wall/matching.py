@@ -103,31 +103,58 @@ def jaccard_score(left: Iterable[str], right: Iterable[str], *, max_points: int)
     return round((len(left_set & right_set) / len(left_set | right_set)) * max_points)
 
 
-def calculate_match_score(*, source, target, synonyms: dict[str, set[str]] | None = None) -> MatchScore:
+def calculate_match_score(
+    *, source, target, synonyms: dict[str, set[str]] | None = None
+) -> MatchScore:
     """Calculate a 0..100 match score between opposite listing types."""
     if source.pk == target.pk or source.listing_type == target.listing_type:
-        return MatchScore(score=0, breakdown={}, reason_codes=["same_type_or_self"], explanation="این آگهی قابل تطبیق نیست.")
+        return MatchScore(
+            score=0,
+            breakdown={},
+            reason_codes=["same_type_or_self"],
+            explanation="این آگهی قابل تطبیق نیست.",
+        )
 
     breakdown: dict[str, int] = {}
     reasons: list[str] = ["opposite_type"]
     breakdown["type_complementarity"] = 30
 
-    breakdown["category_similarity"] = _category_score(source=source, target=target, reasons=reasons)
-    breakdown["location_similarity"] = _location_score(source=source, target=target, reasons=reasons)
+    breakdown["category_similarity"] = _category_score(
+        source=source, target=target, reasons=reasons
+    )
+    breakdown["location_similarity"] = _location_score(
+        source=source, target=target, reasons=reasons
+    )
 
     source_title_tokens = tokenize(source.title, synonyms=synonyms)
     target_title_tokens = tokenize(target.title, synonyms=synonyms)
     source_desc_tokens = tokenize(source.description, synonyms=synonyms)
     target_desc_tokens = tokenize(target.description, synonyms=synonyms)
-    breakdown["title_similarity"] = jaccard_score(source_title_tokens, target_title_tokens, max_points=20)
-    breakdown["description_similarity"] = jaccard_score(source_desc_tokens, target_desc_tokens, max_points=10)
+    breakdown["title_similarity"] = jaccard_score(
+        source_title_tokens, target_title_tokens, max_points=20
+    )
+    breakdown["description_similarity"] = jaccard_score(
+        source_desc_tokens, target_desc_tokens, max_points=10
+    )
     if breakdown["title_similarity"]:
         reasons.append("title_overlap")
     if breakdown["description_similarity"]:
         reasons.append("description_overlap")
 
-    source_tags = set(source.listing_tags.select_related("tag").values_list("tag__normalized_name", flat=True)) if getattr(source, "pk", None) else set()
-    target_tags = set(target.listing_tags.select_related("tag").values_list("tag__normalized_name", flat=True)) if getattr(target, "pk", None) else set()
+    source_tags = (
+        set(
+            source.listing_tags.select_related("tag").values_list("tag__normalized_name", flat=True)
+        )
+        if getattr(source, "pk", None)
+        else set()
+    )
+    target_tags = (
+        set(
+            target.listing_tags.select_related("tag").values_list("tag__normalized_name", flat=True)
+        )
+        if getattr(target, "pk", None)
+        else set()
+    )
     breakdown["tag_similarity"] = jaccard_score(source_tags, target_tags, max_points=15)
     if breakdown["tag_similarity"]:
         reasons.append("tag_overlap")
@@ -139,12 +166,16 @@ def calculate_match_score(*, source, target, synonyms: dict[str, set[str]] | Non
 
     score = min(sum(breakdown.values()), 100)
     explanation = _build_explanation(score=score, reasons=reasons)
-    return MatchScore(score=score, breakdown=breakdown, reason_codes=reasons, explanation=explanation)
+    return MatchScore(
+        score=score, breakdown=breakdown, reason_codes=reasons, explanation=explanation
+    )
 
 
 def opposite_listing_type(listing_type: str) -> str:
     """Return the complementary fixed listing type."""
-    return ListingType.OFFER_HELP if listing_type == ListingType.NEED_HELP else ListingType.NEED_HELP
+    return (
+        ListingType.OFFER_HELP if listing_type == ListingType.NEED_HELP else ListingType.NEED_HELP
+    )
 
 
 def _category_score(*, source, target, reasons: list[str]) -> int:
@@ -179,7 +210,11 @@ def _location_score(*, source, target, reasons: list[str]) -> int:
     if source.city and target.city and normalize_text(source.city) == normalize_text(target.city):
         reasons.append("same_city")
         return 15
-    if source.province and target.province and normalize_text(source.province) == normalize_text(target.province):
+    if (
+        source.province
+        and target.province
+        and normalize_text(source.province) == normalize_text(target.province)
+    ):
         reasons.append("same_province")
         return 8
     if not source.city or not target.city:
@@ -191,11 +226,16 @@ def _distance_km(*, source, target) -> float | None:
     """Return haversine distance in kilometers when both listings have coordinates."""
     if None in {source.latitude, source.longitude, target.latitude, target.longitude}:
         return None
-    lat1, lon1, lat2, lon2 = map(float, [source.latitude, source.longitude, target.latitude, target.longitude])
+    lat1, lon1, lat2, lon2 = map(
+        float, [source.latitude, source.longitude, target.latitude, target.longitude]
+    )
     radius_km = 6371.0
     dlat = math.radians(lat2 - lat1)
     dlon = math.radians(lon2 - lon1)
-    a = math.sin(dlat / 2) ** 2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2) ** 2
+    a = (
+        math.sin(dlat / 2) ** 2
+        + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2) ** 2
+    )
     return radius_km * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
 
@@ -232,5 +272,13 @@ def _build_explanation(*, score: int, reasons: list[str]) -> str:
         "verified_phone": "شماره تماس کمک‌کننده/درخواست‌کننده تأیید شده است",
     }
     parts = [labels[reason] for reason in reasons if reason in labels]
-    strength = "بسیار بالا" if score >= 80 else "بالا" if score >= 60 else "متوسط" if score >= 40 else "ضعیف"
+    strength = (
+        "بسیار بالا"
+        if score >= 80
+        else "بالا"
+        if score >= 60
+        else "متوسط"
+        if score >= 40
+        else "ضعیف"
+    )
     return f"میزان تطابق {strength} است: " + "، ".join(parts)

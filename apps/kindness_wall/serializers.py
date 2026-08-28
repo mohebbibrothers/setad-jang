@@ -99,7 +99,9 @@ class KindnessListingListSerializer(serializers.ModelSerializer):
     def get_cover_image(self, obj: KindnessListing) -> str | None:
         """Return cover image URL if available."""
         images = list(obj.images.all())
-        cover = next((image for image in images if image.is_cover), None) or (images[0] if images else None)
+        cover = next((image for image in images if image.is_cover), None) or (
+            images[0] if images else None
+        )
         return cover.image.url if cover else None
 
 
@@ -130,7 +132,16 @@ class KindnessMatchSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = KindnessMatch
-        fields = ("id", "target_listing", "score", "score_breakdown", "reason_codes", "explanation", "status", "generated_at")
+        fields = (
+            "id",
+            "target_listing",
+            "score",
+            "score_breakdown",
+            "reason_codes",
+            "explanation",
+            "status",
+            "generated_at",
+        )
         read_only_fields = fields
 
 
@@ -165,16 +176,25 @@ class KindnessAdminMatchSerializer(serializers.ModelSerializer):
 class KindnessListingCreateUpdateSerializer(serializers.Serializer):
     """Input serializer for user listing create/update."""
 
-    listing_type = serializers.ChoiceField(choices=[("need_help", "نیاز به کمک دارم"), ("offer_help", "می‌خواهم کمک کنم")], required=False)
-    category_id = serializers.PrimaryKeyRelatedField(queryset=KindnessCategory.objects.all(), source="category", required=False)
+    listing_type = serializers.ChoiceField(
+        choices=[("need_help", "نیاز به کمک دارم"), ("offer_help", "می‌خواهم کمک کنم")],
+        required=False,
+    )
+    category_id = serializers.PrimaryKeyRelatedField(
+        queryset=KindnessCategory.objects.all(), source="category", required=False
+    )
     title = serializers.CharField(max_length=260, required=False)
     description = serializers.CharField(required=False)
     province = serializers.CharField(max_length=100, required=False, allow_blank=True)
     city = serializers.CharField(max_length=100, required=False, allow_blank=True)
     district = serializers.CharField(max_length=120, required=False, allow_blank=True)
     address_hint = serializers.CharField(max_length=260, required=False, allow_blank=True)
-    latitude = serializers.DecimalField(max_digits=9, decimal_places=6, required=False, allow_null=True)
-    longitude = serializers.DecimalField(max_digits=9, decimal_places=6, required=False, allow_null=True)
+    latitude = serializers.DecimalField(
+        max_digits=9, decimal_places=6, required=False, allow_null=True
+    )
+    longitude = serializers.DecimalField(
+        max_digits=9, decimal_places=6, required=False, allow_null=True
+    )
 
     def validate_title(self, value: str) -> str:
         """Require meaningful listing title."""
@@ -269,16 +289,18 @@ class KindnessAdminContactRevealSerializer(serializers.ModelSerializer):
 class KindnessListingReportCreateSerializer(serializers.Serializer):
     """Input serializer for reporting a listing."""
 
-    reason = serializers.ChoiceField(choices=[
-        ("spam", "اسپم"),
-        ("fraud", "مشکوک به سوءاستفاده"),
-        ("wrong_category", "دسته‌بندی اشتباه"),
-        ("inappropriate", "محتوای نامناسب"),
-        ("duplicate", "تکراری"),
-        ("expired", "منقضی‌شده"),
-        ("contact_invalid", "شماره تماس نامعتبر"),
-        ("other", "سایر"),
-    ])
+    reason = serializers.ChoiceField(
+        choices=[
+            ("spam", "اسپم"),
+            ("fraud", "مشکوک به سوءاستفاده"),
+            ("wrong_category", "دسته‌بندی اشتباه"),
+            ("inappropriate", "محتوای نامناسب"),
+            ("duplicate", "تکراری"),
+            ("expired", "منقضی‌شده"),
+            ("contact_invalid", "شماره تماس نامعتبر"),
+            ("other", "سایر"),
+        ]
+    )
     description = serializers.CharField(required=False, allow_blank=True, default="")
 
 
@@ -344,7 +366,16 @@ class KindnessDuplicateCandidateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = KindnessDuplicateCandidate
-        fields = ("id", "listing", "candidate_listing", "score", "reason", "status", "created_at", "updated_at")
+        fields = (
+            "id",
+            "listing",
+            "candidate_listing",
+            "score",
+            "reason",
+            "status",
+            "created_at",
+            "updated_at",
+        )
         read_only_fields = fields
 
 

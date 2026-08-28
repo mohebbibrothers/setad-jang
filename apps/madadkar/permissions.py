@@ -64,9 +64,7 @@ class IsParticipationOwner(BasePermission):
     ) -> bool:
         """فقط صاحب participation اجازه دسترسی دارد."""
         return bool(
-            request.user
-            and request.user.is_authenticated
-            and obj.user_id == request.user.pk,
+            request.user and request.user.is_authenticated and obj.user_id == request.user.pk,
         )
 
 
@@ -87,7 +85,5 @@ class IsPaymentOwner(BasePermission):
     ) -> bool:
         """فقط صاحب payment اجازه دسترسی دارد."""
         return bool(
-            request.user
-            and request.user.is_authenticated
-            and obj.user_id == request.user.pk,
+            request.user and request.user.is_authenticated and obj.user_id == request.user.pk,
         )

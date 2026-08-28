@@ -67,10 +67,7 @@ def get_payment_provider(name: str | None = None) -> AbstractPaymentProvider:
     provider_cls = _PROVIDER_REGISTRY.get(provider_name)
     if provider_cls is None:
         available = ", ".join(sorted(_PROVIDER_REGISTRY.keys()))
-        msg = (
-            f"Payment provider '{provider_name}' یافت نشد. "
-            f"providerهای موجود: {available}"
-        )
+        msg = f"Payment provider '{provider_name}' یافت نشد. providerهای موجود: {available}"
         raise UnknownPaymentProviderError(msg)
 
     provider = provider_cls()

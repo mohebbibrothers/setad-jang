@@ -46,4 +46,7 @@ def test_swr_cache_serves_stale_value_when_refresh_fails(monkeypatch) -> None:
     def failing_factory() -> str:
         raise RuntimeError("upstream temporarily unavailable")
 
-    assert cache_get_or_set_swr(key=key, factory=failing_factory, soft_ttl=1, hard_ttl=120) == "initial"
+    assert (
+        cache_get_or_set_swr(key=key, factory=failing_factory, soft_ttl=1, hard_ttl=120)
+        == "initial"
+    )

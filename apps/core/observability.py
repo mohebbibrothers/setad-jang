@@ -11,7 +11,13 @@ import logging
 logger = logging.getLogger("apps.core.observability")
 
 
-def initialize_sentry(*, dsn: str, environment: str, traces_sample_rate: float = 0.0, profiles_sample_rate: float = 0.0) -> bool:
+def initialize_sentry(
+    *,
+    dsn: str,
+    environment: str,
+    traces_sample_rate: float = 0.0,
+    profiles_sample_rate: float = 0.0,
+) -> bool:
     """Initialize Sentry if DSN is configured."""
     if not dsn:
         return False

@@ -95,17 +95,14 @@ def get_public_criminals_queryset() -> QuerySet[R4JCriminal]:
 
     این queryset برای endpoint عمومی لیست استفاده می‌شود.
     """
-    return (
-        R4JCriminal.published
-        .all()
-        .prefetch_related(
-            Prefetch(
-                "photos",
-                queryset=R4JCriminalPhoto.objects.filter(is_active=True).order_by(
-                    "order", "-created_at",
-                ),
+    return R4JCriminal.published.all().prefetch_related(
+        Prefetch(
+            "photos",
+            queryset=R4JCriminalPhoto.objects.filter(is_active=True).order_by(
+                "order",
+                "-created_at",
             ),
-        )
+        ),
     )
 
 
@@ -122,47 +119,46 @@ def get_public_criminal_detail(
     - تمام aliases
     - field_visibility برای محاسبه‌ی visibility فیلدهای core
     """
-    queryset = (
-        R4JCriminal.published
-        .all()
-        .prefetch_related(
-            Prefetch(
-                "photos",
-                queryset=R4JCriminalPhoto.objects.filter(is_active=True).order_by(
-                    "order", "-created_at",
-                ),
+    queryset = R4JCriminal.published.all().prefetch_related(
+        Prefetch(
+            "photos",
+            queryset=R4JCriminalPhoto.objects.filter(is_active=True).order_by(
+                "order",
+                "-created_at",
             ),
-            Prefetch(
-                "phones",
-                queryset=R4JCriminalPhone.objects.filter(
-                    is_active=True, is_public=True,
-                ),
+        ),
+        Prefetch(
+            "phones",
+            queryset=R4JCriminalPhone.objects.filter(
+                is_active=True,
+                is_public=True,
             ),
-            Prefetch(
-                "socials",
-                queryset=R4JCriminalSocial.objects.filter(
-                    is_active=True, is_public=True,
-                ),
+        ),
+        Prefetch(
+            "socials",
+            queryset=R4JCriminalSocial.objects.filter(
+                is_active=True,
+                is_public=True,
             ),
-            Prefetch(
-                "attachments",
-                queryset=R4JCriminalAttachment.objects.filter(
-                    is_active=True, is_public=True,
-                ),
+        ),
+        Prefetch(
+            "attachments",
+            queryset=R4JCriminalAttachment.objects.filter(
+                is_active=True,
+                is_public=True,
             ),
-            Prefetch(
-                "aliases",
-                queryset=R4JCriminalAlias.objects.filter(is_active=True),
-            ),
-            Prefetch(
-                "field_visibility",
-                queryset=R4JCriminalFieldVisibility.objects.filter(is_active=True),
-            ),
-        )
+        ),
+        Prefetch(
+            "aliases",
+            queryset=R4JCriminalAlias.objects.filter(is_active=True),
+        ),
+        Prefetch(
+            "field_visibility",
+            queryset=R4JCriminalFieldVisibility.objects.filter(is_active=True),
+        ),
     )
 
     return _lookup_criminal(queryset, lookup)
-
 
 
 def get_public_criminal_detail_cached(*, lookup: str | int) -> R4JCriminal | None:
@@ -250,31 +246,26 @@ def get_admin_criminals_queryset() -> QuerySet[R4JCriminal]:
 
     برای admin panel که نیاز است وضعیت واقعی همه چیز را ببیند.
     """
-    return (
-        R4JCriminal.all_objects.all()
-        .prefetch_related(
-            Prefetch(
-                "photos",
-                queryset=R4JCriminalPhoto.all_objects.order_by(
-                    "order", "-created_at",
-                ),
+    return R4JCriminal.all_objects.all().prefetch_related(
+        Prefetch(
+            "photos",
+            queryset=R4JCriminalPhoto.all_objects.order_by(
+                "order",
+                "-created_at",
             ),
-        )
+        ),
     )
 
 
 def get_admin_criminal_detail(*, lookup: str | int) -> R4JCriminal | None:
     """دریافت یک criminal با تمام nested data — برای admin."""
-    queryset = (
-        R4JCriminal.all_objects.all()
-        .prefetch_related(
-            "photos",
-            "phones",
-            "socials",
-            "attachments",
-            "aliases",
-            "field_visibility",
-        )
+    queryset = R4JCriminal.all_objects.all().prefetch_related(
+        "photos",
+        "phones",
+        "socials",
+        "attachments",
+        "aliases",
+        "field_visibility",
     )
     return _lookup_criminal(queryset, lookup)
 
@@ -298,7 +289,9 @@ def get_admin_phones(*, criminal_id: int) -> QuerySet[R4JCriminalPhone]:
 
 
 def get_admin_phone_by_id(
-    *, criminal_id: int, phone_id: int,
+    *,
+    criminal_id: int,
+    phone_id: int,
 ) -> R4JCriminalPhone | None:
     """دریافت یک شماره با id و criminal_id."""
     try:
@@ -313,7 +306,9 @@ def get_admin_socials(*, criminal_id: int) -> QuerySet[R4JCriminalSocial]:
 
 
 def get_admin_social_by_id(
-    *, criminal_id: int, social_id: int,
+    *,
+    criminal_id: int,
+    social_id: int,
 ) -> R4JCriminalSocial | None:
     """دریافت یک social با id و criminal_id."""
     try:
@@ -328,7 +323,9 @@ def get_admin_aliases(*, criminal_id: int) -> QuerySet[R4JCriminalAlias]:
 
 
 def get_admin_alias_by_id(
-    *, criminal_id: int, alias_id: int,
+    *,
+    criminal_id: int,
+    alias_id: int,
 ) -> R4JCriminalAlias | None:
     """دریافت یک alias با id و criminal_id."""
     try:
@@ -340,12 +337,15 @@ def get_admin_alias_by_id(
 def get_admin_photos(*, criminal_id: int) -> QuerySet[R4JCriminalPhoto]:
     """تمام عکس‌های یک criminal مرتب‌شده — برای admin."""
     return R4JCriminalPhoto.all_objects.filter(criminal_id=criminal_id).order_by(
-        "order", "-created_at",
+        "order",
+        "-created_at",
     )
 
 
 def get_admin_photo_by_id(
-    *, criminal_id: int, photo_id: int,
+    *,
+    criminal_id: int,
+    photo_id: int,
 ) -> R4JCriminalPhoto | None:
     """دریافت یک photo با id و criminal_id."""
     try:
@@ -360,19 +360,23 @@ def get_admin_attachments(*, criminal_id: int) -> QuerySet[R4JCriminalAttachment
 
 
 def get_admin_attachment_by_id(
-    *, criminal_id: int, attachment_id: int,
+    *,
+    criminal_id: int,
+    attachment_id: int,
 ) -> R4JCriminalAttachment | None:
     """دریافت یک attachment با id و criminal_id."""
     try:
         return R4JCriminalAttachment.all_objects.get(
-            pk=attachment_id, criminal_id=criminal_id,
+            pk=attachment_id,
+            criminal_id=criminal_id,
         )
     except R4JCriminalAttachment.DoesNotExist:
         return None
 
 
 def get_admin_field_visibility(
-    *, criminal_id: int,
+    *,
+    criminal_id: int,
 ) -> QuerySet[R4JCriminalFieldVisibility]:
     """تمام visibility overrideهای یک criminal — برای admin."""
     return R4JCriminalFieldVisibility.all_objects.filter(criminal_id=criminal_id)
@@ -419,7 +423,9 @@ def get_user_reports_queryset(*, user_id: int) -> QuerySet[R4JReport]:
 
 
 def get_user_report_by_id(
-    *, user_id: int, report_id: int,
+    *,
+    user_id: int,
+    report_id: int,
 ) -> R4JReport | None:
     """
     دریافت یک گزارش خاص از یک کاربر — با IDOR protection.
@@ -555,9 +561,7 @@ def get_user_bounties_queryset(*, user_id: int) -> QuerySet[R4JBounty]:
     استفاده می‌شود.
     """
     return (
-        R4JBounty.objects.filter(user_id=user_id)
-        .select_related("criminal")
-        .order_by("-created_at")
+        R4JBounty.objects.filter(user_id=user_id).select_related("criminal").order_by("-created_at")
     )
 
 
@@ -609,11 +613,7 @@ def get_admin_bounties_queryset() -> QuerySet[R4JBounty]:
 
     با select_related برای جلوگیری از N+1 در list rendering.
     """
-    return (
-        R4JBounty.objects.all()
-        .select_related("criminal", "user")
-        .order_by("-created_at")
-    )
+    return R4JBounty.objects.all().select_related("criminal", "user").order_by("-created_at")
 
 
 def get_admin_bounty_by_id(*, bounty_id: int) -> R4JBounty | None:
@@ -627,11 +627,7 @@ def get_admin_bounty_by_id(*, bounty_id: int) -> R4JBounty | None:
         R4JBounty | None
     """
     try:
-        return (
-            R4JBounty.objects.filter(pk=bounty_id)
-            .select_related("criminal", "user")
-            .get()
-        )
+        return R4JBounty.objects.filter(pk=bounty_id).select_related("criminal", "user").get()
     except R4JBounty.DoesNotExist:
         return None
 
@@ -647,9 +643,7 @@ def _lookup_criminal(
 ) -> R4JCriminal | None:
     """lookup با id (اگر عدد) یا slug (اگر رشته)."""
     try:
-        if isinstance(lookup, int) or (
-            isinstance(lookup, str) and lookup.isdigit()
-        ):
+        if isinstance(lookup, int) or (isinstance(lookup, str) and lookup.isdigit()):
             return queryset.get(pk=int(lookup))
         return queryset.get(slug=str(lookup))
     except R4JCriminal.DoesNotExist:
@@ -666,15 +660,14 @@ def compute_visibility_map(
     - default از PUBLIC_DEFAULT_VISIBILITY
     - override از R4JCriminalFieldVisibility (در صورت وجود)
     """
-    overrides = {
-        fv.field_name: fv.is_public for fv in criminal.field_visibility.all()
-    }
+    overrides = {fv.field_name: fv.is_public for fv in criminal.field_visibility.all()}
     return {**PUBLIC_DEFAULT_VISIBILITY, **overrides}
 
 
 # ============================================================
 # Evidence custody — admin scope
 # ============================================================
+
 
 def get_admin_evidence_custody_events() -> QuerySet[R4JEvidenceCustodyEvent]:
     """Return all evidence custody events for admin forensic review."""

@@ -359,6 +359,7 @@ def _mark_legacy_response(
 
 class SignupRequestAPIView(APIView):
     """SignupRequestAPIView implementation for the authentication application."""
+
     permission_classes = [AllowAny]
     throttle_classes = [OTPRequestThrottle, OTPGlobalIPThrottle, OTPTargetThrottle]
 
@@ -403,6 +404,7 @@ class SignupRequestAPIView(APIView):
 
 class SignupVerifyAPIView(APIView):
     """SignupVerifyAPIView implementation for the authentication application."""
+
     permission_classes = [AllowAny]
     throttle_classes = [OTPVerifyThrottle]
 
@@ -465,6 +467,7 @@ class SignupVerifyAPIView(APIView):
 
 class LoginPasswordAPIView(APIView):
     """LoginPasswordAPIView implementation for the authentication application."""
+
     permission_classes = [AllowAny]
     throttle_classes = [LoginThrottle]
 
@@ -574,6 +577,7 @@ class LoginPasswordAPIView(APIView):
 
 class LoginOTPRequestAPIView(APIView):
     """LoginOTPRequestAPIView implementation for the authentication application."""
+
     permission_classes = [AllowAny]
     throttle_classes = [OTPRequestThrottle, OTPGlobalIPThrottle, OTPTargetThrottle]
 
@@ -582,8 +586,7 @@ class LoginOTPRequestAPIView(APIView):
         tags=[TAG_AUTH_PUBLIC],
         summary="درخواست کد ورود با شناسه",
         description=(
-            "ارسال کد ورود به ایمیل یا شماره موبایل.\n\n"
-            "این endpoint enumeration-safe است."
+            "ارسال کد ورود به ایمیل یا شماره موبایل.\n\nاین endpoint enumeration-safe است."
         ),
         request=OTPLoginRequestSerializer,
         responses={
@@ -620,6 +623,7 @@ class LoginOTPRequestAPIView(APIView):
 
 class LoginOTPVerifyAPIView(APIView):
     """LoginOTPVerifyAPIView implementation for the authentication application."""
+
     permission_classes = [AllowAny]
     throttle_classes = [OTPVerifyThrottle]
 
@@ -741,6 +745,7 @@ class LoginOTPVerifyAPIView(APIView):
 
 class IdentifierForgotPasswordRequestAPIView(APIView):
     """IdentifierForgotPasswordRequestAPIView implementation for the authentication application."""
+
     permission_classes = [AllowAny]
     throttle_classes = [PasswordResetThrottle, OTPGlobalIPThrottle, OTPTargetThrottle]
 
@@ -787,6 +792,7 @@ class IdentifierForgotPasswordRequestAPIView(APIView):
 
 class IdentifierForgotPasswordConfirmAPIView(APIView):
     """IdentifierForgotPasswordConfirmAPIView implementation for the authentication application."""
+
     permission_classes = [AllowAny]
     throttle_classes = [OTPVerifyThrottle]
 
@@ -844,6 +850,7 @@ class IdentifierForgotPasswordConfirmAPIView(APIView):
 
 class IdentifierAddRequestAPIView(APIView):
     """IdentifierAddRequestAPIView implementation for the authentication application."""
+
     permission_classes = [IsAuthenticated]
     throttle_classes = [OTPRequestThrottle, OTPGlobalIPThrottle, OTPTargetThrottle]
 
@@ -899,6 +906,7 @@ class IdentifierAddRequestAPIView(APIView):
 
 class IdentifierAddVerifyAPIView(APIView):
     """IdentifierAddVerifyAPIView implementation for the authentication application."""
+
     permission_classes = [IsAuthenticated]
     throttle_classes = [OTPVerifyThrottle]
 
@@ -961,6 +969,7 @@ class IdentifierAddVerifyAPIView(APIView):
 
 class IdentifierMakePrimaryAPIView(APIView):
     """IdentifierMakePrimaryAPIView implementation for the authentication application."""
+
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
@@ -1017,6 +1026,7 @@ class IdentifierMakePrimaryAPIView(APIView):
 
 class RegisterAPIView(APIView):
     """RegisterAPIView implementation for the authentication application."""
+
     permission_classes = [AllowAny]
     throttle_classes = [RegisterThrottle]
 
@@ -1056,6 +1066,7 @@ class RegisterAPIView(APIView):
 
 class VerifyEmailAPIView(APIView):
     """VerifyEmailAPIView implementation for the authentication application."""
+
     permission_classes = [AllowAny]
     throttle_classes = [OTPRequestThrottle, OTPGlobalIPThrottle]
 
@@ -1064,10 +1075,7 @@ class VerifyEmailAPIView(APIView):
         tags=[TAG_AUTH_PUBLIC],
         summary="[منسوخ] تأیید ایمیل با کد",
         deprecated=True,
-        description=(
-            "تأیید ایمیل کاربر با ارسال کد ۵ رقمی دریافتی."
-            + _LEGACY_DESCRIPTION_FOOTER
-        ),
+        description=("تأیید ایمیل کاربر با ارسال کد ۵ رقمی دریافتی." + _LEGACY_DESCRIPTION_FOOTER),
         request=VerifyEmailSerializer,
         responses={
             200: EMPTY_SUCCESS_RESPONSE,
@@ -1113,6 +1121,7 @@ class VerifyEmailAPIView(APIView):
 
 class ResendVerificationAPIView(APIView):
     """ResendVerificationAPIView implementation for the authentication application."""
+
     permission_classes = [AllowAny]
     throttle_classes = [OTPRequestThrottle, OTPGlobalIPThrottle, OTPTargetThrottle]
 
@@ -1170,6 +1179,7 @@ class ResendVerificationAPIView(APIView):
 
 class LoginAPIView(APIView):
     """LoginAPIView implementation for the authentication application."""
+
     permission_classes = [AllowAny]
     throttle_classes = [LoginThrottle]
 
@@ -1178,10 +1188,7 @@ class LoginAPIView(APIView):
         tags=[TAG_AUTH_PUBLIC],
         summary="[منسوخ] ورود کاربر با ایمیل",
         deprecated=True,
-        description=(
-            "ورود با ایمیل و رمز عبور و دریافت توکن‌های JWT."
-            + _LEGACY_DESCRIPTION_FOOTER
-        ),
+        description=("ورود با ایمیل و رمز عبور و دریافت توکن‌های JWT." + _LEGACY_DESCRIPTION_FOOTER),
         request=LoginSerializer,
         responses={
             200: LOGIN_SUCCESS_RESPONSE,
@@ -1276,6 +1283,7 @@ class LoginAPIView(APIView):
 
 class CustomTokenRefreshView(TokenRefreshView):
     """CustomTokenRefreshView implementation for the authentication application."""
+
     permission_classes = [AllowAny]
     serializer_class = SessionAwareTokenRefreshSerializer
 
@@ -1309,6 +1317,7 @@ class CustomTokenRefreshView(TokenRefreshView):
 
 class ForgotPasswordAPIView(APIView):
     """ForgotPasswordAPIView implementation for the authentication application."""
+
     permission_classes = [AllowAny]
     throttle_classes = [PasswordResetThrottle, OTPGlobalIPThrottle, OTPTargetThrottle]
 
@@ -1349,6 +1358,7 @@ class ForgotPasswordAPIView(APIView):
 
 class ResetPasswordAPIView(APIView):
     """ResetPasswordAPIView implementation for the authentication application."""
+
     permission_classes = [AllowAny]
     throttle_classes = [PasswordResetThrottle, OTPGlobalIPThrottle]
 
@@ -1358,8 +1368,7 @@ class ResetPasswordAPIView(APIView):
         summary="[منسوخ] تنظیم رمز جدید با کد بازیابی",
         deprecated=True,
         description=(
-            "تنظیم رمز عبور جدید با استفاده از کد ۵ رقمی دریافتی."
-            + _LEGACY_DESCRIPTION_FOOTER
+            "تنظیم رمز عبور جدید با استفاده از کد ۵ رقمی دریافتی." + _LEGACY_DESCRIPTION_FOOTER
         ),
         request=ResetPasswordSerializer,
         responses={
@@ -1417,6 +1426,7 @@ class ResetPasswordAPIView(APIView):
 
 class ChangePasswordAPIView(APIView):
     """ChangePasswordAPIView implementation for the authentication application."""
+
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
@@ -1462,6 +1472,7 @@ class ChangePasswordAPIView(APIView):
 
 class LogoutAPIView(APIView):
     """LogoutAPIView implementation for the authentication application."""
+
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
@@ -1506,7 +1517,12 @@ class AdminAuthRiskSignalListAPIView(APIView):
     permission_classes = [IsAdminUser]
     pagination_class = StandardPagination
 
-    @extend_schema(operation_id="auth_admin_risk_signals_list", tags=[TAG_AUTH_ADMIN], summary="لیست سیگنال‌های ریسک احراز هویت", responses={200: AUTH_RISK_SIGNAL_LIST_RESPONSE, 403: GENERIC_ERROR_RESPONSE})
+    @extend_schema(
+        operation_id="auth_admin_risk_signals_list",
+        tags=[TAG_AUTH_ADMIN],
+        summary="لیست سیگنال‌های ریسک احراز هویت",
+        responses={200: AUTH_RISK_SIGNAL_LIST_RESPONSE, 403: GENERIC_ERROR_RESPONSE},
+    )
     def get(self, request: Request) -> Response:
         queryset = get_admin_auth_risk_signals()
         status_filter = request.query_params.get("status")
@@ -1519,8 +1535,13 @@ class AdminAuthRiskSignalListAPIView(APIView):
         page = paginator.paginate_queryset(queryset, request, view=self)
         if page is not None:
             serializer = AuthRiskSignalSerializer(page, many=True)
-            return paginator.get_paginated_response(serializer.data, message="لیست سیگنال‌های ریسک دریافت شد.")
-        return SuccessResponse(data=AuthRiskSignalSerializer(queryset, many=True).data, message="لیست سیگنال‌های ریسک دریافت شد.")
+            return paginator.get_paginated_response(
+                serializer.data, message="لیست سیگنال‌های ریسک دریافت شد."
+            )
+        return SuccessResponse(
+            data=AuthRiskSignalSerializer(queryset, many=True).data,
+            message="لیست سیگنال‌های ریسک دریافت شد.",
+        )
 
 
 class AdminAuthRiskSignalReviewAPIView(APIView):
@@ -1528,11 +1549,24 @@ class AdminAuthRiskSignalReviewAPIView(APIView):
 
     permission_classes = [IsAdminUser]
 
-    @extend_schema(operation_id="auth_admin_risk_signal_review", tags=[TAG_AUTH_ADMIN], summary="بررسی سیگنال ریسک احراز هویت", request=AuthRiskSignalReviewSerializer, responses={200: AUTH_RISK_SIGNAL_DETAIL_RESPONSE, 400: GENERIC_ERROR_RESPONSE, 403: GENERIC_ERROR_RESPONSE, 404: GENERIC_ERROR_RESPONSE})
+    @extend_schema(
+        operation_id="auth_admin_risk_signal_review",
+        tags=[TAG_AUTH_ADMIN],
+        summary="بررسی سیگنال ریسک احراز هویت",
+        request=AuthRiskSignalReviewSerializer,
+        responses={
+            200: AUTH_RISK_SIGNAL_DETAIL_RESPONSE,
+            400: GENERIC_ERROR_RESPONSE,
+            403: GENERIC_ERROR_RESPONSE,
+            404: GENERIC_ERROR_RESPONSE,
+        },
+    )
     def post(self, request: Request, signal_id: int) -> Response:
         signal = get_admin_auth_risk_signal_by_id(signal_id=signal_id)
         if signal is None:
-            return ErrorResponse(message="سیگنال ریسکی با این شناسه یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+            return ErrorResponse(
+                message="سیگنال ریسکی با این شناسه یافت نشد.", status_code=status.HTTP_404_NOT_FOUND
+            )
         serializer = AuthRiskSignalReviewSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         try:
@@ -1545,8 +1579,17 @@ class AdminAuthRiskSignalReviewAPIView(APIView):
         except Exception as exc:
             return ErrorResponse(message=str(exc))
         metadata = extract_audit_metadata(request)
-        log_action_async(user_id=request.user.pk, action=audit_actions.AUTH_RISK_SIGNAL_REVIEWED, resource_type="auth_risk_signal", resource_id=str(signal.pk), extra_data={"status": signal.status, "signal_type": signal.signal_type}, **metadata)
-        return SuccessResponse(data=AuthRiskSignalSerializer(signal).data, message="سیگنال ریسک بررسی شد.")
+        log_action_async(
+            user_id=request.user.pk,
+            action=audit_actions.AUTH_RISK_SIGNAL_REVIEWED,
+            resource_type="auth_risk_signal",
+            resource_id=str(signal.pk),
+            extra_data={"status": signal.status, "signal_type": signal.signal_type},
+            **metadata,
+        )
+        return SuccessResponse(
+            data=AuthRiskSignalSerializer(signal).data, message="سیگنال ریسک بررسی شد."
+        )
 
 
 class AuthSessionListAPIView(APIView):
@@ -1555,15 +1598,25 @@ class AuthSessionListAPIView(APIView):
     permission_classes = [IsAuthenticated]
     pagination_class = StandardPagination
 
-    @extend_schema(operation_id="auth_sessions_list", tags=[TAG_AUTH_USER], summary="لیست نشست‌ها و دستگاه‌های من", responses={200: AUTH_SESSION_LIST_RESPONSE, 401: GENERIC_ERROR_RESPONSE})
+    @extend_schema(
+        operation_id="auth_sessions_list",
+        tags=[TAG_AUTH_USER],
+        summary="لیست نشست‌ها و دستگاه‌های من",
+        responses={200: AUTH_SESSION_LIST_RESPONSE, 401: GENERIC_ERROR_RESPONSE},
+    )
     def get(self, request: Request) -> Response:
         queryset = get_user_auth_sessions(user_id=request.user.pk)
         paginator = self.pagination_class()
         page = paginator.paginate_queryset(queryset, request, view=self)
         if page is not None:
             serializer = AuthSessionSerializer(page, many=True, context={"request": request})
-            return paginator.get_paginated_response(serializer.data, message="لیست نشست‌ها با موفقیت دریافت شد.")
-        return SuccessResponse(data=AuthSessionSerializer(queryset, many=True, context={"request": request}).data, message="لیست نشست‌ها با موفقیت دریافت شد.")
+            return paginator.get_paginated_response(
+                serializer.data, message="لیست نشست‌ها با موفقیت دریافت شد."
+            )
+        return SuccessResponse(
+            data=AuthSessionSerializer(queryset, many=True, context={"request": request}).data,
+            message="لیست نشست‌ها با موفقیت دریافت شد.",
+        )
 
 
 class AuthSessionRevokeAPIView(APIView):
@@ -1571,15 +1624,37 @@ class AuthSessionRevokeAPIView(APIView):
 
     permission_classes = [IsAuthenticated]
 
-    @extend_schema(operation_id="auth_sessions_revoke", tags=[TAG_AUTH_USER], summary="لغو یکی از نشست‌های من", request=None, responses={200: AUTH_SESSION_DETAIL_RESPONSE, 401: GENERIC_ERROR_RESPONSE, 404: GENERIC_ERROR_RESPONSE})
+    @extend_schema(
+        operation_id="auth_sessions_revoke",
+        tags=[TAG_AUTH_USER],
+        summary="لغو یکی از نشست‌های من",
+        request=None,
+        responses={
+            200: AUTH_SESSION_DETAIL_RESPONSE,
+            401: GENERIC_ERROR_RESPONSE,
+            404: GENERIC_ERROR_RESPONSE,
+        },
+    )
     def post(self, request: Request, session_id: int) -> Response:
         session = get_user_auth_session_by_id(user_id=request.user.pk, session_id=session_id)
         if session is None:
-            return ErrorResponse(message="نشستی با این شناسه یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+            return ErrorResponse(
+                message="نشستی با این شناسه یافت نشد.", status_code=status.HTTP_404_NOT_FOUND
+            )
         session = revoke_auth_session(session=session, revoked_by=request.user)
         metadata = extract_audit_metadata(request)
-        log_action_async(user_id=request.user.pk, action=audit_actions.AUTH_SESSION_REVOKED, resource_type="auth_session", resource_id=str(session.pk), extra_data={"self_revoke": True}, **metadata)
-        return SuccessResponse(data=AuthSessionSerializer(session, context={"request": request}).data, message="نشست با موفقیت لغو شد.")
+        log_action_async(
+            user_id=request.user.pk,
+            action=audit_actions.AUTH_SESSION_REVOKED,
+            resource_type="auth_session",
+            resource_id=str(session.pk),
+            extra_data={"self_revoke": True},
+            **metadata,
+        )
+        return SuccessResponse(
+            data=AuthSessionSerializer(session, context={"request": request}).data,
+            message="نشست با موفقیت لغو شد.",
+        )
 
 
 class AdminUserSessionsListAPIView(APIView):
@@ -1588,7 +1663,16 @@ class AdminUserSessionsListAPIView(APIView):
     permission_classes = [IsAdminUser]
     pagination_class = StandardPagination
 
-    @extend_schema(operation_id="auth_admin_user_sessions_list", tags=[TAG_AUTH_ADMIN], summary="لیست نشست‌های کاربر — ادمین", responses={200: AUTH_SESSION_LIST_RESPONSE, 403: GENERIC_ERROR_RESPONSE, 404: GENERIC_ERROR_RESPONSE})
+    @extend_schema(
+        operation_id="auth_admin_user_sessions_list",
+        tags=[TAG_AUTH_ADMIN],
+        summary="لیست نشست‌های کاربر — ادمین",
+        responses={
+            200: AUTH_SESSION_LIST_RESPONSE,
+            403: GENERIC_ERROR_RESPONSE,
+            404: GENERIC_ERROR_RESPONSE,
+        },
+    )
     def get(self, request: Request, user_id: int) -> Response:
         user = get_user_by_id(user_id)
         if user is None:
@@ -1598,8 +1682,13 @@ class AdminUserSessionsListAPIView(APIView):
         page = paginator.paginate_queryset(queryset, request, view=self)
         if page is not None:
             serializer = AuthSessionSerializer(page, many=True, context={"request": request})
-            return paginator.get_paginated_response(serializer.data, message="لیست نشست‌های کاربر دریافت شد.")
-        return SuccessResponse(data=AuthSessionSerializer(queryset, many=True, context={"request": request}).data, message="لیست نشست‌های کاربر دریافت شد.")
+            return paginator.get_paginated_response(
+                serializer.data, message="لیست نشست‌های کاربر دریافت شد."
+            )
+        return SuccessResponse(
+            data=AuthSessionSerializer(queryset, many=True, context={"request": request}).data,
+            message="لیست نشست‌های کاربر دریافت شد.",
+        )
 
 
 class AdminUserSessionsRevokeAPIView(APIView):
@@ -1607,15 +1696,34 @@ class AdminUserSessionsRevokeAPIView(APIView):
 
     permission_classes = [IsAdminUser]
 
-    @extend_schema(operation_id="auth_admin_user_sessions_revoke_all", tags=[TAG_AUTH_ADMIN], summary="لغو همه نشست‌های کاربر — ادمین", request=None, responses={200: EMPTY_SUCCESS_RESPONSE, 403: GENERIC_ERROR_RESPONSE, 404: GENERIC_ERROR_RESPONSE})
+    @extend_schema(
+        operation_id="auth_admin_user_sessions_revoke_all",
+        tags=[TAG_AUTH_ADMIN],
+        summary="لغو همه نشست‌های کاربر — ادمین",
+        request=None,
+        responses={
+            200: EMPTY_SUCCESS_RESPONSE,
+            403: GENERIC_ERROR_RESPONSE,
+            404: GENERIC_ERROR_RESPONSE,
+        },
+    )
     def post(self, request: Request, user_id: int) -> Response:
         user = get_user_by_id(user_id)
         if user is None:
             return ErrorResponse(message="کاربر یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
         revoked_count = revoke_all_user_sessions(user=user, revoked_by=request.user)
         metadata = extract_audit_metadata(request)
-        log_action_async(user_id=request.user.pk, action=audit_actions.AUTH_USER_SESSIONS_REVOKED, resource_type="user", resource_id=str(user.pk), extra_data={"revoked_count": revoked_count}, **metadata)
-        return SuccessResponse(data={"revoked_count": revoked_count}, message="نشست‌های کاربر با موفقیت لغو شد.")
+        log_action_async(
+            user_id=request.user.pk,
+            action=audit_actions.AUTH_USER_SESSIONS_REVOKED,
+            resource_type="user",
+            resource_id=str(user.pk),
+            extra_data={"revoked_count": revoked_count},
+            **metadata,
+        )
+        return SuccessResponse(
+            data={"revoked_count": revoked_count}, message="نشست‌های کاربر با موفقیت لغو شد."
+        )
 
 
 # ============================================================
@@ -1625,6 +1733,7 @@ class AdminUserSessionsRevokeAPIView(APIView):
 
 class MeAPIView(APIView):
     """MeAPIView implementation for the authentication application."""
+
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
@@ -1668,6 +1777,7 @@ class MeAPIView(APIView):
 
 class ProfileAPIView(APIView):
     """ProfileAPIView implementation for the authentication application."""
+
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
@@ -1691,8 +1801,7 @@ class ProfileAPIView(APIView):
         tags=[TAG_AUTH_USER],
         summary="ویرایش پروفایل کاربر",
         description=(
-            "ویرایش اطلاعات تکمیلی پروفایل کاربر لاگین کرده.\n\n"
-            "تمام فیلدها optional هستند."
+            "ویرایش اطلاعات تکمیلی پروفایل کاربر لاگین کرده.\n\nتمام فیلدها optional هستند."
         ),
         request=UpdateProfileSerializer,
         responses={
@@ -1722,6 +1831,7 @@ class ProfileAPIView(APIView):
 
 class AdminUserListAPIView(APIView):
     """AdminUserListAPIView implementation for the authentication application."""
+
     permission_classes = [IsAdminUser]
     pagination_class = StandardPagination
 
@@ -1769,6 +1879,7 @@ class AdminUserListAPIView(APIView):
 
 class AdminUserDetailAPIView(APIView):
     """AdminUserDetailAPIView implementation for the authentication application."""
+
     permission_classes = [IsAdminUser]
 
     @extend_schema(
@@ -1843,8 +1954,7 @@ class AdminUserDetailAPIView(APIView):
                 resource_type="user",
                 resource_id=str(user.pk),
                 changes={
-                    field: serializer.validated_data[field]
-                    for field in serializer.validated_data
+                    field: serializer.validated_data[field] for field in serializer.validated_data
                 },
                 **metadata,
             )
@@ -1891,6 +2001,7 @@ class AdminUserDetailAPIView(APIView):
 
 class AdminChangeUserRoleAPIView(APIView):
     """AdminChangeUserRoleAPIView implementation for the authentication application."""
+
     permission_classes = [IsAdminUser]
 
     @extend_schema(

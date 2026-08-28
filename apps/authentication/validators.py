@@ -35,11 +35,7 @@ logger = logging.getLogger("apps.authentication")
 # ============================================================
 
 _BLOCKLIST_PATH = (
-    Path(settings.BASE_DIR)
-    / "apps"
-    / "authentication"
-    / "data"
-    / "disposable_email_domains.txt"
+    Path(settings.BASE_DIR) / "apps" / "authentication" / "data" / "disposable_email_domains.txt"
 )
 
 # Cache namespace برای نتایج MX check
@@ -79,9 +75,7 @@ def disposable_email_blocklist() -> frozenset[str]:
     try:
         with _BLOCKLIST_PATH.open("r", encoding="utf-8") as fp:
             domains = {
-                line.strip().lower()
-                for line in fp
-                if line.strip() and not line.startswith("#")
+                line.strip().lower() for line in fp if line.strip() and not line.startswith("#")
             }
     except OSError as exc:
         logger.exception(

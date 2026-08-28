@@ -406,14 +406,33 @@ PUBLIC_CAMPAIGN_FILTER_PARAMS = [
 
 ADMIN_CAMPAIGN_FILTER_PARAMS = [
     *LIST_PAGINATION_PARAMS,
-    OpenApiParameter(name="sponsor", type=OpenApiTypes.INT, location=OpenApiParameter.QUERY, description="شناسه مددکار"),
-    OpenApiParameter(name="status", type=OpenApiTypes.STR, location=OpenApiParameter.QUERY, enum=["draft", "published", "completed", "closed"], description="وضعیت حرکت"),
+    OpenApiParameter(
+        name="sponsor",
+        type=OpenApiTypes.INT,
+        location=OpenApiParameter.QUERY,
+        description="شناسه مددکار",
+    ),
+    OpenApiParameter(
+        name="status",
+        type=OpenApiTypes.STR,
+        location=OpenApiParameter.QUERY,
+        enum=["draft", "published", "completed", "closed"],
+        description="وضعیت حرکت",
+    ),
     OpenApiParameter(name="is_visible", type=OpenApiTypes.BOOL, location=OpenApiParameter.QUERY),
     OpenApiParameter(name="is_active", type=OpenApiTypes.BOOL, location=OpenApiParameter.QUERY),
-    OpenApiParameter(name="created_after", type=OpenApiTypes.DATETIME, location=OpenApiParameter.QUERY),
-    OpenApiParameter(name="created_before", type=OpenApiTypes.DATETIME, location=OpenApiParameter.QUERY),
-    OpenApiParameter(name="min_total_amount", type=OpenApiTypes.INT, location=OpenApiParameter.QUERY),
-    OpenApiParameter(name="max_total_amount", type=OpenApiTypes.INT, location=OpenApiParameter.QUERY),
+    OpenApiParameter(
+        name="created_after", type=OpenApiTypes.DATETIME, location=OpenApiParameter.QUERY
+    ),
+    OpenApiParameter(
+        name="created_before", type=OpenApiTypes.DATETIME, location=OpenApiParameter.QUERY
+    ),
+    OpenApiParameter(
+        name="min_total_amount", type=OpenApiTypes.INT, location=OpenApiParameter.QUERY
+    ),
+    OpenApiParameter(
+        name="max_total_amount", type=OpenApiTypes.INT, location=OpenApiParameter.QUERY
+    ),
     OpenApiParameter(name="search", type=OpenApiTypes.STR, location=OpenApiParameter.QUERY),
 ]
 
@@ -474,6 +493,7 @@ ADMIN_PAYMENTS_FILTER_PARAMS = [
 # Helpers
 # ============================================================
 
+
 def _build_callback_url() -> str:
     """ساخت URL کامل برای callback verify بر اساس settings."""
     base = settings.MADADKAR_PAYMENT_CALLBACK_BASE_URL.rstrip("/")
@@ -491,11 +511,7 @@ def _extract_mobile_email(user, fallback_mobile: str, fallback_email: str) -> tu
 
     if not mobile:
         # User model attributes — defensive lookup
-        mobile = (
-            getattr(user, "phone_number", "")
-            or getattr(user, "mobile", "")
-            or ""
-        )
+        mobile = getattr(user, "phone_number", "") or getattr(user, "mobile", "") or ""
 
     if not email:
         email = getattr(user, "email", "") or ""
@@ -557,7 +573,11 @@ class MadadkarPublicSponsorListView(APIView):
         payload = cached_public_payload(
             domain="madadkar",
             namespace="madadkar:public_list",
-            parts=("sponsors", request.query_params.get("page", "1"), request.query_params.get("page_size", str(StandardPagination.page_size))),
+            parts=(
+                "sponsors",
+                request.query_params.get("page", "1"),
+                request.query_params.get("page_size", str(StandardPagination.page_size)),
+            ),
             factory=build_payload,
         )
         return SuccessResponse(data=payload, message="لیست مددکاران با موفقیت دریافت شد.")
@@ -639,7 +659,9 @@ class MadadkarPublicCampaignListView(APIView):
 
             if page is not None:
                 serializer = CampaignPublicListSerializer(
-                    page, many=True, context={"request": request},
+                    page,
+                    many=True,
+                    context={"request": request},
                 )
                 response = paginator.get_paginated_response(
                     serializer.data,
@@ -648,7 +670,9 @@ class MadadkarPublicCampaignListView(APIView):
                 return response.data["data"]
 
             serializer = CampaignPublicListSerializer(
-                queryset, many=True, context={"request": request},
+                queryset,
+                many=True,
+                context={"request": request},
             )
             return {"results": serializer.data}
 
@@ -657,7 +681,9 @@ class MadadkarPublicCampaignListView(APIView):
             namespace="madadkar:public_list",
             parts=(
                 "campaigns",
-                *build_cache_variant(request, filterset=filterset, pagination_class=StandardPagination),
+                *build_cache_variant(
+                    request, filterset=filterset, pagination_class=StandardPagination
+                ),
             ),
             factory=build_payload,
         )
@@ -990,9 +1016,7 @@ class MadadkarPaymentVerifyView(APIView):
             "participation": participation_data,
             "is_verified": is_success,
             "message": (
-                "پرداخت با موفقیت تأیید شد."
-                if is_success
-                else "پرداخت تأیید نشد یا ناموفق بود."
+                "پرداخت با موفقیت تأیید شد." if is_success else "پرداخت تأیید نشد یا ناموفق بود."
             ),
         }
 
@@ -1095,6 +1119,7 @@ class MadadkarUserMyParticipationDetailView(APIView):
 # User/Public/Admin — Donation Receipts
 # ============================================================
 
+
 class MadadkarUserReceiptListView(APIView):
     """List verifiable donation receipts owned by current user."""
 
@@ -1112,7 +1137,9 @@ class MadadkarUserReceiptListView(APIView):
         page = paginator.paginate_queryset(queryset, request, view=self)
         if page is not None:
             serializer = DonationReceiptSerializer(page, many=True)
-            return paginator.get_paginated_response(serializer.data, message="لیست رسیدها با موفقیت دریافت شد.")
+            return paginator.get_paginated_response(
+                serializer.data, message="لیست رسیدها با موفقیت دریافت شد."
+            )
         serializer = DonationReceiptSerializer(queryset, many=True)
         return SuccessResponse(data=serializer.data, message="لیست رسیدها با موفقیت دریافت شد.")
 
@@ -1126,12 +1153,18 @@ class MadadkarUserReceiptDetailView(APIView):
         operation_id="madadkar_user_receipt_retrieve",
         tags=[TAG_MADADKAR_USER],
         summary="جزئیات رسید مشارکت من",
-        responses={200: USER_RECEIPT_DETAIL_RESPONSE, 401: GENERIC_ERROR_RESPONSE, 404: GENERIC_ERROR_RESPONSE},
+        responses={
+            200: USER_RECEIPT_DETAIL_RESPONSE,
+            401: GENERIC_ERROR_RESPONSE,
+            404: GENERIC_ERROR_RESPONSE,
+        },
     )
     def get(self, request: Request, receipt_id: int) -> Response:
         receipt = selectors.get_user_receipt_by_id(user_id=request.user.pk, receipt_id=receipt_id)
         if receipt is None:
-            return ErrorResponse(message="رسیدی با این شناسه یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+            return ErrorResponse(
+                message="رسیدی با این شناسه یافت نشد.", status_code=status.HTTP_404_NOT_FOUND
+            )
         metadata = extract_audit_metadata(request)
         log_action_async(
             user_id=request.user.pk,
@@ -1141,7 +1174,9 @@ class MadadkarUserReceiptDetailView(APIView):
             extra_data={"receipt_number": receipt.receipt_number},
             **metadata,
         )
-        return SuccessResponse(data=DonationReceiptSerializer(receipt).data, message="جزئیات رسید با موفقیت دریافت شد.")
+        return SuccessResponse(
+            data=DonationReceiptSerializer(receipt).data, message="جزئیات رسید با موفقیت دریافت شد."
+        )
 
 
 class MadadkarPublicReceiptVerifyView(APIView):
@@ -1167,7 +1202,10 @@ class MadadkarPublicReceiptVerifyView(APIView):
             action=audit_actions.MADADKAR_RECEIPT_VERIFIED,
             resource_type="madadkar_receipt",
             resource_id=str(receipt.pk) if receipt else serializer.validated_data["receipt_number"],
-            extra_data={"is_valid": is_valid, "receipt_number": serializer.validated_data["receipt_number"]},
+            extra_data={
+                "is_valid": is_valid,
+                "receipt_number": serializer.validated_data["receipt_number"],
+            },
             **metadata,
         )
         return SuccessResponse(data=payload, message="نتیجه اعتبارسنجی رسید با موفقیت دریافت شد.")
@@ -1183,12 +1221,19 @@ class MadadkarAdminReceiptResendView(APIView):
         tags=[TAG_MADADKAR_ADMIN_ANALYTICS],
         summary="ثبت ارسال مجدد رسید — ادمین",
         request=DonationReceiptResendSerializer,
-        responses={200: USER_RECEIPT_DETAIL_RESPONSE, 400: GENERIC_ERROR_RESPONSE, 403: GENERIC_ERROR_RESPONSE, 404: GENERIC_ERROR_RESPONSE},
+        responses={
+            200: USER_RECEIPT_DETAIL_RESPONSE,
+            400: GENERIC_ERROR_RESPONSE,
+            403: GENERIC_ERROR_RESPONSE,
+            404: GENERIC_ERROR_RESPONSE,
+        },
     )
     def post(self, request: Request, receipt_id: int) -> Response:
         receipt = selectors.get_admin_receipt_by_id(receipt_id=receipt_id)
         if receipt is None:
-            return ErrorResponse(message="رسیدی با این شناسه یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+            return ErrorResponse(
+                message="رسیدی با این شناسه یافت نشد.", status_code=status.HTTP_404_NOT_FOUND
+            )
         serializer = DonationReceiptResendSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         receipt = services.record_receipt_resend(receipt=receipt)
@@ -1198,10 +1243,16 @@ class MadadkarAdminReceiptResendView(APIView):
             action=audit_actions.MADADKAR_RECEIPT_RESENT,
             resource_type="madadkar_receipt",
             resource_id=str(receipt.pk),
-            extra_data={"receipt_number": receipt.receipt_number, "delivery_channel": serializer.validated_data["delivery_channel"]},
+            extra_data={
+                "receipt_number": receipt.receipt_number,
+                "delivery_channel": serializer.validated_data["delivery_channel"],
+            },
             **metadata,
         )
-        return SuccessResponse(data=DonationReceiptSerializer(receipt).data, message="ارسال مجدد رسید با موفقیت ثبت شد.")
+        return SuccessResponse(
+            data=DonationReceiptSerializer(receipt).data,
+            message="ارسال مجدد رسید با موفقیت ثبت شد.",
+        )
 
 
 def _build_receipt_verification_payload(*, is_valid: bool, receipt) -> dict:
@@ -1245,7 +1296,11 @@ def _build_receipt_verification_payload(*, is_valid: bool, receipt) -> dict:
         tags=[TAG_MADADKAR_ADMIN_SPONSOR],
         summary="ساخت مددکار جدید — ادمین",
         request=SponsorCreateSerializer,
-        responses={201: ADMIN_SPONSOR_DETAIL_RESPONSE, 400: GENERIC_ERROR_RESPONSE, 403: GENERIC_ERROR_RESPONSE},
+        responses={
+            201: ADMIN_SPONSOR_DETAIL_RESPONSE,
+            400: GENERIC_ERROR_RESPONSE,
+            403: GENERIC_ERROR_RESPONSE,
+        },
     ),
 )
 class MadadkarAdminSponsorListCreateView(APIView):
@@ -1306,20 +1361,34 @@ class MadadkarAdminSponsorListCreateView(APIView):
         operation_id="madadkar_admin_sponsor_retrieve",
         tags=[TAG_MADADKAR_ADMIN_SPONSOR],
         summary="جزئیات مددکار — ادمین",
-        responses={200: ADMIN_SPONSOR_DETAIL_RESPONSE, 403: GENERIC_ERROR_RESPONSE, 404: GENERIC_ERROR_RESPONSE},
+        responses={
+            200: ADMIN_SPONSOR_DETAIL_RESPONSE,
+            403: GENERIC_ERROR_RESPONSE,
+            404: GENERIC_ERROR_RESPONSE,
+        },
     ),
     patch=extend_schema(
         operation_id="madadkar_admin_sponsor_update",
         tags=[TAG_MADADKAR_ADMIN_SPONSOR],
         summary="ویرایش مددکار — ادمین",
         request=SponsorUpdateSerializer,
-        responses={200: ADMIN_SPONSOR_DETAIL_RESPONSE, 400: GENERIC_ERROR_RESPONSE, 403: GENERIC_ERROR_RESPONSE, 404: GENERIC_ERROR_RESPONSE},
+        responses={
+            200: ADMIN_SPONSOR_DETAIL_RESPONSE,
+            400: GENERIC_ERROR_RESPONSE,
+            403: GENERIC_ERROR_RESPONSE,
+            404: GENERIC_ERROR_RESPONSE,
+        },
     ),
     delete=extend_schema(
         operation_id="madadkar_admin_sponsor_delete",
         tags=[TAG_MADADKAR_ADMIN_SPONSOR],
         summary="حذف نرم مددکار — ادمین",
-        responses={200: EMPTY_SUCCESS_RESPONSE, 400: GENERIC_ERROR_RESPONSE, 403: GENERIC_ERROR_RESPONSE, 404: GENERIC_ERROR_RESPONSE},
+        responses={
+            200: EMPTY_SUCCESS_RESPONSE,
+            400: GENERIC_ERROR_RESPONSE,
+            403: GENERIC_ERROR_RESPONSE,
+            404: GENERIC_ERROR_RESPONSE,
+        },
     ),
 )
 class MadadkarAdminSponsorDetailView(APIView):
@@ -1353,7 +1422,8 @@ class MadadkarAdminSponsorDetailView(APIView):
 
         try:
             sponsor = services.update_sponsor(
-                sponsor=sponsor, **serializer.validated_data,
+                sponsor=sponsor,
+                **serializer.validated_data,
             )
         except SponsorInvalidDataError as exc:
             return ErrorResponse(message=str(exc))
@@ -1417,7 +1487,12 @@ class MadadkarAdminSponsorDetailView(APIView):
         tags=[TAG_MADADKAR_ADMIN_CAMPAIGN],
         summary="ساخت حرکت جدید — ادمین",
         request=CampaignAdminCreateSerializer,
-        responses={201: ADMIN_CAMPAIGN_DETAIL_RESPONSE, 400: GENERIC_ERROR_RESPONSE, 403: GENERIC_ERROR_RESPONSE, 404: GENERIC_ERROR_RESPONSE},
+        responses={
+            201: ADMIN_CAMPAIGN_DETAIL_RESPONSE,
+            400: GENERIC_ERROR_RESPONSE,
+            403: GENERIC_ERROR_RESPONSE,
+            404: GENERIC_ERROR_RESPONSE,
+        },
     ),
 )
 class MadadkarAdminCampaignListCreateView(APIView):
@@ -1492,7 +1567,11 @@ class MadadkarAdminCampaignListCreateView(APIView):
         operation_id="madadkar_admin_campaign_retrieve",
         tags=[TAG_MADADKAR_ADMIN_CAMPAIGN],
         summary="جزئیات حرکت — ادمین",
-        responses={200: ADMIN_CAMPAIGN_DETAIL_RESPONSE, 403: GENERIC_ERROR_RESPONSE, 404: GENERIC_ERROR_RESPONSE},
+        responses={
+            200: ADMIN_CAMPAIGN_DETAIL_RESPONSE,
+            403: GENERIC_ERROR_RESPONSE,
+            404: GENERIC_ERROR_RESPONSE,
+        },
     ),
     patch=extend_schema(
         operation_id="madadkar_admin_campaign_update",
@@ -1506,14 +1585,24 @@ class MadadkarAdminCampaignListCreateView(APIView):
             "- deadline فقط می‌تواند به جلو منتقل شود (نه عقب)"
         ),
         request=CampaignAdminUpdateSerializer,
-        responses={200: ADMIN_CAMPAIGN_DETAIL_RESPONSE, 400: GENERIC_ERROR_RESPONSE, 403: GENERIC_ERROR_RESPONSE, 404: GENERIC_ERROR_RESPONSE},
+        responses={
+            200: ADMIN_CAMPAIGN_DETAIL_RESPONSE,
+            400: GENERIC_ERROR_RESPONSE,
+            403: GENERIC_ERROR_RESPONSE,
+            404: GENERIC_ERROR_RESPONSE,
+        },
     ),
     delete=extend_schema(
         operation_id="madadkar_admin_campaign_delete",
         tags=[TAG_MADADKAR_ADMIN_CAMPAIGN],
         summary="حذف نرم حرکت — ادمین",
         description="فقط حرکت‌های در وضعیت DRAFT قابل حذف هستند.",
-        responses={200: EMPTY_SUCCESS_RESPONSE, 400: GENERIC_ERROR_RESPONSE, 403: GENERIC_ERROR_RESPONSE, 404: GENERIC_ERROR_RESPONSE},
+        responses={
+            200: EMPTY_SUCCESS_RESPONSE,
+            400: GENERIC_ERROR_RESPONSE,
+            403: GENERIC_ERROR_RESPONSE,
+            404: GENERIC_ERROR_RESPONSE,
+        },
     ),
 )
 class MadadkarAdminCampaignDetailView(APIView):
@@ -1543,7 +1632,9 @@ class MadadkarAdminCampaignDetailView(APIView):
             )
 
         serializer = CampaignAdminUpdateSerializer(
-            data=request.data, partial=True, context={"campaign": campaign},
+            data=request.data,
+            partial=True,
+            context={"campaign": campaign},
         )
         serializer.is_valid(raise_exception=True)
 
@@ -1666,10 +1757,7 @@ class MadadkarAdminCampaignCloseView(APIView):
         operation_id="madadkar_admin_campaign_close",
         tags=[TAG_MADADKAR_ADMIN_CAMPAIGN],
         summary="بستن دستی حرکت — ادمین",
-        description=(
-            "انتقال حرکت از PUBLISHED به CLOSED. "
-            "از این پس امکان مشارکت جدید وجود ندارد."
-        ),
+        description=("انتقال حرکت از PUBLISHED به CLOSED. از این پس امکان مشارکت جدید وجود ندارد."),
         request=None,
         responses={
             200: ADMIN_CAMPAIGN_DETAIL_RESPONSE,
@@ -1736,7 +1824,8 @@ class MadadkarAdminCampaignImageListCreateView(APIView):
             )
 
         images = campaign.gallery_images.filter(is_active=True).order_by(
-            "display_order", "created_at",
+            "display_order",
+            "created_at",
         )
         return SuccessResponse(
             data=CampaignImageReadSerializer(images, many=True).data,
@@ -1767,7 +1856,8 @@ class MadadkarAdminCampaignImageListCreateView(APIView):
         serializer.is_valid(raise_exception=True)
 
         image = services.add_campaign_image(
-            campaign=campaign, **serializer.validated_data,
+            campaign=campaign,
+            **serializer.validated_data,
         )
 
         metadata = extract_audit_metadata(request)
@@ -2038,10 +2128,7 @@ class MadadkarAdminCampaignExportView(APIView):
 
         response = HttpResponse(
             excel_buffer.getvalue(),
-            content_type=(
-                "application/vnd.openxmlformats-officedocument."
-                "spreadsheetml.sheet"
-            ),
+            content_type=("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
         )
         response["Content-Disposition"] = f'attachment; filename="{filename}"'
         response["Content-Length"] = str(excel_buffer.getbuffer().nbytes)
@@ -2051,6 +2138,7 @@ class MadadkarAdminCampaignExportView(APIView):
 # ============================================================
 # Admin — Refunds / Financial Adjustments
 # ============================================================
+
 
 class MadadkarAdminRefundListCreateView(APIView):
     """List and create reviewed payment refund requests — admin."""
@@ -2076,23 +2164,36 @@ class MadadkarAdminRefundListCreateView(APIView):
         page = paginator.paginate_queryset(queryset, request, view=self)
         if page is not None:
             serializer = PaymentRefundSerializer(page, many=True)
-            return paginator.get_paginated_response(serializer.data, message="لیست بازپرداخت‌ها با موفقیت دریافت شد.")
+            return paginator.get_paginated_response(
+                serializer.data, message="لیست بازپرداخت‌ها با موفقیت دریافت شد."
+            )
         serializer = PaymentRefundSerializer(queryset, many=True)
-        return SuccessResponse(data=serializer.data, message="لیست بازپرداخت‌ها با موفقیت دریافت شد.")
+        return SuccessResponse(
+            data=serializer.data, message="لیست بازپرداخت‌ها با موفقیت دریافت شد."
+        )
 
     @extend_schema(
         operation_id="madadkar_admin_refunds_create",
         tags=[TAG_MADADKAR_ADMIN_ANALYTICS],
         summary="ثبت درخواست بازپرداخت — ادمین",
         request=PaymentRefundRequestSerializer,
-        responses={201: ADMIN_REFUND_DETAIL_RESPONSE, 400: GENERIC_ERROR_RESPONSE, 403: GENERIC_ERROR_RESPONSE, 404: GENERIC_ERROR_RESPONSE},
+        responses={
+            201: ADMIN_REFUND_DETAIL_RESPONSE,
+            400: GENERIC_ERROR_RESPONSE,
+            403: GENERIC_ERROR_RESPONSE,
+            404: GENERIC_ERROR_RESPONSE,
+        },
     )
     def post(self, request: Request) -> Response:
         serializer = PaymentRefundRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        payment = selectors.get_admin_payment_by_id(payment_id=serializer.validated_data["payment_id"])
+        payment = selectors.get_admin_payment_by_id(
+            payment_id=serializer.validated_data["payment_id"]
+        )
         if payment is None:
-            return ErrorResponse(message="پرداختی با این شناسه یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+            return ErrorResponse(
+                message="پرداختی با این شناسه یافت نشد.", status_code=status.HTTP_404_NOT_FOUND
+            )
         try:
             refund = services.request_payment_refund(
                 payment=payment,
@@ -2113,7 +2214,9 @@ class MadadkarAdminRefundListCreateView(APIView):
             extra_data={"payment_id": payment.pk, "amount": refund.amount, "reason": refund.reason},
             **metadata,
         )
-        return CreatedResponse(data=PaymentRefundSerializer(refund).data, message="درخواست بازپرداخت با موفقیت ثبت شد.")
+        return CreatedResponse(
+            data=PaymentRefundSerializer(refund).data, message="درخواست بازپرداخت با موفقیت ثبت شد."
+        )
 
 
 class MadadkarAdminRefundActionView(APIView):
@@ -2126,19 +2229,28 @@ class MadadkarAdminRefundActionView(APIView):
         tags=[TAG_MADADKAR_ADMIN_ANALYTICS],
         summary="تأیید بازپرداخت — ادمین",
         request=None,
-        responses={200: ADMIN_REFUND_DETAIL_RESPONSE, 400: GENERIC_ERROR_RESPONSE, 403: GENERIC_ERROR_RESPONSE, 404: GENERIC_ERROR_RESPONSE},
+        responses={
+            200: ADMIN_REFUND_DETAIL_RESPONSE,
+            400: GENERIC_ERROR_RESPONSE,
+            403: GENERIC_ERROR_RESPONSE,
+            404: GENERIC_ERROR_RESPONSE,
+        },
     )
     def post(self, request: Request, refund_id: int, action: str) -> Response:
         refund = selectors.get_admin_refund_by_id(refund_id=refund_id)
         if refund is None:
-            return ErrorResponse(message="بازپرداختی با این شناسه یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+            return ErrorResponse(
+                message="بازپرداختی با این شناسه یافت نشد.", status_code=status.HTTP_404_NOT_FOUND
+            )
         if action == "approve":
             return self._approve(request=request, refund=refund)
         if action == "reject":
             return self._reject(request=request, refund=refund)
         if action == "complete":
             return self._complete(request=request, refund=refund)
-        return ErrorResponse(message="عملیات بازپرداخت نامعتبر است.", status_code=status.HTTP_404_NOT_FOUND)
+        return ErrorResponse(
+            message="عملیات بازپرداخت نامعتبر است.", status_code=status.HTTP_404_NOT_FOUND
+        )
 
     def _approve(self, *, request: Request, refund) -> Response:
         """Approve refund and record audit evidence."""
@@ -2155,7 +2267,9 @@ class MadadkarAdminRefundActionView(APIView):
             extra_data={"amount": updated.amount, "payment_id": updated.payment_id},
             **metadata,
         )
-        return SuccessResponse(data=PaymentRefundSerializer(updated).data, message="بازپرداخت با موفقیت تأیید شد.")
+        return SuccessResponse(
+            data=PaymentRefundSerializer(updated).data, message="بازپرداخت با موفقیت تأیید شد."
+        )
 
     def _reject(self, *, request: Request, refund) -> Response:
         """Reject refund and record audit evidence."""
@@ -2178,7 +2292,9 @@ class MadadkarAdminRefundActionView(APIView):
             extra_data={"reason": updated.rejection_reason, "payment_id": updated.payment_id},
             **metadata,
         )
-        return SuccessResponse(data=PaymentRefundSerializer(updated).data, message="بازپرداخت رد شد.")
+        return SuccessResponse(
+            data=PaymentRefundSerializer(updated).data, message="بازپرداخت رد شد."
+        )
 
     def _complete(self, *, request: Request, refund) -> Response:
         """Complete approved refund and record audit evidence."""
@@ -2197,10 +2313,16 @@ class MadadkarAdminRefundActionView(APIView):
             action=audit_actions.MADADKAR_REFUND_COMPLETED,
             resource_type="madadkar_refund",
             resource_id=str(updated.pk),
-            extra_data={"amount": updated.amount, "payment_id": updated.payment_id, "provider_ref_id": updated.provider_ref_id},
+            extra_data={
+                "amount": updated.amount,
+                "payment_id": updated.payment_id,
+                "provider_ref_id": updated.provider_ref_id,
+            },
             **metadata,
         )
-        return SuccessResponse(data=PaymentRefundSerializer(updated).data, message="بازپرداخت با موفقیت تکمیل شد.")
+        return SuccessResponse(
+            data=PaymentRefundSerializer(updated).data, message="بازپرداخت با موفقیت تکمیل شد."
+        )
 
 
 class MadadkarAdminAdjustmentListCreateView(APIView):
@@ -2227,28 +2349,45 @@ class MadadkarAdminAdjustmentListCreateView(APIView):
         page = paginator.paginate_queryset(queryset, request, view=self)
         if page is not None:
             serializer = FinancialAdjustmentSerializer(page, many=True)
-            return paginator.get_paginated_response(serializer.data, message="لیست اصلاحات مالی با موفقیت دریافت شد.")
+            return paginator.get_paginated_response(
+                serializer.data, message="لیست اصلاحات مالی با موفقیت دریافت شد."
+            )
         serializer = FinancialAdjustmentSerializer(queryset, many=True)
-        return SuccessResponse(data=serializer.data, message="لیست اصلاحات مالی با موفقیت دریافت شد.")
+        return SuccessResponse(
+            data=serializer.data, message="لیست اصلاحات مالی با موفقیت دریافت شد."
+        )
 
     @extend_schema(
         operation_id="madadkar_admin_adjustments_create",
         tags=[TAG_MADADKAR_ADMIN_ANALYTICS],
         summary="ثبت اصلاح مالی — ادمین",
         request=FinancialAdjustmentCreateSerializer,
-        responses={201: ADMIN_ADJUSTMENT_DETAIL_RESPONSE, 400: GENERIC_ERROR_RESPONSE, 403: GENERIC_ERROR_RESPONSE, 404: GENERIC_ERROR_RESPONSE},
+        responses={
+            201: ADMIN_ADJUSTMENT_DETAIL_RESPONSE,
+            400: GENERIC_ERROR_RESPONSE,
+            403: GENERIC_ERROR_RESPONSE,
+            404: GENERIC_ERROR_RESPONSE,
+        },
     )
     def post(self, request: Request) -> Response:
         serializer = FinancialAdjustmentCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        campaign = selectors.get_admin_campaign_by_id(campaign_id=serializer.validated_data["campaign_id"])
+        campaign = selectors.get_admin_campaign_by_id(
+            campaign_id=serializer.validated_data["campaign_id"]
+        )
         if campaign is None:
-            return ErrorResponse(message="حرکتی با این شناسه یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+            return ErrorResponse(
+                message="حرکتی با این شناسه یافت نشد.", status_code=status.HTTP_404_NOT_FOUND
+            )
         payment = None
         if serializer.validated_data.get("payment_id"):
-            payment = selectors.get_admin_payment_by_id(payment_id=serializer.validated_data["payment_id"])
+            payment = selectors.get_admin_payment_by_id(
+                payment_id=serializer.validated_data["payment_id"]
+            )
             if payment is None:
-                return ErrorResponse(message="پرداختی با این شناسه یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+                return ErrorResponse(
+                    message="پرداختی با این شناسه یافت نشد.", status_code=status.HTTP_404_NOT_FOUND
+                )
         try:
             adjustment = services.create_financial_adjustment(
                 campaign=campaign,
@@ -2267,10 +2406,17 @@ class MadadkarAdminAdjustmentListCreateView(APIView):
             action=audit_actions.MADADKAR_ADJUSTMENT_CREATED,
             resource_type="madadkar_financial_adjustment",
             resource_id=str(adjustment.pk),
-            extra_data={"campaign_id": campaign.pk, "amount": adjustment.amount, "type": adjustment.adjustment_type},
+            extra_data={
+                "campaign_id": campaign.pk,
+                "amount": adjustment.amount,
+                "type": adjustment.adjustment_type,
+            },
             **metadata,
         )
-        return CreatedResponse(data=FinancialAdjustmentSerializer(adjustment).data, message="اصلاح مالی با موفقیت ثبت شد.")
+        return CreatedResponse(
+            data=FinancialAdjustmentSerializer(adjustment).data,
+            message="اصلاح مالی با موفقیت ثبت شد.",
+        )
 
 
 class MadadkarAdminAdjustmentActionView(APIView):
@@ -2283,24 +2429,35 @@ class MadadkarAdminAdjustmentActionView(APIView):
         tags=[TAG_MADADKAR_ADMIN_ANALYTICS],
         summary="عملیات اصلاح مالی — ادمین",
         request=FinancialAdjustmentRejectSerializer,
-        responses={200: ADMIN_ADJUSTMENT_DETAIL_RESPONSE, 400: GENERIC_ERROR_RESPONSE, 403: GENERIC_ERROR_RESPONSE, 404: GENERIC_ERROR_RESPONSE},
+        responses={
+            200: ADMIN_ADJUSTMENT_DETAIL_RESPONSE,
+            400: GENERIC_ERROR_RESPONSE,
+            403: GENERIC_ERROR_RESPONSE,
+            404: GENERIC_ERROR_RESPONSE,
+        },
     )
     def post(self, request: Request, adjustment_id: int, action: str) -> Response:
         adjustment = selectors.get_admin_adjustment_by_id(adjustment_id=adjustment_id)
         if adjustment is None:
-            return ErrorResponse(message="اصلاح مالی با این شناسه یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+            return ErrorResponse(
+                message="اصلاح مالی با این شناسه یافت نشد.", status_code=status.HTTP_404_NOT_FOUND
+            )
         if action == "approve":
             return self._approve(request=request, adjustment=adjustment)
         if action == "reject":
             return self._reject(request=request, adjustment=adjustment)
         if action == "apply":
             return self._apply(request=request, adjustment=adjustment)
-        return ErrorResponse(message="عملیات اصلاح مالی نامعتبر است.", status_code=status.HTTP_404_NOT_FOUND)
+        return ErrorResponse(
+            message="عملیات اصلاح مالی نامعتبر است.", status_code=status.HTTP_404_NOT_FOUND
+        )
 
     def _approve(self, *, request: Request, adjustment) -> Response:
         """Approve financial adjustment and audit the sensitive action."""
         try:
-            updated = services.approve_financial_adjustment(adjustment=adjustment, reviewed_by=request.user)
+            updated = services.approve_financial_adjustment(
+                adjustment=adjustment, reviewed_by=request.user
+            )
         except FinancialAdjustmentWorkflowError as exc:
             return ErrorResponse(message=str(exc))
         metadata = extract_audit_metadata(request)
@@ -2312,7 +2469,9 @@ class MadadkarAdminAdjustmentActionView(APIView):
             extra_data={"amount": updated.amount, "type": updated.adjustment_type},
             **metadata,
         )
-        return SuccessResponse(data=FinancialAdjustmentSerializer(updated).data, message="اصلاح مالی تأیید شد.")
+        return SuccessResponse(
+            data=FinancialAdjustmentSerializer(updated).data, message="اصلاح مالی تأیید شد."
+        )
 
     def _reject(self, *, request: Request, adjustment) -> Response:
         """Reject financial adjustment and audit the sensitive action."""
@@ -2335,7 +2494,9 @@ class MadadkarAdminAdjustmentActionView(APIView):
             extra_data={"reason": updated.rejection_reason},
             **metadata,
         )
-        return SuccessResponse(data=FinancialAdjustmentSerializer(updated).data, message="اصلاح مالی رد شد.")
+        return SuccessResponse(
+            data=FinancialAdjustmentSerializer(updated).data, message="اصلاح مالی رد شد."
+        )
 
     def _apply(self, *, request: Request, adjustment) -> Response:
         """Apply financial adjustment and audit the sensitive action."""
@@ -2349,10 +2510,16 @@ class MadadkarAdminAdjustmentActionView(APIView):
             action=audit_actions.MADADKAR_ADJUSTMENT_APPLIED,
             resource_type="madadkar_financial_adjustment",
             resource_id=str(updated.pk),
-            extra_data={"campaign_id": updated.campaign_id, "amount": updated.amount, "type": updated.adjustment_type},
+            extra_data={
+                "campaign_id": updated.campaign_id,
+                "amount": updated.amount,
+                "type": updated.adjustment_type,
+            },
             **metadata,
         )
-        return SuccessResponse(data=FinancialAdjustmentSerializer(updated).data, message="اصلاح مالی اعمال شد.")
+        return SuccessResponse(
+            data=FinancialAdjustmentSerializer(updated).data, message="اصلاح مالی اعمال شد."
+        )
 
 
 class MadadkarAdminCampaignFinancialControlView(APIView):
@@ -2364,19 +2531,29 @@ class MadadkarAdminCampaignFinancialControlView(APIView):
         operation_id="madadkar_admin_campaign_financial_control",
         tags=[TAG_MADADKAR_ADMIN_ANALYTICS],
         summary="کنترل مالی حرکت — ادمین",
-        responses={200: ADMIN_FINANCIAL_CONTROL_RESPONSE, 403: GENERIC_ERROR_RESPONSE, 404: GENERIC_ERROR_RESPONSE},
+        responses={
+            200: ADMIN_FINANCIAL_CONTROL_RESPONSE,
+            403: GENERIC_ERROR_RESPONSE,
+            404: GENERIC_ERROR_RESPONSE,
+        },
     )
     def get(self, request: Request, campaign_id: int) -> Response:
         campaign = selectors.get_admin_campaign_by_id(campaign_id=campaign_id)
         if campaign is None:
-            return ErrorResponse(message="حرکتی با این شناسه یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+            return ErrorResponse(
+                message="حرکتی با این شناسه یافت نشد.", status_code=status.HTTP_404_NOT_FOUND
+            )
         summary = selectors.get_campaign_financial_control_summary(campaign=campaign)
-        return SuccessResponse(data=CampaignFinancialControlSummarySerializer(summary).data, message="گزارش کنترل مالی با موفقیت دریافت شد.")
+        return SuccessResponse(
+            data=CampaignFinancialControlSummarySerializer(summary).data,
+            message="گزارش کنترل مالی با موفقیت دریافت شد.",
+        )
 
 
 # ============================================================
 # Admin — Campaign Intelligence
 # ============================================================
+
 
 class MadadkarAdminCampaignIntelligenceView(APIView):
     """Campaign-level decision intelligence for Madadkar admins."""
@@ -2395,13 +2572,21 @@ class MadadkarAdminCampaignIntelligenceView(APIView):
                 description="بازه تحلیل روزانه؛ پیش‌فرض ۳۰، حداکثر ۳۶۵.",
             ),
         ],
-        responses={200: ADMIN_CAMPAIGN_INTELLIGENCE_RESPONSE, 403: GENERIC_ERROR_RESPONSE, 404: GENERIC_ERROR_RESPONSE},
+        responses={
+            200: ADMIN_CAMPAIGN_INTELLIGENCE_RESPONSE,
+            403: GENERIC_ERROR_RESPONSE,
+            404: GENERIC_ERROR_RESPONSE,
+        },
     )
     def get(self, request: Request, campaign_id: int) -> Response:
         campaign = selectors.get_admin_campaign_by_id(campaign_id=campaign_id)
         if campaign is None:
-            return ErrorResponse(message="حرکتی با این شناسه یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
-        days = _parse_int_query_param(request=request, name="days", default=30, minimum=1, maximum=365)
+            return ErrorResponse(
+                message="حرکتی با این شناسه یافت نشد.", status_code=status.HTTP_404_NOT_FOUND
+            )
+        days = _parse_int_query_param(
+            request=request, name="days", default=30, minimum=1, maximum=365
+        )
         intelligence = selectors.get_campaign_intelligence(campaign=campaign, days=days)
         return SuccessResponse(
             data=CampaignIntelligenceSerializer(intelligence).data,
@@ -2429,7 +2614,9 @@ class MadadkarAdminIntelligenceOverviewView(APIView):
         responses={200: ADMIN_INTELLIGENCE_OVERVIEW_RESPONSE, 403: GENERIC_ERROR_RESPONSE},
     )
     def get(self, request: Request) -> Response:
-        days = _parse_int_query_param(request=request, name="days", default=30, minimum=1, maximum=365)
+        days = _parse_int_query_param(
+            request=request, name="days", default=30, minimum=1, maximum=365
+        )
         overview = selectors.get_madadkar_intelligence_overview(days=days)
         return SuccessResponse(
             data=MadadkarIntelligenceOverviewSerializer(overview).data,
@@ -2437,7 +2624,9 @@ class MadadkarAdminIntelligenceOverviewView(APIView):
         )
 
 
-def _parse_int_query_param(*, request: Request, name: str, default: int, minimum: int, maximum: int) -> int:
+def _parse_int_query_param(
+    *, request: Request, name: str, default: int, minimum: int, maximum: int
+) -> int:
     """Parse bounded integer query params for intelligence endpoints."""
     raw_value = request.query_params.get(name, default)
     try:
@@ -2451,6 +2640,7 @@ def _parse_int_query_param(*, request: Request, name: str, default: int, minimum
 # Admin — Risk Signals
 # ============================================================
 
+
 class MadadkarAdminRiskSignalListView(APIView):
     """List Madadkar financial risk signals for admin review."""
 
@@ -2462,10 +2652,16 @@ class MadadkarAdminRiskSignalListView(APIView):
         summary="لیست سیگنال‌های ریسک مددکار — ادمین",
         parameters=[
             OpenApiParameter(name="status", type=OpenApiTypes.STR, location=OpenApiParameter.QUERY),
-            OpenApiParameter(name="severity", type=OpenApiTypes.STR, location=OpenApiParameter.QUERY),
+            OpenApiParameter(
+                name="severity", type=OpenApiTypes.STR, location=OpenApiParameter.QUERY
+            ),
             OpenApiParameter(name="user", type=OpenApiTypes.INT, location=OpenApiParameter.QUERY),
-            OpenApiParameter(name="campaign", type=OpenApiTypes.INT, location=OpenApiParameter.QUERY),
-            OpenApiParameter(name="ip_address", type=OpenApiTypes.STR, location=OpenApiParameter.QUERY),
+            OpenApiParameter(
+                name="campaign", type=OpenApiTypes.INT, location=OpenApiParameter.QUERY
+            ),
+            OpenApiParameter(
+                name="ip_address", type=OpenApiTypes.STR, location=OpenApiParameter.QUERY
+            ),
         ],
         responses={200: ADMIN_RISK_SIGNALS_LIST_RESPONSE, 403: GENERIC_ERROR_RESPONSE},
     )
@@ -2484,9 +2680,13 @@ class MadadkarAdminRiskSignalListView(APIView):
         page = paginator.paginate_queryset(queryset, request, view=self)
         if page is not None:
             serializer = MadadkarRiskSignalSerializer(page, many=True)
-            return paginator.get_paginated_response(serializer.data, message="لیست سیگنال‌های ریسک با موفقیت دریافت شد.")
+            return paginator.get_paginated_response(
+                serializer.data, message="لیست سیگنال‌های ریسک با موفقیت دریافت شد."
+            )
         serializer = MadadkarRiskSignalSerializer(queryset, many=True)
-        return SuccessResponse(data=serializer.data, message="لیست سیگنال‌های ریسک با موفقیت دریافت شد.")
+        return SuccessResponse(
+            data=serializer.data, message="لیست سیگنال‌های ریسک با موفقیت دریافت شد."
+        )
 
 
 class MadadkarAdminRiskSignalReviewView(APIView):
@@ -2499,12 +2699,19 @@ class MadadkarAdminRiskSignalReviewView(APIView):
         tags=[TAG_MADADKAR_ADMIN_ANALYTICS],
         summary="بررسی سیگنال ریسک مددکار — ادمین",
         request=MadadkarRiskSignalReviewSerializer,
-        responses={200: ADMIN_RISK_SIGNAL_DETAIL_RESPONSE, 400: GENERIC_ERROR_RESPONSE, 403: GENERIC_ERROR_RESPONSE, 404: GENERIC_ERROR_RESPONSE},
+        responses={
+            200: ADMIN_RISK_SIGNAL_DETAIL_RESPONSE,
+            400: GENERIC_ERROR_RESPONSE,
+            403: GENERIC_ERROR_RESPONSE,
+            404: GENERIC_ERROR_RESPONSE,
+        },
     )
     def post(self, request: Request, signal_id: int) -> Response:
         signal = selectors.get_admin_risk_signal_by_id(signal_id=signal_id)
         if signal is None:
-            return ErrorResponse(message="سیگنال ریسکی با این شناسه یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+            return ErrorResponse(
+                message="سیگنال ریسکی با این شناسه یافت نشد.", status_code=status.HTTP_404_NOT_FOUND
+            )
         serializer = MadadkarRiskSignalReviewSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         try:
@@ -2522,15 +2729,23 @@ class MadadkarAdminRiskSignalReviewView(APIView):
             action=audit_actions.MADADKAR_RISK_SIGNAL_REVIEWED,
             resource_type="madadkar_risk_signal",
             resource_id=str(reviewed.pk),
-            extra_data={"status": reviewed.status, "signal_type": reviewed.signal_type, "severity": reviewed.severity},
+            extra_data={
+                "status": reviewed.status,
+                "signal_type": reviewed.signal_type,
+                "severity": reviewed.severity,
+            },
             **metadata,
         )
-        return SuccessResponse(data=MadadkarRiskSignalSerializer(reviewed).data, message="سیگنال ریسک با موفقیت بررسی شد.")
+        return SuccessResponse(
+            data=MadadkarRiskSignalSerializer(reviewed).data,
+            message="سیگنال ریسک با موفقیت بررسی شد.",
+        )
 
 
 # ============================================================
 # Admin — Disbursement / Allocation Ledger
 # ============================================================
+
 
 class MadadkarAdminDisbursementListCreateView(APIView):
     """List and request campaign fund disbursements — admin."""
@@ -2556,23 +2771,36 @@ class MadadkarAdminDisbursementListCreateView(APIView):
         page = paginator.paginate_queryset(queryset, request, view=self)
         if page is not None:
             serializer = CampaignDisbursementSerializer(page, many=True)
-            return paginator.get_paginated_response(serializer.data, message="لیست تخصیص‌های مالی با موفقیت دریافت شد.")
+            return paginator.get_paginated_response(
+                serializer.data, message="لیست تخصیص‌های مالی با موفقیت دریافت شد."
+            )
         serializer = CampaignDisbursementSerializer(queryset, many=True)
-        return SuccessResponse(data=serializer.data, message="لیست تخصیص‌های مالی با موفقیت دریافت شد.")
+        return SuccessResponse(
+            data=serializer.data, message="لیست تخصیص‌های مالی با موفقیت دریافت شد."
+        )
 
     @extend_schema(
         operation_id="madadkar_admin_disbursements_create",
         tags=[TAG_MADADKAR_ADMIN_ANALYTICS],
         summary="درخواست تخصیص مالی از حرکت — ادمین",
         request=CampaignDisbursementCreateSerializer,
-        responses={201: ADMIN_DISBURSEMENT_DETAIL_RESPONSE, 400: GENERIC_ERROR_RESPONSE, 403: GENERIC_ERROR_RESPONSE, 404: GENERIC_ERROR_RESPONSE},
+        responses={
+            201: ADMIN_DISBURSEMENT_DETAIL_RESPONSE,
+            400: GENERIC_ERROR_RESPONSE,
+            403: GENERIC_ERROR_RESPONSE,
+            404: GENERIC_ERROR_RESPONSE,
+        },
     )
     def post(self, request: Request) -> Response:
         serializer = CampaignDisbursementCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        campaign = selectors.get_admin_campaign_by_id(campaign_id=serializer.validated_data["campaign_id"])
+        campaign = selectors.get_admin_campaign_by_id(
+            campaign_id=serializer.validated_data["campaign_id"]
+        )
         if campaign is None:
-            return ErrorResponse(message="حرکتی با این شناسه یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+            return ErrorResponse(
+                message="حرکتی با این شناسه یافت نشد.", status_code=status.HTTP_404_NOT_FOUND
+            )
         try:
             disbursement = services.request_campaign_disbursement(
                 campaign=campaign,
@@ -2596,7 +2824,10 @@ class MadadkarAdminDisbursementListCreateView(APIView):
             extra_data={"campaign_id": campaign.pk, "amount": disbursement.amount},
             **metadata,
         )
-        return CreatedResponse(data=CampaignDisbursementSerializer(disbursement).data, message="درخواست تخصیص مالی ثبت شد.")
+        return CreatedResponse(
+            data=CampaignDisbursementSerializer(disbursement).data,
+            message="درخواست تخصیص مالی ثبت شد.",
+        )
 
 
 class MadadkarAdminDisbursementDetailView(APIView):
@@ -2608,13 +2839,22 @@ class MadadkarAdminDisbursementDetailView(APIView):
         operation_id="madadkar_admin_disbursement_retrieve",
         tags=[TAG_MADADKAR_ADMIN_ANALYTICS],
         summary="جزئیات تخصیص مالی — ادمین",
-        responses={200: ADMIN_DISBURSEMENT_DETAIL_RESPONSE, 403: GENERIC_ERROR_RESPONSE, 404: GENERIC_ERROR_RESPONSE},
+        responses={
+            200: ADMIN_DISBURSEMENT_DETAIL_RESPONSE,
+            403: GENERIC_ERROR_RESPONSE,
+            404: GENERIC_ERROR_RESPONSE,
+        },
     )
     def get(self, request: Request, disbursement_id: int) -> Response:
         disbursement = selectors.get_admin_disbursement_by_id(disbursement_id=disbursement_id)
         if disbursement is None:
-            return ErrorResponse(message="تخصیص مالی با این شناسه یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
-        return SuccessResponse(data=CampaignDisbursementSerializer(disbursement).data, message="جزئیات تخصیص مالی با موفقیت دریافت شد.")
+            return ErrorResponse(
+                message="تخصیص مالی با این شناسه یافت نشد.", status_code=status.HTTP_404_NOT_FOUND
+            )
+        return SuccessResponse(
+            data=CampaignDisbursementSerializer(disbursement).data,
+            message="جزئیات تخصیص مالی با موفقیت دریافت شد.",
+        )
 
 
 class MadadkarAdminDisbursementActionView(APIView):
@@ -2627,28 +2867,45 @@ class MadadkarAdminDisbursementActionView(APIView):
         tags=[TAG_MADADKAR_ADMIN_ANALYTICS],
         summary="عملیات تخصیص مالی — ادمین",
         request=CampaignDisbursementMarkPaidSerializer,
-        responses={200: ADMIN_DISBURSEMENT_DETAIL_RESPONSE, 400: GENERIC_ERROR_RESPONSE, 403: GENERIC_ERROR_RESPONSE, 404: GENERIC_ERROR_RESPONSE},
+        responses={
+            200: ADMIN_DISBURSEMENT_DETAIL_RESPONSE,
+            400: GENERIC_ERROR_RESPONSE,
+            403: GENERIC_ERROR_RESPONSE,
+            404: GENERIC_ERROR_RESPONSE,
+        },
     )
     def post(self, request: Request, disbursement_id: int, action: str) -> Response:
         disbursement = selectors.get_admin_disbursement_by_id(disbursement_id=disbursement_id)
         if disbursement is None:
-            return ErrorResponse(message="تخصیص مالی با این شناسه یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+            return ErrorResponse(
+                message="تخصیص مالی با این شناسه یافت نشد.", status_code=status.HTTP_404_NOT_FOUND
+            )
         if action == "approve":
             return self._approve(request=request, disbursement=disbursement)
         if action == "reject":
             return self._reject(request=request, disbursement=disbursement)
         if action == "mark-paid":
             return self._mark_paid(request=request, disbursement=disbursement)
-        return ErrorResponse(message="عملیات تخصیص مالی نامعتبر است.", status_code=status.HTTP_404_NOT_FOUND)
+        return ErrorResponse(
+            message="عملیات تخصیص مالی نامعتبر است.", status_code=status.HTTP_404_NOT_FOUND
+        )
 
     def _approve(self, *, request: Request, disbursement) -> Response:
         """Approve requested disbursement and audit the action."""
         try:
-            updated = services.approve_campaign_disbursement(disbursement=disbursement, reviewed_by=request.user)
+            updated = services.approve_campaign_disbursement(
+                disbursement=disbursement, reviewed_by=request.user
+            )
         except DisbursementWorkflowError as exc:
             return ErrorResponse(message=str(exc))
-        _audit_disbursement_action(request=request, disbursement=updated, action=audit_actions.MADADKAR_DISBURSEMENT_APPROVED)
-        return SuccessResponse(data=CampaignDisbursementSerializer(updated).data, message="تخصیص مالی تأیید شد.")
+        _audit_disbursement_action(
+            request=request,
+            disbursement=updated,
+            action=audit_actions.MADADKAR_DISBURSEMENT_APPROVED,
+        )
+        return SuccessResponse(
+            data=CampaignDisbursementSerializer(updated).data, message="تخصیص مالی تأیید شد."
+        )
 
     def _reject(self, *, request: Request, disbursement) -> Response:
         """Reject requested disbursement and audit the action."""
@@ -2662,8 +2919,14 @@ class MadadkarAdminDisbursementActionView(APIView):
             )
         except DisbursementWorkflowError as exc:
             return ErrorResponse(message=str(exc))
-        _audit_disbursement_action(request=request, disbursement=updated, action=audit_actions.MADADKAR_DISBURSEMENT_REJECTED)
-        return SuccessResponse(data=CampaignDisbursementSerializer(updated).data, message="تخصیص مالی رد شد.")
+        _audit_disbursement_action(
+            request=request,
+            disbursement=updated,
+            action=audit_actions.MADADKAR_DISBURSEMENT_REJECTED,
+        )
+        return SuccessResponse(
+            data=CampaignDisbursementSerializer(updated).data, message="تخصیص مالی رد شد."
+        )
 
     def _mark_paid(self, *, request: Request, disbursement) -> Response:
         """Mark approved disbursement as paid and audit the action."""
@@ -2677,8 +2940,12 @@ class MadadkarAdminDisbursementActionView(APIView):
             )
         except DisbursementWorkflowError as exc:
             return ErrorResponse(message=str(exc))
-        _audit_disbursement_action(request=request, disbursement=updated, action=audit_actions.MADADKAR_DISBURSEMENT_PAID)
-        return SuccessResponse(data=CampaignDisbursementSerializer(updated).data, message="پرداخت تخصیص مالی ثبت شد.")
+        _audit_disbursement_action(
+            request=request, disbursement=updated, action=audit_actions.MADADKAR_DISBURSEMENT_PAID
+        )
+        return SuccessResponse(
+            data=CampaignDisbursementSerializer(updated).data, message="پرداخت تخصیص مالی ثبت شد."
+        )
 
 
 class MadadkarAdminCampaignDisbursableSummaryView(APIView):
@@ -2690,14 +2957,23 @@ class MadadkarAdminCampaignDisbursableSummaryView(APIView):
         operation_id="madadkar_admin_campaign_disbursable_summary",
         tags=[TAG_MADADKAR_ADMIN_ANALYTICS],
         summary="مانده قابل تخصیص حرکت — ادمین",
-        responses={200: ADMIN_DISBURSABLE_SUMMARY_RESPONSE, 403: GENERIC_ERROR_RESPONSE, 404: GENERIC_ERROR_RESPONSE},
+        responses={
+            200: ADMIN_DISBURSABLE_SUMMARY_RESPONSE,
+            403: GENERIC_ERROR_RESPONSE,
+            404: GENERIC_ERROR_RESPONSE,
+        },
     )
     def get(self, request: Request, campaign_id: int) -> Response:
         campaign = selectors.get_admin_campaign_by_id(campaign_id=campaign_id)
         if campaign is None:
-            return ErrorResponse(message="حرکتی با این شناسه یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+            return ErrorResponse(
+                message="حرکتی با این شناسه یافت نشد.", status_code=status.HTTP_404_NOT_FOUND
+            )
         summary = selectors.get_campaign_disbursable_summary(campaign=campaign)
-        return SuccessResponse(data=CampaignDisbursableSummarySerializer(summary).data, message="مانده قابل تخصیص با موفقیت دریافت شد.")
+        return SuccessResponse(
+            data=CampaignDisbursableSummarySerializer(summary).data,
+            message="مانده قابل تخصیص با موفقیت دریافت شد.",
+        )
 
 
 def _audit_disbursement_action(*, request: Request, disbursement, action: str) -> None:
@@ -2708,7 +2984,11 @@ def _audit_disbursement_action(*, request: Request, disbursement, action: str) -
         action=action,
         resource_type="madadkar_disbursement",
         resource_id=str(disbursement.pk),
-        extra_data={"campaign_id": disbursement.campaign_id, "amount": disbursement.amount, "status": disbursement.status},
+        extra_data={
+            "campaign_id": disbursement.campaign_id,
+            "amount": disbursement.amount,
+            "status": disbursement.status,
+        },
         **metadata,
     )
 
@@ -2716,6 +2996,7 @@ def _audit_disbursement_action(*, request: Request, disbursement, action: str) -
 # ============================================================
 # Admin — Reconciliation Import / Review / Export
 # ============================================================
+
 
 class MadadkarAdminReconciliationImportView(APIView):
     """Import provider settlement CSV/XLSX and create reconciliation batch."""
@@ -2728,14 +3009,20 @@ class MadadkarAdminReconciliationImportView(APIView):
         tags=[TAG_MADADKAR_ADMIN_ANALYTICS],
         summary="Import گزارش تطبیق پرداخت — ادمین",
         request=PaymentReconciliationImportSerializer,
-        responses={201: ADMIN_RECONCILIATION_BATCH_DETAIL_RESPONSE, 400: GENERIC_ERROR_RESPONSE, 403: GENERIC_ERROR_RESPONSE},
+        responses={
+            201: ADMIN_RECONCILIATION_BATCH_DETAIL_RESPONSE,
+            400: GENERIC_ERROR_RESPONSE,
+            403: GENERIC_ERROR_RESPONSE,
+        },
     )
     def post(self, request: Request) -> Response:
         serializer = PaymentReconciliationImportSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         uploaded_file = serializer.validated_data["file"]
         try:
-            rows = parse_settlement_report(filename=uploaded_file.name, content=uploaded_file.read())
+            rows = parse_settlement_report(
+                filename=uploaded_file.name, content=uploaded_file.read()
+            )
             batch = services.reconcile_provider_payments(
                 provider_name=serializer.validated_data["provider_name"],
                 rows=rows,
@@ -2786,9 +3073,13 @@ class MadadkarAdminReconciliationBatchListView(APIView):
         page = paginator.paginate_queryset(queryset, request, view=self)
         if page is not None:
             serializer = PaymentReconciliationBatchSerializer(page, many=True)
-            return paginator.get_paginated_response(serializer.data, message="لیست batchهای تطبیق با موفقیت دریافت شد.")
+            return paginator.get_paginated_response(
+                serializer.data, message="لیست batchهای تطبیق با موفقیت دریافت شد."
+            )
         serializer = PaymentReconciliationBatchSerializer(queryset, many=True)
-        return SuccessResponse(data=serializer.data, message="لیست batchهای تطبیق با موفقیت دریافت شد.")
+        return SuccessResponse(
+            data=serializer.data, message="لیست batchهای تطبیق با موفقیت دریافت شد."
+        )
 
 
 class MadadkarAdminReconciliationBatchDetailView(APIView):
@@ -2800,13 +3091,22 @@ class MadadkarAdminReconciliationBatchDetailView(APIView):
         operation_id="madadkar_admin_reconciliation_batch_retrieve",
         tags=[TAG_MADADKAR_ADMIN_ANALYTICS],
         summary="جزئیات batch تطبیق پرداخت — ادمین",
-        responses={200: ADMIN_RECONCILIATION_BATCH_DETAIL_RESPONSE, 403: GENERIC_ERROR_RESPONSE, 404: GENERIC_ERROR_RESPONSE},
+        responses={
+            200: ADMIN_RECONCILIATION_BATCH_DETAIL_RESPONSE,
+            403: GENERIC_ERROR_RESPONSE,
+            404: GENERIC_ERROR_RESPONSE,
+        },
     )
     def get(self, request: Request, batch_id: int) -> Response:
         batch = selectors.get_admin_reconciliation_batch_by_id(batch_id=batch_id)
         if batch is None:
-            return ErrorResponse(message="Batch تطبیق با این شناسه یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
-        return SuccessResponse(data=PaymentReconciliationBatchSerializer(batch).data, message="جزئیات batch تطبیق با موفقیت دریافت شد.")
+            return ErrorResponse(
+                message="Batch تطبیق با این شناسه یافت نشد.", status_code=status.HTTP_404_NOT_FOUND
+            )
+        return SuccessResponse(
+            data=PaymentReconciliationBatchSerializer(batch).data,
+            message="جزئیات batch تطبیق با موفقیت دریافت شد.",
+        )
 
 
 class MadadkarAdminReconciliationItemListView(APIView):
@@ -2818,12 +3118,18 @@ class MadadkarAdminReconciliationItemListView(APIView):
         operation_id="madadkar_admin_reconciliation_items_list",
         tags=[TAG_MADADKAR_ADMIN_ANALYTICS],
         summary="لیست ردیف‌های batch تطبیق پرداخت — ادمین",
-        responses={200: ADMIN_RECONCILIATION_ITEM_LIST_RESPONSE, 403: GENERIC_ERROR_RESPONSE, 404: GENERIC_ERROR_RESPONSE},
+        responses={
+            200: ADMIN_RECONCILIATION_ITEM_LIST_RESPONSE,
+            403: GENERIC_ERROR_RESPONSE,
+            404: GENERIC_ERROR_RESPONSE,
+        },
     )
     def get(self, request: Request, batch_id: int) -> Response:
         batch = selectors.get_admin_reconciliation_batch_by_id(batch_id=batch_id)
         if batch is None:
-            return ErrorResponse(message="Batch تطبیق با این شناسه یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+            return ErrorResponse(
+                message="Batch تطبیق با این شناسه یافت نشد.", status_code=status.HTTP_404_NOT_FOUND
+            )
         queryset = selectors.get_admin_reconciliation_items_queryset(batch=batch)
         status_filter = request.query_params.get("status")
         if status_filter:
@@ -2832,9 +3138,13 @@ class MadadkarAdminReconciliationItemListView(APIView):
         page = paginator.paginate_queryset(queryset, request, view=self)
         if page is not None:
             serializer = PaymentReconciliationItemSerializer(page, many=True)
-            return paginator.get_paginated_response(serializer.data, message="لیست ردیف‌های تطبیق با موفقیت دریافت شد.")
+            return paginator.get_paginated_response(
+                serializer.data, message="لیست ردیف‌های تطبیق با موفقیت دریافت شد."
+            )
         serializer = PaymentReconciliationItemSerializer(queryset, many=True)
-        return SuccessResponse(data=serializer.data, message="لیست ردیف‌های تطبیق با موفقیت دریافت شد.")
+        return SuccessResponse(
+            data=serializer.data, message="لیست ردیف‌های تطبیق با موفقیت دریافت شد."
+        )
 
 
 class MadadkarAdminReconciliationDiscrepancyExportView(APIView):
@@ -2846,12 +3156,18 @@ class MadadkarAdminReconciliationDiscrepancyExportView(APIView):
         operation_id="madadkar_admin_reconciliation_discrepancies_export",
         tags=[TAG_MADADKAR_ADMIN_ANALYTICS],
         summary="خروجی CSV اختلافات تطبیق — ادمین",
-        responses={200: {"type": "string", "format": "binary"}, 403: GENERIC_ERROR_RESPONSE, 404: GENERIC_ERROR_RESPONSE},
+        responses={
+            200: {"type": "string", "format": "binary"},
+            403: GENERIC_ERROR_RESPONSE,
+            404: GENERIC_ERROR_RESPONSE,
+        },
     )
     def get(self, request: Request, batch_id: int) -> HttpResponse | ErrorResponse:
         batch = selectors.get_admin_reconciliation_batch_by_id(batch_id=batch_id)
         if batch is None:
-            return ErrorResponse(message="Batch تطبیق با این شناسه یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+            return ErrorResponse(
+                message="Batch تطبیق با این شناسه یافت نشد.", status_code=status.HTTP_404_NOT_FOUND
+            )
         content = build_reconciliation_discrepancy_csv(batch=batch)
         metadata = extract_audit_metadata(request)
         log_action(
@@ -2859,7 +3175,10 @@ class MadadkarAdminReconciliationDiscrepancyExportView(APIView):
             action=audit_actions.MADADKAR_RECONCILIATION_EXPORTED,
             resource_type="madadkar_reconciliation_batch",
             resource_id=str(batch.pk),
-            extra_data={"provider_name": batch.provider_name, "mismatch_count": batch.mismatch_count},
+            extra_data={
+                "provider_name": batch.provider_name,
+                "mismatch_count": batch.mismatch_count,
+            },
             **metadata,
         )
         filename = f"madadkar-reconciliation-discrepancies-{batch.pk}.csv"
@@ -2873,6 +3192,7 @@ class MadadkarAdminReconciliationDiscrepancyExportView(APIView):
 # Admin — Financial Ops Controls
 # ============================================================
 
+
 class MadadkarAdminFinancialControlSnapshotListView(APIView):
     """List generated Madadkar financial control snapshots."""
 
@@ -2882,8 +3202,15 @@ class MadadkarAdminFinancialControlSnapshotListView(APIView):
         operation_id="madadkar_admin_financial_control_snapshots_list",
         tags=[TAG_MADADKAR_ADMIN_ANALYTICS],
         summary="لیست snapshotهای کنترل مالی مددکار — ادمین",
-        parameters=[OpenApiParameter(name="severity", type=OpenApiTypes.STR, location=OpenApiParameter.QUERY)],
-        responses={200: ADMIN_FINANCIAL_CONTROL_SNAPSHOT_LIST_RESPONSE, 403: GENERIC_ERROR_RESPONSE},
+        parameters=[
+            OpenApiParameter(
+                name="severity", type=OpenApiTypes.STR, location=OpenApiParameter.QUERY
+            )
+        ],
+        responses={
+            200: ADMIN_FINANCIAL_CONTROL_SNAPSHOT_LIST_RESPONSE,
+            403: GENERIC_ERROR_RESPONSE,
+        },
     )
     def get(self, request: Request) -> Response:
         queryset = selectors.get_admin_financial_control_snapshots_queryset()
@@ -2894,9 +3221,13 @@ class MadadkarAdminFinancialControlSnapshotListView(APIView):
         page = paginator.paginate_queryset(queryset, request, view=self)
         if page is not None:
             serializer = MadadkarFinancialControlSnapshotSerializer(page, many=True)
-            return paginator.get_paginated_response(serializer.data, message="لیست کنترل‌های مالی با موفقیت دریافت شد.")
+            return paginator.get_paginated_response(
+                serializer.data, message="لیست کنترل‌های مالی با موفقیت دریافت شد."
+            )
         serializer = MadadkarFinancialControlSnapshotSerializer(queryset, many=True)
-        return SuccessResponse(data=serializer.data, message="لیست کنترل‌های مالی با موفقیت دریافت شد.")
+        return SuccessResponse(
+            data=serializer.data, message="لیست کنترل‌های مالی با موفقیت دریافت شد."
+        )
 
 
 class MadadkarAdminFinancialControlLatestView(APIView):
@@ -2908,13 +3239,23 @@ class MadadkarAdminFinancialControlLatestView(APIView):
         operation_id="madadkar_admin_financial_control_latest",
         tags=[TAG_MADADKAR_ADMIN_ANALYTICS],
         summary="آخرین snapshot کنترل مالی مددکار — ادمین",
-        responses={200: ADMIN_FINANCIAL_CONTROL_SNAPSHOT_DETAIL_RESPONSE, 403: GENERIC_ERROR_RESPONSE, 404: GENERIC_ERROR_RESPONSE},
+        responses={
+            200: ADMIN_FINANCIAL_CONTROL_SNAPSHOT_DETAIL_RESPONSE,
+            403: GENERIC_ERROR_RESPONSE,
+            404: GENERIC_ERROR_RESPONSE,
+        },
     )
     def get(self, request: Request) -> Response:
         snapshot = selectors.get_latest_financial_control_snapshot()
         if snapshot is None:
-            return ErrorResponse(message="هنوز snapshot کنترل مالی تولید نشده است.", status_code=status.HTTP_404_NOT_FOUND)
-        return SuccessResponse(data=MadadkarFinancialControlSnapshotSerializer(snapshot).data, message="آخرین snapshot کنترل مالی با موفقیت دریافت شد.")
+            return ErrorResponse(
+                message="هنوز snapshot کنترل مالی تولید نشده است.",
+                status_code=status.HTTP_404_NOT_FOUND,
+            )
+        return SuccessResponse(
+            data=MadadkarFinancialControlSnapshotSerializer(snapshot).data,
+            message="آخرین snapshot کنترل مالی با موفقیت دریافت شد.",
+        )
 
 
 class MadadkarAdminFinancialControlGenerateView(APIView):
@@ -2927,7 +3268,10 @@ class MadadkarAdminFinancialControlGenerateView(APIView):
         tags=[TAG_MADADKAR_ADMIN_ANALYTICS],
         summary="تولید snapshot کنترل مالی مددکار — ادمین",
         request=None,
-        responses={201: ADMIN_FINANCIAL_CONTROL_SNAPSHOT_DETAIL_RESPONSE, 403: GENERIC_ERROR_RESPONSE},
+        responses={
+            201: ADMIN_FINANCIAL_CONTROL_SNAPSHOT_DETAIL_RESPONSE,
+            403: GENERIC_ERROR_RESPONSE,
+        },
     )
     def post(self, request: Request) -> Response:
         snapshot = services.generate_financial_control_snapshot()
@@ -2940,7 +3284,10 @@ class MadadkarAdminFinancialControlGenerateView(APIView):
             extra_data={"severity": snapshot.severity, "summary": snapshot.summary},
             **metadata,
         )
-        return CreatedResponse(data=MadadkarFinancialControlSnapshotSerializer(snapshot).data, message="Snapshot کنترل مالی با موفقیت تولید شد.")
+        return CreatedResponse(
+            data=MadadkarFinancialControlSnapshotSerializer(snapshot).data,
+            message="Snapshot کنترل مالی با موفقیت تولید شد.",
+        )
 
 
 # ============================================================

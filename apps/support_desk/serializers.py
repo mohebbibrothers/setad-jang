@@ -39,7 +39,14 @@ class SupportDepartmentInputSerializer(serializers.Serializer):
 
     title = serializers.CharField(max_length=180)
     description = serializers.CharField(required=False, allow_blank=True, default="")
-    default_assignee_id = serializers.PrimaryKeyRelatedField(queryset=SupportDepartment._meta.get_field("default_assignee").remote_field.model.objects.all(), source="default_assignee", required=False, allow_null=True)
+    default_assignee_id = serializers.PrimaryKeyRelatedField(
+        queryset=SupportDepartment._meta.get_field(
+            "default_assignee"
+        ).remote_field.model.objects.all(),
+        source="default_assignee",
+        required=False,
+        allow_null=True,
+    )
     order = serializers.IntegerField(required=False, min_value=0, default=0)
     is_active = serializers.BooleanField(required=False)
 
@@ -58,7 +65,19 @@ class SupportBusinessCalendarSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = SupportBusinessCalendar
-        fields = ("id", "title", "department", "timezone_name", "workday_start", "workday_end", "active_weekdays", "is_default", "is_active", "created_at", "updated_at")
+        fields = (
+            "id",
+            "title",
+            "department",
+            "timezone_name",
+            "workday_start",
+            "workday_end",
+            "active_weekdays",
+            "is_default",
+            "is_active",
+            "created_at",
+            "updated_at",
+        )
         read_only_fields = fields
 
 
@@ -66,11 +85,18 @@ class SupportBusinessCalendarInputSerializer(serializers.Serializer):
     """Admin input serializer for business calendars."""
 
     title = serializers.CharField(max_length=180)
-    department_id = serializers.PrimaryKeyRelatedField(queryset=SupportDepartment.all_objects.all(), source="department", required=False, allow_null=True)
+    department_id = serializers.PrimaryKeyRelatedField(
+        queryset=SupportDepartment.all_objects.all(),
+        source="department",
+        required=False,
+        allow_null=True,
+    )
     timezone_name = serializers.CharField(max_length=80, required=False, default="Asia/Tehran")
     workday_start = serializers.TimeField(required=False)
     workday_end = serializers.TimeField(required=False)
-    active_weekdays = serializers.ListField(child=serializers.IntegerField(min_value=0, max_value=6), required=False)
+    active_weekdays = serializers.ListField(
+        child=serializers.IntegerField(min_value=0, max_value=6), required=False
+    )
     is_default = serializers.BooleanField(required=False, default=False)
     is_active = serializers.BooleanField(required=False)
 
@@ -89,7 +115,9 @@ class SupportHolidaySerializer(serializers.ModelSerializer):
 class SupportHolidayInputSerializer(serializers.Serializer):
     """Admin input serializer for support holidays."""
 
-    calendar_id = serializers.PrimaryKeyRelatedField(queryset=SupportBusinessCalendar.objects.all(), source="calendar")
+    calendar_id = serializers.PrimaryKeyRelatedField(
+        queryset=SupportBusinessCalendar.objects.all(), source="calendar"
+    )
     date = serializers.DateField()
     title = serializers.CharField(max_length=180)
     is_active = serializers.BooleanField(required=False)
@@ -102,15 +130,31 @@ class SupportCategorySerializer(serializers.ModelSerializer):
 
     class Meta:
         model = SupportCategory
-        fields = ("id", "parent_id", "department", "title", "slug", "path", "depth", "description", "icon", "order", "is_active")
+        fields = (
+            "id",
+            "parent_id",
+            "department",
+            "title",
+            "slug",
+            "path",
+            "depth",
+            "description",
+            "icon",
+            "order",
+            "is_active",
+        )
         read_only_fields = fields
 
 
 class SupportCategoryInputSerializer(serializers.Serializer):
     """Admin input serializer for support tree categories."""
 
-    department_id = serializers.PrimaryKeyRelatedField(queryset=SupportDepartment.all_objects.all(), source="department")
-    parent_id = serializers.PrimaryKeyRelatedField(queryset=SupportCategory.all_objects.all(), source="parent", required=False, allow_null=True)
+    department_id = serializers.PrimaryKeyRelatedField(
+        queryset=SupportDepartment.all_objects.all(), source="department"
+    )
+    parent_id = serializers.PrimaryKeyRelatedField(
+        queryset=SupportCategory.all_objects.all(), source="parent", required=False, allow_null=True
+    )
     title = serializers.CharField(max_length=180)
     description = serializers.CharField(required=False, allow_blank=True, default="")
     icon = serializers.CharField(required=False, allow_blank=True, default="", max_length=80)
@@ -130,7 +174,14 @@ class SupportSLAPolicySummarySerializer(serializers.ModelSerializer):
 
     class Meta:
         model = SupportSLAPolicy
-        fields = ("id", "title", "first_response_minutes", "resolution_minutes", "pause_when_waiting_for_user", "is_active")
+        fields = (
+            "id",
+            "title",
+            "first_response_minutes",
+            "resolution_minutes",
+            "pause_when_waiting_for_user",
+            "is_active",
+        )
         read_only_fields = fields
 
 
@@ -165,7 +216,12 @@ class SupportSLAPolicyInputSerializer(serializers.Serializer):
     """Admin input serializer for SLA policies."""
 
     title = serializers.CharField(max_length=180)
-    department_id = serializers.PrimaryKeyRelatedField(queryset=SupportDepartment.all_objects.all(), source="department", required=False, allow_null=True)
+    department_id = serializers.PrimaryKeyRelatedField(
+        queryset=SupportDepartment.all_objects.all(),
+        source="department",
+        required=False,
+        allow_null=True,
+    )
     priority = serializers.CharField(required=False, default="normal")
     severity = serializers.CharField(required=False, default="minor")
     first_response_minutes = serializers.IntegerField(min_value=1, required=False, default=24 * 60)
@@ -208,11 +264,26 @@ class SupportTicketTypeInputSerializer(serializers.Serializer):
     code = serializers.SlugField(max_length=80)
     title = serializers.CharField(max_length=180)
     description = serializers.CharField(required=False, allow_blank=True, default="")
-    default_department_id = serializers.PrimaryKeyRelatedField(queryset=SupportDepartment.all_objects.all(), source="default_department", required=False, allow_null=True)
-    default_category_id = serializers.PrimaryKeyRelatedField(queryset=SupportCategory.all_objects.all(), source="default_category", required=False, allow_null=True)
+    default_department_id = serializers.PrimaryKeyRelatedField(
+        queryset=SupportDepartment.all_objects.all(),
+        source="default_department",
+        required=False,
+        allow_null=True,
+    )
+    default_category_id = serializers.PrimaryKeyRelatedField(
+        queryset=SupportCategory.all_objects.all(),
+        source="default_category",
+        required=False,
+        allow_null=True,
+    )
     default_priority = serializers.CharField(required=False, default="normal")
     default_severity = serializers.CharField(required=False, default="minor")
-    default_sla_policy_id = serializers.PrimaryKeyRelatedField(queryset=SupportSLAPolicy.all_objects.all(), source="default_sla_policy", required=False, allow_null=True)
+    default_sla_policy_id = serializers.PrimaryKeyRelatedField(
+        queryset=SupportSLAPolicy.all_objects.all(),
+        source="default_sla_policy",
+        required=False,
+        allow_null=True,
+    )
     order = serializers.IntegerField(required=False, min_value=0, default=0)
     is_active = serializers.BooleanField(required=False)
 
@@ -224,7 +295,15 @@ class SupportTicketMessageSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = SupportTicketMessage
-        fields = ("id", "message_type", "body", "is_from_staff", "author_display", "created_at", "edited_at")
+        fields = (
+            "id",
+            "message_type",
+            "body",
+            "is_from_staff",
+            "author_display",
+            "created_at",
+            "edited_at",
+        )
         read_only_fields = fields
 
     def get_author_display(self, obj: SupportTicketMessage) -> str:
@@ -236,7 +315,12 @@ class SupportAdminTicketMessageSerializer(SupportTicketMessageSerializer):
     """Admin timeline serializer including internal note visibility."""
 
     class Meta(SupportTicketMessageSerializer.Meta):
-        fields = (*SupportTicketMessageSerializer.Meta.fields, "author_id", "is_internal", "metadata")
+        fields = (
+            *SupportTicketMessageSerializer.Meta.fields,
+            "author_id",
+            "is_internal",
+            "metadata",
+        )
         read_only_fields = fields
 
 
@@ -347,8 +431,12 @@ class SupportAdminTicketDetailSerializer(SupportTicketDetailSerializer):
 class SupportTicketCreateUpdateSerializer(serializers.Serializer):
     """Input serializer for creating/updating user tickets."""
 
-    ticket_type_id = serializers.PrimaryKeyRelatedField(queryset=SupportTicketType.objects.all(), source="ticket_type")
-    category_id = serializers.PrimaryKeyRelatedField(queryset=SupportCategory.objects.all(), source="category", required=False, allow_null=True)
+    ticket_type_id = serializers.PrimaryKeyRelatedField(
+        queryset=SupportTicketType.objects.all(), source="ticket_type"
+    )
+    category_id = serializers.PrimaryKeyRelatedField(
+        queryset=SupportCategory.objects.all(), source="category", required=False, allow_null=True
+    )
     subject = serializers.CharField(max_length=260)
     description = serializers.CharField()
 
@@ -384,7 +472,9 @@ class SupportTicketAttachmentCreateSerializer(serializers.Serializer):
     """Input serializer for user attachment upload."""
 
     file = serializers.FileField()
-    attachment_kind = serializers.ChoiceField(choices=AttachmentKind.choices, required=False, default=AttachmentKind.OTHER)
+    attachment_kind = serializers.ChoiceField(
+        choices=AttachmentKind.choices, required=False, default=AttachmentKind.OTHER
+    )
 
 
 class SupportTicketSatisfactionCreateSerializer(serializers.Serializer):
@@ -403,8 +493,20 @@ class SupportTicketReopenSerializer(serializers.Serializer):
 class SupportAdminAssignSerializer(serializers.Serializer):
     """Admin input serializer for assignment."""
 
-    assignee_id = serializers.PrimaryKeyRelatedField(queryset=SupportDepartment._meta.get_field("default_assignee").remote_field.model.objects.all(), source="assignee", required=False, allow_null=True)
-    department_id = serializers.PrimaryKeyRelatedField(queryset=SupportDepartment.all_objects.all(), source="department", required=False, allow_null=True)
+    assignee_id = serializers.PrimaryKeyRelatedField(
+        queryset=SupportDepartment._meta.get_field(
+            "default_assignee"
+        ).remote_field.model.objects.all(),
+        source="assignee",
+        required=False,
+        allow_null=True,
+    )
+    department_id = serializers.PrimaryKeyRelatedField(
+        queryset=SupportDepartment.all_objects.all(),
+        source="department",
+        required=False,
+        allow_null=True,
+    )
     reason = serializers.CharField(required=False, allow_blank=True, default="")
 
 
@@ -432,8 +534,15 @@ class SupportTicketSuggestSerializer(serializers.Serializer):
 
     subject = serializers.CharField(max_length=260)
     description = serializers.CharField()
-    category_id = serializers.PrimaryKeyRelatedField(queryset=SupportCategory.objects.all(), source="category", required=False, allow_null=True)
-    ticket_type_id = serializers.PrimaryKeyRelatedField(queryset=SupportTicketType.objects.all(), source="ticket_type", required=False, allow_null=True)
+    category_id = serializers.PrimaryKeyRelatedField(
+        queryset=SupportCategory.objects.all(), source="category", required=False, allow_null=True
+    )
+    ticket_type_id = serializers.PrimaryKeyRelatedField(
+        queryset=SupportTicketType.objects.all(),
+        source="ticket_type",
+        required=False,
+        allow_null=True,
+    )
 
 
 class SupportTriageSuggestionSerializer(serializers.Serializer):
@@ -459,15 +568,35 @@ class SupportCannedResponseSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = SupportCannedResponse
-        fields = ("id", "department", "category", "title", "body", "usage_count", "is_active", "created_at", "updated_at")
+        fields = (
+            "id",
+            "department",
+            "category",
+            "title",
+            "body",
+            "usage_count",
+            "is_active",
+            "created_at",
+            "updated_at",
+        )
         read_only_fields = fields
 
 
 class SupportCannedResponseInputSerializer(serializers.Serializer):
     """Admin input serializer for canned responses."""
 
-    department_id = serializers.PrimaryKeyRelatedField(queryset=SupportDepartment.all_objects.all(), source="department", required=False, allow_null=True)
-    category_id = serializers.PrimaryKeyRelatedField(queryset=SupportCategory.all_objects.all(), source="category", required=False, allow_null=True)
+    department_id = serializers.PrimaryKeyRelatedField(
+        queryset=SupportDepartment.all_objects.all(),
+        source="department",
+        required=False,
+        allow_null=True,
+    )
+    category_id = serializers.PrimaryKeyRelatedField(
+        queryset=SupportCategory.all_objects.all(),
+        source="category",
+        required=False,
+        allow_null=True,
+    )
     title = serializers.CharField(max_length=180)
     body = serializers.CharField()
     is_active = serializers.BooleanField(required=False)
@@ -477,11 +606,25 @@ class SupportDuplicateCandidateSerializer(serializers.ModelSerializer):
     """Admin duplicate candidate serializer."""
 
     ticket_number = serializers.CharField(source="ticket.ticket_number", read_only=True)
-    candidate_ticket_number = serializers.CharField(source="candidate_ticket.ticket_number", read_only=True)
+    candidate_ticket_number = serializers.CharField(
+        source="candidate_ticket.ticket_number", read_only=True
+    )
 
     class Meta:
         model = SupportDuplicateCandidate
-        fields = ("id", "ticket_id", "ticket_number", "candidate_ticket_id", "candidate_ticket_number", "score", "reason", "status", "reviewed_by_id", "reviewed_at", "created_at")
+        fields = (
+            "id",
+            "ticket_id",
+            "ticket_number",
+            "candidate_ticket_id",
+            "candidate_ticket_number",
+            "score",
+            "reason",
+            "status",
+            "reviewed_by_id",
+            "reviewed_at",
+            "created_at",
+        )
         read_only_fields = fields
 
 
@@ -521,7 +664,9 @@ class SupportAdminAnalyticsSerializer(serializers.Serializer):
 class SupportAttachmentVisibilityGuardSerializer(serializers.Serializer):
     """Schema-only serializer documenting user upload visibility boundary."""
 
-    visibility = serializers.ChoiceField(choices=AttachmentVisibility.choices, default=AttachmentVisibility.PUBLIC)
+    visibility = serializers.ChoiceField(
+        choices=AttachmentVisibility.choices, default=AttachmentVisibility.PUBLIC
+    )
 
 
 class SupportAssignmentCandidateSerializer(serializers.Serializer):
@@ -585,14 +730,33 @@ class SupportKnowledgeArticleSerializer(serializers.ModelSerializer):
 class SupportKnowledgeArticleInputSerializer(serializers.Serializer):
     """Admin input serializer for support knowledge base articles."""
 
-    department_id = serializers.PrimaryKeyRelatedField(queryset=SupportDepartment.all_objects.all(), source="department", required=False, allow_null=True)
-    category_id = serializers.PrimaryKeyRelatedField(queryset=SupportCategory.all_objects.all(), source="category", required=False, allow_null=True)
-    ticket_type_id = serializers.PrimaryKeyRelatedField(queryset=SupportTicketType.all_objects.all(), source="ticket_type", required=False, allow_null=True)
+    department_id = serializers.PrimaryKeyRelatedField(
+        queryset=SupportDepartment.all_objects.all(),
+        source="department",
+        required=False,
+        allow_null=True,
+    )
+    category_id = serializers.PrimaryKeyRelatedField(
+        queryset=SupportCategory.all_objects.all(),
+        source="category",
+        required=False,
+        allow_null=True,
+    )
+    ticket_type_id = serializers.PrimaryKeyRelatedField(
+        queryset=SupportTicketType.all_objects.all(),
+        source="ticket_type",
+        required=False,
+        allow_null=True,
+    )
     title = serializers.CharField(max_length=220)
     summary = serializers.CharField(required=False, allow_blank=True, default="")
     body = serializers.CharField()
-    keywords = serializers.ListField(child=serializers.CharField(max_length=60), required=False, default=list)
-    status = serializers.ChoiceField(choices=KnowledgeArticleStatus.choices, required=False, default=KnowledgeArticleStatus.DRAFT)
+    keywords = serializers.ListField(
+        child=serializers.CharField(max_length=60), required=False, default=list
+    )
+    status = serializers.ChoiceField(
+        choices=KnowledgeArticleStatus.choices, required=False, default=KnowledgeArticleStatus.DRAFT
+    )
     is_active = serializers.BooleanField(required=False)
 
 
@@ -600,11 +764,23 @@ class SupportKnowledgeArticleUseSerializer(serializers.ModelSerializer):
     """Read serializer for knowledge article usage events."""
 
     article_title = serializers.CharField(source="article.title", read_only=True)
-    ticket_number = serializers.CharField(source="ticket.ticket_number", read_only=True, allow_null=True)
+    ticket_number = serializers.CharField(
+        source="ticket.ticket_number", read_only=True, allow_null=True
+    )
 
     class Meta:
         model = SupportKnowledgeArticleUse
-        fields = ("id", "article", "article_title", "ticket", "ticket_number", "used_by", "context", "metadata", "created_at")
+        fields = (
+            "id",
+            "article",
+            "article_title",
+            "ticket",
+            "ticket_number",
+            "used_by",
+            "context",
+            "metadata",
+            "created_at",
+        )
         read_only_fields = fields
 
 
@@ -612,7 +788,9 @@ class SupportKnowledgeArticleUseInputSerializer(serializers.Serializer):
     """Input serializer for recording article usage in support context."""
 
     ticket_number = serializers.CharField(required=False, allow_blank=True, default="")
-    context = serializers.CharField(required=False, allow_blank=True, default="reply", max_length=40)
+    context = serializers.CharField(
+        required=False, allow_blank=True, default="reply", max_length=40
+    )
 
 
 class SupportKnowledgeRecommendationSerializer(serializers.Serializer):
@@ -620,9 +798,21 @@ class SupportKnowledgeRecommendationSerializer(serializers.Serializer):
 
     subject = serializers.CharField(max_length=260)
     description = serializers.CharField()
-    department_id = serializers.PrimaryKeyRelatedField(queryset=SupportDepartment.objects.all(), source="department", required=False, allow_null=True)
-    category_id = serializers.PrimaryKeyRelatedField(queryset=SupportCategory.objects.all(), source="category", required=False, allow_null=True)
-    ticket_type_id = serializers.PrimaryKeyRelatedField(queryset=SupportTicketType.objects.all(), source="ticket_type", required=False, allow_null=True)
+    department_id = serializers.PrimaryKeyRelatedField(
+        queryset=SupportDepartment.objects.all(),
+        source="department",
+        required=False,
+        allow_null=True,
+    )
+    category_id = serializers.PrimaryKeyRelatedField(
+        queryset=SupportCategory.objects.all(), source="category", required=False, allow_null=True
+    )
+    ticket_type_id = serializers.PrimaryKeyRelatedField(
+        queryset=SupportTicketType.objects.all(),
+        source="ticket_type",
+        required=False,
+        allow_null=True,
+    )
 
 
 class SupportSmartReplySuggestionSerializer(serializers.Serializer):

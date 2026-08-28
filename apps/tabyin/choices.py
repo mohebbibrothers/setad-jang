@@ -36,6 +36,4 @@ class SubmissionStatus(models.TextChoices):
     REJECTED = "rejected", "رد شده"
 
 
-SUBMISSION_REVIEWABLE_STATUSES: frozenset[str] = frozenset(
-    [SubmissionStatus.PENDING_REVIEW]
-)
+SUBMISSION_REVIEWABLE_STATUSES: frozenset[str] = frozenset([SubmissionStatus.PENDING_REVIEW])

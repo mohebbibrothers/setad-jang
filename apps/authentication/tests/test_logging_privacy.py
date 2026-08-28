@@ -58,9 +58,7 @@ class TestOTPLoggingPrivacy:
             )
 
         flattened_log_args = " ".join(
-            str(arg)
-            for call in mock_logger_info.call_args_list
-            for arg in call.args
+            str(arg) for call in mock_logger_info.call_args_list for arg in call.args
         )
         assert identifier not in flattened_log_args
         assert "se***@ex***.com" in flattened_log_args

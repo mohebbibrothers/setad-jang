@@ -60,7 +60,9 @@ class CacheInvalidationEventAdmin(admin.ModelAdmin):
         return ", ".join(paths[:4]) + (" …" if len(paths) > 4 else "")
 
     @admin.action(description="Retry selected cache invalidation events")
-    def retry_selected_events(self, request: HttpRequest, queryset: QuerySet[CacheInvalidationEvent]) -> None:
+    def retry_selected_events(
+        self, request: HttpRequest, queryset: QuerySet[CacheInvalidationEvent]
+    ) -> None:
         """Queue selected non-succeeded events for immediate retry."""
         from apps.core.tasks import process_cache_invalidation_event_task
 
@@ -72,19 +74,27 @@ class CacheInvalidationEventAdmin(admin.ModelAdmin):
             process_cache_invalidation_event_task.delay(event_id=event.pk)
             queued += 1
 
-        self.message_user(request, f"Queued {queued} cache invalidation event(s) for retry.", messages.SUCCESS)
+        self.message_user(
+            request, f"Queued {queued} cache invalidation event(s) for retry.", messages.SUCCESS
+        )
 
     @admin.action(description="Mark selected cache invalidation events as dead")
-    def mark_selected_as_dead(self, request: HttpRequest, queryset: QuerySet[CacheInvalidationEvent]) -> None:
+    def mark_selected_as_dead(
+        self, request: HttpRequest, queryset: QuerySet[CacheInvalidationEvent]
+    ) -> None:
         """Move selected events to the dead-letter state."""
         updated = queryset.exclude(status=CacheInvalidationEvent.STATUS_SUCCEEDED).update(
             status=CacheInvalidationEvent.STATUS_DEAD,
             updated_at=timezone.now(),
         )
-        self.message_user(request, f"Marked {updated} cache invalidation event(s) as dead.", messages.WARNING)
+        self.message_user(
+            request, f"Marked {updated} cache invalidation event(s) as dead.", messages.WARNING
+        )
 
     @admin.action(description="Mark selected failed/dead events as pending")
-    def mark_selected_as_pending(self, request: HttpRequest, queryset: QuerySet[CacheInvalidationEvent]) -> None:
+    def mark_selected_as_pending(
+        self, request: HttpRequest, queryset: QuerySet[CacheInvalidationEvent]
+    ) -> None:
         """Move failed/dead events back to pending without dispatching immediately."""
         updated = queryset.filter(
             status__in=[CacheInvalidationEvent.STATUS_FAILED, CacheInvalidationEvent.STATUS_DEAD],
@@ -93,4 +103,6 @@ class CacheInvalidationEventAdmin(admin.ModelAdmin):
             next_attempt_at=timezone.now(),
             updated_at=timezone.now(),
         )
-        self.message_user(request, f"Marked {updated} cache invalidation event(s) as pending.", messages.SUCCESS)
+        self.message_user(
+            request, f"Marked {updated} cache invalidation event(s) as pending.", messages.SUCCESS
+        )

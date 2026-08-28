@@ -28,7 +28,9 @@ class NotificationProvider(Protocol):
 
     provider_name: str
 
-    def send(self, *, recipient: str, subject: str, body: str, payload: dict[str, Any]) -> NotificationDeliveryResult:
+    def send(
+        self, *, recipient: str, subject: str, body: str, payload: dict[str, Any]
+    ) -> NotificationDeliveryResult:
         """Send notification payload."""
 
 
@@ -37,7 +39,9 @@ class InAppNotificationProvider:
 
     provider_name = "in_app"
 
-    def send(self, *, recipient: str, subject: str, body: str, payload: dict[str, Any]) -> NotificationDeliveryResult:
+    def send(
+        self, *, recipient: str, subject: str, body: str, payload: dict[str, Any]
+    ) -> NotificationDeliveryResult:
         """In-app delivery is represented by the delivery row itself."""
         return NotificationDeliveryResult(success=True, provider=self.provider_name)
 
@@ -47,12 +51,22 @@ class EmailNotificationProvider:
 
     provider_name = "django_email"
 
-    def send(self, *, recipient: str, subject: str, body: str, payload: dict[str, Any]) -> NotificationDeliveryResult:
+    def send(
+        self, *, recipient: str, subject: str, body: str, payload: dict[str, Any]
+    ) -> NotificationDeliveryResult:
         """Send an email notification."""
         try:
-            send_mail(subject=subject, message=body, from_email=settings.DEFAULT_FROM_EMAIL, recipient_list=[recipient], fail_silently=False)
+            send_mail(
+                subject=subject,
+                message=body,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[recipient],
+                fail_silently=False,
+            )
         except Exception as exc:
-            return NotificationDeliveryResult(success=False, provider=self.provider_name, error_message=type(exc).__name__)
+            return NotificationDeliveryResult(
+                success=False, provider=self.provider_name, error_message=type(exc).__name__
+            )
         return NotificationDeliveryResult(success=True, provider=self.provider_name)
 
 
@@ -61,13 +75,17 @@ class SMSNotificationProvider:
 
     provider_name = "sms"
 
-    def send(self, *, recipient: str, subject: str, body: str, payload: dict[str, Any]) -> NotificationDeliveryResult:
+    def send(
+        self, *, recipient: str, subject: str, body: str, payload: dict[str, Any]
+    ) -> NotificationDeliveryResult:
         """Send an SMS notification through configured SMS adapter."""
         try:
             provider = get_sms_otp_provider()
             provider.send(recipient=recipient, code=body[:120], purpose="notification")
         except Exception as exc:
-            return NotificationDeliveryResult(success=False, provider=self.provider_name, error_message=type(exc).__name__)
+            return NotificationDeliveryResult(
+                success=False, provider=self.provider_name, error_message=type(exc).__name__
+            )
         return NotificationDeliveryResult(success=True, provider=self.provider_name)
 
 
@@ -76,9 +94,15 @@ class WebhookNotificationProvider:
 
     provider_name = "webhook_noop"
 
-    def send(self, *, recipient: str, subject: str, body: str, payload: dict[str, Any]) -> NotificationDeliveryResult:
+    def send(
+        self, *, recipient: str, subject: str, body: str, payload: dict[str, Any]
+    ) -> NotificationDeliveryResult:
         """Skip webhooks until a concrete endpoint registry is configured."""
-        return NotificationDeliveryResult(success=False, provider=self.provider_name, error_message="webhook_provider_not_configured")
+        return NotificationDeliveryResult(
+            success=False,
+            provider=self.provider_name,
+            error_message="webhook_provider_not_configured",
+        )
 
 
 def get_notification_provider(channel: str) -> NotificationProvider:

@@ -100,7 +100,9 @@ def enqueue_cache_invalidation_event(*, domain: str, tags: list[str], paths: lis
         process_cache_invalidation_event_task.delay(event_id=event.pk)
         logger.info("Cache invalidation outbox event queued id=%s domain=%s", event.pk, domain)
     except Exception:
-        logger.exception("Failed to queue cache invalidation outbox event id=%s domain=%s", event.pk, domain)
+        logger.exception(
+            "Failed to queue cache invalidation outbox event id=%s domain=%s", event.pk, domain
+        )
 
 
 def _apply_invalidation(entry: _PendingInvalidation) -> None:

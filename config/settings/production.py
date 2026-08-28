@@ -46,14 +46,12 @@ if SECRET_KEY in _INSECURE_SECRET_KEYS:
 
 if len(SECRET_KEY) < 50:
     raise RuntimeError(
-        f"SECRET_KEY در production باید حداقل 50 کاراکتر باشد. "
-        f"فعلاً {len(SECRET_KEY)} کاراکتر است.",
+        f"SECRET_KEY در production باید حداقل 50 کاراکتر باشد. فعلاً {len(SECRET_KEY)} کاراکتر است.",
     )
 
 if not ALLOWED_HOSTS:
     raise RuntimeError(
-        "ALLOWED_HOSTS در production نباید خالی باشد. "
-        "حداقل یک hostname معتبر مشخص کن.",
+        "ALLOWED_HOSTS در production نباید خالی باشد. حداقل یک hostname معتبر مشخص کن.",
     )
 
 # ============================================================

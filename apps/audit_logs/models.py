@@ -100,7 +100,9 @@ class AuditLog(BaseModel):
     )
     action = models.CharField(max_length=100, verbose_name="عملیات")
     ip_address = models.GenericIPAddressField(null=True, blank=True, verbose_name="آدرس IP")
-    request_id = models.CharField(max_length=80, null=True, blank=True, verbose_name="شناسه درخواست")
+    request_id = models.CharField(
+        max_length=80, null=True, blank=True, verbose_name="شناسه درخواست"
+    )
     user_agent = models.CharField(max_length=512, blank=True, verbose_name="User-Agent")
     path = models.CharField(max_length=512, blank=True, verbose_name="مسیر درخواست")
     method = models.CharField(max_length=10, blank=True, verbose_name="متد HTTP")
@@ -212,7 +214,9 @@ class AuditLog(BaseModel):
             super().save(*args, **kwargs)
             return
 
-        using = kwargs.get("using") or self._state.db or router.db_for_write(type(self), instance=self)
+        using = (
+            kwargs.get("using") or self._state.db or router.db_for_write(type(self), instance=self)
+        )
         last_error: Exception | None = None
 
         for _attempt in range(CHAIN_INSERT_MAX_ATTEMPTS):
@@ -250,7 +254,9 @@ class AuditLog(BaseModel):
             "changes": self.changes,
             "extra_data": self.extra_data,
         }
-        encoded = json.dumps(payload, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        encoded = json.dumps(
+            payload, sort_keys=True, ensure_ascii=False, separators=(",", ":")
+        ).encode("utf-8")
         return hashlib.sha256(encoded).hexdigest()
 
     def delete(self, *args: Any, **kwargs: Any) -> tuple[int, dict[str, int]]:

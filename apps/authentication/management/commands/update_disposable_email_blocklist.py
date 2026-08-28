@@ -39,16 +39,13 @@ _DEFAULT_SOURCE_URL = (
 )
 
 _TARGET_PATH = (
-    Path(settings.BASE_DIR)
-    / "apps"
-    / "authentication"
-    / "data"
-    / "disposable_email_domains.txt"
+    Path(settings.BASE_DIR) / "apps" / "authentication" / "data" / "disposable_email_domains.txt"
 )
 
 
 class Command(BaseCommand):
     """Management command entrypoint for this maintenance workflow."""
+
     help = "Update the local blocklist of disposable email domains from a remote source."
 
     def add_arguments(self, parser) -> None:

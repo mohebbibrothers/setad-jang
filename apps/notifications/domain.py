@@ -51,7 +51,9 @@ def _default_channels(*, priority: str) -> list[str]:
     channels = [NotificationChannel.IN_APP]
     if getattr(settings, "NOTIFICATIONS_EMAIL_ENABLED", False):
         channels.append(NotificationChannel.EMAIL)
-    if priority == NotificationPriority.URGENT and getattr(settings, "NOTIFICATIONS_SMS_ENABLED", False):
+    if priority == NotificationPriority.URGENT and getattr(
+        settings, "NOTIFICATIONS_SMS_ENABLED", False
+    ):
         channels.append(NotificationChannel.SMS)
     return channels
 
@@ -81,7 +83,11 @@ def notify_support_resolved(*, ticket, actor) -> None:
         actor=actor,
         aggregate_type="support_ticket",
         aggregate_id=ticket.ticket_number,
-        payload={"title": "تیکت شما حل شد", "ticket_number": ticket.ticket_number, "subject": ticket.subject},
+        payload={
+            "title": "تیکت شما حل شد",
+            "ticket_number": ticket.ticket_number,
+            "subject": ticket.subject,
+        },
     )
 
 
@@ -95,7 +101,11 @@ def notify_public_report_status_changed(*, report, actor) -> None:
         actor=actor,
         aggregate_type="public_report",
         aggregate_id=str(report.pk),
-        payload={"title": "وضعیت گزارش شما تغییر کرد", "tracking_code": report.tracking_code, "status": report.status},
+        payload={
+            "title": "وضعیت گزارش شما تغییر کرد",
+            "tracking_code": report.tracking_code,
+            "status": report.status,
+        },
     )
 
 
@@ -107,7 +117,11 @@ def notify_tabyin_submission_reviewed(*, submission, actor, approved: bool) -> N
         actor=actor,
         aggregate_type="tabyin_content",
         aggregate_id=str(submission.pk),
-        payload={"title": "نتیجه بررسی محتوای تبیین", "content_title": submission.title, "approved": approved},
+        payload={
+            "title": "نتیجه بررسی محتوای تبیین",
+            "content_title": submission.title,
+            "approved": approved,
+        },
     )
 
 
@@ -138,7 +152,11 @@ def notify_lms_certificate_issued(*, certificate) -> None:
         actor=certificate.user,
         aggregate_type="lms_certificate",
         aggregate_id=str(certificate.pk),
-        payload={"title": "مدرک آموزشی شما صادر شد", "course_title": certificate.course_title_snapshot, "certificate_code": certificate.certificate_code},
+        payload={
+            "title": "مدرک آموزشی شما صادر شد",
+            "course_title": certificate.course_title_snapshot,
+            "certificate_code": certificate.certificate_code,
+        },
     )
 
 
@@ -164,5 +182,9 @@ def notify_kindness_high_match(*, source_listing, match) -> None:
         actor=source_listing.owner,
         aggregate_type="kindness_match",
         aggregate_id=str(match.pk),
-        payload={"title": "پیشنهاد تطبیق جدید", "listing_title": source_listing.title, "score": match.score},
+        payload={
+            "title": "پیشنهاد تطبیق جدید",
+            "listing_title": source_listing.title,
+            "score": match.score,
+        },
     )

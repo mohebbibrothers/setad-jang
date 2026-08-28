@@ -90,6 +90,7 @@ logger = logging.getLogger("apps.madadkar")
 # Exceptions
 # ===========================================================================
 
+
 class MadadkarServiceError(Exception):
     """خطای پایه service layer مددکار."""
 
@@ -156,6 +157,7 @@ class DisbursementWorkflowError(MadadkarServiceError):
 # ===========================================================================
 # Helpers
 # ===========================================================================
+
 
 def _extract_django_validation_message(exc: DjangoValidationError) -> str:
     """
@@ -237,29 +239,37 @@ def _sync_campaign_counters(*, campaign: Campaign) -> Campaign:
         unique_users=Count("user_id", distinct=True, filter=Q(status=ParticipationStatus.PAID)),
     )
 
-    completed_refunds = PaymentRefund.objects.filter(
-        payment__participation__campaign=campaign,
-        payment__participation__status=ParticipationStatus.PAID,
-        status=RefundStatus.COMPLETED,
-    ).aggregate(total=Sum("amount"))["total"] or 0
+    completed_refunds = (
+        PaymentRefund.objects.filter(
+            payment__participation__campaign=campaign,
+            payment__participation__status=ParticipationStatus.PAID,
+            status=RefundStatus.COMPLETED,
+        ).aggregate(total=Sum("amount"))["total"]
+        or 0
+    )
 
     # معادل سمت دیتابیسِ property پایتونی ``signed_amount``: CREDIT مثبت،
     # هر چیز دیگری منفی. علامت‌ها باید با آن property هم‌راستا بمانند.
-    adjustment_delta = CampaignFinancialAdjustment.objects.filter(
-        campaign=campaign,
-        status=FinancialAdjustmentStatus.APPLIED,
-    ).aggregate(
-        delta=Sum(
-            Case(
-                When(adjustment_type=FinancialAdjustmentType.CREDIT, then=F("amount")),
-                default=-F("amount"),
-                output_field=BigIntegerField(),
+    adjustment_delta = (
+        CampaignFinancialAdjustment.objects.filter(
+            campaign=campaign,
+            status=FinancialAdjustmentStatus.APPLIED,
+        ).aggregate(
+            delta=Sum(
+                Case(
+                    When(adjustment_type=FinancialAdjustmentType.CREDIT, then=F("amount")),
+                    default=-F("amount"),
+                    output_field=BigIntegerField(),
+                ),
             ),
-        ),
-    )["delta"] or 0
+        )["delta"]
+        or 0
+    )
 
     campaign.purchased_shares = aggregates["reserved_shares"] or 0
-    campaign.purchased_amount = max((aggregates["paid_amount"] or 0) - completed_refunds + adjustment_delta, 0)
+    campaign.purchased_amount = max(
+        (aggregates["paid_amount"] or 0) - completed_refunds + adjustment_delta, 0
+    )
     campaign.participant_count = aggregates["unique_users"] or 0
     campaign.save(
         update_fields=[
@@ -355,6 +365,7 @@ def _record_payment_event(
 # Sponsor services
 # ===========================================================================
 
+
 @transaction.atomic
 def create_sponsor(*, name: str, logo: Any = None) -> Sponsor:
     """
@@ -426,9 +437,13 @@ def delete_sponsor(*, sponsor: Sponsor) -> None:
     Raises:
         SponsorInUseError: اگر Sponsor دارای حرکت غیر DRAFT باشد.
     """
-    active_campaigns_exist = Campaign.objects.filter(
-        sponsor=sponsor,
-    ).exclude(status=CampaignStatus.DRAFT).exists()
+    active_campaigns_exist = (
+        Campaign.objects.filter(
+            sponsor=sponsor,
+        )
+        .exclude(status=CampaignStatus.DRAFT)
+        .exists()
+    )
 
     if active_campaigns_exist:
         msg = "این مددکار دارای حرکت‌های منتشرشده است و قابل حذف نیست."
@@ -441,6 +456,7 @@ def delete_sponsor(*, sponsor: Sponsor) -> None:
 # ===========================================================================
 # Campaign services
 # ===========================================================================
+
 
 def _validate_campaign_financial_fields(
     *,
@@ -504,8 +520,7 @@ def create_campaign(
     campaign.save()
 
     logger.info(
-        "Madadkar campaign created campaign_id=%s sponsor=%s "
-        "total_amount=%s total_shares=%s",
+        "Madadkar campaign created campaign_id=%s sponsor=%s total_amount=%s total_shares=%s",
         campaign.pk,
         sponsor.pk,
         total_amount,
@@ -540,9 +555,7 @@ def update_campaign(*, campaign: Campaign, **fields: Any) -> Campaign:
             raise CampaignFieldLockedError(msg)
 
         if locked and field_name in _LOCKED_AFTER_FIRST_PAYMENT:
-            msg = (
-                f"به دلیل ثبت پرداخت‌های موفق، فیلد «{field_name}» قابل ویرایش نیست."
-            )
+            msg = f"به دلیل ثبت پرداخت‌های موفق، فیلد «{field_name}» قابل ویرایش نیست."
             raise CampaignFieldLockedError(msg)
 
     new_total_amount = fields.get("total_amount", campaign.total_amount)
@@ -576,9 +589,7 @@ def update_campaign(*, campaign: Campaign, **fields: Any) -> Campaign:
             and campaign.deadline is not None
             and new_deadline < campaign.deadline
         ):
-            msg = (
-                "پس از ثبت پرداخت موفق، مهلت پایان فقط می‌تواند به جلو منتقل شود."
-            )
+            msg = "پس از ثبت پرداخت موفق، مهلت پایان فقط می‌تواند به جلو منتقل شود."
             raise CampaignFieldLockedError(msg)
 
         if locked and campaign.has_deadline and not new_has_deadline:
@@ -609,10 +620,7 @@ def update_campaign(*, campaign: Campaign, **fields: Any) -> Campaign:
 def publish_campaign(*, campaign: Campaign) -> Campaign:
     """انتشار حرکت: DRAFT → PUBLISHED."""
     if campaign.status != CampaignStatus.DRAFT:
-        msg = (
-            f"فقط حرکت‌های پیش‌نویس قابل انتشار هستند. "
-            f"وضعیت فعلی: {campaign.get_status_display()}"
-        )
+        msg = f"فقط حرکت‌های پیش‌نویس قابل انتشار هستند. وضعیت فعلی: {campaign.get_status_display()}"
         raise CampaignInvalidStateError(msg)
 
     campaign.status = CampaignStatus.PUBLISHED
@@ -627,10 +635,7 @@ def publish_campaign(*, campaign: Campaign) -> Campaign:
 def close_campaign(*, campaign: Campaign) -> Campaign:
     """بستن دستی حرکت: PUBLISHED → CLOSED."""
     if campaign.status != CampaignStatus.PUBLISHED:
-        msg = (
-            f"فقط حرکت‌های منتشرشده قابل بستن هستند. "
-            f"وضعیت فعلی: {campaign.get_status_display()}"
-        )
+        msg = f"فقط حرکت‌های منتشرشده قابل بستن هستند. وضعیت فعلی: {campaign.get_status_display()}"
         raise CampaignInvalidStateError(msg)
 
     campaign.status = CampaignStatus.CLOSED
@@ -648,10 +653,7 @@ def auto_complete_campaign_if_fully_funded(*, campaign: Campaign) -> Campaign:
 
     داخلی — توسط verify_payment فراخوانی می‌شود.
     """
-    if (
-        campaign.status == CampaignStatus.PUBLISHED
-        and campaign.is_fully_funded
-    ):
+    if campaign.status == CampaignStatus.PUBLISHED and campaign.is_fully_funded:
         campaign.status = CampaignStatus.COMPLETED
         campaign.completed_at = timezone.now()
         campaign.save(update_fields=["status", "completed_at", "updated_at"])
@@ -677,6 +679,7 @@ def delete_campaign(*, campaign: Campaign) -> None:
 # Campaign Image services
 # ===========================================================================
 
+
 @transaction.atomic
 def add_campaign_image(
     *,
@@ -687,9 +690,13 @@ def add_campaign_image(
 ) -> CampaignImage:
     """افزودن یک تصویر به گالری حرکت."""
     if display_order is None:
-        last = CampaignImage.objects.filter(
-            campaign=campaign,
-        ).order_by("-display_order").first()
+        last = (
+            CampaignImage.objects.filter(
+                campaign=campaign,
+            )
+            .order_by("-display_order")
+            .first()
+        )
         display_order = (last.display_order + 1) if last else 0
 
     gallery_image = CampaignImage.objects.create(
@@ -721,6 +728,7 @@ def delete_campaign_image(*, image: CampaignImage) -> None:
 # ===========================================================================
 # Participation services — concurrency-safe share reservation
 # ===========================================================================
+
 
 @transaction.atomic
 def _reserve_participation_shares(
@@ -934,8 +942,7 @@ def initiate_participation(
             reason="gateway_rejected",
         )
         logger.warning(
-            "Madadkar payment request failed campaign_id=%s user_id=%s "
-            "amount=%s error=%s",
+            "Madadkar payment request failed campaign_id=%s user_id=%s amount=%s error=%s",
             campaign.pk,
             user.pk,
             total_amount,
@@ -977,6 +984,7 @@ def initiate_participation(
 # Payment services — verify + idempotency + anti-tampering
 # ===========================================================================
 
+
 def verify_payment(*, authority: str) -> Payment:
     """
     تأیید پرداخت بر اساس authority برگشتی از درگاه.
@@ -1015,8 +1023,7 @@ def verify_payment(*, authority: str) -> Payment:
     """
     # ── مرحله ۱: یافتن payment + early-return idempotent
     payment = (
-        Payment.objects
-        .select_related("participation", "participation__campaign", "user")
+        Payment.objects.select_related("participation", "participation__campaign", "user")
         .filter(authority=authority)
         .first()
     )
@@ -1066,8 +1073,7 @@ def verify_payment(*, authority: str) -> Payment:
     # اگر provider success گزارش داد ولی مبلغ تطبیق ندارد → CRITICAL security
     if verify_result.success and verify_result.verified_amount != payment.amount:
         logger.error(
-            "Madadkar payment AMOUNT MISMATCH payment_id=%s authority=%s "
-            "stored=%s verified=%s",
+            "Madadkar payment AMOUNT MISMATCH payment_id=%s authority=%s stored=%s verified=%s",
             payment.pk,
             authority,
             payment.amount,
@@ -1079,15 +1085,12 @@ def verify_payment(*, authority: str) -> Payment:
         # شود حتی وقتی به caller exception می‌دهیم.
         with transaction.atomic():
             locked_payment = (
-                Payment.objects
-                .select_for_update()
+                Payment.objects.select_for_update()
                 .select_related("participation", "participation__campaign")
                 .get(pk=payment.pk)
             )
-            locked_campaign = (
-                Campaign.objects
-                .select_for_update()
-                .get(pk=locked_payment.participation.campaign_id)
+            locked_campaign = Campaign.objects.select_for_update().get(
+                pk=locked_payment.participation.campaign_id
             )
             locked_participation = locked_payment.participation
 
@@ -1119,17 +1122,13 @@ def verify_payment(*, authority: str) -> Payment:
 
             _sync_campaign_counters(campaign=locked_campaign)
 
-        msg = (
-            "مبلغ تأیید شده توسط درگاه با مبلغ ثبت‌شده مطابقت ندارد. "
-            "پرداخت رد شد."
-        )
+        msg = "مبلغ تأیید شده توسط درگاه با مبلغ ثبت‌شده مطابقت ندارد. پرداخت رد شد."
         raise PaymentAmountMismatchError(msg)
 
     # ── مرحله ۴: ذخیره وضعیت نهایی در atomic block با lock
     with transaction.atomic():
         locked_payment = (
-            Payment.objects
-            .select_for_update()
+            Payment.objects.select_for_update()
             .select_related("participation", "participation__campaign")
             .get(pk=payment.pk)
         )
@@ -1138,17 +1137,14 @@ def verify_payment(*, authority: str) -> Payment:
         # که verify دو بار همزمان فراخوانی شده باشد.
         if locked_payment.status in (PaymentStatus.SUCCESS, PaymentStatus.FAILED):
             logger.info(
-                "Madadkar payment verify race-detected idempotent return "
-                "payment_id=%s status=%s",
+                "Madadkar payment verify race-detected idempotent return payment_id=%s status=%s",
                 locked_payment.pk,
                 locked_payment.status,
             )
             return locked_payment
 
-        locked_campaign = (
-            Campaign.objects
-            .select_for_update()
-            .get(pk=locked_payment.participation.campaign_id)
+        locked_campaign = Campaign.objects.select_for_update().get(
+            pk=locked_payment.participation.campaign_id
         )
         locked_participation = locked_payment.participation
 
@@ -1222,8 +1218,7 @@ def verify_payment(*, authority: str) -> Payment:
         auto_complete_campaign_if_fully_funded(campaign=locked_campaign)
 
         logger.info(
-            "Madadkar payment verify success payment_id=%s authority=%s "
-            "ref_id=%s amount=%s",
+            "Madadkar payment verify success payment_id=%s authority=%s ref_id=%s amount=%s",
             locked_payment.pk,
             authority,
             locked_payment.ref_id,
@@ -1241,6 +1236,7 @@ def verify_payment(*, authority: str) -> Payment:
 # Maintenance services — Celery taskها از این‌ها استفاده می‌کنند
 # ===========================================================================
 
+
 @transaction.atomic
 def expire_stale_participation(*, participation: Participation) -> Participation:
     """
@@ -1252,11 +1248,7 @@ def expire_stale_participation(*, participation: Participation) -> Participation
     if participation.status != ParticipationStatus.PENDING_PAYMENT:
         return participation
 
-    campaign = (
-        Campaign.objects
-        .select_for_update()
-        .get(pk=participation.campaign_id)
-    )
+    campaign = Campaign.objects.select_for_update().get(pk=participation.campaign_id)
 
     participation.status = ParticipationStatus.EXPIRED
     participation.save(update_fields=["status", "updated_at"])
@@ -1337,17 +1329,26 @@ def close_campaign_due_to_deadline(*, campaign: Campaign) -> Campaign:
 # Refund / adjustment workflow services
 # ===========================================================================
 
+
 def _completed_refund_total(*, payment: Payment) -> int:
     """Return already completed refund amount for a payment."""
-    return PaymentRefund.objects.filter(payment=payment, status=RefundStatus.COMPLETED).aggregate(total=Sum("amount"))["total"] or 0
+    return (
+        PaymentRefund.objects.filter(payment=payment, status=RefundStatus.COMPLETED).aggregate(
+            total=Sum("amount")
+        )["total"]
+        or 0
+    )
 
 
 def _open_refund_total(*, payment: Payment) -> int:
     """Return refund amount already locked by non-terminal refund requests."""
-    return PaymentRefund.objects.filter(
-        payment=payment,
-        status__in=[RefundStatus.PENDING_REVIEW, RefundStatus.APPROVED],
-    ).aggregate(total=Sum("amount"))["total"] or 0
+    return (
+        PaymentRefund.objects.filter(
+            payment=payment,
+            status__in=[RefundStatus.PENDING_REVIEW, RefundStatus.APPROVED],
+        ).aggregate(total=Sum("amount"))["total"]
+        or 0
+    )
 
 
 @transaction.atomic
@@ -1361,12 +1362,20 @@ def request_payment_refund(
     idempotency_key: str | None = None,
 ) -> PaymentRefund:
     """Create a reviewed refund request for a successful payment."""
-    locked_payment = Payment.objects.select_for_update().select_related("participation", "participation__campaign").get(pk=payment.pk)
+    locked_payment = (
+        Payment.objects.select_for_update()
+        .select_related("participation", "participation__campaign")
+        .get(pk=payment.pk)
+    )
     if locked_payment.status != PaymentStatus.SUCCESS:
         raise RefundWorkflowError("فقط پرداخت‌های موفق قابل بازپرداخت هستند.")
     if amount <= 0:
         raise RefundWorkflowError("مبلغ بازپرداخت باید بزرگ‌تر از صفر باشد.")
-    available = locked_payment.amount - _completed_refund_total(payment=locked_payment) - _open_refund_total(payment=locked_payment)
+    available = (
+        locked_payment.amount
+        - _completed_refund_total(payment=locked_payment)
+        - _open_refund_total(payment=locked_payment)
+    )
     if amount > available:
         raise RefundWorkflowError("مبلغ بازپرداخت از مانده قابل بازپرداخت بیشتر است.")
     if idempotency_key:
@@ -1394,9 +1403,13 @@ def request_payment_refund(
 
 
 @transaction.atomic
-def approve_payment_refund(*, refund: PaymentRefund, reviewed_by: Any = None, note: str = "") -> PaymentRefund:
+def approve_payment_refund(
+    *, refund: PaymentRefund, reviewed_by: Any = None, note: str = ""
+) -> PaymentRefund:
     """Approve a pending refund request without applying financial effects yet."""
-    locked_refund = PaymentRefund.objects.select_for_update().select_related("payment").get(pk=refund.pk)
+    locked_refund = (
+        PaymentRefund.objects.select_for_update().select_related("payment").get(pk=refund.pk)
+    )
     if locked_refund.status != RefundStatus.PENDING_REVIEW:
         raise RefundWorkflowError("فقط درخواست‌های در انتظار بررسی قابل تأیید هستند.")
     locked_refund.status = RefundStatus.APPROVED
@@ -1416,16 +1429,22 @@ def approve_payment_refund(*, refund: PaymentRefund, reviewed_by: Any = None, no
 
 
 @transaction.atomic
-def reject_payment_refund(*, refund: PaymentRefund, reviewed_by: Any = None, rejection_reason: str = "") -> PaymentRefund:
+def reject_payment_refund(
+    *, refund: PaymentRefund, reviewed_by: Any = None, rejection_reason: str = ""
+) -> PaymentRefund:
     """Reject a pending refund request with immutable payment ledger evidence."""
-    locked_refund = PaymentRefund.objects.select_for_update().select_related("payment").get(pk=refund.pk)
+    locked_refund = (
+        PaymentRefund.objects.select_for_update().select_related("payment").get(pk=refund.pk)
+    )
     if locked_refund.status != RefundStatus.PENDING_REVIEW:
         raise RefundWorkflowError("فقط درخواست‌های در انتظار بررسی قابل رد هستند.")
     locked_refund.status = RefundStatus.REJECTED
     locked_refund.reviewed_by = reviewed_by
     locked_refund.reviewed_at = timezone.now()
     locked_refund.rejection_reason = rejection_reason
-    locked_refund.save(update_fields=["status", "reviewed_by", "reviewed_at", "rejection_reason", "updated_at"])
+    locked_refund.save(
+        update_fields=["status", "reviewed_by", "reviewed_at", "rejection_reason", "updated_at"]
+    )
     _record_payment_event(
         payment=locked_refund.payment,
         event_kind=PaymentEventKind.REFUND_REJECTED,
@@ -1439,7 +1458,11 @@ def reject_payment_refund(*, refund: PaymentRefund, reviewed_by: Any = None, rej
 @transaction.atomic
 def complete_payment_refund(*, refund: PaymentRefund, provider_ref_id: str = "") -> PaymentRefund:
     """Mark an approved refund as completed and resync campaign accounting."""
-    locked_refund = PaymentRefund.objects.select_for_update().select_related("payment", "payment__participation").get(pk=refund.pk)
+    locked_refund = (
+        PaymentRefund.objects.select_for_update()
+        .select_related("payment", "payment__participation")
+        .get(pk=refund.pk)
+    )
     if locked_refund.status != RefundStatus.APPROVED:
         raise RefundWorkflowError("فقط بازپرداخت‌های تأییدشده قابل تکمیل هستند.")
     locked_payment = Payment.objects.select_for_update().get(pk=locked_refund.payment_id)
@@ -1499,9 +1522,13 @@ def create_financial_adjustment(
 
 
 @transaction.atomic
-def approve_financial_adjustment(*, adjustment: CampaignFinancialAdjustment, reviewed_by: Any = None) -> CampaignFinancialAdjustment:
+def approve_financial_adjustment(
+    *, adjustment: CampaignFinancialAdjustment, reviewed_by: Any = None
+) -> CampaignFinancialAdjustment:
     """Approve a pending financial adjustment before final application."""
-    locked_adjustment = CampaignFinancialAdjustment.objects.select_for_update().get(pk=adjustment.pk)
+    locked_adjustment = CampaignFinancialAdjustment.objects.select_for_update().get(
+        pk=adjustment.pk
+    )
     if locked_adjustment.status != FinancialAdjustmentStatus.PENDING_REVIEW:
         raise FinancialAdjustmentWorkflowError("فقط اصلاحات در انتظار بررسی قابل تأیید هستند.")
     locked_adjustment.status = FinancialAdjustmentStatus.APPROVED
@@ -1519,21 +1546,31 @@ def reject_financial_adjustment(
     rejection_reason: str = "",
 ) -> CampaignFinancialAdjustment:
     """Reject a pending financial adjustment with reviewer evidence."""
-    locked_adjustment = CampaignFinancialAdjustment.objects.select_for_update().get(pk=adjustment.pk)
+    locked_adjustment = CampaignFinancialAdjustment.objects.select_for_update().get(
+        pk=adjustment.pk
+    )
     if locked_adjustment.status != FinancialAdjustmentStatus.PENDING_REVIEW:
         raise FinancialAdjustmentWorkflowError("فقط اصلاحات در انتظار بررسی قابل رد هستند.")
     locked_adjustment.status = FinancialAdjustmentStatus.REJECTED
     locked_adjustment.reviewed_by = reviewed_by
     locked_adjustment.reviewed_at = timezone.now()
     locked_adjustment.rejection_reason = rejection_reason
-    locked_adjustment.save(update_fields=["status", "reviewed_by", "reviewed_at", "rejection_reason", "updated_at"])
+    locked_adjustment.save(
+        update_fields=["status", "reviewed_by", "reviewed_at", "rejection_reason", "updated_at"]
+    )
     return locked_adjustment
 
 
 @transaction.atomic
-def apply_financial_adjustment(*, adjustment: CampaignFinancialAdjustment) -> CampaignFinancialAdjustment:
+def apply_financial_adjustment(
+    *, adjustment: CampaignFinancialAdjustment
+) -> CampaignFinancialAdjustment:
     """Apply an approved financial adjustment and resync campaign counters."""
-    locked_adjustment = CampaignFinancialAdjustment.objects.select_for_update().select_related("campaign", "payment").get(pk=adjustment.pk)
+    locked_adjustment = (
+        CampaignFinancialAdjustment.objects.select_for_update()
+        .select_related("campaign", "payment")
+        .get(pk=adjustment.pk)
+    )
     if locked_adjustment.status != FinancialAdjustmentStatus.APPROVED:
         raise FinancialAdjustmentWorkflowError("فقط اصلاحات تأییدشده قابل اعمال هستند.")
     campaign = Campaign.objects.select_for_update().get(pk=locked_adjustment.campaign_id)
@@ -1561,7 +1598,10 @@ def apply_financial_adjustment(*, adjustment: CampaignFinancialAdjustment) -> Ca
 # Financial operations control services
 # ===========================================================================
 
-def generate_financial_control_snapshot(*, generated_by_task_id: str = "") -> MadadkarFinancialControlSnapshot:
+
+def generate_financial_control_snapshot(
+    *, generated_by_task_id: str = ""
+) -> MadadkarFinancialControlSnapshot:
     """Generate a daily finance-ops control snapshot from current operational signals."""
     today = timezone.localdate()
     controls = _build_financial_control_payload()
@@ -1572,8 +1612,12 @@ def generate_financial_control_snapshot(*, generated_by_task_id: str = "") -> Ma
         severity=severity,
         summary={
             "open_flags": len(flags),
-            "critical_flags": len([flag for flag in flags if flag["severity"] == FinancialControlSeverity.CRITICAL]),
-            "warning_flags": len([flag for flag in flags if flag["severity"] == FinancialControlSeverity.WARNING]),
+            "critical_flags": len(
+                [flag for flag in flags if flag["severity"] == FinancialControlSeverity.CRITICAL]
+            ),
+            "warning_flags": len(
+                [flag for flag in flags if flag["severity"] == FinancialControlSeverity.WARNING]
+            ),
         },
         controls=controls,
         flags=flags,
@@ -1587,27 +1631,69 @@ def _build_financial_control_payload() -> dict[str, Any]:
     stale_cutoff = timezone.now() - timezone.timedelta(minutes=pending_timeout)
     return {
         "pending_payments": Payment.objects.filter(status=PaymentStatus.PENDING).count(),
-        "stale_pending_payments": Payment.objects.filter(status=PaymentStatus.PENDING, created_at__lt=stale_cutoff).count(),
-        "open_risk_signals": MadadkarRiskSignal.objects.filter(status=MadadkarRiskStatus.OPEN).count(),
-        "high_risk_signals": MadadkarRiskSignal.objects.filter(status=MadadkarRiskStatus.OPEN, severity__in=[MadadkarRiskSeverity.HIGH, MadadkarRiskSeverity.CRITICAL]).count(),
+        "stale_pending_payments": Payment.objects.filter(
+            status=PaymentStatus.PENDING, created_at__lt=stale_cutoff
+        ).count(),
+        "open_risk_signals": MadadkarRiskSignal.objects.filter(
+            status=MadadkarRiskStatus.OPEN
+        ).count(),
+        "high_risk_signals": MadadkarRiskSignal.objects.filter(
+            status=MadadkarRiskStatus.OPEN,
+            severity__in=[MadadkarRiskSeverity.HIGH, MadadkarRiskSeverity.CRITICAL],
+        ).count(),
         "pending_refunds": PaymentRefund.objects.filter(status=RefundStatus.PENDING_REVIEW).count(),
         "approved_refunds": PaymentRefund.objects.filter(status=RefundStatus.APPROVED).count(),
-        "requested_disbursements": CampaignDisbursement.objects.filter(status=DisbursementStatus.REQUESTED).count(),
-        "approved_unpaid_disbursements": CampaignDisbursement.objects.filter(status=DisbursementStatus.APPROVED).count(),
-        "reconciliation_mismatches": PaymentReconciliationBatch.objects.aggregate(total=Sum("mismatch_count"))["total"] or 0,
+        "requested_disbursements": CampaignDisbursement.objects.filter(
+            status=DisbursementStatus.REQUESTED
+        ).count(),
+        "approved_unpaid_disbursements": CampaignDisbursement.objects.filter(
+            status=DisbursementStatus.APPROVED
+        ).count(),
+        "reconciliation_mismatches": PaymentReconciliationBatch.objects.aggregate(
+            total=Sum("mismatch_count")
+        )["total"]
+        or 0,
     }
 
 
 def _build_financial_control_flags(*, controls: dict[str, Any]) -> list[dict[str, Any]]:
     """Turn raw controls into actionable finance-ops flags."""
     flag_specs = [
-        ("stale_pending_payments", FinancialControlSeverity.WARNING, "پرداخت‌های pending منقضی‌شده نیازمند cleanup هستند."),
-        ("high_risk_signals", FinancialControlSeverity.CRITICAL, "سیگنال‌های ریسک high/critical باز وجود دارد."),
-        ("pending_refunds", FinancialControlSeverity.WATCH, "درخواست‌های refund در انتظار بررسی وجود دارد."),
-        ("approved_refunds", FinancialControlSeverity.WARNING, "refundهای تأییدشده هنوز تکمیل نشده‌اند."),
-        ("requested_disbursements", FinancialControlSeverity.WATCH, "درخواست‌های تخصیص مالی در انتظار تأیید وجود دارد."),
-        ("approved_unpaid_disbursements", FinancialControlSeverity.WARNING, "تخصیص‌های تأییدشده هنوز paid نشده‌اند."),
-        ("reconciliation_mismatches", FinancialControlSeverity.WARNING, "اختلافات reconciliation نیازمند بررسی مالی هستند."),
+        (
+            "stale_pending_payments",
+            FinancialControlSeverity.WARNING,
+            "پرداخت‌های pending منقضی‌شده نیازمند cleanup هستند.",
+        ),
+        (
+            "high_risk_signals",
+            FinancialControlSeverity.CRITICAL,
+            "سیگنال‌های ریسک high/critical باز وجود دارد.",
+        ),
+        (
+            "pending_refunds",
+            FinancialControlSeverity.WATCH,
+            "درخواست‌های refund در انتظار بررسی وجود دارد.",
+        ),
+        (
+            "approved_refunds",
+            FinancialControlSeverity.WARNING,
+            "refundهای تأییدشده هنوز تکمیل نشده‌اند.",
+        ),
+        (
+            "requested_disbursements",
+            FinancialControlSeverity.WATCH,
+            "درخواست‌های تخصیص مالی در انتظار تأیید وجود دارد.",
+        ),
+        (
+            "approved_unpaid_disbursements",
+            FinancialControlSeverity.WARNING,
+            "تخصیص‌های تأییدشده هنوز paid نشده‌اند.",
+        ),
+        (
+            "reconciliation_mismatches",
+            FinancialControlSeverity.WARNING,
+            "اختلافات reconciliation نیازمند بررسی مالی هستند.",
+        ),
     ]
     flags = []
     for key, severity, message in flag_specs:
@@ -1633,12 +1719,20 @@ def _derive_financial_control_severity(*, flags: list[dict[str, Any]]) -> str:
 # Disbursement / allocation ledger services
 # ===========================================================================
 
+
 def calculate_campaign_disbursable_amount(*, campaign: Campaign) -> int:
     """Return current net amount that is not committed to active disbursements."""
-    committed = CampaignDisbursement.objects.filter(
-        campaign=campaign,
-        status__in=[DisbursementStatus.REQUESTED, DisbursementStatus.APPROVED, DisbursementStatus.PAID],
-    ).aggregate(total=Sum("amount"))["total"] or 0
+    committed = (
+        CampaignDisbursement.objects.filter(
+            campaign=campaign,
+            status__in=[
+                DisbursementStatus.REQUESTED,
+                DisbursementStatus.APPROVED,
+                DisbursementStatus.PAID,
+            ],
+        ).aggregate(total=Sum("amount"))["total"]
+        or 0
+    )
     return max(campaign.purchased_amount - committed, 0)
 
 
@@ -1683,9 +1777,15 @@ def request_campaign_disbursement(
 
 
 @transaction.atomic
-def approve_campaign_disbursement(*, disbursement: CampaignDisbursement, reviewed_by: Any = None) -> CampaignDisbursement:
+def approve_campaign_disbursement(
+    *, disbursement: CampaignDisbursement, reviewed_by: Any = None
+) -> CampaignDisbursement:
     """Approve a requested disbursement after re-checking available funds."""
-    locked = CampaignDisbursement.objects.select_for_update().select_related("campaign").get(pk=disbursement.pk)
+    locked = (
+        CampaignDisbursement.objects.select_for_update()
+        .select_related("campaign")
+        .get(pk=disbursement.pk)
+    )
     if locked.status != DisbursementStatus.REQUESTED:
         raise DisbursementWorkflowError("فقط تخصیص‌های درخواست‌شده قابل تأیید هستند.")
     available = calculate_campaign_disbursable_amount(campaign=locked.campaign) + locked.amount
@@ -1713,7 +1813,9 @@ def reject_campaign_disbursement(
     locked.reviewed_by = reviewed_by
     locked.rejection_reason = rejection_reason.strip()
     locked.rejected_at = timezone.now()
-    locked.save(update_fields=["status", "reviewed_by", "rejection_reason", "rejected_at", "updated_at"])
+    locked.save(
+        update_fields=["status", "reviewed_by", "rejection_reason", "rejected_at", "updated_at"]
+    )
     return locked
 
 
@@ -1734,13 +1836,16 @@ def mark_campaign_disbursement_paid(
     locked.paid_by = paid_by
     locked.bank_tracking_reference = bank_tracking_reference.strip()
     locked.paid_at = timezone.now()
-    locked.save(update_fields=["status", "paid_by", "bank_tracking_reference", "paid_at", "updated_at"])
+    locked.save(
+        update_fields=["status", "paid_by", "bank_tracking_reference", "paid_at", "updated_at"]
+    )
     return locked
 
 
 # ===========================================================================
 # Donation receipt services
 # ===========================================================================
+
 
 def issue_donation_receipt_for_payment(*, payment: Payment) -> DonationReceipt:
     """Issue an idempotent verifiable receipt for a successful payment."""
@@ -1791,9 +1896,15 @@ def _build_receipt_number(*, payment: Payment, issued_at) -> str:
     return f"MDK-{date_part}-{payment.pk:010d}"
 
 
-def verify_donation_receipt(*, receipt_number: str, receipt_hash: str) -> tuple[bool, DonationReceipt | None]:
+def verify_donation_receipt(
+    *, receipt_number: str, receipt_hash: str
+) -> tuple[bool, DonationReceipt | None]:
     """Verify a public receipt number/hash pair without exposing private data."""
-    receipt = DonationReceipt.objects.select_related("campaign", "payment", "user").filter(receipt_number=receipt_number).first()
+    receipt = (
+        DonationReceipt.objects.select_related("campaign", "payment", "user")
+        .filter(receipt_number=receipt_number)
+        .first()
+    )
     if receipt is None:
         return False, None
     expected = receipt.compute_receipt_hash()
@@ -1813,6 +1924,7 @@ def record_receipt_resend(*, receipt: DonationReceipt) -> DonationReceipt:
 # ===========================================================================
 # Risk scoring services
 # ===========================================================================
+
 
 def create_madadkar_risk_signal(
     *,
@@ -1849,7 +1961,9 @@ def create_madadkar_risk_signal(
     )
 
 
-def evaluate_payment_risk(*, payment: Payment, window_minutes: int = 60) -> list[MadadkarRiskSignal]:
+def evaluate_payment_risk(
+    *, payment: Payment, window_minutes: int = 60
+) -> list[MadadkarRiskSignal]:
     """Evaluate payment-level fraud/abuse signals for a payment event."""
     signals: list[MadadkarRiskSignal] = []
     campaign = payment.participation.campaign
@@ -1858,7 +1972,9 @@ def evaluate_payment_risk(*, payment: Payment, window_minutes: int = 60) -> list
         status=PaymentStatus.SUCCESS,
         created_at__lt=payment.created_at,
     ).count()
-    high_amount_threshold = int(getattr(settings, "MADADKAR_RISK_HIGH_AMOUNT_NEW_USER_THRESHOLD", 50_000_000))
+    high_amount_threshold = int(
+        getattr(settings, "MADADKAR_RISK_HIGH_AMOUNT_NEW_USER_THRESHOLD", 50_000_000)
+    )
     if payment.amount >= high_amount_threshold and previous_success_count == 0:
         signals.append(
             create_madadkar_risk_signal(
@@ -1873,13 +1989,17 @@ def evaluate_payment_risk(*, payment: Payment, window_minutes: int = 60) -> list
             )
         )
     since = timezone.now() - timezone.timedelta(minutes=window_minutes)
-    failure_count = Payment.objects.filter(user_id=payment.user_id, status=PaymentStatus.FAILED, created_at__gte=since).count()
+    failure_count = Payment.objects.filter(
+        user_id=payment.user_id, status=PaymentStatus.FAILED, created_at__gte=since
+    ).count()
     failure_threshold = int(getattr(settings, "MADADKAR_RISK_PAYMENT_FAILURE_SPIKE_THRESHOLD", 3))
     if failure_count >= failure_threshold:
         signals.append(
             create_madadkar_risk_signal(
                 signal_type=MadadkarRiskSignalType.PAYMENT_FAILURE_SPIKE,
-                severity=MadadkarRiskSeverity.MEDIUM if failure_count < failure_threshold * 2 else MadadkarRiskSeverity.HIGH,
+                severity=MadadkarRiskSeverity.MEDIUM
+                if failure_count < failure_threshold * 2
+                else MadadkarRiskSeverity.HIGH,
                 user=payment.user,
                 campaign=campaign,
                 payment=payment,
@@ -1890,10 +2010,15 @@ def evaluate_payment_risk(*, payment: Payment, window_minutes: int = 60) -> list
         )
     ip_user_threshold = int(getattr(settings, "MADADKAR_RISK_IP_DISTINCT_USERS_THRESHOLD", 3))
     if payment.ip_address:
-        distinct_users = Payment.objects.filter(
-            ip_address=payment.ip_address,
-            created_at__gte=since,
-        ).values("user_id").distinct().count()
+        distinct_users = (
+            Payment.objects.filter(
+                ip_address=payment.ip_address,
+                created_at__gte=since,
+            )
+            .values("user_id")
+            .distinct()
+            .count()
+        )
         if distinct_users >= ip_user_threshold:
             signals.append(
                 create_madadkar_risk_signal(
@@ -1910,14 +2035,18 @@ def evaluate_payment_risk(*, payment: Payment, window_minutes: int = 60) -> list
     return signals
 
 
-def evaluate_refund_risk(*, refund: PaymentRefund, window_hours: int = 24) -> list[MadadkarRiskSignal]:
+def evaluate_refund_risk(
+    *, refund: PaymentRefund, window_hours: int = 24
+) -> list[MadadkarRiskSignal]:
     """Evaluate refund velocity and campaign refund spike signals."""
     signals: list[MadadkarRiskSignal] = []
     payment = refund.payment
     campaign = payment.participation.campaign
     since = timezone.now() - timezone.timedelta(hours=window_hours)
     refund_threshold = int(getattr(settings, "MADADKAR_RISK_REFUND_VELOCITY_THRESHOLD", 3))
-    user_refunds = PaymentRefund.objects.filter(payment__user_id=payment.user_id, created_at__gte=since).count()
+    user_refunds = PaymentRefund.objects.filter(
+        payment__user_id=payment.user_id, created_at__gte=since
+    ).count()
     if user_refunds >= refund_threshold:
         signals.append(
             create_madadkar_risk_signal(
@@ -1932,13 +2061,17 @@ def evaluate_refund_risk(*, refund: PaymentRefund, window_hours: int = 24) -> li
                 metadata={"window_hours": window_hours, "user_refund_count": user_refunds},
             )
         )
-    campaign_refunds = PaymentRefund.objects.filter(payment__participation__campaign=campaign, created_at__gte=since).count()
+    campaign_refunds = PaymentRefund.objects.filter(
+        payment__participation__campaign=campaign, created_at__gte=since
+    ).count()
     campaign_threshold = int(getattr(settings, "MADADKAR_RISK_CAMPAIGN_REFUND_SPIKE_THRESHOLD", 5))
     if campaign_refunds >= campaign_threshold:
         signals.append(
             create_madadkar_risk_signal(
                 signal_type=MadadkarRiskSignalType.CAMPAIGN_REFUND_SPIKE,
-                severity=MadadkarRiskSeverity.CRITICAL if campaign_refunds >= campaign_threshold * 2 else MadadkarRiskSeverity.HIGH,
+                severity=MadadkarRiskSeverity.CRITICAL
+                if campaign_refunds >= campaign_threshold * 2
+                else MadadkarRiskSeverity.HIGH,
                 user=payment.user,
                 campaign=campaign,
                 payment=payment,
@@ -1951,7 +2084,9 @@ def evaluate_refund_risk(*, refund: PaymentRefund, window_hours: int = 24) -> li
     return signals
 
 
-def evaluate_adjustment_risk(*, adjustment: CampaignFinancialAdjustment) -> list[MadadkarRiskSignal]:
+def evaluate_adjustment_risk(
+    *, adjustment: CampaignFinancialAdjustment
+) -> list[MadadkarRiskSignal]:
     """Evaluate unusually large manual financial adjustments."""
     campaign = adjustment.campaign
     ratio_threshold = float(getattr(settings, "MADADKAR_RISK_ADJUSTMENT_RATIO_THRESHOLD", 0.25))
@@ -1968,7 +2103,11 @@ def evaluate_adjustment_risk(*, adjustment: CampaignFinancialAdjustment) -> list
             payment=adjustment.payment,
             adjustment=adjustment,
             description="مبلغ اصلاح مالی نسبت به مبلغ مؤثر حرکت غیرعادی است.",
-            metadata={"ratio": round(ratio, 4), "amount": adjustment.amount, "base_amount": base_amount},
+            metadata={
+                "ratio": round(ratio, 4),
+                "amount": adjustment.amount,
+                "base_amount": base_amount,
+            },
         )
     ]
 
@@ -1982,14 +2121,20 @@ def review_madadkar_risk_signal(
     review_note: str = "",
 ) -> MadadkarRiskSignal:
     """Review, dismiss, or escalate an open Madadkar risk signal."""
-    if status not in {MadadkarRiskStatus.REVIEWED, MadadkarRiskStatus.DISMISSED, MadadkarRiskStatus.ESCALATED}:
+    if status not in {
+        MadadkarRiskStatus.REVIEWED,
+        MadadkarRiskStatus.DISMISSED,
+        MadadkarRiskStatus.ESCALATED,
+    }:
         raise MadadkarServiceError("وضعیت بررسی ریسک نامعتبر است.")
     locked_signal = MadadkarRiskSignal.objects.select_for_update().get(pk=signal.pk)
     locked_signal.status = status
     locked_signal.reviewed_by = reviewed_by
     locked_signal.reviewed_at = timezone.now()
     locked_signal.review_note = review_note
-    locked_signal.save(update_fields=["status", "reviewed_by", "reviewed_at", "review_note", "updated_at"])
+    locked_signal.save(
+        update_fields=["status", "reviewed_by", "reviewed_at", "review_note", "updated_at"]
+    )
     return locked_signal
 
 
@@ -1997,8 +2142,11 @@ def review_madadkar_risk_signal(
 # Payment reconciliation services
 # ===========================================================================
 
+
 @transaction.atomic
-def reconcile_provider_payments(*, provider_name: str, rows: list[dict[str, Any]], source_name: str = "") -> PaymentReconciliationBatch:
+def reconcile_provider_payments(
+    *, provider_name: str, rows: list[dict[str, Any]], source_name: str = ""
+) -> PaymentReconciliationBatch:
     """Reconcile provider settlement/report rows with internal payment ledger.
 
     Expected row keys are intentionally generic:
@@ -2024,7 +2172,9 @@ def reconcile_provider_payments(*, provider_name: str, rows: list[dict[str, Any]
         duplicate_ref = bool(ref_id and ref_id in seen_refs)
         if ref_id:
             seen_refs.add(ref_id)
-        payment = _find_payment_for_reconciliation(provider_name=batch.provider_name, authority=authority, ref_id=ref_id)
+        payment = _find_payment_for_reconciliation(
+            provider_name=batch.provider_name, authority=authority, ref_id=ref_id
+        )
         item_status, reason = _classify_reconciliation_row(
             payment=payment,
             provider_amount=provider_amount,
@@ -2048,7 +2198,9 @@ def reconcile_provider_payments(*, provider_name: str, rows: list[dict[str, Any]
     return batch
 
 
-def _find_payment_for_reconciliation(*, provider_name: str, authority: str, ref_id: str) -> Payment | None:
+def _find_payment_for_reconciliation(
+    *, provider_name: str, authority: str, ref_id: str
+) -> Payment | None:
     """Find internal payment by authority first, then provider ref_id."""
     queryset = Payment.objects.filter(gateway_name=provider_name)
     if authority:
@@ -2060,28 +2212,48 @@ def _find_payment_for_reconciliation(*, provider_name: str, authority: str, ref_
     return None
 
 
-def _classify_reconciliation_row(*, payment: Payment | None, provider_amount: int, provider_status: str, duplicate_ref: bool) -> tuple[str, str]:
+def _classify_reconciliation_row(
+    *, payment: Payment | None, provider_amount: int, provider_status: str, duplicate_ref: bool
+) -> tuple[str, str]:
     """Classify one provider row compared to internal payment state."""
     if duplicate_ref:
-        return ReconciliationItemStatus.DUPLICATE_PROVIDER_REF, "شناسه مرجع در گزارش درگاه تکراری است."
+        return (
+            ReconciliationItemStatus.DUPLICATE_PROVIDER_REF,
+            "شناسه مرجع در گزارش درگاه تکراری است.",
+        )
     if payment is None:
         return ReconciliationItemStatus.MISSING_INTERNAL, "پرداخت متناظر در سیستم داخلی پیدا نشد."
     if provider_amount and provider_amount != payment.amount:
-        return ReconciliationItemStatus.AMOUNT_MISMATCH, "مبلغ گزارش درگاه با مبلغ داخلی تطابق ندارد."
+        return (
+            ReconciliationItemStatus.AMOUNT_MISMATCH,
+            "مبلغ گزارش درگاه با مبلغ داخلی تطابق ندارد.",
+        )
     provider_success = provider_status in {"success", "paid", "verified", "100", "101"}
     if provider_success and payment.status != PaymentStatus.SUCCESS:
-        return ReconciliationItemStatus.STATUS_MISMATCH, "درگاه پرداخت را موفق می‌داند اما وضعیت داخلی موفق نیست."
+        return (
+            ReconciliationItemStatus.STATUS_MISMATCH,
+            "درگاه پرداخت را موفق می‌داند اما وضعیت داخلی موفق نیست.",
+        )
     if not provider_success and payment.status == PaymentStatus.SUCCESS:
-        return ReconciliationItemStatus.STATUS_MISMATCH, "وضعیت داخلی موفق است اما گزارش درگاه موفق نیست."
+        return (
+            ReconciliationItemStatus.STATUS_MISMATCH,
+            "وضعیت داخلی موفق است اما گزارش درگاه موفق نیست.",
+        )
     return ReconciliationItemStatus.MATCHED, "تطبیق موفق."
 
 
-def _finalize_reconciliation_batch(*, batch: PaymentReconciliationBatch) -> PaymentReconciliationBatch:
+def _finalize_reconciliation_batch(
+    *, batch: PaymentReconciliationBatch
+) -> PaymentReconciliationBatch:
     """Aggregate reconciliation item counters and mark batch completed."""
     items = batch.items.all()
     batch.matched_count = items.filter(status=ReconciliationItemStatus.MATCHED).count()
-    batch.missing_internal_count = items.filter(status=ReconciliationItemStatus.MISSING_INTERNAL).count()
-    batch.duplicate_provider_ref_count = items.filter(status=ReconciliationItemStatus.DUPLICATE_PROVIDER_REF).count()
+    batch.missing_internal_count = items.filter(
+        status=ReconciliationItemStatus.MISSING_INTERNAL
+    ).count()
+    batch.duplicate_provider_ref_count = items.filter(
+        status=ReconciliationItemStatus.DUPLICATE_PROVIDER_REF
+    ).count()
     batch.mismatch_count = items.exclude(status=ReconciliationItemStatus.MATCHED).count()
     batch.status = ReconciliationStatus.COMPLETED
     batch.completed_at = timezone.now()
@@ -2091,14 +2263,16 @@ def _finalize_reconciliation_batch(*, batch: PaymentReconciliationBatch) -> Paym
         "missing_internal": batch.missing_internal_count,
         "duplicate_provider_ref": batch.duplicate_provider_ref_count,
     }
-    batch.save(update_fields=[
-        "matched_count",
-        "missing_internal_count",
-        "duplicate_provider_ref_count",
-        "mismatch_count",
-        "status",
-        "completed_at",
-        "summary",
-        "updated_at",
-    ])
+    batch.save(
+        update_fields=[
+            "matched_count",
+            "missing_internal_count",
+            "duplicate_provider_ref_count",
+            "mismatch_count",
+            "status",
+            "completed_at",
+            "summary",
+            "updated_at",
+        ]
+    )
     return batch

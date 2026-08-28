@@ -86,18 +86,30 @@ class ReportAdmin(admin.ModelAdmin):
         "review_panel",
     )
     fieldsets = (
-        ("اطلاعات گزارش", {
-            "fields": ("full_name", "phone_number", "subject", "description", "submitter_ip"),
-        }),
-        ("بررسی ادمین", {
-            "fields": ("review_panel",),
-        }),
-        ("نتیجه بررسی", {
-            "fields": ("status", "admin_note"),
-        }),
-        ("زمان‌ها", {
-            "fields": ("created_at", "updated_at"),
-        }),
+        (
+            "اطلاعات گزارش",
+            {
+                "fields": ("full_name", "phone_number", "subject", "description", "submitter_ip"),
+            },
+        ),
+        (
+            "بررسی ادمین",
+            {
+                "fields": ("review_panel",),
+            },
+        ),
+        (
+            "نتیجه بررسی",
+            {
+                "fields": ("status", "admin_note"),
+            },
+        ),
+        (
+            "زمان‌ها",
+            {
+                "fields": ("created_at", "updated_at"),
+            },
+        ),
     )
     inlines = [ReportAttachmentInline]
     ordering = ("-created_at",)
@@ -132,8 +144,8 @@ class ReportAdmin(admin.ModelAdmin):
             '<button type="submit" name="_public_report_mark_reviewing" value="1">در حال بررسی</button>'
             '<button type="submit" class="default" name="_public_report_approve" value="1">تأیید گزارش</button>'
             '<button type="submit" name="_public_report_reject" value="1">رد گزارش</button>'
-            '</div>'
-            '</div>{}',
+            "</div>"
+            "</div>{}",
             "",
         )
 
@@ -145,13 +157,18 @@ class ReportAdmin(admin.ModelAdmin):
             "_public_report_reject": ReportStatus.REJECTED,
         }
         if request.method == "POST":
-            selected_status = next((status for action, status in action_to_status.items() if action in request.POST), None)
+            selected_status = next(
+                (status for action, status in action_to_status.items() if action in request.POST),
+                None,
+            )
             if selected_status is not None:
                 obj = self.get_object(request, object_id)
                 if obj is None:
                     messages.error(request, "گزارش یافت نشد.")
                     return HttpResponseRedirect(request.path)
-                return self._handle_status_update(request=request, report=obj, new_status=selected_status)
+                return self._handle_status_update(
+                    request=request, report=obj, new_status=selected_status
+                )
         return super().changeform_view(request, object_id, form_url, extra_context)
 
     def _handle_status_update(self, *, request, report: Report, new_status: str):

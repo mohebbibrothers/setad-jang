@@ -64,7 +64,9 @@ def apply_smart_search(
     if not search_fields:
         return queryset
     if not is_postgresql_queryset(queryset):
-        return _apply_fallback_icontains(queryset, terms=_fallback_terms(raw=raw, normalized=normalized), fields=search_fields)
+        return _apply_fallback_icontains(
+            queryset, terms=_fallback_terms(raw=raw, normalized=normalized), fields=search_fields
+        )
     return _apply_postgres_search(
         queryset,
         normalized=normalized,
@@ -88,7 +90,9 @@ def _fallback_terms(*, raw: str, normalized: str) -> list[str]:
     return [term for term in terms if term]
 
 
-def _apply_fallback_icontains(queryset: QuerySet, *, terms: list[str], fields: list[SearchField]) -> QuerySet:
+def _apply_fallback_icontains(
+    queryset: QuerySet, *, terms: list[str], fields: list[SearchField]
+) -> QuerySet:
     """Apply portable icontains search for SQLite/dev/test."""
     query = reduce(
         or_,
@@ -125,5 +129,7 @@ def _apply_postgres_search(
             current = TrigramSimilarity(field_name, normalized)
             similarity = current if similarity is None else similarity + current
         queryset = queryset.annotate(_trigram_similarity=Coalesce(similarity, Value(0.0)))
-        return queryset.filter(Q(**{f"{rank_alias}__gt": 0}) | Q(_trigram_similarity__gt=0.1)).order_by(F(rank_alias).desc(), F("_trigram_similarity").desc())
+        return queryset.filter(
+            Q(**{f"{rank_alias}__gt": 0}) | Q(_trigram_similarity__gt=0.1)
+        ).order_by(F(rank_alias).desc(), F("_trigram_similarity").desc())
     return queryset.filter(**{f"{rank_alias}__gt": 0}).order_by(F(rank_alias).desc())

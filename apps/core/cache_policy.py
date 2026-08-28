@@ -49,7 +49,11 @@ PUBLIC_CACHE_POLICIES: dict[str, CachePolicy] = {
     ),
     "kindness": CachePolicy(
         domain="kindness",
-        backend_namespaces=("kindness:public_list", "kindness:public_detail", "kindness:categories"),
+        backend_namespaces=(
+            "kindness:public_list",
+            "kindness:public_detail",
+            "kindness:categories",
+        ),
         frontend_tags=("homepage", "kindness", "kindness:list"),
         frontend_paths=("/",),
     ),

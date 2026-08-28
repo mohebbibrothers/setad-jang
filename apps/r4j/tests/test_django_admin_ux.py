@@ -98,7 +98,6 @@ class TestR4JDjangoAdminUX:
         assert "کد ملی" in html
         assert "خلاصه جرائم" in html
 
-
     def test_criminal_attachment_inline_save_does_not_require_formset_save_m2m(self, rf):
         """Attachment inline save must not 500 when Django's formset has no save_m2m hook."""
         admin_user = AdminUserFactory()
@@ -261,14 +260,15 @@ class TestR4JDjangoAdminUX:
         assert field_change.status == ReportFieldChangeStatus.PENDING
         assert "برای همه پیشنهادهای اصلاح باید تصمیم" in response.content.decode("utf-8")
 
-
     def test_report_review_submit_applies_resource_suggestions(self, client):
         admin_user = AdminUserFactory()
         client.force_login(admin_user)
         criminal = R4JCriminalFactory(city="تهران")
         report = R4JReportFactory(criminal=criminal, status=ReportStatus.PENDING)
         alias = R4JReportAliasSuggestion.objects.create(report=report, alias="حاج علی")
-        phone = R4JReportPhoneSuggestion.objects.create(report=report, label="واتساپ", number="+989121234567")
+        phone = R4JReportPhoneSuggestion.objects.create(
+            report=report, label="واتساپ", number="+989121234567"
+        )
         social = R4JReportSocialSuggestion.objects.create(
             report=report,
             platform=SocialPlatform.TELEGRAM,

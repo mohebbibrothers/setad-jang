@@ -35,12 +35,7 @@ class R4JCriminalActiveManager(models.Manager):
     """
 
     def get_queryset(self) -> models.QuerySet:
-        return (
-            super()
-            .get_queryset()
-            .filter(is_active=True)
-            .order_by("-created_at", "-pk")
-        )
+        return super().get_queryset().filter(is_active=True).order_by("-created_at", "-pk")
 
 
 class R4JCriminalPublishedManager(models.Manager):

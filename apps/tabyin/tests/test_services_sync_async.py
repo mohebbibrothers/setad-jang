@@ -400,6 +400,7 @@ class TestTaskOutcomeAudit:
         """
         اگر خود audit write fail شود، business task نباید fail شود.
         """
+
         def fake_run_sync(*, mode: str) -> _FakeSyncStats:
             return _FakeSyncStats()
 
