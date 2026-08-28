@@ -12,7 +12,11 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.audit_logs import actions as audit_actions
 from apps.authentication.choices import AuthRiskSeverity, AuthRiskSignalType, AuthRiskStatus
-from apps.authentication.models import AuthRiskSignal, AuthSession
+from apps.authentication.models import (
+    LEGACY_FINGERPRINT_ALGORITHM,
+    AuthRiskSignal,
+    AuthSession,
+)
 from apps.authentication.services import create_auth_risk_signal, evaluate_auth_session_risk
 from tests.factories.auth import AdminUserFactory, UserFactory
 
@@ -65,6 +69,33 @@ def test_known_device_and_ip_do_not_create_duplicate_risks() -> None:
     second = _session(user=user, user_agent="Chrome Stable", ip_address="198.51.100.11")
 
     signals = evaluate_auth_session_risk(session=second)
+
+    assert signals == []
+
+
+def test_legacy_sha1_fingerprint_still_matches_after_algorithm_migration() -> None:
+    """نشست‌های ساخته‌شده با الگوریتم قدیمی (sha1) بعد از مهاجرت به sha256
+    نباید «دستگاه جدید» تلقی شوند.
+
+    بدون تطبیق دوگانه، اولین نشستِ جدیدِ هر کاربر بعد از deploy سیگنال
+    کاذب NEW_DEVICE می‌گیرد (چون هش ذخیره‌شدهٔ قدیمی با الگوریتم جدید
+    بازتولید نمی‌شود).
+    """
+    user = UserFactory()
+    user_agent = "Mozilla/5.0 (X11; Linux x86_64) legacy-fp-test"
+    ip_address = "198.51.100.77"
+
+    legacy = _session(user=user, user_agent=user_agent, ip_address=ip_address)
+    legacy.fingerprint_hash = AuthSession.build_fingerprint_hash(
+        user_agent=user_agent,
+        ip_address=ip_address,
+        algorithm=LEGACY_FINGERPRINT_ALGORITHM,
+    )
+    legacy.save(update_fields=["fingerprint_hash"])
+
+    current = _session(user=user, user_agent=user_agent, ip_address=ip_address)
+
+    signals = evaluate_auth_session_risk(session=current)
 
     assert signals == []
 

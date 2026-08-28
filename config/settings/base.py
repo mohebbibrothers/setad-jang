@@ -317,6 +317,13 @@ REST_FRAMEWORK = {
         # ── Public Reports ────────────────────────────────
         "report_create_anon": "5/min",
         "report_create_user": "20/min",
+        # لیست موضوعات: عمومی و cached ولی طبق انضباط پروژه scope اختصاصی.
+        "public_report_subjects": "30/min",
+        # ── Health ────────────────────────────────────────
+        # /health/detailed/ برای anonymous به‌ازای IP محدود است (هر فراخوانی
+        # ۹ چک سنگین اجرا می‌کند). /health/ و /health/ready/ عمداً throttle
+        # ندارند چون probeهای orchestrator نباید محدود شوند.
+        "health_detailed_anon": "10/min",
         # ── Authentication ────────────────────────────────
         "auth_login": "10/min",
         "auth_register": "5/min",
@@ -328,6 +335,9 @@ REST_FRAMEWORK = {
         # برابر SMS-bombing توزیع‌شده محدود می‌کند.
         "auth_otp_target": "12/hour",
         "auth_password_reset": "3/min",
+        # رفرش توکن: هر فراخوانی موفق یک ردیف blacklist می‌سازد؛ per-IP
+        # (در لحظهٔ رفرش، هویت از body است نه request.user).
+        "token_refresh": "30/min",
         # ── Tabyin ────────────────────────────────────────
         "tabyin_sync": "5/hour",
         # ── R4J — Reward for Justice ──────────────────────
@@ -340,11 +350,19 @@ REST_FRAMEWORK = {
         "madadkar_browse_user": "120/min",
         "madadkar_participate": "10/min",
         "madadkar_payment_verify": "30/min",
+        # راستی‌آزمایی عمومی رسید: اوراکل شمارش است؛ سقف عمداً سخت‌گیرانه
+        # و همیشه per-IP (مستقل از احراز هویت).
+        "madadkar_receipt_verify": "10/min",
         # ── LMS — Learning Management System ────────────────
         "lms_enroll": "20/hour",
         "lms_progress": "120/min",
         "lms_quiz_start": "10/hour",
         "lms_discussion": "30/hour",
+        # browse عمومی دوره‌ها: همان الگوی انضباطی browse (anon/user).
+        "lms_browse_anon": "60/min",
+        "lms_browse_user": "120/min",
+        # تأیید عمومی گواهی‌نامه: اوراکل شمارش slug؛ per-IP و سخت‌گیرانه.
+        "lms_certificate_verify": "10/min",
         # ── Kindness Wall — Divar-e Mehrabani ─────────
         "kindness_browse_anon": "60/min",
         "kindness_browse_user": "120/min",
@@ -673,19 +691,38 @@ AUTHENTICATION_BACKENDS = [
 ]
 
 # ============================================================================
-# Email
+# Email (Django 6.1 → MAILERS)
 # ============================================================================
-
-EMAIL_BACKEND = config(
+# از Django 6.1 تنظیمات `EMAIL_*` منسوخ شده‌اند (RemovedInDjango70Warning) و
+# در 7.0 حذف می‌شوند؛ جایگزین رسمی `MAILERS` است که aliasهای نام‌دار و
+# per-backend OPTIONS دارد. نام متغیرهای محیطی (EMAIL_HOST و ...) عمداً حفظ
+# شده تا قرارداد deployment/.env تغییر نکند؛ فقط ساختار settings عوض شده.
+#
+# نکتهٔ مهم: OPTIONS فقط باید شامل کلیدهایی باشد که backend انتخابی می‌پذیرد
+# (BaseEmailBackend با alias ست، روی کلید ناشناخته InvalidMailer می‌دهد).
+# پس OPTIONS فقط برای SMTP ساخته می‌شود؛ console/locmem/custom بدون OPTIONS.
+_EMAIL_BACKEND = config(
     "EMAIL_BACKEND",
     default="apps.core.email_backends.ReadableConsoleEmailBackend",
 )
-EMAIL_HOST = config("EMAIL_HOST", default="smtp-relay.brevo.com")
-EMAIL_PORT = config("EMAIL_PORT", default=587, cast=int)
-EMAIL_USE_TLS = config("EMAIL_USE_TLS", default=True, cast=bool)
-EMAIL_TIMEOUT = config("EMAIL_TIMEOUT", default=15, cast=int)
-EMAIL_HOST_USER = config("EMAIL_HOST_USER", default="")
-EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD", default="")
+
+_EMAIL_SMTP_OPTIONS: dict[str, object] = {}
+if "smtp" in _EMAIL_BACKEND.lower():
+    _EMAIL_SMTP_OPTIONS = {
+        "host": config("EMAIL_HOST", default="smtp-relay.brevo.com"),
+        "port": config("EMAIL_PORT", default=587, cast=int),
+        "use_tls": config("EMAIL_USE_TLS", default=True, cast=bool),
+        "timeout": config("EMAIL_TIMEOUT", default=15, cast=int),
+        "username": config("EMAIL_HOST_USER", default=""),
+        "password": config("EMAIL_HOST_PASSWORD", default=""),
+    }
+
+MAILERS = {
+    "default": {
+        "BACKEND": _EMAIL_BACKEND,
+        "OPTIONS": _EMAIL_SMTP_OPTIONS,
+    },
+}
 DEFAULT_FROM_EMAIL = config(
     "DEFAULT_FROM_EMAIL",
     default="noreply@setadjang.local",

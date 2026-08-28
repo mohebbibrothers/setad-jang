@@ -329,7 +329,19 @@ class TestSupportSLAAndEscalation:
 
 
 class TestSupportSmartTriageAndDuplicates:
-    """Smart triage and duplicate candidate services."""
+    """Smart triage and duplicate candidate services.
+
+    `suggest_ticket_triage` به انواع تیکتِ seedشده (مثل code="payment")
+    وابسته است؛ چون تست‌های تراکنشی کل دیتابیس را flush می‌کنند (روی
+    PostgreSQL یعنی TRUNCATE)، seed در این fixture idempotent بازسازی
+    می‌شود تا ترتیب اجرا اثری نداشته باشد.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _ensure_seeds(self, db):
+        from tests.seed_helpers import reseed_support_taxonomy
+
+        reseed_support_taxonomy()
 
     def test_smart_triage_suggests_payment_priority_and_similar_tickets(self) -> None:
         owner = UserFactory()

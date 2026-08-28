@@ -13,6 +13,7 @@ from django.contrib.auth import authenticate
 from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.db import transaction
+from django.db.models import Q
 from django.http import HttpRequest
 from django.utils import timezone
 from rest_framework_simplejwt.exceptions import TokenError
@@ -22,7 +23,15 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from .choices import AuthRiskSeverity, AuthRiskSignalType, AuthRiskStatus, OTPPurpose, UserRole
 from .constants import LAST_SEEN_TOUCH_SECONDS, SESSION_ID_CLAIM
 from .logging_utils import mask_identifier
-from .models import AuthRiskSignal, AuthSession, OTPCode, PrimaryIdentifierKind, Profile, User
+from .models import (
+    LEGACY_FINGERPRINT_ALGORITHM,
+    AuthRiskSignal,
+    AuthSession,
+    OTPCode,
+    PrimaryIdentifierKind,
+    Profile,
+    User,
+)
 from .normalizers import normalize_email, normalize_phone
 from .otp import (
     OTPCooldownActive,
@@ -413,7 +422,21 @@ def evaluate_auth_session_risk(*, session: AuthSession) -> list[AuthRiskSignal]:
     """Evaluate risk created by a newly issued auth session."""
     signals: list[AuthRiskSignal] = []
     previous_sessions = AuthSession.objects.filter(user=session.user).exclude(pk=session.pk)
-    if not previous_sessions.filter(fingerprint_hash=session.fingerprint_hash).exists():
+    # تطبیق دوگانهٔ اثرانگشت: هش فعلی (sha256) یا هش legacy (sha1).
+    # نشست‌هایی که پیش از مهاجرت الگوریتم ساخته شده‌اند با sha1 ذخیره شده‌اند
+    # و بدون این شاخه، اولین نشستِ جدیدِ هر کاربر بعد از deploy به‌اشتباه
+    # «دستگاه جدید» علامت می‌خورد. بازتولید هش legacy معتبر است چون
+    # ورودی‌هایش (user_agent حداکثر ۵۱۲ کاراکتر و ip_address) عیناً در خود
+    # record ذخیره شده‌اند. با انقضای طبیعی نشست‌های قدیمی، این شاخه فراموش
+    # می‌شود و بعداً می‌توان حذفش کرد.
+    fingerprint_legacy_hash = AuthSession.build_fingerprint_hash(
+        user_agent=session.user_agent,
+        ip_address=session.ip_address,
+        algorithm=LEGACY_FINGERPRINT_ALGORITHM,
+    )
+    if not previous_sessions.filter(
+        Q(fingerprint_hash=session.fingerprint_hash) | Q(fingerprint_hash=fingerprint_legacy_hash)
+    ).exists():
         signals.append(
             create_auth_risk_signal(
                 signal_type=AuthRiskSignalType.NEW_DEVICE,

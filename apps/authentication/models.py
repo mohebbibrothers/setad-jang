@@ -23,6 +23,18 @@ from .choices import (
 from .managers import UserAllManager, UserManager
 
 # ============================================================
+# Session fingerprint — algorithms
+# ============================================================
+
+#: الگوریتم فعلی هش اثرانگشت نشست. عمداً صریح (نه پیش‌فرض salted_hmac) تا
+#: خروجی مستقل از نسخهٔ Django باشد.
+FINGERPRINT_ALGORITHM: str = "sha256"
+#: الگوریتم نشست‌هایی که پیش از مهاجرت ساخته شده‌اند — فقط برای تطبیق
+#: legacy در ``evaluate_auth_session_risk``. با انقضای طبیعی آن نشست‌ها
+#: (TTL مشخص) این ثابت بی‌اثر می‌شود.
+LEGACY_FINGERPRINT_ALGORITHM: str = "sha1"
+
+# ============================================================
 # Identifier kinds
 # ============================================================
 
@@ -198,10 +210,24 @@ class AuthSession(BaseModel):
         return f"AuthSession user={self.user_id} revoked={self.is_revoked}"
 
     @staticmethod
-    def build_fingerprint_hash(*, user_agent: str = "", ip_address: str | None = None) -> str:
-        """Build a stable non-PII fingerprint hash from request metadata."""
+    def build_fingerprint_hash(
+        *,
+        user_agent: str = "",
+        ip_address: str | None = None,
+        algorithm: str = FINGERPRINT_ALGORITHM,
+    ) -> str:
+        """
+        Build a stable non-PII fingerprint hash from request metadata.
+
+        الگوریتم صریح است چون از Django 6.1 پیش‌فرضِ ``salted_hmac`` منسوخ
+        شده (در 7.0 → sha256) و بدون این پارامتر، هشِ تولیدی به نسخهٔ Django
+        وابسته می‌شد؛ یعنی یک ارتقای patch می‌توانست بی‌صدا «دستگاه جدید»
+        شبیه‌سازی کند. برای تطبیق با رکوردهای قدیمی (sha1) از
+        ``LEGACY_FINGERPRINT_ALGORITHM`` استفاده کنید — ببینید
+        ``evaluate_auth_session_risk``.
+        """
         payload = f"{user_agent[:512]}|{ip_address or ''}"
-        return salted_hmac("auth-session-fingerprint", payload).hexdigest()
+        return salted_hmac("auth-session-fingerprint", payload, algorithm=algorithm).hexdigest()
 
 
 class AuthRiskSignal(BaseModel):

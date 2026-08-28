@@ -128,6 +128,7 @@ from .throttles import (
     OTPVerifyThrottle,
     PasswordResetThrottle,
     RegisterThrottle,
+    TokenRefreshThrottle,
 )
 
 # ============================================================
@@ -1285,6 +1286,8 @@ class CustomTokenRefreshView(TokenRefreshView):
     """CustomTokenRefreshView implementation for the authentication application."""
 
     permission_classes = [AllowAny]
+    # یافتهٔ ممیزی ۵.۱: هر رفرش یک ردیف blacklist می‌سازد → throttle per-IP.
+    throttle_classes = [TokenRefreshThrottle]
     serializer_class = SessionAwareTokenRefreshSerializer
 
     @extend_schema(

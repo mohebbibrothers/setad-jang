@@ -77,6 +77,12 @@ class DetailedChecksSerializer(ReadinessChecksSerializer):
     audit_chain_quick = ComponentCheckSerializer()
     performance_contracts = serializers.JSONField()
     tabyin_sync = TabyinSyncCheckSerializer()
+    # برای کاربران anonymous عمداً حذف می‌شود (اطلاعات حالت providerها
+    # حساس است)؛ از این رو required=False.
+    provider_readiness = serializers.JSONField(
+        required=False,
+        help_text="وضعیت providerهای خارجی (فقط برای staff برگردانده می‌شود)",
+    )
 
 
 # ─── System Info ────────────────────────────────────────────
@@ -106,9 +112,13 @@ class ReadinessHealthSerializer(serializers.Serializer):
 
 
 class DetailedHealthSerializer(serializers.Serializer):
-    """پاسخ کامل health check شامل تمام چک‌ها و اطلاعات سیستم."""
+    """پاسخ health check تفصیلی.
+
+    بخش `system` فقط برای کاربران staff برمی‌گردد؛ برای ناشناس‌ها غایب است
+    (نه required). جزئیات همین منطق در ``DetailedHealthView`` مستند شده است.
+    """
 
     status = serializers.ChoiceField(choices=HEALTH_STATUS_CHOICES)
     timestamp = serializers.DateTimeField()
     checks = DetailedChecksSerializer()
-    system = SystemInfoSerializer()
+    system = SystemInfoSerializer(required=False)

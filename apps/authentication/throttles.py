@@ -92,3 +92,19 @@ class PasswordResetThrottle(IdentityRateThrottle):
     """محدودیت درخواست بازیابی رمز عبور بر اساس هویت درخواست‌دهنده."""
 
     scope = "auth_password_reset"
+
+
+class TokenRefreshThrottle(ClientIPRateThrottle):
+    """
+    Throttle اختصاصی رفرش توکن (یافتهٔ ممیزی ۵.۱).
+
+    هر فراخوانی موفق، توکن قبلی را blacklist می‌کند (یک ردیف DB می‌سازد) و
+    یک توکن تازه صادر می‌کند؛ یعنی endpoint ای است که هر درخواستش هزینهٔ
+    نگارش دارد. کلید همیشه روی IP است چون در لحظهٔ رفرش، هویت از توکنِ
+    داخل body می‌آید نه از request.user — پس IdentityRateThrottle هم
+    عملاً به IP برمی‌گشت. این throttle جایگزینِ پیش‌فرض `anon: 60/min`
+    می‌شود و سقف را برای کلاینت‌های درخواستی مدرن (که رفرش مکرر دارند)
+    کافی نگه می‌دارد، ولی رگبار blacklist-write را مهار می‌کند.
+    """
+
+    scope = "token_refresh"

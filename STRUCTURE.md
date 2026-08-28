@@ -162,6 +162,7 @@ setad-jang/
 │   ├── file_security.py
 │   ├── frontend_revalidation.py
 │   ├── logging.py
+│   ├── mailing.py
 │   ├── managers.py
 │   ├── metrics.py
 │   ├── metrics_views.py
@@ -375,6 +376,7 @@ apps/core/
 ├── file_security.py
 ├── frontend_revalidation.py
 ├── logging.py
+├── mailing.py
 ├── managers.py
 ├── metrics.py
 ├── metrics_views.py

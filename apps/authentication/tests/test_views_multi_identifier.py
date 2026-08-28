@@ -47,7 +47,7 @@ def _patch_email_signup_validation(monkeypatch: pytest.MonkeyPatch) -> None:
         "validate_email_for_signup",
         lambda email: None,
     )
-    monkeypatch.setattr(provider_module, "send_mail", lambda **kwargs: 1)
+    monkeypatch.setattr(provider_module, "send_text_email", lambda **kwargs: 1)
 
 
 def _patch_sms_delivery_success(monkeypatch: pytest.MonkeyPatch) -> None:

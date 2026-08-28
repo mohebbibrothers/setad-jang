@@ -21,7 +21,7 @@ PROD_CHECK_ENV := \
 	SECRET_KEY=realistic-production-secret-key-with-more-than-fifty-characters-2026 \
 	SECURE_SSL_REDIRECT=True
 
-.PHONY: help install lock lock-check lint format format-check structure structure-check check deploy-check migrations-check schema-check schema-update test coverage pip-check pip-audit bandit secrets-scan security verify verify-fast docker-up docker-down
+.PHONY: help install lock lock-check lint format format-check structure structure-check check deploy-check migrations-check schema-check schema-update test test-postgres coverage coverage-postgres test-sqlite-vendor pip-check pip-audit bandit secrets-scan security verify verify-fast docker-up docker-down
 
 help:
 	@printf '%s\n' 'Setad Jang commands:'
@@ -116,8 +116,32 @@ security: pip-audit bandit secrets-scan
 test:
 	$(PYTHON) -m pytest -q
 
+# اجرای کامل تست‌ها روی PostgreSQL — همان موتوری که production استفاده می‌کند.
+# ⚠️ ست کردن DATABASE_ENGINE به‌تنهایی کافی نیست: settings توسعه/پایه
+# (`config.settings.development`) پیش‌فرضِ pytest در pyproject.toml است و
+# DATABASE_ENGINE را اصلاً نمی‌خواند (base.py روی SQLite قفل است). پس این‌جا
+# صریحاً `config.settings.test` ست می‌شود؛ وگرنه هدف بی‌سروصدا روی SQLite
+# اجرا می‌شود و ادعای «تست روی PostgreSQL» دروغ است.
+# بقیهٔ متغیرهای POSTGRES_* از environment/.env خوانده می‌شوند؛ پیش‌فرض‌های
+# config/settings/test.py با docker-compose و CI هماهنگ‌اند.
+test-postgres:
+	DJANGO_SETTINGS_MODULE=config.settings.test DATABASE_ENGINE=postgres $(PYTHON) -m pytest -q
+
 coverage:
 	$(PYTHON) -m pytest --cov=apps --cov=config --cov-report=term --cov-fail-under=82 -q
+
+# همان coverage ولی روی PostgreSQL؛ هم‌چنین `config.settings.test` (نکتهٔ
+# بالای test-postgres). در CI این هدف با موتور postgres اجرا می‌شود تا
+# قفل‌های ردیفی و FTS واقعاً آزموده شوند (نه بی‌صدا حذف شوند).
+coverage-postgres:
+	DJANGO_SETTINGS_MODULE=config.settings.test DATABASE_ENGINE=postgres $(PYTHON) -m pytest --cov=apps --cov=config --cov-report=term --cov-fail-under=82 -q
+
+# زیرمجموعهٔ تست‌های vendor-specific (marker=sqlite) برای گام سریع SQLite در
+# CI؛ وقتی اجرای اصلی روی PostgreSQL است، این تست‌ها skip می‌شوند و این هدف
+# آن‌ها را جداگانه (و صریحاً روی SQLite — در CI متغیر DATABASE_ENGINE=postgres
+# از محیط ارث می‌رسد و باید بازنویسی شود) اجرا می‌کند.
+test-sqlite-vendor:
+	DJANGO_SETTINGS_MODULE=config.settings.test DATABASE_ENGINE=sqlite $(PYTHON) -m pytest -q -m "sqlite"
 
 verify-fast: lint format-check check migrations-check schema-check structure-check
 

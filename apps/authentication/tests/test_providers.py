@@ -56,23 +56,21 @@ class TestEmailOTPProvider:
     ) -> None:
         sent_payload: dict[str, object] = {}
 
-        def fake_send_mail(
+        def fake_send_text_email(
             *,
             subject: str,
             message: str,
             from_email: str,
             recipient_list: list[str],
-            fail_silently: bool,
         ) -> int:
             sent_payload["subject"] = subject
             sent_payload["message"] = message
             sent_payload["from_email"] = from_email
             sent_payload["recipient_list"] = recipient_list
-            sent_payload["fail_silently"] = fail_silently
             return 1
 
         settings.DEFAULT_FROM_EMAIL = "noreply@test.local"
-        monkeypatch.setattr(providers, "send_mail", fake_send_mail)
+        monkeypatch.setattr(providers, "send_text_email", fake_send_text_email)
 
         provider = providers.EmailOTPProvider()
         result = provider.send(
@@ -86,16 +84,15 @@ class TestEmailOTPProvider:
         assert "12345" in str(sent_payload["message"])
         assert sent_payload["from_email"] == "noreply@test.local"
         assert sent_payload["recipient_list"] == ["user@example.com"]
-        assert sent_payload["fail_silently"] is False
 
     def test_wraps_backend_failure(
         self,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        def fake_send_mail(**kwargs: object) -> int:
+        def fake_send_text_email(**kwargs: object) -> int:
             raise RuntimeError("smtp unavailable")
 
-        monkeypatch.setattr(providers, "send_mail", fake_send_mail)
+        monkeypatch.setattr(providers, "send_text_email", fake_send_text_email)
 
         provider = providers.EmailOTPProvider()
 

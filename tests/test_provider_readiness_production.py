@@ -63,11 +63,17 @@ class TestProviderReadiness:
     """Provider readiness diagnostics tests."""
 
     @override_settings(
-        EMAIL_BACKEND="django.core.mail.backends.smtp.EmailBackend",
-        EMAIL_HOST="smtp-relay.brevo.com",
-        EMAIL_PORT=587,
-        EMAIL_HOST_USER="brevo-user",
-        EMAIL_HOST_PASSWORD="brevo-key",
+        MAILERS={
+            "default": {
+                "BACKEND": "django.core.mail.backends.smtp.EmailBackend",
+                "OPTIONS": {
+                    "host": "smtp-relay.brevo.com",
+                    "port": 587,
+                    "username": "brevo-user",
+                    "password": "brevo-key",
+                },
+            }
+        },
         DEFAULT_FROM_EMAIL="noreply@example.com",
     )
     def test_email_readiness_accepts_brevo_style_smtp_config(self) -> None:

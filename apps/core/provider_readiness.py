@@ -17,15 +17,25 @@ class ProviderReadinessResult:
     detail: str = ""
 
 
+def _default_mailer_config() -> dict[str, object]:
+    """Return ``MAILERS["default"]`` — از Django 6.1 جایگزین EMAIL_* شده است."""
+    mailers = getattr(settings, "MAILERS", {})
+    return mailers.get("default", {})
+
+
 def check_email_provider_readiness() -> ProviderReadinessResult:
     """Check SMTP/email provider configuration without sending an email."""
-    backend = settings.EMAIL_BACKEND
+    mailer = _default_mailer_config()
+    backend = str(mailer.get("BACKEND", ""))
+    options = mailer.get("OPTIONS", {})
+    if not isinstance(options, dict):
+        options = {}
     if backend.endswith("ReadableConsoleEmailBackend"):
         return ProviderReadinessResult(
             "email", settings.DEBUG, "console", "Console email backend is development-only."
         )
-    required = [settings.EMAIL_HOST, settings.EMAIL_PORT, settings.DEFAULT_FROM_EMAIL]
-    credentials_present = bool(settings.EMAIL_HOST_USER and settings.EMAIL_HOST_PASSWORD)
+    required = [options.get("host"), options.get("port"), settings.DEFAULT_FROM_EMAIL]
+    credentials_present = bool(options.get("username") and options.get("password"))
     ready = all(required) and credentials_present
     return ProviderReadinessResult(
         "email",

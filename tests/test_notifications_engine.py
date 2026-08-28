@@ -104,7 +104,9 @@ class TestNotificationServiceContracts:
             payload={"title": "Email", "message": "Body"},
         )
 
-        with patch("apps.notifications.providers.send_mail", side_effect=RuntimeError("smtp down")):
+        with patch(
+            "apps.notifications.providers.send_text_email", side_effect=RuntimeError("smtp down")
+        ):
             dispatch_event(event=event)
 
         event.refresh_from_db()

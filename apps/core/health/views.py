@@ -40,6 +40,7 @@ from apps.core.health.serializers import (
     ReadinessHealthSerializer,
     SimpleHealthSerializer,
 )
+from apps.core.health.throttles import HealthDetailedAnonThrottle
 
 logger = logging.getLogger("apps.core.health")
 
@@ -199,11 +200,21 @@ class DetailedHealthView(APIView):
     Health check کامل — readiness + اطلاعات سیستم + diagnosticهای non-critical.
 
     مناسب dashboardهای monitoring و debugging. برای liveness/readiness مستقیم
-    orchestration، از `/health/` و `/health/ready/` استفاده شود.
+    orchestration، از `/health/` و `/health/ready/` استفاده شود (آن دو عمداً
+    عمومی و بدون throttle می‌مانند؛ probeهای orchestrator نباید محدود شوند).
+
+    محدودیت‌های این endpoint (رفع یافتهٔ ممیزی ۴.۱):
+    - `HealthDetailedAnonThrottle`: درخواست‌های anonymous به‌ازای هر IP محدود
+      می‌شوند؛ قبلاً بدون هیچ throttle بود و هر فراخوانی ۹ چک سنگین
+      (DB/cache/migration state/storage) اجرا می‌کرد — بستر DoS.
+    - اطلاعات حساس فقط برای staff: بخش `system` (نسخهٔ دقیق Django/Python،
+      محیط) و `checks.provider_readiness` (حالت providerهای payment/sms/email
+      — مثلاً اگر استقرار سهواً با sandbox بالا بیاید) برای کاربران anonymous
+      حذف می‌شوند تا مهاجم هدف‌گیری CVE یا سرک‌کشی providerها نداشته باشد.
     """
 
     permission_classes = [AllowAny]
-    throttle_classes = []
+    throttle_classes = [HealthDetailedAnonThrottle]
 
     @extend_schema(
         operation_id="health_detailed",
@@ -212,7 +223,12 @@ class DetailedHealthView(APIView):
         description=(
             "بررسی جامع وضعیت کامپوننت‌های سیستم.\n\n"
             "شامل readiness checks و diagnosticهای تکمیلی مثل Tabyin sync.\n"
-            "خروجی secret-safe است و credential/traceback خام نشان نمی‌دهد."
+            "خروجی secret-safe است و credential/traceback خام نشان نمی‌دهد.\n"
+            "نکات دسترسی:\n"
+            "- درخواست‌های anonymous به‌ازای هر IP به ۱۰ در دقیقه محدودند "
+            "(هر فراخوانی ۹ چک سنگین اجرا می‌کند).\n"
+            "- بخش `system` (نسخه‌های دقیق) و `checks.provider_readiness` "
+            "(حالت providerهای خارجی) فقط برای کاربران staff برگردانده می‌شود."
         ),
         responses={
             200: DetailedHealthSerializer,
@@ -221,15 +237,24 @@ class DetailedHealthView(APIView):
     )
     def get(self, request: Request) -> Response:
         checks = build_detailed_checks()
+
+        # ردکردن اطلاعات حساس برای ناشناس‌ها پیش از aggregate تا وضعیت هم
+        # بر همان چیزی محاسبه شود که به کلاینت داده می‌شود.
+        if not request.user.is_staff:
+            checks.pop("provider_readiness", None)
+
         overall = aggregate_status(checks)
         _log_health_summary(endpoint="detailed", overall=overall, checks=checks)
 
+        payload: dict[str, Any] = {
+            "status": overall,
+            "timestamp": timezone.now().isoformat(),
+            "checks": checks,
+        }
+        if request.user.is_staff:
+            payload["system"] = _build_system_info()
+
         return Response(
-            data={
-                "status": overall,
-                "timestamp": timezone.now().isoformat(),
-                "checks": checks,
-                "system": _build_system_info(),
-            },
+            data=payload,
             status=_http_status_for_health(overall),
         )

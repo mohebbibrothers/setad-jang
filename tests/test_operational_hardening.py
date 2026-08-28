@@ -35,6 +35,13 @@ def _production_env(**overrides: str) -> dict[str, str]:
             "ALLOWED_HOSTS": "127.0.0.1,localhost,testserver",
             "CACHE_BACKEND": "redis",
             "CORS_ALLOWED_ORIGINS": "",
+            # صریحاً postgres تا تست مستقل از موتورِ محیط اجرا باشد: اگر pytest
+            # زیر DATABASE_ENGINE=sqlite اجرا شود (مثلاً local)، subprocess
+            # بدون این خط سراغ ردکردن SQLite می‌رفت و هرگز به بررسیِ
+            # POSTGRES_PASSWORD نمی‌رسید — تست‌ها فقط در اجرای PostgreSQL
+            # سبز می‌شدند (وابستگی پنهان به محیط). تستِ پیش‌فرضِ production
+            # خودش این کلید را pop می‌کند.
+            "DATABASE_ENGINE": "postgres",
             "DEBUG": "False",
             "DJANGO_SETTINGS_MODULE": "config.settings.production",
             "POSTGRES_CONNECT_TIMEOUT": "1",
@@ -112,14 +119,46 @@ def test_production_settings_reject_sqlite_without_explicit_escape_hatch() -> No
     assert "SQLite در production" in result.stderr
 
 
-def test_docker_worker_consumes_all_routed_celery_queues() -> None:
-    """Worker کانتینری باید queueهای default، tabyin_sync و madadkar را consume کند."""
-    compose = _load_compose()
-    worker_command = compose["services"]["worker"]["command"]
+def _queues_of(service_command: str) -> set[str]:
+    """استخراج مجموعهٔ queueهای `-Q` از command یک سرویس celery worker."""
+    assert "-Q" in service_command
+    queue_arg = service_command[service_command.index("-Q") + 1]
+    return set(queue_arg.split(","))
 
-    assert "-Q" in worker_command
-    queue_arg = worker_command[worker_command.index("-Q") + 1]
-    assert set(queue_arg.split(",")) == {"default", "tabyin_sync", "madadkar"}
+
+def test_docker_workers_consume_all_routed_celery_queues_exactly_once() -> None:
+    """پس از یافتهٔ ممیزی ۵.۲، queueهای مسیر‌دار باید بین workerها تقسیم شوند.
+
+    - هر queue دقیقاً یک مصرف‌کننده داشته باشد (consuming دوبارهٔ یک queue
+      یعنی دو worker روی یک task رقابت می‌کنند و کار مضاعف می‌شود)؛
+    - اتحاد queueهای همهٔ workerها دقیقاً همان queueهای روت‌شده در
+      ``CELERY_TASK_ROUTES`` + پیش‌فرض باشد؛
+    - flower به هر دو worker وابسته باشد تا monitoring کامل بماند.
+    """
+    compose = _load_compose()
+    worker_services = {
+        name: service
+        for name, service in compose["services"].items()
+        if "celery" in str(service.get("command", ""))
+        and "worker" in str(service.get("command", ""))
+    }
+
+    assert set(worker_services) == {"worker", "madadkar-worker"}
+
+    consumed_everywhere: list[str] = []
+    for _name, service in worker_services.items():
+        consumed_everywhere.extend(_queues_of(service["command"]))
+
+    assert sorted(consumed_everywhere) == sorted(set(consumed_everywhere)), (
+        "یک queue باید دقیقاً توسط یک worker مصرف شود؛ "
+        f"تکرار: {[q for q in consumed_everywhere if consumed_everywhere.count(q) > 1]}"
+    )
+    assert set(consumed_everywhere) == {"default", "tabyin_sync", "madadkar"}
+
+    # اتصال وابستگی‌های flower (مشاهدهٔ هر دو worker)
+    flower_depends = compose["services"]["flower"]["depends_on"]
+    assert "worker" in flower_depends
+    assert "madadkar-worker" in flower_depends
 
 
 def test_docker_compose_has_postgres_service_and_web_dependency() -> None:

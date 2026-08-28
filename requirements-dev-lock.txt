@@ -9,7 +9,7 @@
 # ============================================================
 
 CacheControl==0.14.4
-Django==6.0.8
+Django==6.1
 Faker==40.37.0
 PyJWT==2.13.0
 PyYAML==6.0.3
@@ -20,24 +20,24 @@ attrs==26.1.0
 bandit==1.9.4
 billiard==4.2.4
 boolean.py==5.0
-boto3==1.43.82
-botocore==1.43.82
-celery==5.5.3
+boto3==1.43.83
+botocore==1.43.83
+celery==5.6.3
 certifi==2026.4.22
 charset-normalizer==3.4.7
 click==8.5.0
 click-didyoumean==0.3.1
 click-plugins==1.1.1.2
 click-repl==0.3.0
-coverage==7.15.4
+coverage==7.16.0
 cyclonedx-python-lib==9.1.0
 defusedxml==0.7.1
 detect-secrets==1.5.0
 django-cors-headers==4.9.0
 django-filter==25.2
-django-redis==6.0.0
+django-redis==7.0.0
 django-storages==1.14.6
-djangorestframework==3.17.1
+djangorestframework==3.18.0
 djangorestframework_simplejwt==5.5.1
 dnspython==2.7.0
 drf-spectacular==0.29.0
@@ -45,7 +45,7 @@ et_xmlfile==2.0.0
 factory_boy==3.3.1
 filelock==3.32.4
 flower==2.0.1
-gunicorn==23.0.0
+gunicorn==26.2.0
 humanize==4.16.0
 idna==3.15
 importlib_metadata==8.7.1
@@ -54,7 +54,7 @@ iniconfig==2.3.0
 jmespath==1.1.0
 jsonschema==4.26.0
 jsonschema-specifications==2025.9.1
-kombu==5.5.4
+kombu==5.6.2
 license-expression==30.4.4
 markdown-it-py==4.2.0
 mdurl==0.1.2
@@ -101,6 +101,7 @@ toml==0.10.2
 tornado==6.5.8
 typing_extensions==4.16.0
 tzdata==2026.2
+tzlocal==5.4.4
 uritemplate==4.2.0
 urllib3==2.7.0
 vine==5.1.0

@@ -104,6 +104,9 @@ services:
     volumes:
       - db_data:/app/data
       - media_data:/app/media
+    # فقط صف‌های عمومی/همگام‌سازی — صف madadkar جدا شده است (یافتهٔ ممیزی ۵.۲).
+    # دلیل: یک تسک سنگین tabyin_sync نباید slotهای صف madadkar را اشغال کند
+    # و تأیید پرداخت/بستن کمپین را پشت خود نگه دارد.
     command:
       [
         "celery",
@@ -111,8 +114,58 @@ services:
         "config",
         "worker",
         "--loglevel=info",
+        "--concurrency=4",
         "-Q",
-        "default,tabyin_sync,madadkar",
+        "default,tabyin_sync",
+      ]
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A config inspect ping --timeout=5 -d celery@$$HOSTNAME"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # ── worker اختصاصی صف madadkar ─────────────────────────────────────────
+  # ممیزی ۵.۲: سه تسک مالی (expire_stale_participations،
+  # close_expired_campaigns، generate_financial_control_snapshot) صف
+  # اختصاصی داشتند ولی همان استخر مشترک آن‌ها را مصرف می‌کرد. این سرویس
+  # concurrency مستقل دارد تا:
+  #   * بار سفارشی دوره‌ای (مثلاً بستن کمپین‌های منقضی) با پردازش یک‌جا
+  #     و بدون رقابت با default توزیع شود؛
+  #   * وقتی کارهای سنگین tabyin/core در جریان‌اند، slot کارهای مالی باقی
+  #     بماند (دربارهٔ visibility_timeout=2×TIME_LIMIT و قفل‌های select_for_update
+  #     در financial control snapshot حساس است).
+  madadkar-worker:
+    image: setadjang:latest
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      web:
+        condition: service_started
+    env_file:
+      - .env
+    environment:
+      <<: *app_env
+      RUN_MIGRATIONS: "0"
+      RUN_COLLECTSTATIC: "0"
+    networks:
+      - internal
+    volumes:
+      - db_data:/app/data
+      - media_data:/app/media
+    command:
+      [
+        "celery",
+        "-A",
+        "config",
+        "worker",
+        "--loglevel=info",
+        "--concurrency=2",
+        "-Q",
+        "madadkar",
       ]
     healthcheck:
       test: ["CMD-SHELL", "celery -A config inspect ping --timeout=5 -d celery@$$HOSTNAME"]
@@ -165,6 +218,8 @@ services:
       redis:
         condition: service_healthy
       worker:
+        condition: service_started
+      madadkar-worker:
         condition: service_started
     env_file:
       - .env

@@ -35,7 +35,19 @@ def _client_for(user) -> APIClient:
 
 
 class TestSupportTaxonomyAPI:
-    """Authenticated taxonomy browse endpoints."""
+    """Authenticated taxonomy browse endpoints.
+
+    این کلاس به seed مایگریشن 0002 وابسته است؛ چون تست‌های تراکنشی
+    (transaction=True) کل دیتابیس را flush می‌کنند — مخصوصاً روی PostgreSQL
+    که flush یعنی TRUNCATE — seed با این fixture idempotent بازسازی می‌شود
+    تا تست مستقل از ترتیب اجرا بماند.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _ensure_seeds(self, db):
+        from tests.seed_helpers import reseed_support_taxonomy
+
+        reseed_support_taxonomy()
 
     def test_authenticated_user_can_browse_departments_categories_and_ticket_types(self) -> None:
         client = _client_for(UserFactory())

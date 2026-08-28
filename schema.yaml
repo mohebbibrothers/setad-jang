@@ -1747,6 +1747,9 @@ paths:
 
         شامل readiness checks و diagnosticهای تکمیلی مثل Tabyin sync.
         خروجی secret-safe است و credential/traceback خام نشان نمی‌دهد.
+        نکات دسترسی:
+        - درخواست‌های anonymous به‌ازای هر IP به ۱۰ در دقیقه محدودند (هر فراخوانی ۹ چک سنگین اجرا می‌کند).
+        - بخش `system` (نسخه‌های دقیق) و `checks.provider_readiness` (حالت providerهای خارجی) فقط برای کاربران staff برگردانده می‌شود.
       summary: Detailed health check
       tags:
       - سلامت سیستم
@@ -15214,6 +15217,8 @@ components:
         performance_contracts: {}
         tabyin_sync:
           $ref: '#/components/schemas/TabyinSyncCheck'
+        provider_readiness:
+          description: وضعیت providerهای خارجی (فقط برای staff برگردانده می‌شود)
       required:
       - audit_chain_quick
       - cache
@@ -15225,7 +15230,11 @@ components:
       - tabyin_sync
     DetailedHealth:
       type: object
-      description: پاسخ کامل health check شامل تمام چک‌ها و اطلاعات سیستم.
+      description: |-
+        پاسخ health check تفصیلی.
+
+        بخش `system` فقط برای کاربران staff برمی‌گردد؛ برای ناشناس‌ها غایب است
+        (نه required). جزئیات همین منطق در ``DetailedHealthView`` مستند شده است.
       properties:
         status:
           $ref: '#/components/schemas/HealthStatusEnum'
@@ -15239,7 +15248,6 @@ components:
       required:
       - checks
       - status
-      - system
       - timestamp
     DiscussionReport:
       type: object

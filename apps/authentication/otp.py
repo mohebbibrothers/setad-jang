@@ -195,10 +195,19 @@ def _expected_hash_for(otp: OTPCode, code: str) -> str:
 
 
 def _cooldown_key(*, identifier_kind: str, identifier_value: str, purpose: str) -> str:
-    """کلید cooldown، با شناسهٔ هش‌شده تا مقدار خام وارد کش نشود."""
+    """کلید cooldown، با شناسهٔ هش‌شده تا مقدار خام وارد کش نشود.
+
+    ``algorithm="sha256"`` صریح است چون پیش‌فرض ``salted_hmac`` از
+    Django 6.1 منسوخ شده (7.0 → sha256) و بدون آن، استخراج کلید به نسخهٔ
+    Django وابسته می‌شد. نگرانی «پنجرهٔ rolling deploy» (کلید sha1 توسط
+    instance قدیمی) در این‌جا وجود ندارد چون لایهٔ دومِ cooldown — بررسی
+    رکورد تازهٔ OTP در دیتابیس در ``generate_and_send_otp`` — مستقل از این
+    کلید است و در همان پنجره هنوز جلوی ارسال مجدد را می‌گیرد.
+    """
     digest = salted_hmac(
         "apps.authentication.otp.cooldown",
         f"{identifier_kind}|{identifier_value}|{purpose}",
+        algorithm="sha256",
     ).hexdigest()
     return f"auth:otp:cooldown:{digest}"
 

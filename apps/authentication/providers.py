@@ -24,7 +24,8 @@ from typing import Any, Final
 
 import requests
 from django.conf import settings
-from django.core.mail import send_mail
+
+from apps.core.mailing import send_text_email
 
 logger = logging.getLogger("apps.authentication")
 
@@ -118,12 +119,11 @@ class EmailOTPProvider(OTPDeliveryProvider):
 
     def send(self, recipient: str, code: str, purpose: str) -> bool:
         try:
-            send_mail(
+            send_text_email(
                 subject=self._build_subject(purpose),
                 message=self._build_message(code),
                 from_email=settings.DEFAULT_FROM_EMAIL,
                 recipient_list=[recipient],
-                fail_silently=False,
             )
         except Exception as exc:
             logger.exception(

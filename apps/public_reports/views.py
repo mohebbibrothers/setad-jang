@@ -65,7 +65,7 @@ from .services import (
     update_report_status,
     update_subject,
 )
-from .throttles import ReportCreateAnonThrottle, ReportCreateUserThrottle
+from .throttles import ReportCreateAnonThrottle, ReportCreateUserThrottle, ReportSubjectListThrottle
 
 # ============================================================
 # Tag Constants — استاندارد یکپارچه پروژه
@@ -127,6 +127,8 @@ class ReportSubjectListAPIView(APIView):
     """لیست موضوعات گزارش — عمومی."""
 
     permission_classes = [AllowAny]
+    # یافتهٔ ممیزی ۵.۱: endpoint عمومی باید scope اختصاصی داشته باشد.
+    throttle_classes = [ReportSubjectListThrottle]
 
     @extend_schema(
         operation_id="reports_subjects_public_list",

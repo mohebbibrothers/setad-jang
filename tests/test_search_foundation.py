@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from django.db import connection
 
 from apps.core.search import (
     SearchField,
@@ -37,6 +38,11 @@ def test_normalize_search_query_is_persian_aware_and_bounded() -> None:
     assert len(normalized) == 200
 
 
+@pytest.mark.sqlite
+@pytest.mark.skipif(
+    connection.vendor != "sqlite",
+    reason="این تست رفتار fallback مخصوص SQLite را اثبات می‌کند؛ روی PostgreSQL شاخهٔ FTS اجرا می‌شود.",
+)
 def test_apply_smart_search_uses_sqlite_safe_fallback() -> None:
     """In test/dev SQLite, smart search must fall back to icontains safely."""
     ticket = SupportTicketFactory(subject="مشکل پرداخت ویژه")
@@ -53,6 +59,11 @@ def test_apply_smart_search_uses_sqlite_safe_fallback() -> None:
     assert list(queryset) == [ticket]
 
 
+@pytest.mark.sqlite
+@pytest.mark.skipif(
+    connection.vendor != "sqlite",
+    reason="این تست رفتار fallback مخصوص SQLite را اثبات می‌کند؛ روی PostgreSQL شاخهٔ FTS اجرا می‌شود.",
+)
 def test_apply_smart_search_fallback_handles_persian_half_space_variants() -> None:
     """Fallback search must find Persian half-space text after normalization."""
     campaign = PublishedCampaignFactory(title="خرید پشه‌بند ضد دوربین")

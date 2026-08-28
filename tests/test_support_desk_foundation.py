@@ -29,7 +29,19 @@ pytestmark = pytest.mark.django_db
 
 
 class TestSupportDeskSeedTaxonomy:
-    """Seed taxonomy must be rich, dynamic and admin-editable."""
+    """Seed taxonomy must be rich, dynamic and admin-editable.
+
+    نکته: seedها توسط مایگریشن داده ساخته می‌شوند، ولی هر تست with
+    ``transaction=True`` بعد از خودش کل دیتابیس را flush می‌کند (روی
+    PostgreSQL یعنی TRUNCATE). این fixture قبل از هر تست، seed را به‌صورت
+    idempotent بازسازی می‌کند تا تست مستقل از ترتیب اجرا باشد.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _ensure_seeds(self, db):
+        from tests.seed_helpers import reseed_support_taxonomy
+
+        reseed_support_taxonomy()
 
     def test_default_departments_categories_ticket_types_sla_and_macros_are_seeded(self) -> None:
         assert SupportDepartment.objects.filter(title="مالی و پرداخت").exists()

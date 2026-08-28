@@ -1566,10 +1566,17 @@ def apply_financial_adjustment(
     *, adjustment: CampaignFinancialAdjustment
 ) -> CampaignFinancialAdjustment:
     """Apply an approved financial adjustment and resync campaign counters."""
-    locked_adjustment = (
-        CampaignFinancialAdjustment.objects.select_for_update()
-        .select_related("campaign", "payment")
-        .get(pk=adjustment.pk)
+    # نکتهٔ مهم دربارهٔ select_related:
+    # `payment` روی CampaignFinancialAdjustment یک FK *nullable* است
+    # (on_delete=SET_NULL). select_related روی یک FK nullable یعنی
+    # LEFT OUTER JOIN، و PostgreSQL `FOR UPDATE` را روی سمت nullable یک
+    # outer join قبول نمی‌کند (NotSupportedError: FOR UPDATE cannot be
+    # applied to the nullable side of an outer join). SQLite این را بی‌صدا
+    # نادیده می‌گرفت، ولی production روی PostgreSQL این مسیر را با 500
+    # می‌شکست. پس فقط خود ردیف adjustment قفل می‌شود و payment در صورت
+    # نیاز جداگانه fetch می‌شود (این‌جا فقط خواندنی است و قفلش لازم نیست).
+    locked_adjustment = CampaignFinancialAdjustment.objects.select_for_update().get(
+        pk=adjustment.pk
     )
     if locked_adjustment.status != FinancialAdjustmentStatus.APPROVED:
         raise FinancialAdjustmentWorkflowError("فقط اصلاحات تأییدشده قابل اعمال هستند.")

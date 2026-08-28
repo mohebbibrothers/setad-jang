@@ -149,6 +149,7 @@ from .throttles import (
     MadadkarBrowseUserThrottle,
     MadadkarParticipateThrottle,
     MadadkarPaymentVerifyThrottle,
+    MadadkarReceiptVerifyThrottle,
 )
 
 logger = logging.getLogger("apps.madadkar")
@@ -1183,6 +1184,8 @@ class MadadkarPublicReceiptVerifyView(APIView):
     """Public verification for receipt number/hash pairs without exposing donor PII."""
 
     permission_classes = [AllowAny]
+    # یافتهٔ ممیزی ۵.۱: اوراکل شمارش رسید — throttle اختصاصی per-IP.
+    throttle_classes = [MadadkarReceiptVerifyThrottle]
 
     @extend_schema(
         operation_id="madadkar_public_receipt_verify",

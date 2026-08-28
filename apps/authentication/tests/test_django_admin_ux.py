@@ -111,3 +111,64 @@ class TestAuthenticationDjangoAdminUX:
         assert otp_admin.has_change_permission(request, otp) is False
         assert otp_admin.has_delete_permission(request, otp) is False
         assert "code_hash" in otp_admin.readonly_fields
+
+
+class TestUserAdminIncludesInactiveUsers:
+    """ممیزی ۴.۳: کاربر غیرفعال نباید از پنل ادمین محو شود."""
+
+    def test_changelist_shows_deactivated_users(self, client):
+        admin_user = AdminUserFactory()
+        client.force_login(admin_user)
+        active = UserFactory(email="visible-active@test.local", is_active=True)
+        inactive = UserFactory(email="visible-inactive@test.local", is_active=False)
+
+        response = client.get(reverse("admin:authentication_user_changelist"))
+
+        assert response.status_code == 200
+        html = response.content.decode("utf-8")
+        assert active.email in html
+        # ← قبل از فیکس (DefaultManager با فیلتر is_active=True) این نام غایب بود.
+        assert inactive.email in html
+
+    def test_changelist_with_inactive_filter_lists_only_deactivated(self, client):
+        admin_user = AdminUserFactory()
+        client.force_login(admin_user)
+        UserFactory(email="filter-active@test.local", is_active=True)
+        inactive = UserFactory(email="filter-inactive@test.local", is_active=False)
+
+        response = client.get(
+            reverse("admin:authentication_user_changelist"), {"is_active__exact": "0"}
+        )
+
+        assert response.status_code == 200
+        html = response.content.decode("utf-8")
+        assert inactive.email in html
+        assert "filter-active@test.local" not in html
+
+    def test_admin_can_reopen_deactivated_user_change_page(self, client):
+        admin_user = AdminUserFactory()
+        client.force_login(admin_user)
+        user = UserFactory(email="reopen@test.local", is_active=False)
+
+        response = client.get(reverse("admin:authentication_user_change", args=[user.pk]))
+
+        assert response.status_code == 200
+        html = response.content.decode("utf-8")
+        assert "reopen@test.local" in html
+
+    def test_user_admin_queryset_includes_inactive(self):
+        from apps.authentication.admin import UserAdmin as CustomUserAdmin
+
+        user_admin = CustomUserAdmin(model=User, admin_site=admin.site)
+        inactive = UserFactory(email="queryset-inactive@test.local", is_active=False)
+
+        pks = [u.pk for u in user_admin.get_queryset(_FakeRequest())]
+
+        assert inactive.pk in pks
+
+
+class _FakeRequest:
+    """Request مینیمال برای خواندن get_queryset بدون HTTP."""
+
+    def __init__(self) -> None:
+        self.user = None

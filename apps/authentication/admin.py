@@ -206,6 +206,21 @@ class UserAdmin(DjangoUserAdmin):
         ),
     )
 
+    # ── رفع یافتهٔ ممیزی ۴.۳: admin باید کاربران غیرفعال را هم ببیند ──────────
+    # `_default_manager` (یعنی `UserManager.get_queryset`) عمداً فقط کاربران
+    # active را برمی‌گرداند؛ اگر ModelAdmin روی آن بماند، حساب غیرفعال از
+    # changelist و از جستجوی ادمین محو می‌شود و ادمین نمی‌تواند آن را بدون
+    # دانستن URL بازفعال کند. چرخهٔ پشتیبانیِ واقعی (غیرفعال‌سازی → بررسی →
+    # بازفعال‌سازی) نیازمند `all_objects` است. فیلتر `is_active` در list_filter
+    # همین‌جا هست (لیست بالا) و به‌جای حذف کاربران، مرتب‌سازی روی آن فراهم است.
+    def get_queryset(self, request):
+        """همهٔ کاربران INCLUDING غیرفعال — الگوی پایه به‌علاوهٔ سفارشی‌سازی ordering."""
+        qs = self.model.all_objects.get_queryset()
+        ordering = self.get_ordering(request)
+        if ordering:
+            qs = qs.order_by(*ordering)
+        return qs
+
     @admin.display(description="وضعیت احراز هویت")
     def verification_summary(self, obj: User) -> str:
         """Compact verification summary for admin reviewers."""

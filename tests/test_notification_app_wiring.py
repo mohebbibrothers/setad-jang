@@ -23,6 +23,20 @@ from tests.factories.tabyin import TabyinContentFactory
 pytestmark = pytest.mark.django_db
 
 
+@pytest.fixture(autouse=True)
+def _ensure_notification_template_seeds(db):
+    """بازسازی seed مایگریشن 0003 (idempotent).
+
+    تست‌های تراکنشی (transaction=True) کل دیتابیس را flush می‌کنند — روی
+    PostgreSQL این یعنی TRUNCATE — پس قالب‌های seedشده ممکن است غایب باشند
+    و این assertion های مربوط به NotificationTemplate را مستقل از ترتیب
+    اجرا می‌کند.
+    """
+    from tests.seed_helpers import reseed_notification_templates
+
+    reseed_notification_templates()
+
+
 @override_settings(NOTIFICATIONS_ASYNC_DISPATCH=False)
 def test_support_reply_and_resolved_emit_in_app_notifications() -> None:
     """Support service events should notify ticket owner."""

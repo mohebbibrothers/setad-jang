@@ -118,6 +118,12 @@ markers = [
     "integration: تست‌های integration (با DB یا چند لایه واقعی)",
     "celery: تست‌های مرتبط با Celery tasks",
     "external: تست‌هایی که با mock به سرویس خارجی وصل می‌شوند",
+    # ── Vendor markers ─────────────────────────────────────────────
+    # تست‌ها با skipif بر اساس connection.vendor خودشان را در موتور نامرتبط
+    # غیرفعال می‌کنند؛ این markers فقط برای اجرای هدفمند زیرمجموعه (مثلاً
+    # گام سریع SQLite در CI) استفاده می‌شوند.
+    "postgres: تست‌هایی که فقط روی PostgreSQL معنادارند (قفل همزمانی واقعی، FTS/trigram)",
+    "sqlite: تست‌هایی که رفتار SQLite-specific را تأیید می‌کنند (fallback search، planهای EXPLAIN)",
 ]
 
 # ════════════════════════════════════════════════════════════

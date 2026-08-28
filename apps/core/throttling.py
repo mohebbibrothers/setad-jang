@@ -48,8 +48,16 @@ def digest_throttle_target(value: str) -> str:
     از `salted_hmac` با SECRET_KEY استفاده می‌شود تا:
     - شمارهٔ موبایل/ایمیل هرگز plaintext در Redis ذخیره نشود.
     - کسی که فقط به Redis دسترسی دارد نتواند لیست مخاطبان را enumerate کند.
+
+    ``algorithm`` عمداً صریح است: از Django 6.1 پیش‌فرضِ ``salted_hmac``
+    منسوخ شده (در 7.0 از sha1 به sha256 تغییر می‌کند) و بدون این پارامتر،
+    خروجی تابع به نسخهٔ Django وابسته می‌شد. این keyها کاملاً ephemeral
+    هستند (عمر throttle چند ثانیه/دقیقه) و هیچ مقدار ماندگاری برای تطبیق
+    ندارند، پس تغییر الگوریتم هیچ سوییچ compatibility نمی‌خواهد.
     """
-    return salted_hmac(_THROTTLE_HMAC_SALT, value).hexdigest()[:_TARGET_DIGEST_LENGTH]
+    return salted_hmac(_THROTTLE_HMAC_SALT, value, algorithm="sha256").hexdigest()[
+        :_TARGET_DIGEST_LENGTH
+    ]
 
 
 class NonBypassableRateThrottle(SimpleRateThrottle):

@@ -45,7 +45,19 @@ jobs:
           --health-retries=5
 
     env:
-      DJANGO_SETTINGS_MODULE: config.settings.development
+      # ── تست‌ها روی PostgreSQL اجرا می‌شوند (نه SQLite) ─────────────────
+      # دلیل: `config.settings.development` روی SQLite قفل است و SQLite
+      # `select_for_update` را بی‌صدا حذف می‌کند (یعنی تست همزمانی دروغین
+      # سبز می‌شود)، full-text search و شاخهٔ postgres را تمرین نمی‌کند و
+      # رفتار خالی/NULL و case sensitivity را می‌پوشاند. `config.settings.test`
+      # با `DATABASE_ENGINE=postgres` همان موتور production را می‌دهد.
+      DJANGO_SETTINGS_MODULE: config.settings.test
+      DATABASE_ENGINE: postgres
+      POSTGRES_DB: setadjang
+      POSTGRES_USER: setadjang
+      POSTGRES_PASSWORD: strong-postgres-password
+      POSTGRES_HOST: 127.0.0.1
+      POSTGRES_PORT: "5432"
       SECRET_KEY: ci-secret-key-with-more-than-fifty-characters-for-setad-jang
       DEBUG: "False"
       ALLOWED_HOSTS: 127.0.0.1,localhost,testserver
@@ -104,8 +116,14 @@ jobs:
       - name: OpenAPI schema validation and drift check
         run: make schema-check SCHEMA_OUTPUT=schema-ci.yaml
 
-      - name: Test suite with coverage gate
-        run: make coverage
+      - name: Test suite on PostgreSQL with coverage gate
+        run: make coverage-postgres
+
+      # برعکسِ مسیر اصلی: تست‌های SQLite-specific (marker=sqlite) را هم اجرا
+      # کن چون در اجرای PostgreSQL به‌طور خودکار skip می‌شوند (fallback
+      # جست‌وجو و planهای EXPLAIN فقط روی SQLite معنا دارند).
+      - name: SQLite vendor-specific tests
+        run: make test-sqlite-vendor
 
       - name: Upload validated schema artifact
         if: always()

@@ -14,6 +14,7 @@ from pathlib import Path
 
 import pytest
 import requests
+from django.db import connection
 from django.utils import timezone
 
 from apps.core import frontend_revalidation as fr, tasks as core_tasks
@@ -563,9 +564,37 @@ class TestHotQueriesUseIndexes:
 
     @staticmethod
     def _assert_no_full_scan(plan: str, table: str) -> None:
-        """SQLite: «SCAN <table>» یعنی پیمایش کامل؛ «SEARCH» یعنی ایندکس."""
-        full_scan = re.search(rf"\bSCAN\b\s+(?:TABLE\s+)?{re.escape(table)}\b", plan)
+        """تشخیص پیمایش کامل در هر دو گویش plan.
+
+        - SQLite: «SCAN <table>» یعنی پیمایش کامل؛ «SEARCH» یعنی ایندکس.
+        - PostgreSQL: «Seq Scan on <table>» یعنی پیمایش کامل؛ «Index Scan»
+          /«Bitmap ... Scan» یعنی ایندکس.
+        """
+        if connection.vendor == "postgresql":
+            pattern = rf"\bSeq Scan on {re.escape(table)}\b"
+        else:
+            pattern = rf"\bSCAN\b\s+(?:TABLE\s+)?{re.escape(table)}\b"
+        full_scan = re.search(pattern, plan)
         assert not full_scan, f"پرس‌وجو روی {table} full scan می‌کند:\n{plan}"
+
+    @staticmethod
+    def _assert_index_named(plan: str, index_name: str) -> None:
+        """تأیید استفادهٔ واقعی از یک ایندکس مشخص در هر دو گویش plan."""
+        assert index_name in plan, f"ایندکس {index_name} در plan استفاده نشده است:\n{plan}"
+
+    @staticmethod
+    def _assert_any_index_used(plan: str, table: str) -> None:
+        """تضمین اینکه پرس‌وجو index-backed است، بدون قفل‌کردن نام ایندکس.
+
+        برای SQLite لازم است: planner ممکن است به‌درستی ایندکس تک‌ستونه را به
+        ترکیبی ترجیح دهد؛ پس نام ایندکس قابل پیش‌بینی نیست ولی «استفاده از
+        ایندکس» (به‌جای پیمایش کامل) تضمین‌پذیر است.
+        """
+        if connection.vendor == "postgresql":
+            used = re.search(rf"\b(?:Bitmap )?Index Scan on {re.escape(table)}\b", plan)
+        else:
+            used = "USING INDEX" in plan
+        assert used, f"پرس‌وجو روی {table} از هیچ ایندکسی استفاده نکرده است:\n{plan}"
 
     def test_outbox_due_query_uses_the_composite_index(self) -> None:
         from django.db.models import Q
@@ -582,7 +611,9 @@ class TestHotQueriesUseIndexes:
         )
 
         # هر دو شاخهٔ OR باید ایندکس بخورند و نام ایندکس ترکیبی دیده شود.
-        assert "core_cache_event_due_idx" in plan, plan
+        # PostgreSQL ممکن است سراغ ایندکس دیگر (like) برود، ولی no full scan
+        # الزامی است و ایندکس ترکیبی باید در plan حضور داشته باشد.
+        self._assert_index_named(plan, "core_cache_event_due_idx")
         self._assert_no_full_scan(plan, "core_cacheinvalidationevent")
 
     def test_outbox_status_lookup_is_index_backed(self) -> None:
@@ -592,6 +623,17 @@ class TestHotQueriesUseIndexes:
             CacheInvalidationEvent.all_objects.filter(status=CacheInvalidationEvent.STATUS_PENDING)
         )
 
+        if connection.vendor == "postgresql":
+            # PostgreSQL planner روی جدول تست‌شدهٔ این ایندکس ترکیبی را برای
+            # فیلتر status انتخاب می‌کند (statistics واقعی)؛ پس نامش را قفل
+            # می‌کنیم تا اگر کسی ایندکس را خراب کرد تست بشکند.
+            self._assert_index_named(plan, "core_cache_event_due_idx")
+        else:
+            # SQLite برای یک فیلتر status خالص به‌درستی ایندکس تک‌ستونهٔ
+            # (status) را که کوچک‌تر و ارزان‌تر است انتخاب می‌کند؛ این
+            # تصمیم planner درست است، نه شکست ایندکس. تضمینِ معنی‌دار در
+            # این موتور «index-backed بودن» است.
+            self._assert_any_index_used(plan, "core_cacheinvalidationevent")
         self._assert_no_full_scan(plan, "core_cacheinvalidationevent")
 
     def test_outbox_domain_history_is_index_backed(self) -> None:
@@ -601,6 +643,7 @@ class TestHotQueriesUseIndexes:
             CacheInvalidationEvent.all_objects.filter(domain="public").order_by("-created_at")
         )
 
+        self._assert_index_named(plan, "core_cache_event_domain_idx")
         self._assert_no_full_scan(plan, "core_cacheinvalidationevent")
 
     def test_explain_is_available_on_the_test_backend(self) -> None:

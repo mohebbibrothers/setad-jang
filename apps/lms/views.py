@@ -92,7 +92,14 @@ from apps.lms.services import (
     request_lesson_video_processing,
     revoke_certificate,
 )
-from apps.lms.throttles import LMSDiscussionThrottle, LMSEnrollThrottle, LMSProgressThrottle
+from apps.lms.throttles import (
+    LMSBrowseAnonThrottle,
+    LMSBrowseUserThrottle,
+    LMSCertificateVerifyThrottle,
+    LMSDiscussionThrottle,
+    LMSEnrollThrottle,
+    LMSProgressThrottle,
+)
 
 TAG_LMS_PUBLIC = "آموزش — عمومی"
 TAG_LMS_USER = "آموزش — کاربر"
@@ -207,6 +214,8 @@ class LMSCategoryPublicListView(APIView):
     """Public list of active LMS categories."""
 
     permission_classes = [AllowAny]
+    # یافتهٔ ممیزی ۵.۱: برداشت انبوه محتوا — browse با throttle اختصاصی.
+    throttle_classes = [LMSBrowseAnonThrottle, LMSBrowseUserThrottle]
 
     @extend_schema(
         operation_id="lms_public_categories_list",
@@ -230,6 +239,8 @@ class LMSCategoryPublicDetailView(APIView):
     """Public category detail by slug."""
 
     permission_classes = [AllowAny]
+    # یافتهٔ ممیزی ۵.۱: برداشت انبوه محتوا — browse با throttle اختصاصی.
+    throttle_classes = [LMSBrowseAnonThrottle, LMSBrowseUserThrottle]
 
     @extend_schema(
         operation_id="lms_public_categories_retrieve",
@@ -262,6 +273,8 @@ class LMSCoursePublicListView(APIView):
     """Public list of published LMS courses."""
 
     permission_classes = [AllowAny]
+    # یافتهٔ ممیزی ۵.۱: برداشت انبوه محتوا — browse با throttle اختصاصی.
+    throttle_classes = [LMSBrowseAnonThrottle, LMSBrowseUserThrottle]
 
     @extend_schema(
         operation_id="lms_public_courses_list",
@@ -301,6 +314,8 @@ class LMSCoursePublicDetailView(APIView):
     """Public course detail by slug."""
 
     permission_classes = [AllowAny]
+    # یافتهٔ ممیزی ۵.۱: برداشت انبوه محتوا — browse با throttle اختصاصی.
+    throttle_classes = [LMSBrowseAnonThrottle, LMSBrowseUserThrottle]
 
     @extend_schema(
         operation_id="lms_public_courses_retrieve",
@@ -333,6 +348,8 @@ class LMSCourseLessonsPublicView(APIView):
     """Public lesson list for a published course."""
 
     permission_classes = [AllowAny]
+    # یافتهٔ ممیزی ۵.۱: برداشت انبوه محتوا — browse با throttle اختصاصی.
+    throttle_classes = [LMSBrowseAnonThrottle, LMSBrowseUserThrottle]
 
     @extend_schema(
         operation_id="lms_public_course_lessons_list",
@@ -364,6 +381,8 @@ class LMSLessonPublicDetailView(APIView):
     """Public lesson detail for previews or course catalog."""
 
     permission_classes = [AllowAny]
+    # یافتهٔ ممیزی ۵.۱: برداشت انبوه محتوا — browse با throttle اختصاصی.
+    throttle_classes = [LMSBrowseAnonThrottle, LMSBrowseUserThrottle]
 
     @extend_schema(
         operation_id="lms_public_lessons_retrieve",
@@ -1370,6 +1389,8 @@ class LMSCertificateVerifyView(APIView):
     """Public certificate verification endpoint."""
 
     permission_classes = [AllowAny]
+    # یافتهٔ ممیزی ۵.۱: اوراکل شمارش گواهی — throttle اختصاصی per-IP.
+    throttle_classes = [LMSCertificateVerifyThrottle]
 
     @extend_schema(
         operation_id="lms_public_certificates_verify",

@@ -17,10 +17,11 @@ Celery application bootstrap برای پروژه ستاد جنگ.
   config/settings/base.py تعریف شده‌اند.
 
 Docker compatibility:
-- docker-compose service `celery_worker` و `celery_beat` هر دو
-  از این فایل به‌عنوان entrypoint استفاده می‌کنند:
-    celery -A config worker -l info -Q default,tabyin_sync,madadkar
-    celery -A config beat -l info
+- docker-compose service `worker` و `madadkar-worker` و `beat` هر دو از این
+  فایل به‌عنوان entrypoint استفاده می‌کنند (تفکیک صف‌ها — یافتهٔ ممیزی ۵.۲):
+    worker:          celery -A config worker -l info -Q default,tabyin_sync
+    madadkar-worker: celery -A config worker -l info -Q madadkar
+    beat:            celery -A config beat -l info
 """
 
 from __future__ import annotations

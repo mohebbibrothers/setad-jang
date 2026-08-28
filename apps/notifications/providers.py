@@ -6,9 +6,9 @@ from dataclasses import dataclass
 from typing import Any, Protocol
 
 from django.conf import settings
-from django.core.mail import send_mail
 
 from apps.authentication.providers import get_sms_otp_provider
+from apps.core.mailing import send_text_email
 from apps.notifications.choices import NotificationChannel
 
 
@@ -56,12 +56,11 @@ class EmailNotificationProvider:
     ) -> NotificationDeliveryResult:
         """Send an email notification."""
         try:
-            send_mail(
+            send_text_email(
                 subject=subject,
                 message=body,
                 from_email=settings.DEFAULT_FROM_EMAIL,
                 recipient_list=[recipient],
-                fail_silently=False,
             )
         except Exception as exc:
             return NotificationDeliveryResult(

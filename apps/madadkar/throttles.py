@@ -57,3 +57,16 @@ class MadadkarPaymentVerifyThrottle(ClientIPRateThrottle):
     """
 
     scope = "madadkar_payment_verify"
+
+
+class MadadkarReceiptVerifyThrottle(ClientIPRateThrottle):
+    """
+    Throttle اختصاصی راستی‌آزمایی عمومی رسید (یافتهٔ ممیزی ۵.۱).
+
+    «آیا این شمارهٔ رسید معتبر است؟» الگوی کلاسیک اوراکل شمارش است؛ با
+    پیش‌فرض `anon: 60/min`، مهاجم با چرخش IP می‌توانست شمارهٔ رسیدها را
+    brute-force کند. این throttle همیشه روی IP است (مستقل از احراز هویت،
+    چون endpoint عمومی است) و سقفش عمداً سخت‌گیرانه‌تر از browse است.
+    """
+
+    scope = "madadkar_receipt_verify"
