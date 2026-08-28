@@ -50,15 +50,8 @@ class StandardPagination(BaseWrappedPagination):
     max_page_size = 100
 
 
-class SmallPagination(BaseWrappedPagination):
-    """SmallPagination implementation for the core application."""
-
-    page_size = 10
-    max_page_size = 50
-
-
-class LargePagination(BaseWrappedPagination):
-    """LargePagination implementation for the core application."""
-
-    page_size = 50
-    max_page_size = 200
+# نکته: پیش‌تر دو کلاس `SmallPagination` و `LargePagination` هم اینجا تعریف
+# شده بودند و هیچ‌جای پروژه استفاده نمی‌شدند. کلاس صفحه‌بندی بلااستفاده صرفاً
+# کد مرده نیست؛ گمراه‌کننده هم هست، چون خواننده فرض می‌کند بخشی از API از آن
+# استفاده می‌کند و باید هنگام تغییر رفتار صفحه‌بندی در نظرش بگیرد. اگر بعداً
+# واقعاً لازم شدند، افزودنشان دو خط کار است.

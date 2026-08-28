@@ -35,14 +35,33 @@ class TestMediaStorageContracts:
 
         assert storage.custom_domain == "cdn.example.com"
         assert storage.querystring_auth is False
-        assert storage.default_acl == "public-read"
 
     def test_private_s3_storage_uses_signed_urls(self) -> None:
         storage = PrivateMediaStorage()
 
         assert storage.querystring_auth is True
-        assert storage.default_acl == "private"
         assert storage.querystring_expire == 600
+
+    @override_settings(AWS_DEFAULT_ACL_MODE="none")
+    def test_acl_header_is_omitted_when_disabled(self) -> None:
+        """پیش‌فرض پروژه: هیچ ACLی ارسال نشود.
+
+        باکت‌های «Object Ownership: Bucket owner enforced» — پیش‌فرض AWS از
+        آوریل ۲۰۲۳ — هر آپلود دارای هدر ACL را رد می‌کنند.
+        """
+        assert PublicMediaStorage().default_acl is None
+        assert PrivateMediaStorage().default_acl is None
+
+    @override_settings(AWS_DEFAULT_ACL_MODE="legacy")
+    def test_legacy_acl_mode_restores_per_storage_defaults(self) -> None:
+        """برای باکت‌های قدیمی یا MinIO باید بشود ACL را برگرداند."""
+        assert PublicMediaStorage().default_acl == "public-read"
+        assert PrivateMediaStorage().default_acl == "private"
+
+    @override_settings(AWS_DEFAULT_ACL_MODE="public-read")
+    def test_explicit_acl_mode_overrides_both_storages(self) -> None:
+        assert PublicMediaStorage().default_acl == "public-read"
+        assert PrivateMediaStorage().default_acl == "public-read"
 
 
 class TestFileSecurityContracts:

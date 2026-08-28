@@ -40,9 +40,12 @@ RUN apt-get update -o Acquire::Retries=5 \
 
 WORKDIR /build
 
-COPY requirements.txt .
+# از قفل کامل استفاده می‌شود، نه requirements.txt.
+# requirements.txt وابستگی‌های غیرمستقیم را پین نمی‌کند، پس دو build از یک
+# commit یکسان می‌توانند نسخه‌های متفاوتی بگیرند و image قابل بازتولید نباشد.
+COPY requirements.txt requirements-lock.txt ./
 RUN pip install --upgrade pip \
-    && pip wheel --wheel-dir=/wheels -r requirements.txt
+    && pip wheel --wheel-dir=/wheels -r requirements-lock.txt
 
 
 # ============================================================

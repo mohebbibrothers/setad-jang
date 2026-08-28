@@ -179,6 +179,27 @@ MEDIA_STORAGE_BACKEND = config("MEDIA_STORAGE_BACKEND", default="local").strip()
 # قبلی) و "noop" همه‌چیز را خاموش می‌کند.
 FILE_SCAN_PROVIDER = config("FILE_SCAN_PROVIDER", default="default").strip().lower()
 
+# حالت ACL آپلودها روی S3/MinIO.
+#
+# "none" یعنی هیچ هدر ACLی ارسال نشود. این مقدار برای باکت‌هایی لازم است که
+# با «Object Ownership: Bucket owner enforced» ساخته شده‌اند — پیش‌فرض AWS از
+# آوریل ۲۰۲۳ — چون آن باکت‌ها هر درخواست دارای ACL را با خطای
+# AccessControlListNotSupported رد می‌کنند. در آن حالت دسترسی عمومی باید با
+# bucket policy مدیریت شود.
+#
+# برای باکت‌های قدیمی‌تر یا MinIO می‌توان مقدار را روی "public-read" گذاشت.
+AWS_DEFAULT_ACL_MODE = config("AWS_DEFAULT_ACL_MODE", default="none")
+
+# backoff نمایی برای تلاش مجدد رویدادهای outbox ابطال کش.
+# sweeper هر دقیقه اجرا می‌شود، پس بدون این backoff یک رویداد خراب کل بودجهٔ
+# تلاش‌هایش را در چند دقیقه می‌سوزاند.
+CACHE_INVALIDATION_RETRY_BASE_SECONDS = config(
+    "CACHE_INVALIDATION_RETRY_BASE_SECONDS", default=10, cast=int
+)
+CACHE_INVALIDATION_RETRY_MAX_SECONDS = config(
+    "CACHE_INVALIDATION_RETRY_MAX_SECONDS", default=3600, cast=int
+)
+
 AUDIT_LOG_ARCHIVE_ROOT = config("AUDIT_LOG_ARCHIVE_ROOT", default=str(BASE_DIR / "audit_exports"))
 AUDIT_LOG_RETENTION_DAYS = config("AUDIT_LOG_RETENTION_DAYS", default=2555, cast=int)
 AUDIT_LOG_LEGAL_HOLD_ENABLED = config("AUDIT_LOG_LEGAL_HOLD_ENABLED", default=True, cast=bool)

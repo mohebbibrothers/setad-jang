@@ -130,7 +130,7 @@ class TestSandboxProviderVerify:
 
 
 class _FakeZarinpalResponse:
-    """Response کوچک و deterministic برای mock کردن requests.post در تست‌های زرین‌پال."""
+    """Response کوچک و deterministic برای mock کردن POST در تست‌های زرین‌پال."""
 
     def __init__(
         self,
@@ -146,6 +146,26 @@ class _FakeZarinpalResponse:
     def json(self):
         """برگرداندن payload mock‌شده مشابه requests.Response.json."""
         return self._payload
+
+
+def _patch_gateway_post(monkeypatch, fake_post) -> None:
+    """جایگزینی POST درگاه با یک fake.
+
+    provider حالا از یک `requests.Session` مشترک و pool-شده استفاده می‌کند
+    (به‌جای `requests.post` سراسری) تا برای هر پرداخت TLS handshake تازه
+    باز نشود. پس تست‌ها هم باید همان Session را هدف بگیرند.
+
+    یک stub سبک تزریق می‌شود تا امضای `fake_post(url, *, json, timeout)`
+    در تست‌ها دست‌نخورده بماند و هیچ Session واقعی‌ای ساخته نشود.
+    """
+
+    class _StubSession:
+        post = staticmethod(fake_post)
+
+    monkeypatch.setattr(
+        "apps.madadkar.payment_providers.zarinpal._get_session",
+        lambda: _StubSession(),
+    )
 
 
 class TestZarinpalProviderConfiguration:
@@ -205,7 +225,7 @@ class TestZarinpalProviderRequestPayment:
                 payload={"data": {"code": 100, "authority": "A0000000000001"}, "errors": []}
             )
 
-        monkeypatch.setattr("apps.madadkar.payment_providers.zarinpal.requests.post", fake_post)
+        _patch_gateway_post(monkeypatch, fake_post)
 
         result = provider.request_payment(
             amount=1000,
@@ -234,7 +254,7 @@ class TestZarinpalProviderRequestPayment:
                 payload={"data": {"code": -9}, "errors": {"message": "invalid merchant"}}
             )
 
-        monkeypatch.setattr("apps.madadkar.payment_providers.zarinpal.requests.post", fake_post)
+        _patch_gateway_post(monkeypatch, fake_post)
 
         result = provider.request_payment(
             amount=1000,
@@ -258,7 +278,7 @@ class TestZarinpalProviderRequestPayment:
         def fake_timeout(url, json, timeout):
             raise requests.exceptions.Timeout
 
-        monkeypatch.setattr("apps.madadkar.payment_providers.zarinpal.requests.post", fake_timeout)
+        _patch_gateway_post(monkeypatch, fake_timeout)
 
         result = provider.request_payment(
             amount=1000,
@@ -285,7 +305,7 @@ class TestZarinpalProviderVerifyPayment:
                 payload={"data": {"code": 100, "ref_id": 987654321}, "errors": []}
             )
 
-        monkeypatch.setattr("apps.madadkar.payment_providers.zarinpal.requests.post", fake_post)
+        _patch_gateway_post(monkeypatch, fake_post)
 
         result = provider.verify_payment(authority="A0000000000001", amount=2500)
 
@@ -306,7 +326,7 @@ class TestZarinpalProviderVerifyPayment:
                 payload={"data": {"code": 101, "ref_id": "REF-101"}, "errors": []}
             )
 
-        monkeypatch.setattr("apps.madadkar.payment_providers.zarinpal.requests.post", fake_post)
+        _patch_gateway_post(monkeypatch, fake_post)
 
         result = provider.verify_payment(authority="A0000000000001", amount=2500)
 
@@ -324,7 +344,7 @@ class TestZarinpalProviderVerifyPayment:
                 payload={"data": {"code": -51}, "errors": {"message": "payment not found"}}
             )
 
-        monkeypatch.setattr("apps.madadkar.payment_providers.zarinpal.requests.post", fake_post)
+        _patch_gateway_post(monkeypatch, fake_post)
 
         result = provider.verify_payment(authority="bad", amount=2500)
 

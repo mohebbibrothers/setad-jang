@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import logging
+import secrets
+from datetime import timedelta
 
 import requests
 from celery import shared_task
@@ -123,6 +125,36 @@ def revalidate_frontend_task(
     )
 
 
+def outbox_retry_delay_seconds(attempts: int) -> float:
+    """تأخیر نمایی پیش از تلاش بعدیِ یک رویداد outbox.
+
+    باگی که این تابع رفع می‌کند: قبلاً هنگام شکست،
+    ``next_attempt_at = timezone.now()`` ست می‌شد. یعنی رویداد **بلافاصله**
+    دوباره سررسید می‌شد و چون sweeper هر دقیقه اجرا می‌شود، یک رویدادِ
+    دائماً خراب کل بودجهٔ ۱۰ تلاشش را در ۱۰ دقیقه می‌سوزاند و به
+    dead-letter می‌رفت — دقیقاً وقتی که فرانت‌اند بالا نیست، یعنی همان
+    زمانی که بیشترین نیاز را به صبر داریم. در عمل هیچ backoffی در سطح
+    outbox وجود نداشت.
+
+    اینجا تأخیر نمایی با jitter می‌گذاریم:
+    ``base * 2^(attempts-1)`` سقف‌دار، به‌اضافهٔ حداکثر ۱۰٪ jitter تا
+    رویدادهایی که با هم شکست خورده‌اند با هم هم برنگردند (thundering herd).
+    """
+    base = float(getattr(settings, "CACHE_INVALIDATION_RETRY_BASE_SECONDS", 10))
+    ceiling = float(getattr(settings, "CACHE_INVALIDATION_RETRY_MAX_SECONDS", 3600))
+
+    exponent = max(0, int(attempts) - 1)
+    # سقف نما تا از سرریز شدن توان جلوگیری شود.
+    delay = base * (2 ** min(exponent, 20))
+    delay = min(delay, ceiling)
+
+    # jitter تا سقف ۱۰٪. از `secrets` استفاده می‌شود نه `random` — نه به این
+    # دلیل که jitter حساس امنیتی است، بلکه چون B311 در bandit عمداً سراسری
+    # خاموش نشده تا استفادهٔ نادرست از random در تولید توکن را بگیرد.
+    jitter_ratio = secrets.randbelow(101) / 1000  # 0.000 … 0.100
+    return delay * (1 + jitter_ratio)
+
+
 @shared_task(
     name="apps.core.tasks.process_cache_invalidation_event_task",
     bind=True,
@@ -174,7 +206,9 @@ def process_cache_invalidation_event_task(self, *, event_id: int) -> None:
             else CacheInvalidationEvent.STATUS_FAILED
         )
         event.last_error = str(exc)[:4000]
-        event.next_attempt_at = timezone.now()
+        event.next_attempt_at = timezone.now() + timedelta(
+            seconds=outbox_retry_delay_seconds(event.attempts)
+        )
         event.save(update_fields=["status", "last_error", "next_attempt_at", "updated_at"])
         raise
 

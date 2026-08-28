@@ -135,6 +135,11 @@ class DeletedResponse(Response):
     - 204 مطابق RFC بدون body است
     - 200 + data=None رفتار consistent‌تری می‌دهد
 
+    این یک انحراف آگاهانه از قرارداد رایج REST است، پس صریحاً برای
+    مصرف‌کنندهٔ frontend مستند شده است. اگر این رفتار را تغییر دادید،
+    بخش «حذف (DELETE)» در docs/FRONTEND_INTEGRATION_GUIDE.md را هم
+    به‌روز کنید.
+
     Args:
         message: پیام فارسی قابل نمایش به کاربر.
         **kwargs: سایر پارامترهای Response.

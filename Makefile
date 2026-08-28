@@ -21,7 +21,7 @@ PROD_CHECK_ENV := \
 	SECRET_KEY=realistic-production-secret-key-with-more-than-fifty-characters-2026 \
 	SECURE_SSL_REDIRECT=True
 
-.PHONY: help install lint format format-check structure structure-check check deploy-check migrations-check schema-check schema-update test coverage pip-check pip-audit bandit secrets-scan security verify verify-fast docker-up docker-down
+.PHONY: help install lock lock-check lint format format-check structure structure-check check deploy-check migrations-check schema-check schema-update test coverage pip-check pip-audit bandit secrets-scan security verify verify-fast docker-up docker-down
 
 help:
 	@printf '%s\n' 'Setad Jang commands:'
@@ -36,6 +36,8 @@ help:
 	@printf '%s\n' '  make schema-update     Regenerate committed schema.yaml'
 	@printf '%s\n' '  make structure         Regenerate STRUCTURE.md'
 	@printf '%s\n' '  make structure-check   Detect STRUCTURE.md drift'
+	@printf '%s\n' '  make lock              Regenerate dependency lock files'
+	@printf '%s\n' '  make lock-check        Detect dependency lock drift'
 	@printf '%s\n' '  make test              Run full pytest suite'
 	@printf '%s\n' '  make coverage          Run full pytest suite with coverage threshold'
 	@printf '%s\n' '  make security          Run dependency/SAST/secrets security gate'
@@ -94,6 +96,12 @@ structure-check:
 pip-check:
 	$(PYTHON) -m pip check
 
+lock:
+	$(PYTHON) scripts/generate_locks.py
+
+lock-check:
+	$(PYTHON) scripts/generate_locks.py --check
+
 pip-audit:
 	$(PYTHON) -m pip_audit -r requirements.txt -r requirements-dev.txt --progress-spinner off
 
@@ -113,7 +121,7 @@ coverage:
 
 verify-fast: lint format-check check migrations-check schema-check structure-check
 
-verify: pip-check security lint format-check check deploy-check migrations-check schema-check structure-check coverage
+verify: pip-check lock-check security lint format-check check deploy-check migrations-check schema-check structure-check coverage
 
 docker-up:
 	docker-compose up --build -d

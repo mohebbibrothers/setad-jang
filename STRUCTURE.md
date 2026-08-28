@@ -279,7 +279,6 @@ setad-jang/
 │   ├── filters.py  # فیلترهای queryset
 │   ├── managers.py
 │   ├── models.py  # مدل‌های داده
-│   ├── permissions.py  # کنترل دسترسی
 │   ├── selectors.py  # خواندن داده (بدون side effect)
 │   ├── serializers.py  # اعتبارسنجی ورودی/خروجی
 │   ├── services.py  # منطق کسب‌وکار و نوشتن

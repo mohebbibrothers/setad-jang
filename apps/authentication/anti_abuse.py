@@ -52,22 +52,27 @@ def is_honeypot_triggered(data: dict[str, Any] | None) -> bool:
         data: payload request (معمولاً request.data).
 
     Returns:
-        True اگر honeypot field مقدار suspicious داشته باشد
-        (string غیرخالی یا value غیررشته‌ای).
+        True فقط وقتی field مقدار *معنادار* داشته باشد.
+
+    رفتار قبلی هر مقدار غیررشته‌ای را bot تلقی می‌کرد. یعنی کلاینتی که
+    به‌اشتباه `website: 0` یا `website: false` می‌فرستاد — که مقدار «خالی»
+    در بسیاری از فرم‌بیلدرها و کلاینت‌های تایپ‌دار است — بی‌دلیل بلاک
+    می‌شد. این بدترین نوع false positive است: کاربر واقعی رد می‌شود و
+    هیچ پیام قابل فهمی هم نمی‌گیرد، چون منطق honeypot عمداً ساکت است.
+
+    معیار درست «رشته بودن» نیست، «خالی نبودن» است. یک bot که فرم را پر
+    می‌کند مقدار معنادار می‌گذارد؛ یک کلاینت ناقص مقدار falsy می‌فرستد.
     """
     if not isinstance(data, dict):
         return False
 
     value = data.get(HONEYPOT_FIELD_NAME)
-    if value is None:
-        return False
 
-    # اگر مقدار string غیرخالی داشت → bot
-    if isinstance(value, str) and value.strip():
-        return True
+    if isinstance(value, str):
+        return bool(value.strip())
 
-    # اگر string نبود، باز هم suspicious است.
-    return not isinstance(value, str)
+    # None، 0، False، [] و {} همگی «پر نشده» تلقی می‌شوند.
+    return bool(value)
 
 
 # ============================================================

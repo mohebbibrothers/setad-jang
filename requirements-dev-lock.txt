@@ -1,27 +1,25 @@
 # ============================================================
-# قفل وابستگی‌های production
+# قفل وابستگی‌های production + development
 # ============================================================
 #
-# این فایل به‌صورت خودکار تولید می‌شود. دستی ویرایشش نکنید.
+# تولید خودکار — دستی ویرایش نکنید:  make lock
 #
-#     make lock
-#
-# چرا وجود دارد: `requirements.txt` بازه‌ای/سطح‌بالا است و وابستگی‌های
-# غیرمستقیم را پین نمی‌کند. یعنی دو build از یک commit یکسان می‌توانند
-# نسخه‌های متفاوتی از transitive dependencyها بگیرند و باگی که در staging
-# نبود در production ظاهر شود. Dockerfile از همین فایل استفاده می‌کند تا
-# image قابل بازتولید باشد.
-#
-# فقط وابستگی‌های runtime. ابزارهای توسعه در requirements-dev-lock.txt.
+# CI از این فایل استفاده می‌کند. عمداً از قفل production جداست تا
+# ابزارهای توسعه (pytest، ruff، bandit، ...) هرگز وارد image نهایی نشوند.
 # ============================================================
 
+CacheControl==0.14.4
 Django==6.0.8
+Faker==40.37.0
 PyJWT==2.13.0
 PyYAML==6.0.3
+Pygments==2.21.0
 amqp==5.3.1
 asgiref==3.11.1
 attrs==26.1.0
+bandit==1.9.4
 billiard==4.2.4
+boolean.py==5.0
 boto3==1.43.82
 botocore==1.43.82
 celery==5.5.3
@@ -31,6 +29,10 @@ click==8.5.0
 click-didyoumean==0.3.1
 click-plugins==1.1.1.2
 click-repl==0.3.0
+coverage==7.15.4
+cyclonedx-python-lib==9.1.0
+defusedxml==0.7.1
+detect-secrets==1.5.0
 django-cors-headers==4.9.0
 django-filter==25.2
 django-redis==6.0.0
@@ -40,37 +42,62 @@ djangorestframework_simplejwt==5.5.1
 dnspython==2.7.0
 drf-spectacular==0.29.0
 et_xmlfile==2.0.0
+factory_boy==3.3.1
+filelock==3.32.4
 flower==2.0.1
 gunicorn==23.0.0
 humanize==4.16.0
 idna==3.15
 importlib_metadata==8.7.1
 inflection==0.5.1
+iniconfig==2.3.0
 jmespath==1.1.0
 jsonschema==4.26.0
 jsonschema-specifications==2025.9.1
 kombu==5.5.4
+license-expression==30.4.4
+markdown-it-py==4.2.0
+mdurl==0.1.2
+msgpack==1.2.2
 openpyxl==3.1.5
 opentelemetry-api==1.39.1
 opentelemetry-sdk==1.39.1
 opentelemetry-semantic-conventions==0.60b1
+packageurl-python==0.17.6
 packaging==26.3
 pillow==12.3.0
+pip==26.2.1
+pip-api==0.0.34
+pip-requirements-parser==32.0.1
+pip_audit==2.9.0
+platformdirs==4.11.5
+pluggy==1.6.0
 prometheus_client==0.25.0
 prompt_toolkit==3.0.53
 psycopg==3.3.2
 psycopg-binary==3.3.2
+py-serializable==2.1.0
+pyparsing==3.3.2
+pytest==9.0.3
+pytest-cov==6.0.0
+pytest-django==4.9.0
 python-dateutil==2.9.0.post0
 python-decouple==3.8
 pytz==2026.3.post1
 redis==7.4.0
 referencing==0.37.0
 requests==2.34.0
+responses==0.25.7
+rich==15.0.0
 rpds-py==0.30.0
+ruff==0.14.4
 s3transfer==0.19.2
 sentry-sdk==2.48.0
 six==1.17.0
+sortedcontainers==2.4.0
 sqlparse==0.6.0
+stevedore==5.9.1
+toml==0.10.2
 tornado==6.5.8
 typing_extensions==4.16.0
 tzdata==2026.2

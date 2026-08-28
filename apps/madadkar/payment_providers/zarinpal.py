@@ -31,10 +31,13 @@ Endpointهای sandbox:
 from __future__ import annotations
 
 import logging
+import threading
 from typing import Any
 
 import requests
 from django.conf import settings
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 from .base import (
     AbstractPaymentProvider,
@@ -43,6 +46,65 @@ from .base import (
 )
 
 logger = logging.getLogger("apps.madadkar")
+
+
+# ---------------------------------------------------------------------------
+# HTTP session مشترک و pool-شده
+# ---------------------------------------------------------------------------
+#
+# قبلاً هر فراخوانی از `requests.post` سراسری استفاده می‌کرد. یعنی برای هر
+# پرداخت یک connection تازه باز می‌شد: DNS + TCP handshake + TLS handshake
+# کامل. روی یک endpoint HTTPS این حدود ۲ تا ۳ رفت‌وبرگشت اضافه است که در
+# مسیر حساس پرداخت — جایی که کاربر منتظر ریدایرکت به درگاه است — مستقیماً
+# به تأخیر محسوس تبدیل می‌شود.
+#
+# با یک Session مشترک، اتصال keep-alive بین درخواست‌ها بازاستفاده می‌شود.
+#
+# نکتهٔ مهم دربارهٔ retry: عمداً retry خودکار **خاموش** است. هر دو endpoint
+# زرین‌پال POST غیرidempotent هستند؛ retry شفاف روی `request_payment`
+# می‌تواند authority تکراری بسازد و روی `verify` می‌تواند وضعیت مبهم ایجاد
+# کند. تصمیم دربارهٔ تلاش مجدد باید در لایهٔ service گرفته شود که context
+# تراکنش را دارد، نه در لایهٔ transport که کور است.
+_SESSION_LOCK = threading.Lock()
+_SESSION: requests.Session | None = None
+
+
+def _get_session() -> requests.Session:
+    """Session مشترک و thread-safe برای فراخوانی‌های زرین‌پال."""
+    global _SESSION
+
+    if _SESSION is not None:
+        return _SESSION
+
+    with _SESSION_LOCK:
+        if _SESSION is None:
+            session = requests.Session()
+            adapter = HTTPAdapter(
+                pool_connections=4,
+                pool_maxsize=int(getattr(settings, "ZARINPAL_HTTP_POOL_MAXSIZE", 16)),
+                max_retries=Retry(total=0, read=0, connect=0, status=0, redirect=0),
+            )
+            session.mount("https://", adapter)
+            session.mount("http://", adapter)
+            session.headers.update(
+                {
+                    "Accept": "application/json",
+                    "Content-Type": "application/json",
+                }
+            )
+            _SESSION = session
+
+    return _SESSION
+
+
+def reset_session() -> None:
+    """بستن Session مشترک. برای تست‌ها و ری‌لود پیکربندی."""
+    global _SESSION
+
+    with _SESSION_LOCK:
+        if _SESSION is not None:
+            _SESSION.close()
+            _SESSION = None
 
 
 class ZarinpalNotConfiguredError(RuntimeError):
@@ -278,7 +340,7 @@ class ZarinpalProvider(AbstractPaymentProvider):
             (payload, error_message). اگر error_message خالی باشد، payload معتبر است.
         """
         try:
-            response = requests.post(url, json=payload, timeout=timeout)
+            response = _get_session().post(url, json=payload, timeout=timeout)
         except requests.exceptions.Timeout:
             logger.warning("Zarinpal %s timed out url=%s", operation, url)
             return {}, "درگاه پرداخت در زمان مقرر پاسخ نداد."

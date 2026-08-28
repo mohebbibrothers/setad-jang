@@ -68,12 +68,17 @@ jobs:
           cache-dependency-path: |
             requirements.txt
             requirements-dev.txt
+            requirements-lock.txt
+            requirements-dev-lock.txt
 
       - name: Install dependencies
         run: make install
 
       - name: Verify dependency graph
         run: make pip-check
+
+      - name: Dependency lock drift check
+        run: make lock-check
 
       - name: Security gate
         run: make security

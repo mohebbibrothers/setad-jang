@@ -122,18 +122,43 @@ class TestIsHoneypotTriggered:
     @pytest.mark.parametrize(
         "value",
         [
-            0,
             True,
             {"nested": "value"},
             ["spam"],
+            1,
         ],
     )
-    def test_returns_true_for_non_string_values(self, value: Any) -> None:
+    def test_returns_true_for_meaningful_non_string_values(self, value: Any) -> None:
+        """مقدار غیررشته‌ای ولی *پرشده* همچنان نشانهٔ bot است."""
         payload = {
             anti_abuse.HONEYPOT_FIELD_NAME: value,
         }
 
         assert anti_abuse.is_honeypot_triggered(payload) is True
+
+    @pytest.mark.parametrize(
+        "value",
+        [
+            0,
+            False,
+            [],
+            {},
+            "",
+            "   ",
+            None,
+        ],
+    )
+    def test_returns_false_for_empty_values(self, value: Any) -> None:
+        """کلاینتی که `website: 0` می‌فرستد نباید بی‌دلیل بلاک شود.
+
+        معیار درست «رشته بودن» نیست، «خالی نبودن» است. رفتار قبلی هر مقدار
+        غیررشته‌ای را bot می‌دانست و کاربر واقعی را بی‌صدا رد می‌کرد.
+        """
+        payload = {
+            anti_abuse.HONEYPOT_FIELD_NAME: value,
+        }
+
+        assert anti_abuse.is_honeypot_triggered(payload) is False
 
 
 # ============================================================
