@@ -88,6 +88,9 @@ MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
+    # گارد لاگین ادمین (یافتهٔ P1-۳ فاز ۷) — بعد از Session تا request کامل
+    # باشد و قبل از CSRF تا تلاش‌های قفل‌شده هزینهٔ توکن هم نپردازند.
+    "apps.core.admin_guard.AdminLoginGuardMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -802,6 +805,20 @@ SMS_API_KEY = config("SMS_API_KEY", default="")
 SMS_SENDER = config("SMS_SENDER", default="")
 SMS_TIMEOUT_SECONDS = config("SMS_TIMEOUT_SECONDS", default=10, cast=int)
 LOGIN_URL = "/admin/login/"
+
+# ============================================================================
+# Django Admin — login guard (یافتهٔ P1-۳ فاز ۷)
+# ============================================================================
+# صفحهٔ لاگین ادمین view معمولی جانگو است و throttleهای DRF به آن نمی‌رسند؛
+# این سه مقدار، سیاست قفلِ مبتنی‌بر‌کشِ `apps.core.admin_guard` را تعریف
+# می‌کنند (شمارش بر اساس ورودی نامعتبر، نه تعداد درخواست).
+
+# حداکثر ورودیِ نامعتبر برای هر جفت (IP, نام‌کاربری) پیش از قفل.
+ADMIN_LOGIN_MAX_FAILURES = config("ADMIN_LOGIN_MAX_FAILURES", default=5, cast=int)
+# سقف تجمیعی هر IP روی همهٔ نام‌های کاربری (ضد credential-stuffing پخش‌شده).
+ADMIN_LOGIN_MAX_FAILURES_PER_IP = config("ADMIN_LOGIN_MAX_FAILURES_PER_IP", default=20, cast=int)
+# مدت قفل موقت (ثانیه).
+ADMIN_LOGIN_LOCKOUT_SECONDS = config("ADMIN_LOGIN_LOCKOUT_SECONDS", default=900, cast=int)
 
 # ============================================================================
 # Shared Redis settings
