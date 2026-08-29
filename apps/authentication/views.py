@@ -37,6 +37,7 @@ from apps.core.schemas import (
 
 from .anti_abuse import is_global_otp_guard_tripped, is_honeypot_triggered
 from .choices import OTPPurpose, UserRole
+from .constants import SESSION_ID_CLAIM
 from .deprecation import add_deprecation_headers, log_legacy_auth_usage
 from .filters import UserAdminFilter
 from .otp import OTPCooldownActive, OTPDeliveryError
@@ -801,7 +802,11 @@ class IdentifierForgotPasswordConfirmAPIView(APIView):
         operation_id="auth_password_forgot_confirm_identifier",
         tags=[TAG_AUTH_PUBLIC],
         summary="تأیید بازیابی رمز با شناسه",
-        description="تنظیم رمز عبور جدید با شناسه، کد یکبارمصرف و رمز جدید.",
+        description=(
+            "تنظیم رمز عبور جدید با شناسه، کد یکبارمصرف و رمز جدید.\n\n"
+            "**پس از ریست، تمام نشست‌های فعال این کاربر لغو می‌شوند** — "
+            "اگر حسابی به‌سرقت رفته باشد، ریست رمز مهاجم را هم بیرون می‌کند."
+        ),
         request=IdentifierForgotPasswordConfirmSerializer,
         responses={
             200: EMPTY_SUCCESS_RESPONSE,
@@ -1038,7 +1043,7 @@ class RegisterAPIView(APIView):
         deprecated=True,
         description=(
             "ساخت حساب کاربری جدید با ایمیل و رمز عبور.\n\n"
-            "پس از ثبت‌نام موفق، یک کد تأیید ۵ رقمی به ایمیل ارسال می‌شود."
+            "پس از ثبت‌نام موفق، یک کد تأیید یکبارمصرف به ایمیل ارسال می‌شود."
             + _LEGACY_DESCRIPTION_FOOTER
         ),
         request=RegisterSerializer,
@@ -1076,7 +1081,9 @@ class VerifyEmailAPIView(APIView):
         tags=[TAG_AUTH_PUBLIC],
         summary="[منسوخ] تأیید ایمیل با کد",
         deprecated=True,
-        description=("تأیید ایمیل کاربر با ارسال کد ۵ رقمی دریافتی." + _LEGACY_DESCRIPTION_FOOTER),
+        description=(
+            "تأیید ایمیل کاربر با ارسال کد یکبارمصرف دریافتی." + _LEGACY_DESCRIPTION_FOOTER
+        ),
         request=VerifyEmailSerializer,
         responses={
             200: EMPTY_SUCCESS_RESPONSE,
@@ -1371,7 +1378,7 @@ class ResetPasswordAPIView(APIView):
         summary="[منسوخ] تنظیم رمز جدید با کد بازیابی",
         deprecated=True,
         description=(
-            "تنظیم رمز عبور جدید با استفاده از کد ۵ رقمی دریافتی." + _LEGACY_DESCRIPTION_FOOTER
+            "تنظیم رمز عبور جدید با استفاده از کد یکبارمصرف دریافتی." + _LEGACY_DESCRIPTION_FOOTER
         ),
         request=ResetPasswordSerializer,
         responses={
@@ -1436,7 +1443,11 @@ class ChangePasswordAPIView(APIView):
         operation_id="auth_password_change",
         tags=[TAG_AUTH_USER],
         summary="تغییر رمز عبور",
-        description="تغییر رمز عبور توسط کاربر لاگین کرده با تأیید رمز فعلی.",
+        description=(
+            "تغییر رمز عبور توسط کاربر لاگین کرده با تأیید رمز فعلی.\n\n"
+            "**همزمان، تمام نشست‌های دیگر (دستگاه‌های دیگر) لغو می‌شوند** — "
+            "الگوی استاندارد امنیتی. نشست همین دستگاه دست‌نخورده می‌ماند."
+        ),
         request=ChangePasswordSerializer,
         responses={
             200: EMPTY_SUCCESS_RESPONSE,
@@ -1448,10 +1459,21 @@ class ChangePasswordAPIView(APIView):
         serializer = ChangePasswordSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
+        # نشست جاری از claim «sid» روی همان توکنِ احراز هویت‌کنندهٔ درخواست
+        # خوانده می‌شود تا هنگام لغو جمعی، از کاربرِ روی همین دستگاه بیرون
+        # انداخته نشود (request.auth توسط SessionAwareJWTAuthentication پر شده).
+        keep_session_sid: int | None = None
+        auth_token = getattr(request, "auth", None)
+        if auth_token is not None:
+            raw_sid = auth_token.get(SESSION_ID_CLAIM)
+            if isinstance(raw_sid, int):
+                keep_session_sid = raw_sid
+
         success = change_password(
             user=request.user,
             old_password=serializer.validated_data["old_password"],
             new_password=serializer.validated_data["new_password"],
+            keep_session_sid=keep_session_sid,
         )
         if not success:
             return ErrorResponse(message="رمز فعلی اشتباه است.")

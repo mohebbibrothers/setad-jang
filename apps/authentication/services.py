@@ -736,7 +736,17 @@ def request_password_reset(*, user: User) -> OTPCode:
 
 @transaction.atomic
 def reset_password_with_otp(*, user: User, code: str, new_password: str) -> bool:
-    """Reset user password if OTP is valid."""
+    """Reset user password if OTP is valid, then retire every active session.
+
+    چرا revoke این‌جا حیاتی است (یافتهٔ P1 ممیزی فاز ۷):
+        سناریوی حساب‌ربوده‌شده: مهاجم refresh token کاربر را می‌دزدد، رمز را
+        ریست می‌کند و «رمز جدید» خودش را می‌گذارد... یا برعکس، کاربرِ صاحب‌اصل
+        پس از سرقت توکن، رمز را عوض می‌کند تا مهاجم بیرون برود. تا پیش از این
+        تغییر، هیچ‌کدام از نشست‌های ثبت‌شده لغو نمی‌شد و توکن دزدیده‌شده تا
+        پایان عمر refresh (۷ روز) کار می‌کرد. ریست رمز دقیقاً همان لحظه‌ای است
+        که باید *همهٔ* نشست‌ها بازنشسته شوند؛ توکن‌های outstanding نیز در
+        همان مسیرِ `revoke_auth_session` در blacklist می‌نشینند.
+    """
     if not verify_otp(
         user=user,
         code=code,
@@ -746,13 +756,32 @@ def reset_password_with_otp(*, user: User, code: str, new_password: str) -> bool
 
     user.set_password(new_password)
     user.save(update_fields=["password"])
-    logger.info("Password reset completed user_id=%s", user.pk)
+    revoked_sessions = revoke_all_user_sessions(user=user)
+    logger.info(
+        "Password reset completed user_id=%s revoked_sessions=%s",
+        user.pk,
+        revoked_sessions,
+    )
     return True
 
 
 @transaction.atomic
-def change_password(*, user: User, old_password: str, new_password: str) -> bool:
-    """Change password after validating current password."""
+def change_password(
+    *,
+    user: User,
+    old_password: str,
+    new_password: str,
+    keep_session_sid: int | None = None,
+) -> bool:
+    """Change password after validating current password and retire other sessions.
+
+    قرارداد نشست (یافتهٔ P1 ممیزی فاز ۷): تغییر رمز باید دستگاه‌های دیگر را
+    بیرون بیندازد، ولی کاربر را از همان دستگاهی که پشت آن رمز را عوض کرده
+    خارج نکند — الگوی استاندارد (GitHub/Google). `keep_session_sid` همان
+    `sid` نشست جاری از claim توکن است؛ اگر توکن قدیمیِ بدون sid باشد،
+    عملاً همهٔ نشست‌ها لغو می‌شود که حالت امنِ پیش‌فرض است (access token
+    جاری تا ۳۰ دقیقه معتبر می‌ماند و کاربر فقط یک بار دوباره login می‌کند).
+    """
     if not user.check_password(old_password):
         logger.info(
             "Password change failed due to invalid old password user_id=%s",
@@ -762,7 +791,13 @@ def change_password(*, user: User, old_password: str, new_password: str) -> bool
 
     user.set_password(new_password)
     user.save(update_fields=["password"])
-    logger.info("Password changed user_id=%s", user.pk)
+    revoked_sessions = revoke_all_user_sessions(user=user, exclude_sid=keep_session_sid)
+    logger.info(
+        "Password changed user_id=%s revoked_sessions=%s kept_session_sid=%s",
+        user.pk,
+        revoked_sessions,
+        keep_session_sid,
+    )
     return True
 
 
@@ -889,10 +924,26 @@ def revoke_auth_session_by_jti(
 
 
 @transaction.atomic
-def revoke_all_user_sessions(*, user: User, revoked_by: User | None = None) -> int:
-    """Revoke all active sessions for one user and return affected count."""
+def revoke_all_user_sessions(
+    *,
+    user: User,
+    revoked_by: User | None = None,
+    exclude_sid: int | None = None,
+) -> int:
+    """Revoke all active sessions for one user and return affected count.
+
+    Args:
+        user: صاحب نشست‌ها.
+        revoked_by: اگر لغو توسط اپراتور انجام می‌شود، برای ممیزی ثبت می‌شود.
+        exclude_sid: شناسهٔ نشستی که باید *دست نخورد* (مثلاً نشست جاریِ
+            کاربر هنگام تغییر رمز از دستگاه خودش). مقدار ``None`` یعنی
+            استثنا نداریم و همه لغو می‌شوند.
+    """
+    sessions = AuthSession.objects.select_for_update().filter(user=user, is_revoked=False)
+    if exclude_sid is not None:
+        sessions = sessions.exclude(pk=exclude_sid)
     count = 0
-    for session in AuthSession.objects.select_for_update().filter(user=user, is_revoked=False):
+    for session in sessions:
         revoke_auth_session(session=session, revoked_by=revoked_by)
         count += 1
     return count
@@ -1237,10 +1288,15 @@ def forgot_password_confirm(
     user.set_password(new_password)
     user.save(update_fields=["password"])
 
+    # یافت P1 فاز ۷: مسیر شناسه‌محور هم مثل reset کلاسیک باید تمام نشست‌ها
+    # را لغو کند، وگرنه توکن refresh دزدیده‌شده پس از ریست رمز زنده می‌ماند.
+    revoked_sessions = revoke_all_user_sessions(user=user)
+
     logger.info(
-        "Password reset confirmed via OTP user_id=%s identifier_kind=%s",
+        "Password reset confirmed via OTP user_id=%s identifier_kind=%s revoked_sessions=%s",
         user.pk,
         identifier_kind,
+        revoked_sessions,
     )
 
 
