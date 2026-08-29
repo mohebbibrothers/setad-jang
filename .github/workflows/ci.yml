@@ -113,6 +113,11 @@ jobs:
       - name: STRUCTURE.md drift check
         run: make structure-check
 
+      # نکته: «make schema-check» خودش DJANGO_SETTINGS_MODULE را برای تولید
+      # schema به config.settings.development پین می‌کند (توضیح در Makefile).
+      # اگر پین شود، schema با env این job (settings.test + PostgreSQL) تولید
+      # می‌شود و bounds فیلدهای عددی (int32/int16 به‌جای int64 در SQLite) با
+      # schema.yaml فرق می‌کند؛ drift مثبت کاذب. در ران ۲۲۷ همین اتفاق افتاد.
       - name: OpenAPI schema validation and drift check
         run: make schema-check SCHEMA_OUTPUT=schema-ci.yaml
 

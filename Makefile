@@ -72,8 +72,19 @@ migrations-check:
 # سریالایزری عوض شود بدون اینکه فایل بازتولید شود، CI سبز می‌ماند و اسناد
 # API بی‌صدا از کد جدا می‌افتند. این هدف علاوه بر validate، خروجی تازه را با
 # نسخهٔ commit‌شده diff می‌کند.
+# ⚠️ چرا schema با settings توسعهٔ پیش‌فرض تولید می‌شود (نه settings جاری CI)؟
+# خروجی `spectacular` به موتور دیتابیس وابسته است: bounds فیلدهای عددی از
+# `connection.ops.integer_field_ranges` می‌آید (SQLite → همه int64؛
+# PostgreSQL → IntegerField=int32 و SmallIntegerField=int16). اگر CI که حالا
+# روی PostgreSQL تست می‌گیرد، schema را با همان env تولید کند، خروجی با
+# `schema.yaml` (که روی SQLite تولید شده) فرق می‌کند و drift همیشه مثبت
+# کاذب می‌شود — دقیقاً همان failure که در ران ۲۲۷ CI رخ داد. پس هم این‌جا
+# و هم در `schema-update`، settings (و در نتیجه SQLite، مستقل از env ارثی)
+# صریحاً پین می‌شود تا schema.yaml در هر محیطی یکسان تولید و بررسی شود.
+SCHEMA_SETTINGS := config.settings.development
+
 schema-check:
-	$(MANAGE) spectacular --file $(SCHEMA_OUTPUT) --validate
+	DJANGO_SETTINGS_MODULE=$(SCHEMA_SETTINGS) $(MANAGE) spectacular --file $(SCHEMA_OUTPUT) --validate
 	@diff -u schema.yaml $(SCHEMA_OUTPUT) > /dev/null 2>&1 || { \
 		echo ''; \
 		echo 'ERROR: schema.yaml با کد همگام نیست. «make schema-update» را اجرا و نتیجه را commit کن.'; \
@@ -83,7 +94,7 @@ schema-check:
 	}
 
 schema-update:
-	$(MANAGE) spectacular --file schema.yaml --validate
+	DJANGO_SETTINGS_MODULE=$(SCHEMA_SETTINGS) $(MANAGE) spectacular --file schema.yaml --validate
 
 # STRUCTURE.md یک سند تولیدشده است. قبلاً دستی commit می‌شد و کهنه شده بود؛
 # حالا بازتولیدپذیر است و drift آن در CI گرفته می‌شود.
