@@ -11933,6 +11933,65 @@ paths:
               schema:
                 $ref: '#/components/schemas/UserTabyinSubmissionNotFound'
           description: ''
+  /api/v1/tabyin/me/uploads/:
+    post:
+      operationId: tabyin_user_media_upload
+      description: |-
+        آپلود مستقیمِ رسانه برای روایت‌های مردمی (multipart).
+
+        فایل بلافاصله روی استوریجِ عمومیِ خودمان ذخیره می‌شود و نشانیِ داخلی‌اش
+        برمی‌گردد تا در همان گذر به‌عنوان url پیوستِ روایت ثبت شود — از همان
+        لحظه، روایت دیگر به هیچ نشانیِ بیرونی بدهکار نیست. متادیتا (ابعاد،
+        مدت، حجم) هم همان‌جا استخراج و برگردانده می‌شود تا استودیو همان را
+        به کاربر نشان دهد.
+      summary: بارگذاری مستقیم رسانه برای روایت (تصویر/ویدئو/صوت/سایر)
+      tags:
+      - تبیین — عمومی
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TabyinMediaUploadInput'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TabyinMediaUploadInput'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserTabyinMediaUploadResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserTabyinMediaUploadBadRequest'
+          description: ''
+  /api/v1/tabyin/uploads/config/:
+    get:
+      operationId: tabyin_upload_config
+      description: |-
+        قرارداد عمومیِ آپلود — سقف حجم و فرمت‌های مجازِ هر نوع رسانه.
+
+        استودیو این قرارداد را می‌خواند تا قوانینِ بک‌اند را دقیق و به‌روز
+        به کاربر نشان دهد (و با مقدارِ داخلِ‌خودش هم fallback دارد).
+      summary: قرارداد آپلود رسانه — سقف حجم و فرمت‌های مجاز
+      tags:
+      - تبیین — عمومی
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TabyinUploadConfigResponse'
+          description: ''
 components:
   schemas:
     AdminCampaignAnalytics:
@@ -12820,7 +12879,7 @@ components:
         attachments:
           type: array
           items:
-            $ref: '#/components/schemas/TabyinAttachment'
+            $ref: '#/components/schemas/UserTabyinSubmissionAttachment'
           readOnly: true
         created_at:
           type: string
@@ -20076,6 +20135,18 @@ components:
         * `status_change` - تغییر وضعیت
         * `assignment_change` - تغییر مسئول
         * `sla_event` - رویداد SLA
+    MirrorStatusEnum:
+      enum:
+      - none
+      - pending
+      - mirrored
+      - failed
+      type: string
+      description: |-
+        * `none` - بدون نیاز (محتوای منبع خارجی)
+        * `pending` - در انتظار آینه‌سازی
+        * `mirrored` - روی سرور بعثت
+        * `failed` - آینه‌سازی ناموفق
     ModeEnum:
       enum:
       - full
@@ -21864,6 +21935,7 @@ components:
         جزئیات یک محتوا — نمایش عمومی.
 
         اطلاعات بیشتر نسبت به لیست.
+        نام پدیدآورنده برای ارسال‌های کاربران پویا و همیشه به‌روز است.
       properties:
         external_id:
           type: string
@@ -21879,9 +21951,7 @@ components:
           title: توضیحات
         author_username:
           type: string
-          title: نام پدیدآورنده
-          description: مقدار username از محتوانگار.
-          maxLength: 255
+          readOnly: true
         origin:
           allOf:
           - $ref: '#/components/schemas/OriginEnum'
@@ -21917,6 +21987,7 @@ components:
           readOnly: true
       required:
       - attachments
+      - author_username
       - external_id
       - primary_media_type
     PublicTabyinContentDetailNotFoundResponse:
@@ -21956,6 +22027,7 @@ components:
         لیست محتواها — نمایش عمومی.
 
         فقط فیلدهای ضروری برای نمایش در گالری.
+        نام پدیدآورنده برای ارسال‌های کاربران پویا و همیشه به‌روز است.
       properties:
         external_id:
           type: string
@@ -21971,9 +22043,7 @@ components:
           title: توضیحات
         author_username:
           type: string
-          title: نام پدیدآورنده
-          description: مقدار username از محتوانگار.
-          maxLength: 255
+          readOnly: true
         origin:
           allOf:
           - $ref: '#/components/schemas/OriginEnum'
@@ -21998,6 +22068,7 @@ components:
           readOnly: true
       required:
       - attachments
+      - author_username
       - external_id
       - primary_media_type
     PublicTabyinContentListResponse:
@@ -27851,13 +27922,54 @@ components:
         * `video` - ویدئو
         * `audio` - صوت
         * `other` - سایر
+    TabyinMediaUploadInput:
+      type: object
+      description: Input serializer for the direct media-upload endpoint (multipart).
+      properties:
+        file:
+          type: string
+          format: uri
+      required:
+      - file
+    TabyinMediaUploadResult:
+      type: object
+      description: نتیجه‌ی آپلود موفق — همان چیزی که استودیو برای ساختِ ردیف پیوست
+        لازم دارد.
+      properties:
+        url:
+          type: string
+        name:
+          type: string
+        media_type:
+          $ref: '#/components/schemas/TabyinMediaTypeEnum'
+        mime_type:
+          type: string
+        original_name:
+          type: string
+        size:
+          type: string
+        duration:
+          type: integer
+        file_size:
+          type: integer
+        size_bytes:
+          type: integer
+      required:
+      - duration
+      - file_size
+      - media_type
+      - mime_type
+      - name
+      - original_name
+      - size
+      - size_bytes
+      - url
     TabyinSubmissionAttachmentInput:
       type: object
       description: Input serializer for user-submitted content attachment URLs.
       properties:
         url:
           type: string
-          format: uri
           maxLength: 1024
         media_type:
           allOf:
@@ -27895,6 +28007,47 @@ components:
           type: string
       required:
       - status
+    TabyinUploadConfig:
+      type: object
+      description: قرارداد عمومیِ آپلود — سقف حجم و فرمت‌های مجاز هر نوع رسانه.
+      properties:
+        max_attachments:
+          type: integer
+        extensions:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+        max_mb:
+          type: object
+          additionalProperties:
+            type: integer
+        labels:
+          type: object
+          additionalProperties:
+            type: string
+      required:
+      - extensions
+      - labels
+      - max_attachments
+      - max_mb
+    TabyinUploadConfigResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          default: true
+        status_code:
+          type: integer
+          default: 200
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/TabyinUploadConfig'
+      required:
+      - data
+      - message
     TokenRefreshData:
       type: object
       properties:
@@ -28187,6 +28340,110 @@ components:
       required:
       - data
       - message
+    UserTabyinMediaUploadBadRequest:
+      type: object
+      properties:
+        success:
+          type: boolean
+          default: false
+        status_code:
+          type: integer
+        message:
+          type: string
+        errors:
+          nullable: true
+      required:
+      - message
+      - status_code
+    UserTabyinMediaUploadResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          default: true
+        status_code:
+          type: integer
+          default: 200
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/TabyinMediaUploadResult'
+      required:
+      - data
+      - message
+    UserTabyinSubmissionAttachment:
+      type: object
+      description: |-
+        پیوست در دید «روایت‌های من» و صف بررسی ادمین — علاوه بر فیلدهای عمومی،
+        نشانی اصلیِ پیش از آینه‌سازی و وضعیت آن را هم نشان می‌دهد تا مالکِ
+        محتوا/ادمین بفهمد فایل کجا میزبانی می‌شود.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        url:
+          type: string
+          format: uri
+          title: آدرس کامل فایل
+          maxLength: 1024
+        media_type:
+          allOf:
+          - $ref: '#/components/schemas/TabyinMediaTypeEnum'
+          title: نوع رسانه
+        media_type_display:
+          type: string
+          readOnly: true
+        size:
+          type: string
+          title: ابعاد
+          description: مثلاً 1280X905
+          maxLength: 32
+        duration:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          title: مدت (ثانیه)
+          description: فقط برای ویدئو/صوت.
+        file_size:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          title: حجم فایل (KB)
+        title:
+          type: string
+          title: عنوان فایل
+          maxLength: 512
+        order:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          title: ترتیب
+        origin_url:
+          type: string
+          format: uri
+          title: نشانی اصلی پیش از آینه‌سازی
+          description: برای پیوست‌هایی که اول با نشانی بیرونی ثبت و بعد روی سرور ما
+            ذخیره شدند.
+          maxLength: 1024
+        mirror_status:
+          allOf:
+          - $ref: '#/components/schemas/MirrorStatusEnum'
+          title: وضعیت آینه‌سازی
+        mirror_status_display:
+          type: string
+          readOnly: true
+        mime_type:
+          type: string
+          title: نوع MIME فایل
+          maxLength: 127
+      required:
+      - id
+      - media_type_display
+      - mirror_status_display
+      - url
     UserTabyinSubmissionCreate:
       type: object
       description: Input serializer for authenticated user content submissions.
@@ -28263,7 +28520,7 @@ components:
         attachments:
           type: array
           items:
-            $ref: '#/components/schemas/TabyinAttachment'
+            $ref: '#/components/schemas/UserTabyinSubmissionAttachment'
           readOnly: true
         created_at:
           type: string
