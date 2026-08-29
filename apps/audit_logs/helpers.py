@@ -17,17 +17,21 @@ from __future__ import annotations
 
 from rest_framework.request import Request
 
+from apps.core.client_ip import get_client_ip as resolve_client_ip
+
 _MAX_USER_AGENT_LENGTH = 512
 _MAX_PATH_LENGTH = 512
 
 
 def get_client_ip(request: Request) -> str | None:
-    """Extract client IP address from request headers."""
-    x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
-    if x_forwarded_for:
-        return x_forwarded_for.split(",")[0].strip()
+    """Extract client IP address, trusting X-Forwarded-For only per NUM_PROXIES.
 
-    return request.META.get("REMOTE_ADDR")
+    یافتهٔ P1 ممیزی: نسخهٔ قبلی ``X-Forwarded-For`` را بدون راستی‌آزمایی
+    می‌پذیرفت (header ورودی، قابل جعل) و audit trail را با IP ساختگی
+    آلوده می‌کرد. اکنون به ``apps.core.client_ip`` delegate می‌شود:
+    NUM_PROXIES=0 (پیش‌فرض) → REMOTE_ADDR؛ زنجیرهٔ کوتاه/معیوب → fail-closed.
+    """
+    return resolve_client_ip(request)
 
 
 def get_request_id(request: Request) -> str | None:

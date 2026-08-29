@@ -84,6 +84,9 @@ class TestAuditMetadataExtractionAndPersistence:
     """تست‌های metadata عملیاتی request برای forensic tracing."""
 
     def test_extract_audit_metadata_includes_method_path_user_agent_ip_and_request_id(self) -> None:
+        # XFF ورودی عمداً «جعل‌شده» فرستاده می‌شود: با NUM_PROXIES=0
+        # (پیش‌فرض پروژه) باید نادیده گرفته شود و REMOTE_ADDR ثبت گردد
+        # (یافتهٔ P1 ممیزی — XFF قابل جعل audit trail را آلوده می‌کند).
         request = APIRequestFactory().post(
             "/api/v1/example/path/?debug=1",
             HTTP_X_FORWARDED_FOR="203.0.113.5, 10.0.0.1",
@@ -94,7 +97,7 @@ class TestAuditMetadataExtractionAndPersistence:
         metadata = extract_audit_metadata(request)
 
         assert metadata == {
-            "ip_address": "203.0.113.5",
+            "ip_address": "127.0.0.1",
             "request_id": "req-forensic-001",
             "user_agent": "Mozilla/5.0 forensic-test",
             "path": "/api/v1/example/path/",

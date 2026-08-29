@@ -20,6 +20,8 @@ from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
 from rest_framework_simplejwt.tokens import RefreshToken
 
+from apps.core.client_ip import get_client_ip as resolve_client_ip
+
 from .choices import AuthRiskSeverity, AuthRiskSignalType, AuthRiskStatus, OTPPurpose, UserRole
 from .constants import LAST_SEEN_TOUCH_SECONDS, SESSION_ID_CLAIM
 from .logging_utils import mask_identifier
@@ -127,12 +129,13 @@ class IdentifierNotVerified(AuthServiceError):
 
 
 def _get_client_ip(*, request: HttpRequest) -> str | None:
-    """Extract client IP address from request headers."""
-    x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
-    if x_forwarded_for:
-        return x_forwarded_for.split(",")[0].strip()
+    """Extract client IP, trusting X-Forwarded-For only per NUM_PROXIES.
 
-    return request.META.get("REMOTE_ADDR")
+    (یافتهٔ P1 ممیزی) XFF ورودی قابل جعل است و در لاگ‌های امنیتی
+    احراز هویت نباید بدون راستی‌آزمایی استفاده شود؛ این تابع همان
+    قرارداد fail-closed ``apps.core.client_ip`` را دارد.
+    """
+    return resolve_client_ip(request)
 
 
 def _normalize_identifier_by_kind(

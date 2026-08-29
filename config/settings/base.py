@@ -46,6 +46,10 @@ DJANGO_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    # برای ثبت lookupهای PostgreSQL (trigram_similar, unaccent, search).
+    # بدون این اپ، لوکاپ `__trigram_similar` در سطح Django اصلاً ثبت
+    # نمی‌شود (یافتهٔ مرتبط با P2 ممیزی: ایندکس‌های جستجو).
+    "django.contrib.postgres",
 ]
 
 THIRD_PARTY_APPS = [
@@ -295,6 +299,14 @@ REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
         "apps.authentication.jwt_auth.SessionAwareJWTAuthentication",
     ),
+    # ── Client IP / X-Forwarded-For ────────────────────────────────────
+    # تعداد پراکسی‌های «قابل اعتماد» پشت سرویس (یافتهٔ P1 ممیزی).
+    # پیش‌فرض صفر است: header ورودی X-Forwarded-For هرگز معتبر نیست و
+    # REMOTE_ADDR (که WSGI/پروکسی واقعی پر می‌کند) تنها منبع IP است.
+    # وقتی پشت n پراکسی هستید که XFF را بازنویسی می‌کنند، این را دقیقاً
+    # همان n بگذارید — نه تعداد hops شبکه. متدهای internal از
+    # apps.core.client_ip استفاده می‌کنند (fail-closed حتی در حالت None).
+    "NUM_PROXIES": config("NUM_PROXIES", default="0", cast=int),
     "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
     "DEFAULT_FILTER_BACKENDS": (
         "django_filters.rest_framework.DjangoFilterBackend",

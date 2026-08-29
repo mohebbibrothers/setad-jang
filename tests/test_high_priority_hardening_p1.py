@@ -149,6 +149,13 @@ class TestProductionCacheFailFast:
             "POSTGRES_HOST": "127.0.0.1",
             "POSTGRES_PORT": "5432",
             "SECRET_KEY": "realistic-production-secret-key-with-more-than-fifty-characters-2026",
+            # از ۱۴۰۵ production در برابر backendهای ایمیلِ توسعه fail-fast
+            # می‌کند (یافتهٔ P2 ناظر بیرونی)؛ پس برای «boot موفق» باید یک
+            # backend واقعی (smtp) ارائه بدهیم — نه backend کنسولِ پیش‌فرض.
+            "EMAIL_BACKEND": "django.core.mail.backends.smtp.EmailBackend",
+            "EMAIL_HOST": "localhost",
+            "EMAIL_PORT": "1025",
+            "EMAIL_USE_TLS": "False",
         }
         return subprocess.run(
             [sys.executable, "-c", "import django; django.setup()"],

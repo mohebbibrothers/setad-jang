@@ -136,6 +136,27 @@ do_rollback() {
   ROLLBACK_ARMED=0  # جلوگیری از ورود مجدد — خطا در حین rollback نباید rollbackِ تازه‌ای تریگر کند
   warn "شروع rollback…"
   if docker image inspect "$ROLLBACK_TAG" >/dev/null 2>&1; then
+    # ── بازگردانی مهاجرت‌ها (اختیاری، opt-in) — یافتهٔ P3 ممیزی: rollbackِ
+    # قبلی فقط ایمیج را برمی‌گرداند و مهاجرت‌های اعمال‌شده در دیتابیس باقی
+    # می‌مانند. اگر deploy جدید مهاجرت داشته باشد و با آن rollback کنیم، کدِ
+    # قدیمی + اسکیمای جدید می‌شود (بدترین حالت). پس اینجا *قبل از عوض‌کردن
+    # ایمیج* و با کدِ NEW، مهاجرت‌ها را به عقب برمی‌گردانیم:
+    #   ROLLBACK_MIGRATIONS="lms:0004_learningactivitystatement madadkar:0007_campaigndisbursement"
+    # (ترتیبِ معکوسِ اعمال؛ هر جفت = app:مقصدِ مهاجرت). پیش‌فرض خالی →
+    # رفتار قدیمی (فقط ایمیج) عمداً حفظ می‌شود؛ تنظیم فقط وقتی deploy
+    # واقعاً مهاجرت داشته است.
+    if [[ -n "${ROLLBACK_MIGRATIONS:-}" ]]; then
+      warn "بازگردانی مهاجرت‌های ذکرشده (با کد NEW، قبل از عوض‌کردن ایمیج)…"
+      local _pair _app _mig
+      for _pair in $ROLLBACK_MIGRATIONS; do
+        _app="${_pair%%:*}"; _mig="${_pair#*:}"
+        if compose exec -T "$WEB_SERVICE" python manage.py migrate "$_app" "$_mig"; then
+          ok "مِهاجرت $_app → $_mig برگشت."
+        else
+          err "بازگردانی $_app→$_mig ناموفق — ایمیج برمی‌گردد ولی دیتابیس را دستی بررسی کن."
+        fi
+      done
+    fi
     run docker tag "$ROLLBACK_TAG" "$IMAGE_NAME"
     [[ -n "$PREV_COMMIT" ]] && run git reset --hard --quiet "$PREV_COMMIT" || true
     run compose up -d --no-deps --force-recreate "$WEB_SERVICE" || true

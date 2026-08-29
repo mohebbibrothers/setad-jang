@@ -34,6 +34,8 @@ from typing import Any
 from django.utils.crypto import salted_hmac
 from rest_framework.throttling import SimpleRateThrottle
 
+from apps.core.client_ip import get_client_ip as _resolve_client_ip
+
 # فضای نام امضای HMAC برای cache keyهای throttle
 _THROTTLE_HMAC_SALT = "apps.core.throttling.target"
 
@@ -73,6 +75,23 @@ class NonBypassableRateThrottle(SimpleRateThrottle):
     bucket_prefix = "any"
 
     cache_format = "throttle_%(prefix)s_%(scope)s_%(ident)s"
+
+    def get_ident(self, request: Any) -> str:
+        """تعیین IP کلاینت به‌صورت fail-closed (یافتهٔ P1 ممیزی).
+
+        عمداً DRF را override می‌کنیم: ``SimpleRateThrottle.get_ident`` وقتی
+        ``NUM_PROXIES`` تنظیم نشده باشد (حالت پیش‌فرض این پروژه پیش از این
+        رفع)، ``X-Forwarded-For`` ورودی را **بدون راستی‌آزمایی** می‌پذیرد —
+        یعنی مهاجم با یک header، هم سهمیهٔ throttle را دور می‌زند و هم IP
+        جعلی وارد audit/لاگ‌ها می‌کند. حتی با ``NUM_PROXIES=k`` تنظیم‌شده،
+        DRF برای زنجیرهٔ کوتاه‌تر سراغ چپ‌ترین (جعل‌پذیرترین) مقدار می‌رود.
+
+        قرارداد جایگزین (``apps.core.client_ip.get_client_ip``):
+        NUM_PROXIES=0 (پیش‌فرض) → فقط REMOTE_ADDR؛ NUM_PROXIES=k → k-امین
+        مقدار از راستِ XFF و فقط وقتی زنجیره به‌اندازهٔ کافی بلند است؛
+        هر حالت معیوب → REMOTE_ADDR (نه header).
+        """
+        return _resolve_client_ip(request) or ""
 
     def get_bucket_ident(self, request: Any, view: Any) -> str:
         """
@@ -126,7 +145,12 @@ class ClientIPRateThrottle(NonBypassableRateThrottle):
     bucket_prefix = "ip"
 
     def get_bucket_ident(self, request: Any, view: Any) -> str:
-        """برگرداندن IP کلاینت با احترام به تنظیمات NUM_PROXIES در DRF."""
+        """برگرداندن IP کلاینت طبق قرارداد fail-closed پروژه.
+
+        (یافتهٔ P1 ممیزی): این متد از ``apps.core.client_ip`` استفاده
+        می‌کند، نه ``SimpleRateThrottle.get_ident`` — قرارداد DRF وقتی
+        ``NUM_PROXIES`` تنظیم نشده XFF ورودی را معتبر می‌داند (جعل‌پذیر).
+        """
         return str(self.get_ident(request))
 
 

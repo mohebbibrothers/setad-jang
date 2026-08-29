@@ -133,6 +133,29 @@ if CACHE_BACKEND != "redis":
         "invalidate کش فقط روی یک worker اثر می‌کند که باعث سرو شدن دادهٔ کهنه است.",
     )
 
+# ── Email backend fail-fast (یافتهٔ P2 ممیزی مستقل) ──
+# در production، backend ایمیلِ توسعه (console/locmem/filebased) یعنی:
+#   1. OTP تأیید هویت و اعلان‌های حساس در لاگ/حافظه چاپ و نگه‌داری می‌شوند؛
+#   2. هیچ ایمیلی واقعاً ارسال نمی‌شود ولی سیستم «به‌نظر سالم» کار می‌کند —
+#      یعنی نبودِ email delivery تا اولین شکایت کاربر نامرئی می‌ماند.
+# پس اگر operator فراموش کند EMAIL_BACKEND را تنظیم کند، برنامه اصلاً بالا
+# نمی‌آید (fail-fast) تا OTP به لاگ نشت نکند.
+_EMAIL_CONSOLE_LIKE_BACKENDS: set[str] = {
+    "django.core.mail.backends.console.EmailBackend",
+    "django.core.mail.backends.locmem.EmailBackend",
+    "django.core.mail.backends.filebased.EmailBackend",
+    "apps.core.email_backends.ReadableConsoleEmailBackend",
+}
+
+if MAILERS["default"]["BACKEND"] in _EMAIL_CONSOLE_LIKE_BACKENDS:
+    raise RuntimeError(
+        f"EMAIL_BACKEND در production نباید backend توسعه باشد: "
+        f"'{MAILERS['default']['BACKEND']}' — در این حالت OTP و اعلان‌های حساس "
+        "در لاگ/حافظه چاپ می‌شوند و هیچ ایمیلی واقعاً ارسال نمی‌شود. "
+        "یک backend واقعی (مثلاً django.core.mail.backends.smtp.EmailBackend) "
+        "با EMAIL_HOST/EMAIL_HOST_USER/EMAIL_HOST_PASSWORD تنظیم کن.",
+    )
+
 
 # ============================================================
 # HTTPS / Proxy

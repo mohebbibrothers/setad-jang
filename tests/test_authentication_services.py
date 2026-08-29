@@ -118,11 +118,23 @@ def _bare_request(*, user_agent: str = "", ip: str | None = None) -> HttpRequest
 class TestClientIPAndIdentifierHelpers:
     """پوشش `_get_client_ip` و `_normalize_identifier_by_kind` و دوستان."""
 
-    def test_get_client_ip_prefers_first_xff_entry(self) -> None:
-        request = _bare_request()
+    def test_get_client_ip_ignores_xff_by_default(self) -> None:
+        """قرارداد fail-closed (یافتهٔ P1 ممیزی): بدون NUM_PROXIES صریح،
+        XFF ورودی (قابل جعل) هرگز معتبر نیست — REMOTE_ADDR تنها منبع IP است."""
+        request = _bare_request(ip="198.51.100.42")
         request.META["HTTP_X_FORWARDED_FOR"] = "203.0.113.7, 10.0.0.1, 192.168.1.9"
 
-        assert auth_services._get_client_ip(request=request) == "203.0.113.7"
+        assert auth_services._get_client_ip(request=request) == "198.51.100.42"
+
+    def test_get_client_ip_honours_trusted_proxy_count(self) -> None:
+        """با NUM_PROXIES=2 چپ‌ترینِ اعتمادپذیر (کلاینت واقعی) برمی‌گردد."""
+        from django.test import override_settings
+
+        with override_settings(REST_FRAMEWORK={"NUM_PROXIES": 2}):
+            request = _bare_request()
+            request.META["HTTP_X_FORWARDED_FOR"] = "203.0.113.7, 10.0.0.1, 192.168.1.9"
+
+            assert auth_services._get_client_ip(request=request) == "10.0.0.1"
 
     def test_get_client_ip_falls_back_to_remote_addr(self) -> None:
         request = _bare_request(ip="198.51.100.42")
@@ -595,7 +607,9 @@ class TestTokenAndSessionServices:
         assert session.user_id == user.pk
         assert session.refresh_jti == str(refresh["jti"])
         assert session.device_label == "Mobile browser"
-        assert session.ip_address == "203.0.113.99"
+        # قرارداد fail-closed (یافتهٔ P1 ممیزی): XFF ورودی بدون NUM_PROXIES
+        # معتبر نیست؛ IP از REMOTE_ADDR خوانده می‌شود.
+        assert session.ip_address == "198.51.100.7"
         assert session.expires_at is not None
         assert session.fingerprint_hash
 

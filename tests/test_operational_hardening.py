@@ -43,6 +43,13 @@ def _production_env(**overrides: str) -> dict[str, str]:
             # خودش این کلید را pop می‌کند.
             "DATABASE_ENGINE": "postgres",
             "DEBUG": "False",
+            # ایمیل در production باید واقعی باشد؛ بدون این خط، پیش‌فرضِ
+            # base.py (ReadableConsoleEmailBackend) fail-fast را فعال می‌کرد
+            # و تست‌های boot همیشه قرمز می‌شدند.
+            "EMAIL_BACKEND": "django.core.mail.backends.smtp.EmailBackend",
+            "EMAIL_HOST": "smtp.example.com",
+            "EMAIL_PORT": "587",
+            "EMAIL_USE_TLS": "True",
             "DJANGO_SETTINGS_MODULE": "config.settings.production",
             "POSTGRES_CONNECT_TIMEOUT": "1",
             "POSTGRES_CONN_MAX_AGE": "0",
@@ -104,6 +111,41 @@ def test_production_settings_reject_sample_postgres_password() -> None:
 
     assert result.returncode != 0
     assert "POSTGRES_PASSWORD" in result.stderr
+
+
+def test_production_settings_reject_console_email_backend() -> None:
+    """EMAIL_BACKEND توسعه در production باید fail-fast شود (یافتهٔ P2 ممیزی).
+
+    OTP تأیید هویت و اعلان‌های حساس با backend های console/locmem/filebased
+    در لاگ/حافظه چاپ می‌شوند و هیچ ایمیلی واقعاً ارسال نمی‌شود؛ در یک
+    production «نابالغ» این یعنی نشت OTP به لاگ. برنامه باید بی‌صدا بالا نیاید.
+    """
+    for backend in (
+        "django.core.mail.backends.console.EmailBackend",
+        "django.core.mail.backends.locmem.EmailBackend",
+        "django.core.mail.backends.filebased.EmailBackend",
+        "apps.core.email_backends.ReadableConsoleEmailBackend",
+    ):
+        result = _run_manage_check(
+            _production_env(
+                EMAIL_BACKEND=backend,
+            )
+        )
+        assert result.returncode != 0, f"{backend} در production نباید قابل boot باشد."
+        assert "EMAIL_BACKEND" in result.stderr
+
+
+def test_production_settings_accept_smtp_email_backend() -> None:
+    """با backend واقعی SMTP، production باید boot شود."""
+    result = _run_manage_check(
+        _production_env(
+            EMAIL_BACKEND="django.core.mail.backends.smtp.EmailBackend",
+            EMAIL_HOST="smtp.example.com",
+            EMAIL_HOST_USER="noreply@example.com",
+            EMAIL_HOST_PASSWORD="strong",
+        )
+    )
+    assert result.returncode == 0, result.stderr + result.stdout
 
 
 def test_production_settings_reject_sqlite_without_explicit_escape_hatch() -> None:

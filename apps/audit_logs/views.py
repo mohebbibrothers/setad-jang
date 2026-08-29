@@ -21,6 +21,7 @@ from rest_framework.request import Request
 from rest_framework.views import APIView
 
 from apps.authentication.permissions import IsAdminUser
+from apps.core.client_ip import get_client_ip as resolve_client_ip
 from apps.core.pagination import StandardPagination
 from apps.core.responses import ErrorResponse, SuccessResponse
 from apps.core.schemas import (
@@ -333,8 +334,9 @@ def _build_export_filters(validated_data: dict) -> AuditExportFilters:
 
 
 def _get_client_ip(request: Request) -> str | None:
-    """Extract client IP with X-Forwarded-For support for audited admin exports."""
-    forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
-    if forwarded_for:
-        return forwarded_for.split(",")[0].strip()
-    return request.META.get("REMOTE_ADDR")
+    """Extract client IP for audited exports, trusting XFF only per NUM_PROXIES.
+
+    (یافتهٔ P1 ممیزی) نسخهٔ قبلی XFF ورودی را بی‌راستی‌آزمایی می‌پذیرفت؛
+    اکنون از ``apps.core.client_ip`` استفاده می‌شود که fail-closed است.
+    """
+    return resolve_client_ip(request)

@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 import requests
-from django.db import connection
+from django.db import connection, transaction
 from django.utils import timezone
 
 from apps.core import frontend_revalidation as fr, tasks as core_tasks
@@ -559,8 +559,31 @@ class TestHotQueriesUseIndexes:
     """
 
     @staticmethod
-    def _plan(queryset) -> str:
-        return queryset.explain()
+    def _plan(queryset, *, force_index: bool = False) -> str:
+        """پلن واقعیِ کوئری (EXPLAIN).
+
+        ``force_index`` فقط برای تست‌های «باید از ایندکس استفاده شود» است:
+        جدول‌های تست خالی‌اند و planner روی جدول خالی Seq Scan را به هر
+        ایندکس ترجیح می‌دهد (ارزان‌تر) — یعنی بدون این، تستِ «استفاده از
+        ایندکس» حتی وقتی ایندکس‌ها سالم‌اند هم قطعاً قرمز می‌شود. با
+        ``SET LOCAL enable_seqscan = off`` اگر ایندکس قابل استفاده‌ای وجود
+        داشته باشد planner باید آن را انتخاب کند؛ اگر ایندکسی نباشد یا با
+        کوئری ناهم‌خوان باشد، اجباراً به Seq Scan برمی‌گردد و
+        ``_assert_no_full_scan`` قرمز می‌شود. (همان الگوی
+        ``tests/test_search_indexes_postgres.py`` برای ایندکس‌های GIN.)
+
+        کنترل منفی (``test_full_scan_detector_actually_detects_a_full_scan``)
+        عمداً بدون force_index است: باید Seq Scan واقعی در پلن باشد.
+        """
+        if connection.vendor != "postgresql" or not force_index:
+            return queryset.explain()
+        with transaction.atomic():
+            with connection.cursor() as cursor:
+                cursor.execute("SET LOCAL enable_seqscan = off")
+            raw = queryset.explain()
+        if isinstance(raw, str):
+            return raw
+        return "\n".join(raw)
 
     @staticmethod
     def _assert_no_full_scan(plan: str, table: str) -> None:
@@ -586,12 +609,18 @@ class TestHotQueriesUseIndexes:
     def _assert_any_index_used(plan: str, table: str) -> None:
         """تضمین اینکه پرس‌وجو index-backed است، بدون قفل‌کردن نام ایندکس.
 
-        برای SQLite لازم است: planner ممکن است به‌درستی ایندکس تک‌ستونه را به
-        ترکیبی ترجیح دهد؛ پس نام ایندکس قابل پیش‌بینی نیست ولی «استفاده از
-        ایندکس» (به‌جای پیمایش کامل) تضمین‌پذیر است.
+        چرا «هر ایندکسی» و نه نامِ خاص (یافتهٔ ۱۴۰۵ — قابلیت اطمینان تست
+        روی PostgreSQL): planner ممکن است عالمانه ایندکس تک‌ستونهٔ ارزان‌تر
+        را به ترکیبی ترجیح دهد؛ انتخابِ planner نباید تست شود، بلکه وجودِ
+        ایندکسِ استفاده‌پذیر و نبودِ full scan باید تضمین شود. نام ایندکس
+        ترکیبی فقط روی SQLite قفل می‌شود (خروجی EXPLAIN این موتور قطعی است).
         """
         if connection.vendor == "postgresql":
-            used = re.search(rf"\b(?:Bitmap )?Index Scan on {re.escape(table)}\b", plan)
+            # دو قالب پلن: «Index Scan using <idx> on <table>» و
+            # «Bitmap Heap Scan on <table>» (بعد از BitmapOr).
+            used = re.search(
+                rf"\b(?:Bitmap )?Index Scan(?: using [\w.]+)? on {re.escape(table)}\b", plan
+            ) or re.search(rf"\bBitmap Heap Scan on {re.escape(table)}\b", plan)
         else:
             used = "USING INDEX" in plan
         assert used, f"پرس‌وجو روی {table} از هیچ ایندکسی استفاده نکرده است:\n{plan}"
@@ -607,27 +636,37 @@ class TestHotQueriesUseIndexes:
                 Q(status=CacheInvalidationEvent.STATUS_PENDING)
                 | Q(status=CacheInvalidationEvent.STATUS_FAILED, next_attempt_at__lte=now),
                 attempts__lt=10,
-            ).order_by("created_at")
+            ).order_by("created_at"),
+            force_index=True,
         )
 
-        # هر دو شاخهٔ OR باید ایندکس بخورند و نام ایندکس ترکیبی دیده شود.
-        # PostgreSQL ممکن است سراغ ایندکس دیگر (like) برود، ولی no full scan
-        # الزامی است و ایندکس ترکیبی باید در plan حضور داشته باشد.
-        self._assert_index_named(plan, "core_cache_event_due_idx")
+        # هر دو شاخهٔ OR باید ایندکس بخورند و نیم‌صفحهٔ «coverage» احتمال دارد
+        # نام ایندکس ترکیبی را بدهد؛ روی SQLite نام ایندکس ترکیبی قفل می‌شود
+        # (خروجی EXPLAIN این موتور قطعی است)، روی PostgreSQL تضمینِ معنی‌دار
+        # «بدون full scan» است — چون planner ممکن است عالمانه ایندکس تک‌ستونهٔ
+        # ارزان‌تری را انتخاب کند؛ انتخابِ درستِ planner نیست که باید تست
+        # شود، بلکه وجودِ ایندکسِ استفاده‌پذیر است.
+        if connection.vendor == "postgresql":
+            self._assert_any_index_used(plan, "core_cacheinvalidationevent")
+        else:
+            self._assert_index_named(plan, "core_cache_event_due_idx")
         self._assert_no_full_scan(plan, "core_cacheinvalidationevent")
 
     def test_outbox_status_lookup_is_index_backed(self) -> None:
         from apps.core.models import CacheInvalidationEvent
 
         plan = self._plan(
-            CacheInvalidationEvent.all_objects.filter(status=CacheInvalidationEvent.STATUS_PENDING)
+            CacheInvalidationEvent.all_objects.filter(status=CacheInvalidationEvent.STATUS_PENDING),
+            force_index=True,
         )
 
         if connection.vendor == "postgresql":
-            # PostgreSQL planner روی جدول تست‌شدهٔ این ایندکس ترکیبی را برای
-            # فیلتر status انتخاب می‌کند (statistics واقعی)؛ پس نامش را قفل
-            # می‌کنیم تا اگر کسی ایندکس را خراب کرد تست بشکند.
-            self._assert_index_named(plan, "core_cache_event_due_idx")
+            # (نکتهٔ ۱۴۰۵): نامِ ایندکسِ انتخابی روی PostgreSQL قطعی نیست —
+            # با seq scan خاموش، planner ممکن است ایندکس تک‌ستونهٔ (status)
+            # را که کوچک‌تر است به ترکیبی ترجیح دهد. تضمینِ معنی‌دار:
+            # «از ایندکس استفاده شده» (نه full scan). نام ایندکس ترکیبی
+            # روی SQLite قفل می‌شود.
+            self._assert_any_index_used(plan, "core_cacheinvalidationevent")
         else:
             # SQLite برای یک فیلتر status خالص به‌درستی ایندکس تک‌ستونهٔ
             # (status) را که کوچک‌تر و ارزان‌تر است انتخاب می‌کند؛ این
@@ -640,10 +679,15 @@ class TestHotQueriesUseIndexes:
         from apps.core.models import CacheInvalidationEvent
 
         plan = self._plan(
-            CacheInvalidationEvent.all_objects.filter(domain="public").order_by("-created_at")
+            CacheInvalidationEvent.all_objects.filter(domain="public").order_by("-created_at"),
+            force_index=True,
         )
 
-        self._assert_index_named(plan, "core_cache_event_domain_idx")
+        if connection.vendor == "postgresql":
+            # همان استدلالِ بالا: وجودِ ایندکسِ استفاده‌پذیر، نه نامِ انتخابی.
+            self._assert_any_index_used(plan, "core_cacheinvalidationevent")
+        else:
+            self._assert_index_named(plan, "core_cache_event_domain_idx")
         self._assert_no_full_scan(plan, "core_cacheinvalidationevent")
 
     def test_explain_is_available_on_the_test_backend(self) -> None:

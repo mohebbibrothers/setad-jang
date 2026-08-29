@@ -1,5 +1,17 @@
+# ============================================================
+# وابستگی‌های مستقیم runtime (پین‌شده)
+# ============================================================
+# چرا «چهار» فایل requirements؟ هر کدام نقش مشخص دارد:
+#   requirements.txt          → وابستگی‌های مستقیم runtime (این فایل)
+#   requirements-dev.txt      → ابزارهای توسعه (pytest/ruff/bandit/...)
+#   requirements-lock.txt     → قفلِ کاملِ runtime (transitiveها پین می‌شوند)
+#                               مصرف‌کننده: Dockerfile (image قابل بازتولید)
+#   requirements-dev-lock.txt → قفلِ runtime + توسعه؛ مصرف‌کننده: CI
+# قفل‌ها خودکار ساخته می‌شوند:  python scripts/generate_locks.py  (make lock)
+# پس این فایل را ویرایش کن و سپس قفل‌ها را بازتولید کن.
+# ============================================================
+
 asgiref==3.11.1
-attrs==26.1.0
 celery==5.6.3
 certifi==2026.4.22
 charset-normalizer==3.4.7
@@ -10,12 +22,12 @@ django-redis==7.0.0
 django-storages[s3]==1.14.6
 djangorestframework==3.18.0
 djangorestframework_simplejwt==5.5.1
+# dnspython (استفادهٔ مستقیم در apps/authentication/validators.py — MX/دامنه)
 dnspython==2.7.0
 drf-spectacular==0.29.0
 flower==2.0.1
 gunicorn==26.2.0
 idna==3.15
-inflection==0.5.1
 jsonschema==4.26.0
 jsonschema-specifications==2025.9.1
 openpyxl==3.1.5

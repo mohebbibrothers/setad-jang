@@ -16,6 +16,8 @@ from decouple import config
 from rest_framework.request import Request
 from rest_framework.response import Response
 
+from apps.core.client_ip import get_client_ip as resolve_client_ip
+
 logger = logging.getLogger("apps.authentication")
 
 DEPRECATION_HEADER: Final[str] = "Deprecation"
@@ -75,7 +77,7 @@ def log_legacy_auth_usage(
     """
     user = getattr(request, "user", None)
     user_id = getattr(user, "pk", None) if getattr(user, "is_authenticated", False) else None
-    ip_address = request.META.get("REMOTE_ADDR")
+    ip_address = resolve_client_ip(request)
 
     logger.warning(
         "Legacy auth endpoint used endpoint=%s user_id=%s ip=%s successor=%s",

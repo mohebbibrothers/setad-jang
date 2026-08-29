@@ -18,6 +18,12 @@ x-app-env: &app_env
   POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
   POSTGRES_HOST: postgres
   POSTGRES_PORT: "5432"
+  # ── Client IP (یافتهٔ P1 ممیزی) ──
+  # در این توپولوژی دقیقاً یک پراکسی قابل اعتماد (سرویس nginx همین فایل)
+  # جلوتر از web است و خودش X-Forwarded-For را بازنویسی می‌کند؛ پس
+  # NUM_PROXIES=1 درست است. اگر nginx را حذف کردی، این را 0 بگذار تا
+  # XFF ورودی هرگز معتبر نشود (fail-closed در apps/core/client_ip.py).
+  NUM_PROXIES: "1"
   SECURE_SSL_REDIRECT: "False"
   SECURE_HSTS_SECONDS: "0"
 
@@ -74,14 +80,55 @@ services:
       RUN_MIGRATIONS: "1"
       RUN_COLLECTSTATIC: "1"
       GUNICORN_WORKERS: "3"
+    # انتشار فقط روی loopback هاست: ترافیک عمومی باید از سرویس nginx
+    # (پایین همین فایل) عبور کند؛ همین باعث می‌شود X-Forwarded-For
+    # قابل اعتماد و NUM_PROXIES=1 معتبر باشد (یافتهٔ P3 ممیزی: «web بدون proxy»).
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     networks:
       - internal
     volumes:
       - db_data:/app/data
       - static_data:/app/staticfiles
       - media_data:/app/media
+    # healthcheck واقعی (یافتهٔ P3 ممیزی: «web بدون healthcheck»): wait-for
+    # فقط process را می‌سنجد؛ این، پاسخِ واقعی /health/ را می‌سنجد و کارگرها
+    # با service_healthy صبر می‌کنند تا migrate تمام شود.
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health/', timeout=5).status == 200 else 1)",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # ── Reverse proxy (یافتهٔ P3 ممیزی: «web بدون proxy در compose») ──
+  # تنها نقطهٔ ورود عمومی؛ web فقط روی loopback هاست باز است.
+  # ALLOWED_HOSTS باید دامنهٔ واقعی را شامل باشد و در صورت TLS در LB،
+  # SECURE_PROXY_SSL_HEADER از قبل با X-Forwarded-Proto هماهنگ است.
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    depends_on:
+      web:
+        condition: service_healthy
+    ports:
+      - "${NGINX_PORT:-80}:80"
+    volumes:
+      - ./deploy/nginx.conf:/etc/nginx/nginx.conf:ro
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
 
   worker:
     image: setadjang:latest
@@ -92,7 +139,7 @@ services:
       postgres:
         condition: service_healthy
       web:
-        condition: service_started
+        condition: service_healthy
     env_file:
       - .env
     environment:
@@ -144,7 +191,7 @@ services:
       postgres:
         condition: service_healthy
       web:
-        condition: service_started
+        condition: service_healthy
     env_file:
       - .env
     environment:
@@ -183,7 +230,7 @@ services:
       postgres:
         condition: service_healthy
       web:
-        condition: service_started
+        condition: service_healthy
     env_file:
       - .env
     environment:

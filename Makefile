@@ -8,6 +8,9 @@ PYTHON ?= python
 MANAGE := $(PYTHON) manage.py
 SCHEMA_OUTPUT ?= /tmp/setad-jang-schema-check.yaml
 
+# NOTE (۱۴۰۵): production در برابر backendهای ایمیلِ توسعه fail-fast
+# می‌کند (یافتهٔ P2 ناظر بیرونی)؛ پس deploy-check هم با backend واقعی
+# (smtp) اجرا می‌شود، نه backend کنسول.
 PROD_CHECK_ENV := \
 	ALLOWED_HOSTS=example.com \
 	CACHE_BACKEND=redis \
@@ -19,7 +22,11 @@ PROD_CHECK_ENV := \
 	POSTGRES_HOST=127.0.0.1 \
 	POSTGRES_PORT=5432 \
 	SECRET_KEY=realistic-production-secret-key-with-more-than-fifty-characters-2026 \
-	SECURE_SSL_REDIRECT=True
+	SECURE_SSL_REDIRECT=True \
+	EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend \
+	EMAIL_HOST=localhost \
+	EMAIL_PORT=1025 \
+	EMAIL_USE_TLS=False
 
 .PHONY: help install lock lock-check lint format format-check structure structure-check check deploy-check migrations-check schema-check schema-update test test-postgres coverage coverage-postgres test-sqlite-vendor pip-check pip-audit bandit secrets-scan security verify verify-fast docker-up docker-down
 

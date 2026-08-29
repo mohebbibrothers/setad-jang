@@ -9,7 +9,7 @@
 
 ## اپلیکیشن‌ها
 
-مجموع: **13 اپ** · 95 مدل · 54 مایگریشن · 285 ویو · 285 مسیر
+مجموع: **13 اپ** · 95 مدل · 60 مایگریشن · 285 ویو · 285 مسیر
 
 | اپ | مدل | مایگریشن | ویو | مسیر |
 |---|---:|---:|---:|---:|
@@ -18,14 +18,14 @@
 | `authentication` | 4 | 9 | 29 | 30 |
 | `command_center` | 0 | 0 | 1 | 1 |
 | `core` | 2 | 3 | 1 | 0 |
-| `kindness_wall` | 12 | 2 | 34 | 34 |
-| `lms` | 18 | 4 | 51 | 51 |
-| `madadkar` | 14 | 8 | 47 | 47 |
+| `kindness_wall` | 12 | 3 | 34 | 34 |
+| `lms` | 18 | 5 | 51 | 51 |
+| `madadkar` | 14 | 9 | 47 | 47 |
 | `notifications` | 4 | 3 | 7 | 7 |
 | `public_reports` | 3 | 2 | 7 | 7 |
-| `r4j` | 15 | 9 | 36 | 36 |
-| `support_desk` | 19 | 6 | 54 | 54 |
-| `tabyin` | 2 | 3 | 13 | 13 |
+| `r4j` | 15 | 10 | 36 | 36 |
+| `support_desk` | 19 | 7 | 54 | 54 |
+| `tabyin` | 2 | 4 | 13 | 13 |
 
 ## قرارداد لایه‌ها
 
@@ -154,6 +154,7 @@ setad-jang/
 │   ├── cache_invalidation.py
 │   ├── cache_policy.py
 │   ├── cache_signals.py
+│   ├── client_ip.py
 │   ├── db_performance.py
 │   ├── email_backends.py
 │   ├── excel.py
@@ -178,6 +179,7 @@ setad-jang/
 │   ├── responses.py
 │   ├── schemas.py
 │   ├── search.py
+│   ├── search_indexes.py
 │   ├── storage.py
 │   ├── tasks.py  # تسک‌های Celery
 │   ├── throttling.py
@@ -368,6 +370,7 @@ apps/core/
 ├── cache_invalidation.py
 ├── cache_policy.py
 ├── cache_signals.py
+├── client_ip.py
 ├── db_performance.py
 ├── email_backends.py
 ├── excel.py
@@ -392,6 +395,7 @@ apps/core/
 ├── responses.py
 ├── schemas.py
 ├── search.py
+├── search_indexes.py
 ├── storage.py
 ├── tasks.py  # تسک‌های Celery
 ├── throttling.py
