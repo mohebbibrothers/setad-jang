@@ -178,6 +178,29 @@ MEDIA_ROOT = BASE_DIR / "media"
 SERVE_PUBLIC_MEDIA = config("SERVE_PUBLIC_MEDIA", default=False, cast=bool)
 
 MEDIA_STORAGE_BACKEND = config("MEDIA_STORAGE_BACKEND", default="local").strip().lower()
+
+# ── رسانه‌ی روایت‌های مردمی (تبیین): آپلود مستقیم + آینه‌سازی ─────────
+# سقف حجم هر نوع رسانه (مگابایت) — با env قابل تنظیم؛ با سقفِ nginx هماهنگ است.
+TABYIN_UPLOAD_MAX_MB = {
+    "image": config("TABYIN_UPLOAD_MAX_IMAGE_MB", default=10, cast=int),
+    "video": config("TABYIN_UPLOAD_MAX_VIDEO_MB", default=100, cast=int),
+    "audio": config("TABYIN_UPLOAD_MAX_AUDIO_MB", default=30, cast=int),
+    "other": config("TABYIN_UPLOAD_MAX_OTHER_MB", default=25, cast=int),
+}
+# سقفِ سختِ دانلود هنگام آینه‌سازی نشانی‌های بیرونی (مگابایت؛ مستقل از نوع).
+TABYIN_MIRROR_MAX_MB = config("TABYIN_MIRROR_MAX_MB", default=120, cast=int)
+# مهلت خواندن از سرور مبدأ هنگام آینه‌سازی (ثانیه).
+TABYIN_MIRROR_TIMEOUT_SECONDS = config("TABYIN_MIRROR_TIMEOUT_SECONDS", default=25, cast=int)
+# اگر CDN خودمان داریم (مثلا https://cdn.besat.me)، رسانه‌ی عمومی با این پیشوند
+# منتشر می‌شود؛ پیش‌فرض = مسیر نسبی /media/… روی همان origin سایت.
+TABYIN_PUBLIC_MEDIA_BASE_URL = config("TABYIN_PUBLIC_MEDIA_BASE_URL", default="").strip()
+# میزبان‌هایی که نشانی مطلقِ رسانه‌ی آن‌ها «داخلی» محسوب می‌شود (بدون آینه‌سازی).
+TABYIN_LOCAL_MEDIA_HOSTS = config(
+    "TABYIN_LOCAL_MEDIA_HOSTS",
+    default="besat.me,www.besat.me",
+    cast=Csv(),
+)
+
 # پیش‌فرض "default" یعنی زنجیرهٔ کامل: blocklist پسوند + بررسی امضای محتوا.
 # مقدار "extension_blocklist" فقط لایهٔ اول را فعال می‌کند (سازگاری با رفتار
 # قبلی) و "noop" همه‌چیز را خاموش می‌کند.

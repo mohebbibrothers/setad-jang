@@ -9,7 +9,7 @@ from django.db import models
 from django.utils import timezone
 
 from apps.core.models import BaseModel
-from apps.tabyin.choices import ContentOrigin, MediaType, SubmissionStatus
+from apps.tabyin.choices import ContentOrigin, MediaType, MirrorStatus, SubmissionStatus
 from apps.tabyin.managers import (
     TabyinContentAllManager,
     TabyinContentManager,
@@ -262,6 +262,28 @@ class TabyinAttachment(BaseModel):
     order = models.PositiveSmallIntegerField(
         default=0,
         verbose_name="ترتیب",
+    )
+
+    # --- آینه‌سازی روی استوریج خودمان (پیوست‌های روایت‌های مردمی) ---
+    origin_url = models.URLField(
+        max_length=1024,
+        blank=True,
+        default="",
+        verbose_name="نشانی اصلی پیش از آینه‌سازی",
+        help_text="برای پیوست‌هایی که اول با نشانی بیرونی ثبت و بعد روی سرور ما ذخیره شدند.",
+    )
+    mirror_status = models.CharField(
+        max_length=10,
+        choices=MirrorStatus.choices,
+        default=MirrorStatus.NONE,
+        db_index=True,
+        verbose_name="وضعیت آینه‌سازی",
+    )
+    mime_type = models.CharField(
+        max_length=127,
+        blank=True,
+        default="",
+        verbose_name="نوع MIME فایل",
     )
 
     class Meta:

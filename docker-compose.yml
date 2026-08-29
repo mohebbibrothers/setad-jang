@@ -121,6 +121,9 @@ services:
       - "${NGINX_PORT:-80}:80"
     volumes:
       - ./deploy/nginx.conf:/etc/nginx/nginx.conf:ro
+      # سرو مستقیمِ /media/ (آپلودها و آینه‌های پیوستِ روایت‌ها) از روی volume
+      # مشترکِ رسانه — فقط‌خواندنی برای nginx.
+      - media_data:/app/media:ro
     networks:
       - internal
     healthcheck:

@@ -35,6 +35,10 @@ class TabyinContentQuerySet(models.QuerySet):
         """Prefetch پیوست‌ها برای جلوگیری از N+1 query."""
         return self.prefetch_related("attachments")
 
+    def with_submitter(self) -> TabyinContentQuerySet:
+        """select_related ارسال‌کننده — برای نمایشِ پویای نام پدیدآورنده بدون N+1."""
+        return self.select_related("submitted_by")
+
     def deleted_in_source(self) -> TabyinContentQuerySet:
         """محتواهایی که در منبع حذف شده‌اند."""
         return self.filter(is_deleted_in_source=True)

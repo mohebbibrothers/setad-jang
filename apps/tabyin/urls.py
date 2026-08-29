@@ -36,6 +36,17 @@ urlpatterns = [
         views.UserTabyinSubmissionDetailView.as_view(),
         name="user-submission-detail",
     ),
+    # ── User media upload ───────────────────────────
+    path(
+        "me/uploads/",
+        views.UserTabyinMediaUploadView.as_view(),
+        name="user-media-upload",
+    ),
+    path(
+        "uploads/config/",
+        views.TabyinUploadConfigView.as_view(),
+        name="upload-config",
+    ),
     # ── Admin: Content management ───────────────────
     path(
         "admin/contents/",

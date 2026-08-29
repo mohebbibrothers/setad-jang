@@ -52,14 +52,46 @@ _DETAIL_NOT_FOUND_SENTINEL = "__not_found__"
 # ============================================================
 
 
+def resolve_author_display(content: TabyinContent) -> str:
+    """
+    نامِ نمایشیِ پدیدآورنده — پویا و همیشه به‌روز.
+
+    برای محتوای ارسالی کاربران، نام از خودِ حساب کاربر خوانده می‌شود (نه
+    از مقدارِ ثابتِ زمانِ ثبت) تا اگر کاربر بعداً نامش را ویرایش کند، نامِ
+    پدیدآورنده در همه‌جا — دیوارِ خانه، فید روایت‌ها، جزئیات و جست‌وجو —
+    خودبه‌خود به‌روز شود. اولویت:
+
+        ۱) نام و نام خانوادگی (full_name)
+        ۲) نشانی ایمیل
+        ۳) شماره موبایل
+
+    و اگر هیچ‌کدام نبود، همان مقدارِ ثابتِ author_username (fallback).
+    محتوای منبع خارجی همیشه author_username خودش را نگه می‌دارد.
+    """
+    if content.origin != ContentOrigin.USER_SUBMITTED:
+        return content.author_username
+    user = content.submitted_by
+    if user is None:
+        return content.author_username
+    full_name = (user.full_name or "").strip()
+    if full_name:
+        return full_name
+    if user.email:
+        return user.email
+    phone = getattr(user, "phone_number", "") or ""
+    if phone:
+        return phone
+    return content.author_username or ""
+
+
 def get_public_contents() -> QuerySet[TabyinContent]:
     """
     لیست محتواهای عمومی (برای نمایش در سایت).
 
     - فقط فعال و حذف‌نشده در منبع
-    - با prefetch پیوست‌ها
+    - با prefetch پیوست‌ها و select_related ارسال‌کننده (نام پدیدآورنده‌ی پویا)
     """
-    return TabyinContent.objects.with_attachments().order_by("-source_created_at")
+    return TabyinContent.objects.with_attachments().with_submitter().order_by("-source_created_at")
 
 
 def get_public_content_by_external_id(
@@ -72,7 +104,9 @@ def get_public_content_by_external_id(
         TabyinContent یا None اگر پیدا نشد.
     """
     try:
-        return TabyinContent.objects.with_attachments().get(external_id=external_id)
+        return (
+            TabyinContent.objects.with_attachments().with_submitter().get(external_id=external_id)
+        )
     except TabyinContent.DoesNotExist:
         return None
 

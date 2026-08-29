@@ -14,10 +14,14 @@ Serializers برای اپ تبیین.
   وابستگی مستقیم لایه‌ی API به runtime زیرساخت async جلوگیری شود.
 """
 
+from urllib.parse import urlparse
+
 from rest_framework import serializers
 
+from apps.tabyin import selectors as tabyin_selectors
 from apps.tabyin.choices import MediaType
 from apps.tabyin.models import TabyinAttachment, TabyinContent
+from apps.tabyin.uploading import is_local_media_url
 
 # ============================================================
 # Attachment Serializers
@@ -57,10 +61,15 @@ class PublicTabyinContentListSerializer(serializers.ModelSerializer):
     لیست محتواها — نمایش عمومی.
 
     فقط فیلدهای ضروری برای نمایش در گالری.
+    نام پدیدآورنده برای ارسال‌های کاربران پویا و همیشه به‌روز است.
     """
 
     attachments = TabyinAttachmentSerializer(many=True, read_only=True)
     primary_media_type = serializers.CharField(read_only=True)
+    author_username = serializers.SerializerMethodField()
+
+    def get_author_username(self, obj: TabyinContent) -> str:
+        return tabyin_selectors.resolve_author_display(obj)
 
     class Meta:
         model = TabyinContent
@@ -82,10 +91,15 @@ class PublicTabyinContentDetailSerializer(serializers.ModelSerializer):
     جزئیات یک محتوا — نمایش عمومی.
 
     اطلاعات بیشتر نسبت به لیست.
+    نام پدیدآورنده برای ارسال‌های کاربران پویا و همیشه به‌روز است.
     """
 
     attachments = TabyinAttachmentSerializer(many=True, read_only=True)
     primary_media_type = serializers.CharField(read_only=True)
+    author_username = serializers.SerializerMethodField()
+
+    def get_author_username(self, obj: TabyinContent) -> str:
+        return tabyin_selectors.resolve_author_display(obj)
 
     class Meta:
         model = TabyinContent
@@ -278,10 +292,24 @@ class AdminSyncTaskStatusSerializer(serializers.Serializer):
 class TabyinSubmissionAttachmentInputSerializer(serializers.Serializer):
     """Input serializer for user-submitted content attachment URLs."""
 
-    url = serializers.URLField(max_length=1024)
+    url = serializers.CharField(max_length=1024, trim_whitespace=True)
     media_type = serializers.ChoiceField(choices=MediaType.choices, default=MediaType.OTHER)
     title = serializers.CharField(max_length=512, required=False, allow_blank=True)
     order = serializers.IntegerField(required=False, min_value=0, default=0)
+
+    def validate_url(self, value: str) -> str:
+        """
+        نشانی پیوست یا مطلقِ http(s) است یا نشانیِ رسانه‌ی داخلیِ سایت
+        (نتیجه‌ی «آپلود مستقیم» — مسیر /media/… یا نشانی CDN خودمان).
+        """
+        if is_local_media_url(value):
+            return value
+        parsed = urlparse(value)
+        if parsed.scheme in ("http", "https") and parsed.netloc:
+            return value
+        raise serializers.ValidationError(
+            "نشانی پیوست معتبر نیست؛ یک نشانی http/https یا نشانیِ رسانه‌ی داخلی سایت بفرست."
+        )
 
 
 class UserTabyinSubmissionCreateSerializer(serializers.Serializer):
@@ -300,6 +328,77 @@ class UserTabyinSubmissionCreateSerializer(serializers.Serializer):
         if len(value) > 5:
             raise serializers.ValidationError("حداکثر ۵ پیوست برای هر محتوا مجاز است.")
         return value
+
+    def validate(self, attrs: dict) -> dict:
+        """هر روایت یک‌نوع است: همه‌ی پیوست‌ها باید هم‌نوع رسانه باشند."""
+        attachments = attrs.get("attachments") or []
+        media_types = {att.get("media_type", MediaType.OTHER) for att in attachments}
+        if len(media_types) > 1:
+            raise serializers.ValidationError(
+                {
+                    "attachments": (
+                        "هر روایت فقط یک نوع رسانه می‌پذیرد؛ همه‌ی پیوست‌ها باید هم‌نوع "
+                        "باشند (همه تصویر یا همه ویدئو یا همه صوت یا همه سایر)."
+                    )
+                }
+            )
+        return attrs
+
+
+class UserTabyinSubmissionAttachmentSerializer(TabyinAttachmentSerializer):
+    """
+    پیوست در دید «روایت‌های من» و صف بررسی ادمین — علاوه بر فیلدهای عمومی،
+    نشانی اصلیِ پیش از آینه‌سازی و وضعیت آن را هم نشان می‌دهد تا مالکِ
+    محتوا/ادمین بفهمد فایل کجا میزبانی می‌شود.
+    """
+
+    mirror_status_display = serializers.CharField(
+        source="get_mirror_status_display",
+        read_only=True,
+    )
+
+    class Meta(TabyinAttachmentSerializer.Meta):
+        fields = [
+            *TabyinAttachmentSerializer.Meta.fields,
+            "origin_url",
+            "mirror_status",
+            "mirror_status_display",
+            "mime_type",
+        ]
+
+
+# ============================================================
+# User Media Upload Serializers
+# ============================================================
+
+
+class TabyinMediaUploadInputSerializer(serializers.Serializer):
+    """Input serializer for the direct media-upload endpoint (multipart)."""
+
+    file = serializers.FileField()
+
+
+class TabyinMediaUploadResultSerializer(serializers.Serializer):
+    """نتیجه‌ی آپلود موفق — همان چیزی که استودیو برای ساختِ ردیف پیوست لازم دارد."""
+
+    url = serializers.CharField()
+    name = serializers.CharField()
+    media_type = serializers.ChoiceField(choices=MediaType.choices)
+    mime_type = serializers.CharField(allow_blank=True)
+    original_name = serializers.CharField(allow_blank=True)
+    size = serializers.CharField(allow_blank=True)
+    duration = serializers.IntegerField()
+    file_size = serializers.IntegerField()
+    size_bytes = serializers.IntegerField()
+
+
+class TabyinUploadConfigSerializer(serializers.Serializer):
+    """قرارداد عمومیِ آپلود — سقف حجم و فرمت‌های مجاز هر نوع رسانه."""
+
+    max_attachments = serializers.IntegerField()
+    extensions = serializers.DictField(child=serializers.ListField(child=serializers.CharField()))
+    max_mb = serializers.DictField(child=serializers.IntegerField())
+    labels = serializers.DictField(child=serializers.CharField())
 
 
 class UserTabyinSubmissionListSerializer(serializers.ModelSerializer):
@@ -324,7 +423,7 @@ class UserTabyinSubmissionListSerializer(serializers.ModelSerializer):
 class UserTabyinSubmissionDetailSerializer(serializers.ModelSerializer):
     """Detail serializer for a user's own submitted content."""
 
-    attachments = TabyinAttachmentSerializer(many=True, read_only=True)
+    attachments = UserTabyinSubmissionAttachmentSerializer(many=True, read_only=True)
 
     class Meta:
         model = TabyinContent
@@ -352,7 +451,7 @@ class AdminTabyinSubmissionQueueSerializer(serializers.ModelSerializer):
     """Admin serializer for reviewing user-submitted content."""
 
     submitted_by_email = serializers.EmailField(source="submitted_by.email", read_only=True)
-    attachments = TabyinAttachmentSerializer(many=True, read_only=True)
+    attachments = UserTabyinSubmissionAttachmentSerializer(many=True, read_only=True)
 
     class Meta:
         model = TabyinContent

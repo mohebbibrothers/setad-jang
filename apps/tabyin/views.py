@@ -20,8 +20,10 @@ from __future__ import annotations
 import hashlib
 import logging
 
+from django.core.exceptions import ValidationError as DjangoValidationError
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import status
+from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.reverse import reverse
@@ -54,6 +56,9 @@ from apps.tabyin.serializers import (
     AdminTabyinSubmissionReviewSerializer,
     PublicTabyinContentDetailSerializer,
     PublicTabyinContentListSerializer,
+    TabyinMediaUploadInputSerializer,
+    TabyinMediaUploadResultSerializer,
+    TabyinUploadConfigSerializer,
     UserTabyinSubmissionCreateSerializer,
     UserTabyinSubmissionDetailSerializer,
     UserTabyinSubmissionListSerializer,
@@ -62,7 +67,9 @@ from apps.tabyin.throttles import (
     TabyinPublicAnonThrottle,
     TabyinPublicUserThrottle,
     TabyinSyncThrottle,
+    TabyinUploadThrottle,
 )
+from apps.tabyin.uploading import get_upload_config_payload
 
 logger = logging.getLogger("apps.tabyin")
 
@@ -314,6 +321,103 @@ class UserTabyinSubmissionDetailView(APIView):
                 status_code=status.HTTP_404_NOT_FOUND,
             )
         return SuccessResponse(data=UserTabyinSubmissionDetailSerializer(content).data)
+
+
+class UserTabyinMediaUploadView(APIView):
+    """
+    آپلود مستقیمِ رسانه برای روایت‌های مردمی (multipart).
+
+    فایل بلافاصله روی استوریجِ عمومیِ خودمان ذخیره می‌شود و نشانیِ داخلی‌اش
+    برمی‌گردد تا در همان گذر به‌عنوان url پیوستِ روایت ثبت شود — از همان
+    لحظه، روایت دیگر به هیچ نشانیِ بیرونی بدهکار نیست. متادیتا (ابعاد،
+    مدت، حجم) هم همان‌جا استخراج و برگردانده می‌شود تا استودیو همان را
+    به کاربر نشان دهد.
+    """
+
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [TabyinUploadThrottle]
+    parser_classes = [MultiPartParser, FormParser]
+
+    @extend_schema(
+        operation_id="tabyin_user_media_upload",
+        summary="بارگذاری مستقیم رسانه برای روایت (تصویر/ویدئو/صوت/سایر)",
+        tags=[TAG_TABYIN_PUBLIC],
+        request=TabyinMediaUploadInputSerializer,
+        responses={
+            201: build_success_response_serializer(
+                name="UserTabyinMediaUploadResponse",
+                data_serializer=TabyinMediaUploadResultSerializer,
+            ),
+            400: build_error_response_serializer(name="UserTabyinMediaUploadBadRequest"),
+        },
+    )
+    def post(self, request: Request) -> SuccessResponse | ErrorResponse:
+        uploaded_file = request.FILES.get("file")
+        if uploaded_file is None:
+            return ErrorResponse(
+                message="فایلی ارسال نشده است؛ فایل را در فیلد file بفرست.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            stored = services.store_user_media_upload(
+                user=request.user,
+                uploaded_file=uploaded_file,
+            )
+        except DjangoValidationError as exc:
+            return ErrorResponse(
+                message="فایل پذیرفته نیست.",
+                errors=getattr(exc, "message_dict", {"file": exc.messages}),
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        metadata = extract_audit_metadata(request)
+        log_action_async(
+            user_id=request.user.pk,
+            action=audit_actions.TABYIN_USER_MEDIA_UPLOADED,
+            resource_type="tabyin_media",
+            resource_id=stored.name,
+            extra_data={
+                "media_type": stored.media_type,
+                "size_bytes": stored.size_bytes,
+                "original_name": stored.original_name,
+            },
+            **metadata,
+        )
+
+        return SuccessResponse(
+            data=TabyinMediaUploadResultSerializer(stored).data,
+            status_code=status.HTTP_201_CREATED,
+            message="فایل روی سرور بعثت ذخیره شد؛ حالا می‌توانی آن را به روایتت پیوست کنی.",
+        )
+
+
+class TabyinUploadConfigView(APIView):
+    """
+    قرارداد عمومیِ آپلود — سقف حجم و فرمت‌های مجازِ هر نوع رسانه.
+
+    استودیو این قرارداد را می‌خواند تا قوانینِ بک‌اند را دقیق و به‌روز
+    به کاربر نشان دهد (و با مقدارِ داخلِ‌خودش هم fallback دارد).
+    """
+
+    permission_classes = [AllowAny]
+
+    @extend_schema(
+        operation_id="tabyin_upload_config",
+        summary="قرارداد آپلود رسانه — سقف حجم و فرمت‌های مجاز",
+        tags=[TAG_TABYIN_PUBLIC],
+        responses={
+            200: build_success_response_serializer(
+                name="TabyinUploadConfigResponse",
+                data_serializer=TabyinUploadConfigSerializer,
+            ),
+        },
+    )
+    def get(self, request: Request) -> SuccessResponse:
+        del request  # بدون استفاده — قرارداد ثابت است
+        return SuccessResponse(
+            data=TabyinUploadConfigSerializer(get_upload_config_payload()).data,
+            message="قرارداد آپلود رسانه دریافت شد.",
+        )
 
 
 # ============================================================

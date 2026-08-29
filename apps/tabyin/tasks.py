@@ -331,3 +331,40 @@ def sync_tabyin_full_task(
         request_id=request_id,
         dispatch_ip=dispatch_ip,
     )
+
+
+@shared_task(
+    bind=True,
+    name="apps.tabyin.tasks.mirror_tabyin_user_attachments_task",
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_backoff_max=300,
+    retry_jitter=True,
+    retry_kwargs={"max_retries": 2},
+)
+def mirror_tabyin_user_attachments_task(self, *, content_id: int) -> dict[str, Any]:
+    """
+    آینه‌سازیِ پیوست‌های نشانی‌محورِ یک روایتِ مردمی روی استوریج خودمان.
+
+    چرا وجود دارد؟ پیوستی که با نشانیِ بیرونی ثبت شود، با ازدست‌رفتن آن
+    نشانی روایتِ منتشرشده را می‌شکند؛ این task آن‌ها را با سدِ SSRF و سقف
+    حجم دانلود و محلی می‌کند. خودِ منطق دانلود در apps.tabyin.uploading
+    است و این task فقط orchestration است. خرابی هر پیوست به‌صورت مجزا و
+    با mirror_status=failed ثبت می‌شود و کل task را نمی‌شکند (نشانیِ
+    اصلی به‌عنوان fallback دست‌نخورده می‌ماند).
+    """
+    logger.info(
+        "Mirror user-attachments task started task_id=%s content_id=%s retries=%s",
+        self.request.id,
+        content_id,
+        self.request.retries,
+    )
+    from apps.tabyin import services
+
+    result = services.mirror_user_content_attachments(content_id=content_id)
+    logger.info(
+        "Mirror user-attachments task finished task_id=%s result=%s",
+        self.request.id,
+        result,
+    )
+    return result

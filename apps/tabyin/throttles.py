@@ -20,3 +20,9 @@ class TabyinSyncThrottle(UserRateThrottle):
 
     scope = "tabyin_sync"
     rate = "5/hour"
+
+
+class TabyinUploadThrottle(UserRateThrottle):
+    """نرخ آپلود مستقیم رسانه برای روایت‌ها — سدِ سوءاستفاده‌ی حجیم."""
+
+    rate = "15/min"

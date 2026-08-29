@@ -28,7 +28,14 @@ from django.utils import timezone
 
 from apps.core.cache import cache_delete_namespace
 from apps.core.cache_invalidation import invalidate_public_domain
-from apps.tabyin.choices import SUBMISSION_REVIEWABLE_STATUSES, ContentOrigin, SubmissionStatus
+from apps.tabyin import uploading
+from apps.tabyin.choices import (
+    SUBMISSION_REVIEWABLE_STATUSES,
+    ContentOrigin,
+    MediaType,
+    MirrorStatus,
+    SubmissionStatus,
+)
 from apps.tabyin.models import TabyinAttachment, TabyinContent
 from apps.tabyin.providers import get_tabyin_provider
 from apps.tabyin.selectors import (
@@ -36,6 +43,7 @@ from apps.tabyin.selectors import (
     PUBLIC_LIST_NAMESPACE,
 )
 from apps.tabyin.sync.engine import SyncEngine, SyncStats
+from apps.tabyin.uploading import StoredMedia
 
 logger = logging.getLogger("apps.tabyin")
 
@@ -59,6 +67,10 @@ def _invalidate_public_caches() -> None:
     cache_delete_namespace(PUBLIC_DETAIL_NAMESPACE)
     invalidate_public_domain("tabyin")
     logger.info("Public tabyin caches invalidated")
+
+
+# نامِ عمومی برای مصارف بیرونی (مثلاً signal به‌روزرسانی نام پدیدآورنده).
+invalidate_public_caches = _invalidate_public_caches
 
 
 # ============================================================
@@ -111,14 +123,49 @@ def submit_user_content(
     )
 
     for index, attachment in enumerate(attachments or []):
+        url = str(attachment["url"]).strip()
+        media_type = attachment.get("media_type", MediaType.OTHER)
+        meta = {"size": "", "duration": 0, "file_size": 0}
+        origin_url = ""
+        mirror_status = MirrorStatus.NONE
+        mime_type = ""
+
+        if uploading.is_local_media_url(url):
+            # فایل از قبل روی استوریج خودمان است (نتیجه‌ی «آپلود مستقیم» —
+            # یا یک آینه‌ی قبلی). متادیتا همان‌جا از استوریج بازخوانی می‌شود
+            # تا قراردادِ متادیتای محتوای مردمی با محتوای منبع خارجی یکی بماند.
+            mirror_status = MirrorStatus.MIRRORED
+            name = uploading.local_media_name_from_url(url)
+            if name:
+                stored_meta = uploading.local_attachment_meta(name, media_type) or {}
+                meta = {**meta, **stored_meta}
+                mime_type = uploading.mimetypes.guess_type(name)[0] or ""
+        else:
+            # نشانی بیرونی: برای انتشارِ پایدار باید روی سرور خودمان آینه
+            # شود؛ اگر نشانی فردا بمیرد، روایتِ کاربر نمی‌شکند. نشانی اصلی
+            # را هم در origin_url نگه می‌داریم (rastrear؛ graceful fallback).
+            origin_url = url
+            mirror_status = MirrorStatus.PENDING
+
         TabyinAttachment.objects.create(
             content=content,
-            url=attachment["url"],
-            relative_url=attachment.get("url", ""),
-            media_type=attachment.get("media_type", "other"),
+            url=url,
+            relative_url=url,
+            media_type=media_type,
             title=attachment.get("title", ""),
             order=attachment.get("order", index),
+            origin_url=origin_url,
+            mirror_status=mirror_status,
+            mime_type=mime_type,
+            size=str(meta.get("size") or ""),
+            duration=int(meta.get("duration") or 0),
+            file_size=int(meta.get("file_size") or 0),
         )
+
+    if content.attachments.filter(mirror_status=MirrorStatus.PENDING).exists():
+        # بعد از commit تَسک آینه‌سازی در صف می‌رود تا قبل از/هم‌زمان با بررسی
+        # ادمین، فایل‌ها روی استوریج خودمان بنشینند.
+        transaction.on_commit(lambda: _dispatch_attachment_mirror(content.pk))
 
     logger.info(
         "User Tabyin submission created content_id=%s external_id=%s user_id=%s attachments=%s",
@@ -128,6 +175,54 @@ def submit_user_content(
         len(attachments or []),
     )
     return content
+
+
+def _dispatch_attachment_mirror(content_pk: int) -> None:
+    """Dispatch تَسک آینه‌سازی پیوست‌ها — مقاوم در برابر نبودِ Celery."""
+    try:
+        from apps.tabyin.tasks import mirror_tabyin_user_attachments_task
+
+        mirror_tabyin_user_attachments_task.delay(content_id=content_pk)
+    except Exception:
+        logger.exception(
+            "Could not dispatch attachment-mirror task for tabyin content %s",
+            content_pk,
+        )
+
+
+def mirror_user_content_attachments(*, content_id: int) -> dict[str, Any]:
+    """
+    آینه‌سازیِ همه‌ی پیوست‌های درانتظار/ناموفقِ یک محتوای ارسالی.
+
+    خروجی JSON-friendly برای تَسک Celery؛ منطقِ دانلودِ دفاعی در
+    apps.tabyin.uploading زندگی می‌کند و این تابع فقط orchestrate می‌کند.
+    """
+    content = TabyinContent.all_objects.filter(pk=content_id).first()
+    if content is None:
+        return {"content_id": content_id, "mirrored": 0, "failed": 0, "skipped": "missing"}
+    attachments = content.attachments.filter(
+        mirror_status__in=[MirrorStatus.PENDING, MirrorStatus.FAILED]
+    )
+    mirrored = 0
+    failed = 0
+    for attachment in attachments:
+        if uploading.mirror_attachment_to_local(attachment):
+            mirrored += 1
+        else:
+            failed += 1
+    result = {
+        "content_id": content_id,
+        "mirrored": mirrored,
+        "failed": failed,
+        "total": attachments.count(),
+    }
+    logger.info("Tabyin attachment mirror finished: %s", result)
+    return result
+
+
+def store_user_media_upload(*, user: Any, uploaded_file: Any) -> StoredMedia:
+    """نگه‌داشتنِ لایه‌ی view به دور از جزئیاتِ ماژول uploading."""
+    return uploading.store_user_upload(uploaded_file=uploaded_file, user=user)
 
 
 @transaction.atomic

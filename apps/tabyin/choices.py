@@ -36,4 +36,13 @@ class SubmissionStatus(models.TextChoices):
     REJECTED = "rejected", "رد شده"
 
 
+class MirrorStatus(models.TextChoices):
+    """وضعیت آینه‌سازی پیوست روی استوریج خودمان."""
+
+    NONE = "none", "بدون نیاز (محتوای منبع خارجی)"
+    PENDING = "pending", "در انتظار آینه‌سازی"
+    MIRRORED = "mirrored", "روی سرور بعثت"
+    FAILED = "failed", "آینه‌سازی ناموفق"
+
+
 SUBMISSION_REVIEWABLE_STATUSES: frozenset[str] = frozenset([SubmissionStatus.PENDING_REVIEW])
