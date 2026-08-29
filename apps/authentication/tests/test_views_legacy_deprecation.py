@@ -124,7 +124,7 @@ class TestLegacyAuthDeprecationHeaders:
             _auth_url("verify-email"),
             data={
                 "email": "missing@test.local",
-                "code": "12345",
+                "code": "123456",
             },
             format="json",
         )

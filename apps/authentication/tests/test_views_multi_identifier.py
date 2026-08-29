@@ -30,7 +30,7 @@ from tests.factories.auth import UserFactory
 
 pytestmark = pytest.mark.django_db
 
-FIXED_OTP_CODE = "12345"
+FIXED_OTP_CODE = "246810"  # ۶ رقم = طول پیش‌فرض موتور (AUTH_OTP_CODE_LENGTH)
 
 
 def _auth_url(name: str) -> str:

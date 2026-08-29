@@ -4,8 +4,9 @@ DRF serializers for authentication, profile, and user management APIs.
 
 from __future__ import annotations
 
-from typing import Final
+from typing import Any, Final
 
+from django.conf import settings
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.utils import timezone
@@ -24,8 +25,66 @@ from .validators import validate_email_for_signup, validate_phone_format
 # Constants
 # ============================================================
 
-OTP_CODE_LENGTH: Final[int] = 5
 IDENTIFIER_MAX_LENGTH: Final[int] = 254
+
+#: کران‌های بیرونی طولِ رشتهٔ OTP — صرفاً بهداشت ورودی (ورودی عریض به
+#: hash/lookup نرسد). طولِ *دقیقِ* معتبر در `OTPCodeField.validate` از همان
+#: مرجعی خوانده می‌شود که کد را تولید می‌کند؛ این دو دیگر نمی‌توانند از هم
+#: جدا شوند (یافتهٔ P0 فاز ۷ — ببینید docstring همان کلاس).
+_OTP_CODE_LENGTH_FLOOR: Final[int] = 4
+_OTP_CODE_LENGTH_CEILING: Final[int] = 10
+
+
+def _otp_code_length() -> int:
+    """طولِ زندهٔ کد OTP — تک‌مرجع: `settings.AUTH_OTP_CODE_LENGTH` موتور.
+
+    پیش‌فرض ۶ است؛ مثل `_OTP_DEFAULTS` در `apps.authentication.otp`، تا اگر
+    تنظیم جابه‌جا شد، اعتبارسنجی ورودی همان لحظه با تولید هم‌قدم بماند.
+    """
+    return int(getattr(settings, "AUTH_OTP_CODE_LENGTH", 6))
+
+
+def _validate_otp_length(value: str) -> None:
+    """سخت‌گیریِ طولِ دقیقِ کد OTP در زمانِ اعتبارسنجی، از تنظیمِ زندهٔ موتور.
+
+    به‌صورت validator ثبت می‌شود (نه override متد `validate`) چون DRF در
+    `Field` این متد را صدا نمی‌زند؛ `run_validators` تنها مسیری است که برای
+    همهٔ فیلدها تضمینی اجرا می‌شود. تابع سطح-ماژول است تا pickle-safe و
+    قابل‌تستِ مستقل بماند.
+    """
+    expected = _otp_code_length()
+    if len(value) != expected:
+        msg = f"کد تأیید باید دقیقاً {expected} رقم باشد."
+        raise serializers.ValidationError(msg)
+
+
+class OTPCodeField(serializers.CharField):
+    """فیلد ورودیِ کد یکبارمصرف با طولِ مقید به موتورِ تولیدکنندهٔ کد.
+
+    چرا این کلاس متولد شد (یافتهٔ P0 فاز ۷):
+        فاز ۳ِ ممیزی، طول OTP را از ۵ به ۶ رقم برد و ثابت‌ها را به settings
+        منتقل کرد — اما هر شش سریالایزِ verify هنوز
+        ``min_length=5 / max_length=5`` ثابت داشتند. نتیجه در production:
+        هر کدِ *معتبرِ* ۶ رقمی درِ signup-verify، OTP-login، بازیابی رمز و
+        افزودن شناسه را به ۴۰۰ می‌بست. تست‌ها این را ندیده بودند چون تولید
+        کد را به رشتهٔ ۵ رقمی monkey-patch می‌کردند و عملاً نقص را با
+        همان عددِ اشتباه «فیکس» کرده بودند.
+
+    الگوی رفع:
+        - کران‌های سفتِ ۴..۱۰ در سطح فیلد، برای hygiene رشته‌های بدشکل؛
+        - دقتِ طولِ واقعی به‌صورت `_validate_otp_length` در زنجیرهٔ validators،
+          که هنگامِ اعتبارسنجی از همان `AUTH_OTP_CODE_LENGTH` می‌خواند؛ پس
+          overrideِ زنده (تست/محیط) بی‌درنگ اثر می‌کند و جدایی ورودی از
+          موتور ساختاراً ناممکن است.
+    """
+
+    def __init__(self, **kwargs: Any) -> None:
+        kwargs.setdefault("trim_whitespace", True)
+        kwargs.setdefault("min_length", _OTP_CODE_LENGTH_FLOOR)
+        kwargs.setdefault("max_length", _OTP_CODE_LENGTH_CEILING)
+        super().__init__(**kwargs)
+        self.validators.append(_validate_otp_length)
+
 
 # ============================================================
 # Internal helpers
@@ -333,7 +392,7 @@ class VerifyEmailSerializer(serializers.Serializer):
     """VerifyEmailSerializer implementation for the authentication application."""
 
     email = serializers.EmailField()
-    code = serializers.CharField(min_length=OTP_CODE_LENGTH, max_length=OTP_CODE_LENGTH)
+    code = OTPCodeField()
 
     def validate_email(self, value: str) -> str:
         try:
@@ -382,7 +441,7 @@ class ResetPasswordSerializer(serializers.Serializer):
     """ResetPasswordSerializer implementation for the authentication application."""
 
     email = serializers.EmailField()
-    code = serializers.CharField(min_length=OTP_CODE_LENGTH, max_length=OTP_CODE_LENGTH)
+    code = OTPCodeField()
     new_password = serializers.CharField(
         write_only=True,
         validators=[validate_password],
@@ -452,7 +511,7 @@ class SignupVerifySerializer(BaseIdentifierSerializer):
     verify OTP and create account with password.
     """
 
-    code = serializers.CharField(min_length=OTP_CODE_LENGTH, max_length=OTP_CODE_LENGTH)
+    code = OTPCodeField()
     password = serializers.CharField(write_only=True, validators=[validate_password])
     first_name = serializers.CharField(required=False, allow_blank=True, max_length=100)
     last_name = serializers.CharField(required=False, allow_blank=True, max_length=100)
@@ -480,7 +539,7 @@ class OTPLoginVerifySerializer(BaseIdentifierSerializer):
     Verify login OTP and issue JWT tokens.
     """
 
-    code = serializers.CharField(min_length=OTP_CODE_LENGTH, max_length=OTP_CODE_LENGTH)
+    code = OTPCodeField()
 
 
 class IdentifierForgotPasswordRequestSerializer(BaseIdentifierSerializer):
@@ -494,7 +553,7 @@ class IdentifierForgotPasswordConfirmSerializer(BaseIdentifierSerializer):
     Confirm password reset by identifier + OTP + new password.
     """
 
-    code = serializers.CharField(min_length=OTP_CODE_LENGTH, max_length=OTP_CODE_LENGTH)
+    code = OTPCodeField()
     new_password = serializers.CharField(
         write_only=True,
         validators=[validate_password],
@@ -537,7 +596,7 @@ class IdentifierAddVerifySerializer(BaseAuthenticatedIdentifierSerializer):
     Verify OTP for attaching or verifying a secondary identifier.
     """
 
-    code = serializers.CharField(min_length=OTP_CODE_LENGTH, max_length=OTP_CODE_LENGTH)
+    code = OTPCodeField()
 
 
 class IdentifierMakePrimarySerializer(serializers.Serializer):
