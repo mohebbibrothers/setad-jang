@@ -51,9 +51,20 @@ def test_metrics_path_normalization_limits_cardinality() -> None:
     )
 
 
-def test_prometheus_metrics_endpoint_returns_text_exposition() -> None:
-    """Metrics endpoint must expose Prometheus text format."""
-    response = APIClient().get(reverse("prometheus-metrics"))
+def test_prometheus_metrics_endpoint_returns_text_exposition(settings) -> None:
+    """Authorized scraper sees Prometheus text format (production contract).
+
+    پس از رفع P1-۲ فاز ۷، در محیط production-like (DEBUG=False) اسکرپر باید
+    هدر Bearer معتبر بفرستد؛ خودِ رفتار گیت (404 برای ناشناس/توکن‌غلط، باز بودن
+    در DEBUG) در apps/core/tests/test_metrics_endpoint.py قفل شده — این تست
+    قرارداد «خروجیِ درست برای اسکرپرِ مجاز» را نگه می‌دارد.
+    """
+    settings.DEBUG = False
+    settings.PROMETHEUS_METRICS_TOKEN = "scraper-token-for-test"
+    client = APIClient()
+    client.credentials(HTTP_AUTHORIZATION="Bearer scraper-token-for-test")
+
+    response = client.get(reverse("prometheus-metrics"))
 
     assert response.status_code == status.HTTP_200_OK
     assert (

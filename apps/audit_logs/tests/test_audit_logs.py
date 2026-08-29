@@ -229,7 +229,7 @@ class TestLoginOTPVerifyAudit:
                 reverse("authentication:login-otp-verify"),
                 data={
                     "identifier": "testuser@example.com",
-                    "code": "00000",
+                    "code": "000000",
                 },
                 format="json",
             )
@@ -240,7 +240,7 @@ class TestLoginOTPVerifyAudit:
         assert call_kwargs["action"] == audit_actions.LOGIN_FAILED
         assert call_kwargs["extra_data"]["method"] == "otp"
         # OTP code نباید در audit باشد
-        assert "00000" not in str(call_kwargs)
+        assert "000000" not in str(call_kwargs)
 
 
 # ============================================================
@@ -279,7 +279,7 @@ class TestSignupAudit:
                 reverse("authentication:signup-verify"),
                 data={
                     "identifier": "newuser@example.com",
-                    "code": "12345",
+                    "code": "246810",
                     "password": "StrongPass!234",
                 },
                 format="json",
@@ -292,7 +292,7 @@ class TestSignupAudit:
         assert call_kwargs["user_id"] == fake_user.pk
         # raw password و OTP code نباید در audit باشد
         assert "StrongPass!234" not in str(call_kwargs)
-        assert "12345" not in str(call_kwargs)
+        assert "246810" not in str(call_kwargs)
 
 
 # ============================================================
@@ -411,7 +411,7 @@ class TestPasswordResetAudit:
                 reverse("authentication:password-forgot-confirm-identifier"),
                 data={
                     "identifier": "someuser@example.com",
-                    "code": "12345",
+                    "code": "246810",
                     "new_password": "NewStrongPass!567",
                 },
                 format="json",
@@ -422,7 +422,7 @@ class TestPasswordResetAudit:
         call_kwargs = mock_task.delay.call_args.kwargs
         assert call_kwargs["action"] == audit_actions.PASSWORD_RESET_COMPLETED
         # raw OTP code و password نباید در audit باشد
-        assert "12345" not in str(call_kwargs)
+        assert "246810" not in str(call_kwargs)
         assert "NewStrongPass!567" not in str(call_kwargs)
 
 
@@ -455,7 +455,7 @@ class TestIdentifierManagementAudit:
                 reverse("authentication:identifier-add-verify"),
                 data={
                     "identifier": "+989123456789",
-                    "code": "12345",
+                    "code": "246810",
                 },
                 format="json",
             )
@@ -466,7 +466,7 @@ class TestIdentifierManagementAudit:
         assert call_kwargs["action"] == audit_actions.IDENTIFIER_VERIFIED
         assert call_kwargs["user_id"] == user.pk
         # raw OTP code نباید در audit باشد
-        assert "12345" not in str(call_kwargs)
+        assert "246810" not in str(call_kwargs)
 
     def test_make_primary_dispatches_audit(self, auth_client, user, db):
         """تغییر شناسه اصلی باید PRIMARY_IDENTIFIER_CHANGED را dispatch کند."""
