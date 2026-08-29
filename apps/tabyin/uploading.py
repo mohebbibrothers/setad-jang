@@ -186,6 +186,7 @@ class StoredMedia:
 
 
 def _max_upload_mb(media_type: str) -> int:
+    """سقف حجم آپلود (مگابایت) برای یک نوع رسانه؛ بد-تنظیمیِ settings پیش‌فرضِ همان نوع را برمی‌گرداند، نه انفجار."""
     configured = getattr(settings, "TABYIN_UPLOAD_MAX_MB", None) or {}
     fallback = _DEFAULT_MAX_UPLOAD_MB.get(media_type, _DEFAULT_MAX_UPLOAD_MB[MediaType.OTHER])
     try:
@@ -196,10 +197,12 @@ def _max_upload_mb(media_type: str) -> int:
 
 
 def _max_upload_bytes(media_type: str) -> int:
+    """تبدیل سقف مگابایتی به بایت — تنها نقطهٔ تبدیل واحدِ این ماژول."""
     return _max_upload_mb(media_type) * 1024 * 1024
 
 
 def _mirror_max_bytes(media_type: str) -> int:
+    """سقف دانلودِ آینه‌ساز: کمینهٔ سقفِ آپلودِ همان نوع و TABYIN_MIRROR_MAX_MB."""
     hard_cap_mb = getattr(settings, "TABYIN_MIRROR_MAX_MB", 120) or 120
     return min(_max_upload_mb(media_type), int(hard_cap_mb)) * 1024 * 1024
 
@@ -223,6 +226,7 @@ def get_upload_config_payload() -> dict:
 
 
 def _public_storage():
+    """استوریج عمومیِ رسانه؛ resolve در زمان فراخوانی (نه import) تا override در تست/استقرار کار کند."""
     return storages["public_media"]
 
 
@@ -278,6 +282,7 @@ def local_media_name_from_url(raw_url: str) -> str | None:
 
 
 def is_local_media_url(raw_url: str) -> bool:
+    """آیا URL به رسانهٔ لوکِ خودمان (رسانهٔ محلی) اشاره می‌کند؟"""
     return local_media_name_from_url(raw_url) is not None
 
 
@@ -287,6 +292,7 @@ def is_local_media_url(raw_url: str) -> bool:
 
 
 def sniff_media_type_from_filename(filename: str) -> str | None:
+    """نوع رسانه از پسوندِ نام فایل؛ None یعنی فرمتِ ناشناخته (مسئولیتِ رد با اعتبارسنجی است)."""
     ext = filename.rsplit(".", maxsplit=1)[-1].lower() if "." in filename else ""
     for media_type, extensions in ALLOWED_EXTENSIONS.items():
         if ext in extensions:
@@ -295,6 +301,7 @@ def sniff_media_type_from_filename(filename: str) -> str | None:
 
 
 def _extract_image_dimensions(file_obj: BinaryIO) -> str:
+    """ابعاد WxH از هدرِ تصویر؛ verify() پیش از decode برای ردِ زودهنگامِ فایلِ نیمه‌خراب."""
     file_obj.seek(0)
     with Image.open(file_obj) as img:
         img.verify()
@@ -304,6 +311,7 @@ def _extract_image_dimensions(file_obj: BinaryIO) -> str:
 
 
 def _extract_wav_duration(file_obj: BinaryIO) -> int:
+    """ثانیه‌های WAV از هدرِ wave؛ هر خطای فایل صفر برمی‌گرداند (متادیتای ناقص نباید آپلود را بشکند)."""
     try:
         file_obj.seek(0)
         with wave.open(file_obj, "rb") as wav:
@@ -423,6 +431,7 @@ def extract_media_meta(file_obj: BinaryIO, media_type: str, size_bytes: int) -> 
 
 
 def _formats_hint() -> str:
+    """رشتهٔ راهنمای فرمت‌ها برای پیام‌های user-facing (لیست پسوندها با برچسبِ فارسیِ هر نوع)."""
     parts = []
     for media_type in (MediaType.IMAGE, MediaType.VIDEO, MediaType.AUDIO, MediaType.OTHER):
         exts = "، ".join(ALLOWED_EXTENSIONS[media_type])
