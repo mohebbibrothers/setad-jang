@@ -1,8 +1,25 @@
-"""Prometheus metrics primitives for Setad Jang observability."""
+"""Prometheus metrics primitives for Setad Jang observability.
+
+یافتهٔ P1 فاز ۷ (صحت متریک در پروداکشن):
+    deployment استاندارد این پروژه gunicorn با N worker است و registry
+    ``prometheus_client`` به‌صورت پیش‌فرض **per-process** نگه داشته می‌شود؛
+    یعنی یک اسکرپ که به یکی از workerها می‌خورد، فقط شمارنده‌های همان
+    worker را می‌دید (~۱/N واقعِ کل) و بازیافت workerها (``max-requests``)
+    شمارنده‌ها را بی‌صدا به صفر برمی‌گرداند.
+
+الگوی رفع:
+    حالت multiprocess خودِ prometheus_client — با env متغیر
+    ``PROMETHEUS_MULTIPROC_DIR`` هر worker شمارش‌ها را در mmap-fileهای
+    مشترک (روی tmpfs) می‌نویسد و مسیرِ exposition، همهٔ فایل‌ها را با
+    ``MultiProcessCollector`` جمع می‌کند. توابع پایین تنها نقطهٔ اتصال
+    این حالت‌اند تا business code هرگز شاخه‌ی «تک‌پروسه/چندپروسه» نبیند.
+"""
 
 from __future__ import annotations
 
+import os
 import time
+from typing import Any
 
 from prometheus_client import Counter, Gauge, Histogram
 
@@ -95,6 +112,39 @@ CELERY_TASK_DURATION_SECONDS = Histogram(
     ["task"],
     buckets=(0.01, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60, 300, 900),
 )
+
+
+def multiprocess_mode_enabled() -> bool:
+    """Return whether prometheus_client is running in multiprocess mode.
+
+    env متغیر در هر فراخوانی خوانده می‌شود (نه import-time) تا تست و
+    اسکریپت‌های استقرار بتوانند رفتار را بدون reload ماژول تغییر دهند؛
+    این عمداً با نحوهٔ خوانش prometheus_client در زمان importِ `values`
+    متفاوت است و همین «خوانش زنده» در سمتِ ماست، نه سمت کتابخانه.
+    """
+    return bool(os.environ.get("PROMETHEUS_MULTIPROC_DIR"))
+
+
+def exposition_registry() -> Any:
+    """Return the registry the scrape endpoint must render.
+
+    - حالت چندپروسه‌ای: registry تازه با ``MultiProcessCollector`` — همهٔ
+      workerها از روی فایل‌های mmap جمع می‌شوند. registryِ *پیش‌فرض* عمداً
+      اضافه نمی‌شود، چون در این حالت خودش مقادیرِ همین پروسه را نگه می‌دارد
+      و افزودنش شمارش را دوبرابر نشان می‌داد.
+    - حالت تک‌پروسه‌ای (dev/test): همان ``REGISTRY`` پیش‌فرض برمی‌گردد.
+    """
+    if not multiprocess_mode_enabled():
+        from prometheus_client import REGISTRY
+
+        return REGISTRY
+
+    from prometheus_client import CollectorRegistry
+    from prometheus_client.multiprocess import MultiProcessCollector
+
+    registry = CollectorRegistry()
+    MultiProcessCollector(registry)
+    return registry
 
 
 def monotonic_time() -> float:

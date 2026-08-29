@@ -104,6 +104,15 @@ prepare_writable_dirs() {
     "/app/media"
   )
 
+  # حالت multiprocess پایدارِ prometheus_client (یافتهٔ P1 فاز ۷): با N worker
+  # gunicorn هر پروسه شمارش‌ها را در mmap-fileهای این دایرکتوری (روی tmpfs
+  # /dev/shm) می‌نویسد و endpoint /metrics همه را جمع می‌کند. بدون ساختِ
+  # قطعیِ دایرکتوری، اولین inc() در worker با FileNotFoundError می‌ترکد —
+  # پس همین‌جا ساخته و chown می‌شود.
+  if [ -n "${PROMETHEUS_MULTIPROC_DIR:-}" ]; then
+    dirs+=("${PROMETHEUS_MULTIPROC_DIR}")
+  fi
+
   for d in "${dirs[@]}"; do
     mkdir -p "${d}"
     chown -R "${APP_USER}:${APP_GROUP}" "${d}"

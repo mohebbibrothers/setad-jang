@@ -61,7 +61,13 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PORT=8000 \
     DEBIAN_FRONTEND=noninteractive \
     APP_USER=app \
-    APP_GROUP=app
+    APP_GROUP=app \
+    # حالت multiprocess خودِ prometheus_client (یافتهٔ P1 فاز ۷): با N worker
+    # gunicorn، هر پروسه شمارنده‌ها را در mmap-fileهای این دایرکتوری می‌نویسد
+    # و /metrics همه را جمع می‌کند — بدون این خط، اسکرپ فقط ~۱/N واقعیت را
+    # می‌دید. /dev/shm در container همان tmpfs است؛ entrypoint دایرکتوری را
+    # می‌سازد و deploy/gunicorn.conf.py فایلِ workerهای مرده را پاک می‌کند.
+    PROMETHEUS_MULTIPROC_DIR=/dev/shm/prometheus
 
 RUN printf 'Acquire::Retries "5";\nAcquire::http::Timeout "30";\nAcquire::https::Timeout "30";\n' \
     > /etc/apt/apt.conf.d/80-retries
@@ -148,7 +154,10 @@ ENTRYPOINT ["/usr/bin/tini", "--", "/app/entrypoint.sh"]
 # کند (مثل overlay روی دیسک شبکه) باعث کشته شدن اشتباهی worker نشود.
 # access-logformat هم request_id ساخته‌شده در middleware را از هدر پاسخ
 # می‌خواند تا لاگ gunicorn و لاگ اپلیکیشن قابل correlate باشند.
+# --config لازم است: deploy/gunicorn.conf.py هوک child_exit را فعال می‌کند
+# تا فایل‌های mmap متریکِ workerهایِ بازیافت‌شده پاک شوند (یافتهٔ P1 فاز ۷).
 CMD ["sh", "-c", "exec gunicorn config.wsgi:application \
+    --config /app/deploy/gunicorn.conf.py \
     --bind 0.0.0.0:${PORT} \
     --worker-class ${GUNICORN_WORKER_CLASS:-gthread} \
     --workers ${GUNICORN_WORKERS:-3} \

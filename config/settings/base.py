@@ -815,6 +815,13 @@ REDIS_URL = config("REDIS_URL", default="redis://127.0.0.1:6379/1")
 
 LOG_FORMAT = config("LOG_FORMAT", default="text").strip().lower()
 PROMETHEUS_METRICS_ENABLED = config("PROMETHEUS_METRICS_ENABLED", default=True, cast=bool)
+
+# توکن اسکرپ متریک‌ها (یافتهٔ P1 فاز ۷): در production تنها راه خواندن
+# /api/v1/metrics/ هدر `Authorization: Bearer <این مقدار>` است و اگر تنظیم
+# نشده باشد endpoint عملاً 404 می‌شود (fail-closed). در scrape-config
+# Prometheus همین را زیر `authorization: credentials:` بگذار.
+# تولید: python -c "import secrets; print(secrets.token_urlsafe(32))"
+PROMETHEUS_METRICS_TOKEN = config("PROMETHEUS_METRICS_TOKEN", default="")
 SENTRY_DSN = config("SENTRY_DSN", default="")
 SENTRY_TRACES_SAMPLE_RATE = config("SENTRY_TRACES_SAMPLE_RATE", default=0.0, cast=float)
 SENTRY_PROFILES_SAMPLE_RATE = config("SENTRY_PROFILES_SAMPLE_RATE", default=0.0, cast=float)
