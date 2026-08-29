@@ -146,6 +146,7 @@ setad-jang/
 │   ├── tests/
 │   ├── __init__.py
 │   ├── admin.py
+│   ├── admin_guard.py
 │   ├── admin_i18n.py
 │   ├── api_cache.py
 │   ├── api_contracts.py
@@ -156,6 +157,7 @@ setad-jang/
 │   ├── cache_signals.py
 │   ├── client_ip.py
 │   ├── db_performance.py
+│   ├── docs_gate.py
 │   ├── email_backends.py
 │   ├── excel.py
 │   ├── exceptions.py
@@ -364,6 +366,7 @@ apps/core/
 ├── tests/
 ├── __init__.py
 ├── admin.py
+├── admin_guard.py
 ├── admin_i18n.py
 ├── api_cache.py
 ├── api_contracts.py
@@ -374,6 +377,7 @@ apps/core/
 ├── cache_signals.py
 ├── client_ip.py
 ├── db_performance.py
+├── docs_gate.py
 ├── email_backends.py
 ├── excel.py
 ├── exceptions.py

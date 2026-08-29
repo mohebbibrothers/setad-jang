@@ -155,3 +155,34 @@ Flower
 Sentry
 structured JSON logs
 ```
+
+### 7.1 Metrics scrape after the P1-2 hardening
+
+`/api/v1/metrics/` در production پشت Bearer token است و خروجی‌اش در حالت
+multiprocess (gunicorn N-worker) جمعِ همهٔ workerهاست (`PROMETHEUS_MULTIPROC_DIR`
+در image ست شده؛ deploy/gunicorn.conf.py فایل‌های worker مرده را پاک می‌کند):
+
+```bash
+# scrape-config Prometheus:
+#   authorization: { type: Bearer, credentials: "<PROMETHEUS_METRICS_TOKEN>" }
+curl -s -H "Authorization: Bearer $(grep ^PROMETHEUS_METRICS_TOKEN= .env | cut -d= -f2)" \
+  http://127.0.0.1:8000/api/v1/metrics/ | head
+```
+
+اگر توکن تنظیم‌نشده باشد endpoint عملاً 404 است — این fail-closed عمدی است.
+
+### 7.2 External reachability verification (P1-5)
+
+از داخل سرور (بعد از هر deploy) و یک‌بار از بیرون (DNS/TLS واقعی) تأیید شود؛
+timeout از بیرون بدون پاسخ HTTP، خودش incident است:
+
+```bash
+curl -fsS -m 5 http://127.0.0.1:8000/api/v1/health/            # expected 200
+curl -fsS -m 8 https://besat.me/api/v1/health/                  # expected 200 + JSON
+curl -sSv -m 8 https://www.besat.me/api/v1/health/ -o /dev/null # DNS باید resolve شود
+nginx -t && systemctl is-active nginx
+```
+
+چک‌لیست الزامی: health 200؛ TLS valid؛ `NUM_PROXIES=1` ست باشد (وگرنه IPها در
+throttle/guard اشتباه می‌شوند)؛ `ALLOWED_HOSTS` شامل هر دامنهٔ فعال.
+

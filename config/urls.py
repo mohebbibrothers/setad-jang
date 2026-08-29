@@ -22,18 +22,21 @@ from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import include, path
 from django.views.generic import RedirectView
-from drf_spectacular.views import (
-    SpectacularAPIView,
-    SpectacularRedocView,
-    SpectacularSwaggerView,
-)
 
+from apps.core.docs_gate import (
+    GatedSpectacularAPIView,
+    GatedSpectacularRedocView,
+    GatedSpectacularSwaggerView,
+)
 from apps.core.metrics_views import PrometheusMetricsView
 from apps.core.public_media import serve_public_media
 
 # ============================================================
 # Root / Documentation URLs
 # ============================================================
+# یافتۀ P1-4 فاز 7: این سه endpoint دیگر بدون‌گیت عمومی نیستند؛ سیاست
+# دقیق (DEBUG / API_DOCS_ALLOW_ANONYMOUS / staff) در
+# apps/core/docs_gate.py مستند شده است.
 
 documentation_urlpatterns = [
     # ── Root redirect ───────────────────────────────────────
@@ -45,19 +48,19 @@ documentation_urlpatterns = [
     # ── OpenAPI schema ──────────────────────────────────────
     path(
         "api/schema/",
-        SpectacularAPIView.as_view(),
+        GatedSpectacularAPIView.as_view(),
         name="schema",
     ),
     # ── Swagger UI ──────────────────────────────────────────
     path(
         "api/docs/",
-        SpectacularSwaggerView.as_view(url_name="schema"),
+        GatedSpectacularSwaggerView.as_view(url_name="schema"),
         name="swagger-ui",
     ),
     # ── ReDoc ───────────────────────────────────────────────
     path(
         "api/redoc/",
-        SpectacularRedocView.as_view(url_name="schema"),
+        GatedSpectacularRedocView.as_view(url_name="schema"),
         name="redoc",
     ),
 ]

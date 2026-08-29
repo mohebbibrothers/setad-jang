@@ -451,6 +451,15 @@ CORS_ALLOW_ALL_ORIGINS = True
 # Swagger / OpenAPI (drf-spectacular)
 # ============================================================================
 
+# گیت داکیومنت (یافتۀ P1-4 فاز 7): در production فقط staff می‌تواند
+# /api/schema|docs|redoc را ببیند. تنها راه قانونی برای عمومی‌کردنِ
+# عمدیِ داکیومنت، همین flag است (پیش‌فرض: خاموش). در DEBUG همیشه باز است.
+API_DOCS_ALLOW_ANONYMOUS = config("API_DOCS_ALLOW_ANONYMOUS", default=False, cast=bool)
+
+# ایمیلِ contact داخل schema عمومی؛ صراحتاً یک آدرس سازمانی، نه شخصی
+# (یافتۀ P1-4 فاز 7 — ایمیل شخصی در schema عمومی collection risk می‌سازد).
+API_CONTACT_EMAIL = config("API_CONTACT_EMAIL", default="dev@besat.me")
+
 SPECTACULAR_SETTINGS = {
     "TITLE": "ستاد جنگ — API Documentation",
     "DESCRIPTION": (
@@ -521,7 +530,7 @@ SPECTACULAR_SETTINGS = {
     "SERVE_INCLUDE_SCHEMA": False,
     "CONTACT": {
         "name": "تیم توسعه ستاد جنگ",
-        "email": "m.h.mohebbi.1386@gmail.com",
+        "email": API_CONTACT_EMAIL,
     },
     "LICENSE": {
         "name": "Iran_Cyber_MA",
