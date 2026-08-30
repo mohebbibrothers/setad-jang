@@ -75,6 +75,13 @@ POSTGRES_PASSWORD=<strong-password> docker-compose up --build -d
   همین nginx (پورت 443 + `listen ... ssl`). settings از قبل
   `SECURE_PROXY_SSL_HEADER=("HTTP_X_FORWARDED_PROTO", "https")` را دارد و
   با `X-Forwarded-Proto` هماهنگ است.
+- (رفع F5 ممیزی) از این فاز `deploy/nginx.conf` هدر `X-Forwarded-Proto`
+  ورودی را **فقط** از شبکه‌های خصوصی (127.0.0.1، 172.16/12، 10/8، 192.168/16)
+  می‌پذیرد و برای بقیه همان `$scheme`ِ خودِ کانکشن را ست می‌کند (سرریزِ
+  پروتکل با map)؛ پس spoof کردنِ `https` ممکن نیست و اگر TLS را روی پروکسیِ
+  host خاتمه می‌دهی، `SECURE_SSL_REDIRECT=True` هم بدون حلقه کار می‌کند.
+  (XFF برای IP-گیری با منطق `NUM_PROXIES`/`client_ip.py` تنظیم می‌شود — همان
+  مسیر قبلی، دست‌نخورده.)
 - `web` healthcheck واقعی روی `/api/v1/health/` دارد و کارگرها/beat با
   `service_healthy` صبر می‌کنند تا مهاجرت‌های وب تمام شود (قبلاً
   `service_started` بود — یافتهٔ P3 ممیزی).
