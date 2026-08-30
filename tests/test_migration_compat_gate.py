@@ -19,7 +19,7 @@ pytestmark = pytest.mark.unit
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SCRIPT = REPO_ROOT / "scripts" / "migration_compat.py"
 
-CLEAN_MIGRATION = '''
+CLEAN_MIGRATION = """
 from django.db import migrations, models
 
 
@@ -31,7 +31,7 @@ class Migration(migrations.Migration):
         ),
         migrations.RunPython(for_sql, migrations.RunPython.noop),
     ]
-'''
+"""
 
 BLOCKING_INDEX_MIGRATION = """
 from django.db import migrations, models
@@ -77,7 +77,9 @@ def tmp_repo_fixture(tmp_path: Path) -> Path:
     """مخزنِ git تمیز با کامیتِ اولیه (بدون مایگریشن) و config محلی."""
     repo = tmp_path / "repo"
     (repo / "apps" / "x" / "migrations").mkdir(parents=True)
-    (repo / "docker-compose.yml").write_text("services:\n  web:\n    environment:\n      RUN_MIGRATIONS: \"1\"\n", encoding="utf-8")
+    (repo / "docker-compose.yml").write_text(
+        'services:\n  web:\n    environment:\n      RUN_MIGRATIONS: "1"\n', encoding="utf-8"
+    )
     _git(repo, "init", "-q")
     _git(repo, "add", ".")
     _git(repo, "commit", "-qm", "base")
@@ -90,7 +92,9 @@ def _add_migration(repo: Path, body: str, name: str = "0002_auto.py") -> None:
     _git(repo, "commit", "-qm", "migration")
 
 
-def _run(repo: Path, base_rev: str, *, policy: str = "auto", compose: str | None = "docker-compose.yml") -> subprocess.CompletedProcess[str]:
+def _run(
+    repo: Path, base_rev: str, *, policy: str = "auto", compose: str | None = "docker-compose.yml"
+) -> subprocess.CompletedProcess[str]:
     args = [
         sys.executable,
         str(SCRIPT),
