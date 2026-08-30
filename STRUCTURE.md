@@ -9,22 +9,22 @@
 
 ## اپلیکیشن‌ها
 
-مجموع: **13 اپ** · 95 مدل · 61 مایگریشن · 287 ویو · 287 مسیر
+مجموع: **13 اپ** · 95 مدل · 61 مایگریشن · 70 ویو · 287 مسیر
 
 | اپ | مدل | مایگریشن | ویو | مسیر |
 |---|---:|---:|---:|---:|
 | `activity` | 1 | 1 | 2 | 2 |
 | `audit_logs` | 1 | 4 | 3 | 3 |
-| `authentication` | 4 | 9 | 29 | 30 |
+| `authentication` | 4 | 9 | 0 | 30 |
 | `command_center` | 0 | 0 | 1 | 1 |
 | `core` | 2 | 3 | 1 | 0 |
 | `kindness_wall` | 12 | 3 | 34 | 34 |
-| `lms` | 18 | 5 | 51 | 51 |
-| `madadkar` | 14 | 9 | 47 | 47 |
+| `lms` | 18 | 5 | 0 | 51 |
+| `madadkar` | 14 | 9 | 0 | 47 |
 | `notifications` | 4 | 3 | 7 | 7 |
 | `public_reports` | 3 | 2 | 7 | 7 |
-| `r4j` | 15 | 10 | 36 | 36 |
-| `support_desk` | 19 | 7 | 54 | 54 |
+| `r4j` | 15 | 10 | 0 | 36 |
+| `support_desk` | 19 | 7 | 0 | 54 |
 | `tabyin` | 2 | 5 | 15 | 15 |
 
 ## قرارداد لایه‌ها
@@ -125,7 +125,18 @@ setad-jang/
 │   ├── throttles.py  # محدودسازی نرخ
 │   ├── urls.py  # مسیرها
 │   ├── validators.py
-│   └── views.py  # لایهٔ HTTP
+│   ├── views.py  # لایهٔ HTTP
+│   ├── views_admin_risk.py
+│   ├── views_admin_users.py
+│   ├── views_common.py
+│   ├── views_identifiers.py
+│   ├── views_legacy.py
+│   ├── views_misc.py
+│   ├── views_otp.py
+│   ├── views_password.py
+│   ├── views_profile.py
+│   ├── views_sessions.py
+│   └── views_signup.py
 ├── command_center/
 │   ├── tests/
 │   ├── __init__.py
@@ -231,7 +242,14 @@ setad-jang/
 │   ├── throttles.py  # محدودسازی نرخ
 │   ├── urls.py  # مسیرها
 │   ├── validators.py
-│   └── views.py  # لایهٔ HTTP
+│   ├── views.py  # لایهٔ HTTP
+│   ├── views_catalog_admin.py
+│   ├── views_certificates.py
+│   ├── views_common.py
+│   ├── views_discussion.py
+│   ├── views_learning.py
+│   ├── views_public_catalog.py
+│   └── views_quiz.py
 ├── madadkar/
 │   ├── management/
 │   ├── migrations/
@@ -255,7 +273,17 @@ setad-jang/
 │   ├── throttles.py  # محدودسازی نرخ
 │   ├── urls.py  # مسیرها
 │   ├── validators.py
-│   └── views.py  # لایهٔ HTTP
+│   ├── views.py  # لایهٔ HTTP
+│   ├── views_admin_campaigns.py
+│   ├── views_admin_control.py
+│   ├── views_admin_disb.py
+│   ├── views_admin_finance.py
+│   ├── views_admin_intel.py
+│   ├── views_admin_misc.py
+│   ├── views_admin_recon.py
+│   ├── views_common.py
+│   ├── views_participation.py
+│   └── views_public.py
 ├── notifications/
 │   ├── migrations/
 │   ├── tests/
@@ -314,7 +342,14 @@ setad-jang/
 │   ├── throttles.py  # محدودسازی نرخ
 │   ├── urls.py  # مسیرها
 │   ├── validators.py
-│   └── views.py  # لایهٔ HTTP
+│   ├── views.py  # لایهٔ HTTP
+│   ├── views_admin_criminals.py
+│   ├── views_admin_misc.py
+│   ├── views_admin_records.py
+│   ├── views_bounties.py
+│   ├── views_common.py
+│   ├── views_public.py
+│   └── views_reports.py
 ├── support_desk/
 │   ├── migrations/
 │   ├── __init__.py
@@ -333,7 +368,14 @@ setad-jang/
 │   ├── throttles.py  # محدودسازی نرخ
 │   ├── urls.py  # مسیرها
 │   ├── validators.py
-│   └── views.py  # لایهٔ HTTP
+│   ├── views.py  # لایهٔ HTTP
+│   ├── views_admin_config.py
+│   ├── views_admin_misc.py
+│   ├── views_admin_tickets.py
+│   ├── views_common.py
+│   ├── views_knowledge.py
+│   ├── views_public.py
+│   └── views_user.py
 └── tabyin/
     ├── management/
     ├── migrations/
