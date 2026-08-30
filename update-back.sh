@@ -305,6 +305,25 @@ ok "کد روی ${TARGET_COMMIT:0:8} است."
 git log -1 --format='      %h · %s · %cr' "$TARGET_COMMIT" || true
 
 # ──────────────────────────────────────────────────────────────────────────────
+#  قدم ۱٫۵ — دروازۀ سازگاری مهاجرت‌ها (یافتۀ P2-12/۱۴ فاز ۸)
+#  build را *پیش از* هر چیز متوقف می‌کند؛ نه پس از migrate در prod. منطق
+#  تحلیل در scripts/migration_compat.py است (تست‌شده در tests/) — این‌جا
+#  فقط فراخوانی/خط‌مشی. RISKY_MIGRATION_POLICY: auto|block|warn|ack.
+# ──────────────────────────────────────────────────────────────────────────────
+step "دروازۀ سازگاری مهاجرت‌های تازه"
+if [[ "$CURRENT_COMMIT" == "$TARGET_COMMIT" ]]; then
+  log "تغییر کدی نیست — گیتِ مهاجرت بی‌موضوع است."
+elif command -v python3 >/dev/null 2>&1; then
+  if ! python3 "$APP_DIR/scripts/migration_compat.py" \
+        --repo "$APP_DIR" --from "$CURRENT_COMMIT" --to "$TARGET_COMMIT" \
+        --compose-file "$COMPOSE_FILE" --policy "${RISKY_MIGRATION_POLICY:-auto}"; then
+    die "مهاجرت پرخطر شناسایی شد — deploy متوقف شد. اصلاحِ مایگریشن (Concurrently/reverse) یا اجرای آگاهانه با پنجرۀ تعمیراتی: RISKY_MIGRATION_POLICY=ack ./$SCRIPT_NAME"
+  fi
+else
+  warn "python3 روی هاست نیست — گیتِ مهاجرت رد شد (برای همین سرور توصیه به نصب است)."
+fi
+
+# ──────────────────────────────────────────────────────────────────────────────
 #  قدم ۲ — snapshot ایمیجِ فعلی (سپرِ rollback)
 # ──────────────────────────────────────────────────────────────────────────────
 step "اسنپ‌شات ایمیجِ فعلی برای rollback"
