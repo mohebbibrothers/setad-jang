@@ -48,7 +48,7 @@ class TestLegacyAuthDeprecationHeaders:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         monkeypatch.setattr(
-            "apps.authentication.views.register_user",
+            "apps.authentication.views_legacy.register_user",
             lambda **kwargs: SimpleNamespace(email="legacy-register@test.local"),
         )
 
@@ -73,7 +73,7 @@ class TestLegacyAuthDeprecationHeaders:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         monkeypatch.setattr(
-            "apps.authentication.views.login_user",
+            "apps.authentication.views_legacy.login_user",
             lambda **kwargs: None,
         )
 
@@ -96,7 +96,7 @@ class TestLegacyAuthDeprecationHeaders:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         monkeypatch.setattr(
-            "apps.authentication.views.get_active_user_by_email",
+            "apps.authentication.views_password.get_active_user_by_email",
             lambda email: None,
         )
 
@@ -116,7 +116,7 @@ class TestLegacyAuthDeprecationHeaders:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         monkeypatch.setattr(
-            "apps.authentication.views.get_user_by_email",
+            "apps.authentication.views_legacy.get_user_by_email",
             lambda email: None,
         )
 
@@ -145,7 +145,7 @@ class TestLegacyAuthDeprecationHeaders:
         )
 
         monkeypatch.setattr(
-            "apps.authentication.views.login_user",
+            "apps.authentication.views_legacy.login_user",
             lambda **kwargs: {
                 "user": user,
                 "tokens": {

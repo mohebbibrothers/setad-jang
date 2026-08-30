@@ -22,7 +22,7 @@ from apps.authentication import (
     otp as otp_module,
     providers as provider_module,
     serializers as auth_serializers,
-    views as auth_views,
+    views_common as auth_guard,  # patch-where-used پس از تفکیک P3-16
 )
 from apps.authentication.choices import OTPPurpose
 from apps.authentication.models import OTPCode, PrimaryIdentifierKind, User
@@ -139,7 +139,7 @@ class TestMultiIdentifierAuthViews:
         api_client,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        monkeypatch.setattr(auth_views, "is_global_otp_guard_tripped", lambda: True)
+        monkeypatch.setattr(auth_guard, "is_global_otp_guard_tripped", lambda: True)
 
         response = api_client.post(
             _auth_url("signup-request"),
