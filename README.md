@@ -126,8 +126,10 @@ django deploy check               ✅ No issues
 makemigrations --check            ✅ No changes detected
 OpenAPI validation                ✅ Valid schema
 STRUCTURE.md check                ✅ همگام با درخت واقعی مخزن
-pytest + coverage gate            ✅ 1824 passed / 25 skipped
-coverage                          ✅ 85.45% >= 82%
+compose config (CI)               ✅ interpolate/`:?` زنده در هر push
+nginx config test (CI)            ✅ nginx -t روی deploy/nginx.conf
+pytest + coverage gate            ✅ 1867 passed / 25 skipped (راتچت: جدول با collect سوئیت می‌خواند)
+coverage                          ✅ 85.53% >= 82%
 ```
 
 Policyهای مهندسی enforced:

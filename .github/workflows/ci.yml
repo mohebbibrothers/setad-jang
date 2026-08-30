@@ -70,10 +70,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4 — pinned 2026-08-30 (audit F3); dependabot bumps
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5 — pinned 2026-08-30 (audit F3); dependabot bumps
         with:
           python-version: "3.14"
           cache: pip
@@ -115,6 +115,16 @@ jobs:
 
       - name: STRUCTURE.md drift check
         run: make structure-check
+      # رفع F4/F5 ممیزی: خرابیِ compose/nginx نباید اولین بار روی سرور کشف شود.
+      # compose config تمامِ `:?`ها و interpolate را زنده می‌سنجد؛ nginx -t
+      # سینتکک/متغیرهای map/geo را (web به‌عنوان host جعلی resolve می‌شود).
+      - name: Compose & nginx config validation
+        run: |
+          POSTGRES_PASSWORD=ci-secret FLOWER_USER=ci FLOWER_PASSWORD=ci \
+            docker compose -f docker-compose.yml config -q
+          docker run --rm --add-host web:127.0.0.1 \
+            -v "$GITHUB_WORKSPACE/deploy/nginx.conf:/etc/nginx/nginx.conf:ro" \
+            nginx:1.27-alpine nginx -t
 
       # نکته: «make schema-check» خودش DJANGO_SETTINGS_MODULE را برای تولید
       # schema به config.settings.development پین می‌کند (توضیح در Makefile).
@@ -145,7 +155,7 @@ jobs:
 
       - name: Upload validated schema artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4 — pinned 2026-08-30 (audit F3); dependabot bumps
         with:
           name: schema-ci
           path: schema-ci.yaml

@@ -1,0 +1,27 @@
+# (رفع F3 ممیزی) رباتِ وابستگی‌ها — pip-auditِ CI فقط «می‌داند»؛
+# dependabot PRِ رفع می‌سازد. گروهی تا review قابل‌مدیریت بماند.
+version: 2
+updates:
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "sunday"
+      time: "02:00"
+    open-pull-requests-limit: 10
+    groups:
+      runtime:
+        patterns:
+          - "*"
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "sunday"
+    open-pull-requests-limit: 5
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "sunday"
+    open-pull-requests-limit: 5
