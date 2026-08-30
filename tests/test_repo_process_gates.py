@@ -49,6 +49,13 @@ def test_ci_validates_compose_and_nginx() -> None:
     assert re.search(r"nginx:1\.27-alpine\s+.*-t|nginx\s+-t", text), "گیت «nginx -t» در CI نیست"
 
 
+def test_ci_never_materializes_env_from_example() -> None:
+    """درسِ همین فاز: «cp .env.example .env» در CI محتوای نمونه را به
+    decouple/اپ نشت می‌دهد (خالی‌ها defaultها را می‌کشند). موجودیتِ خالی بس است."""
+    assert "cp .env.example .env" not in _ci_text(), "گام compose نباید .env را از example بسازد"
+    assert ": > .env" in _ci_text()
+
+
 def test_dependabot_present_and_useful() -> None:
     """F3: بدونِ dependabot، pip-auditِ CI فقط *می‌داند*؛ PRِ رفع نمی‌سازد."""
     f = ROOT / ".github/dependabot.yml"
