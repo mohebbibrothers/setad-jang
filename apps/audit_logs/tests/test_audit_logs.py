@@ -40,7 +40,13 @@ _TASK_PATCH_PATH = "apps.audit_logs.tasks.create_audit_log_task"
 #: Namespace ماژول views برای patch صحیح service functions.
 #: چون view از «from .services import func» استفاده می‌کند، باید
 #: local binding در views را patch کنیم نه ماژول services را.
+# patch-where-used پس از تفکیک P3-16 فاز ۱۱: هر binding در ماژول دامنه‌ای خودش
+# نشسته است، نه در facade؛ facade فقط نام‌های عمومی (کلاس‌ها) را re-export می‌کند.
 _AUTH_VIEWS = "apps.authentication.views"
+_AUTH_SIGNUP = "apps.authentication.views_signup"
+_AUTH_OTP = "apps.authentication.views_otp"
+_AUTH_PASSWORD = "apps.authentication.views_password"
+_AUTH_IDENTIFIERS = "apps.authentication.views_identifiers"
 
 
 # ============================================================
@@ -216,7 +222,7 @@ class TestLoginOTPVerifyAudit:
 
         with (
             patch(
-                f"{_AUTH_VIEWS}.login_otp_verify",
+                f"{_AUTH_OTP}.login_otp_verify",
                 side_effect=OTPServiceError(
                     "کد اشتباه است.",
                     original=Exception(),
@@ -271,7 +277,7 @@ class TestSignupAudit:
         }
 
         with (
-            patch(f"{_AUTH_VIEWS}.signup_verify", return_value=fake_result),
+            patch(f"{_AUTH_SIGNUP}.signup_verify", return_value=fake_result),
             patch(_TASK_PATCH_PATH) as mock_task,
         ):
             mock_task.delay = MagicMock()
@@ -403,7 +409,7 @@ class TestPasswordResetAudit:
         patch باید روی local binding در views انجام شود.
         """
         with (
-            patch(f"{_AUTH_VIEWS}.forgot_password_confirm", return_value=None),
+            patch(f"{_AUTH_PASSWORD}.forgot_password_confirm", return_value=None),
             patch(_TASK_PATCH_PATH) as mock_task,
         ):
             mock_task.delay = MagicMock()
@@ -447,7 +453,7 @@ class TestIdentifierManagementAudit:
         patch روی local binding در views انجام می‌شود.
         """
         with (
-            patch(f"{_AUTH_VIEWS}.identifier_add_verify", return_value=user),
+            patch(f"{_AUTH_IDENTIFIERS}.identifier_add_verify", return_value=user),
             patch(_TASK_PATCH_PATH) as mock_task,
         ):
             mock_task.delay = MagicMock()
@@ -488,7 +494,7 @@ class TestIdentifierManagementAudit:
         )
 
         with (
-            patch(f"{_AUTH_VIEWS}.make_primary_identifier", return_value=user),
+            patch(f"{_AUTH_IDENTIFIERS}.make_primary_identifier", return_value=user),
             patch(_TASK_PATCH_PATH) as mock_task,
         ):
             mock_task.delay = MagicMock()
