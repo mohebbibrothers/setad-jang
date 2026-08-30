@@ -85,11 +85,11 @@ class TestServiceBackedListPlumbing:
 
         partially = [
             REPO_ROOT / "apps" / "notifications" / "views.py",
-            REPO_ROOT / "apps" / "kindness_wall" / "views.py",
+            REPO_ROOT / "apps" / "kindness_wall",
             REPO_ROOT / "apps" / "support_desk",
         ]
         for path in partially:
-            # پس از تفکیک P3-16، support_desk/views.py facade است؛ خانوادهٔ
+            # پس از تفکیک P3-16، views.py در این اپ‌ها facade است؛ خانوادهٔ
             # views*.py آزمون داده می‌شود (پیامدِ سازگار، نه شل‌شدنِ گیت):
             sources = sorted(path.glob("views*.py")) if path.is_dir() else [path]
             combined = "".join(src.read_text(encoding="utf-8") for src in sources)

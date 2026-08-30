@@ -9,7 +9,7 @@
 
 ## اپلیکیشن‌ها
 
-مجموع: **13 اپ** · 95 مدل · 61 مایگریشن · 70 ویو · 287 مسیر
+مجموع: **13 اپ** · 95 مدل · 61 مایگریشن · 36 ویو · 287 مسیر
 
 | اپ | مدل | مایگریشن | ویو | مسیر |
 |---|---:|---:|---:|---:|
@@ -18,7 +18,7 @@
 | `authentication` | 4 | 9 | 0 | 30 |
 | `command_center` | 0 | 0 | 1 | 1 |
 | `core` | 2 | 3 | 1 | 0 |
-| `kindness_wall` | 12 | 3 | 34 | 34 |
+| `kindness_wall` | 12 | 3 | 0 | 34 |
 | `lms` | 18 | 5 | 0 | 51 |
 | `madadkar` | 14 | 9 | 0 | 47 |
 | `notifications` | 4 | 3 | 7 | 7 |
@@ -220,7 +220,12 @@ setad-jang/
 │   ├── throttles.py  # محدودسازی نرخ
 │   ├── urls.py  # مسیرها
 │   ├── validators.py
-│   └── views.py  # لایهٔ HTTP
+│   ├── views.py  # لایهٔ HTTP
+│   ├── views_admin.py
+│   ├── views_common.py
+│   ├── views_engagement.py
+│   ├── views_public.py
+│   └── views_user.py
 ├── lms/
 │   ├── migrations/
 │   ├── tests/
