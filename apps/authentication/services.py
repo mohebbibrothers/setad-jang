@@ -306,7 +306,7 @@ def _prepare_phone_number_update(*, user: User, phone_number: str | None) -> lis
     if User.all_objects.filter(phone_number=normalized_phone).exclude(pk=user.pk).exists():
         raise ValidationError("این شماره موبایل قبلاً ثبت شده است.")
 
-    update_fields: list[str] = []
+    update_fields = []  # نوع از اولین اعلایِ همین scope معلوم است؛ تکرارِ annotation خطاست
 
     if user.phone_number != normalized_phone:
         user.phone_number = normalized_phone

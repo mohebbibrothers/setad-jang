@@ -128,6 +128,57 @@ markers = [
 ]
 
 # ════════════════════════════════════════════════════════════
+# mypy — یافتۀ P2-6 فاز 8 (قفل‌کردنِ بدهیِ type)
+# ════════════════════════════════════════════════════════════
+# فلسفۀ «progressive» و چرا strict نیست:
+#     کد پروژه type-hint دارد ولی هرگز زیر type-checker نبوده؛ روشن‌کردنِ
+#     strict یک‌شبه هزاران خطا می‌دهد و گیتِ بی‌ارزش (disable-per-line)
+#     می‌سازد. اینجا خطاها را به گروه‌های *معنادارِ بدون-stub* محدود کردیم:
+#     نام‌های تعریف‌نشده، آرگومان‌های غلط، ناسازگاری override/assign —
+#     یعنی باگ‌هایی که ruff نمی‌بیند و تست هم ممکن است نپوشاندشان.
+#     افزودن --strict بعداً یک commit تمیز است، نه شرطِ ورود.
+#     کتابخانه‌های بدونِ type (celery/rest_framework/...) عمداً Any می‌مانند؛
+#     mypy-django-plugin هم در فاز بعد (نیازمند pinِ هماهنگِ django-stubs).
+
+[tool.mypy]
+python_version = "3.13"
+files = ["apps", "config"]
+namespace_packages = true
+explicit_package_bases = true
+ignore_missing_imports = true
+follow_imports = "silent"
+exclude = "(^|/)(migrations|tests)/"
+warn_redundant_casts = true
+warn_unused_ignores = false
+check_untyped_defs = false
+# خطاهای بی‌ سروصدا ولی واقعی:
+disallow_untyped_calls = false
+disallow_untyped_defs = false
+show_error_codes = true
+no_implicit_optional = true
+local_partial_types = true
+# بک‌لاگِ صریح (مستند، نه سرِ‌هوایی): این کد家族‌ها روی 650 خطایِ انباشته
+# روشن نمی‌شوند؛ هرکدام که با اصلاحِ واقعی صفر شد، از این لیست بیرون
+# می‌آید. دو خانواده‌ای که همین حالا سبزند و فعال‌اند: var-annotated و
+# no-redef و name-defined.
+disable_error_code = [
+    "arg-type",
+    "assignment",
+    "attr-defined",
+    "call-overload",
+    "dict-item",
+    "has-type",
+    "index",
+    "list-item",
+    "misc",
+    "return-value",
+    "type-var",
+    "unreachable",
+    "union-attr",
+    "valid-type",
+]
+
+# ════════════════════════════════════════════════════════════
 # Coverage
 # ════════════════════════════════════════════════════════════
 [tool.coverage.run]

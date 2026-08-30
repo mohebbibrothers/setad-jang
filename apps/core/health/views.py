@@ -124,7 +124,7 @@ class SimpleHealthView(APIView):
     """
 
     permission_classes = [AllowAny]
-    throttle_classes = []
+    throttle_classes: list[Any] = []
 
     @extend_schema(
         operation_id="health_liveness",
@@ -159,7 +159,7 @@ class ReadinessHealthView(APIView):
     """
 
     permission_classes = [AllowAny]
-    throttle_classes = []
+    throttle_classes: list[Any] = []
 
     @extend_schema(
         operation_id="health_readiness",

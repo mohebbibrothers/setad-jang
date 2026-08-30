@@ -113,7 +113,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     all_objects = UserAllManager()
 
     USERNAME_FIELD = "email"
-    REQUIRED_FIELDS = []
+    REQUIRED_FIELDS: list[str] = []
 
     class Meta:
         verbose_name = "کاربر"

@@ -98,6 +98,9 @@ jobs:
       - name: Ruff lint
         run: make lint
 
+      - name: Type gate (mypy)
+        run: make mypy
+
       - name: Ruff format check
         run: make format-check
 

@@ -28,7 +28,7 @@ PROD_CHECK_ENV := \
 	EMAIL_PORT=1025 \
 	EMAIL_USE_TLS=False
 
-.PHONY: help install lock lock-check lint format format-check structure structure-check check deploy-check migrations-check schema-check schema-update test test-postgres coverage coverage-postgres test-sqlite-vendor test-redis pip-check pip-audit bandit secrets-scan security verify verify-fast docker-up docker-down
+.PHONY: help install lock lock-check lint mypy format format-check structure structure-check check deploy-check migrations-check schema-check schema-update test test-postgres coverage coverage-postgres test-sqlite-vendor test-redis pip-check pip-audit bandit secrets-scan security verify verify-fast docker-up docker-down
 
 help:
 	@printf '%s\n' 'Setad Jang commands:'
@@ -60,6 +60,12 @@ lint:
 # بخش [tool.ruff.format] در pyproject.toml با دقت تنظیم شده بود ولی هیچ گیتی
 # اجرایش نمی‌کرد، و نتیجه‌اش این بود که ۵۵٪ فایل‌ها با استاندارد فرمت خودِ
 # پروژه همخوان نبودند. این هدف، فرمت را از «توصیه» به «قرارداد» تبدیل می‌کند.
+# یافتۀ P2-6 فاز 8: درِ نوعی. کانفیقِ progressive در pyproject (باکدلاگِ
+# صریحِ disable شده آنجا مستند است) — گیتِ سبزِ امروز یعنی از این به بعد
+# خطایِ نوعیِ *جدید* نمی‌تواند merge شود.
+mypy:
+	$(PYTHON) -m mypy
+
 format-check:
 	$(PYTHON) -m ruff format --check .
 
@@ -166,9 +172,9 @@ test-sqlite-vendor:
 test-redis:
 	DJANGO_SETTINGS_MODULE=config.settings.test CACHE_BACKEND=redis REDIS_URL=redis://127.0.0.1:6379/2 $(PYTHON) -m pytest -q -m redis tests/test_cache_layer_redis_integration.py
 
-verify-fast: lint format-check check migrations-check schema-check structure-check
+verify-fast: lint mypy format-check check migrations-check schema-check structure-check
 
-verify: pip-check lock-check security lint format-check check deploy-check migrations-check schema-check structure-check coverage
+verify: pip-check lock-check security lint mypy format-check check deploy-check migrations-check schema-check structure-check coverage
 
 docker-up:
 	docker-compose up --build -d
