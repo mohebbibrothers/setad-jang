@@ -28,7 +28,7 @@ PROD_CHECK_ENV := \
 	EMAIL_PORT=1025 \
 	EMAIL_USE_TLS=False
 
-.PHONY: help install lock lock-check lint format format-check structure structure-check check deploy-check migrations-check schema-check schema-update test test-postgres coverage coverage-postgres test-sqlite-vendor pip-check pip-audit bandit secrets-scan security verify verify-fast docker-up docker-down
+.PHONY: help install lock lock-check lint format format-check structure structure-check check deploy-check migrations-check schema-check schema-update test test-postgres coverage coverage-postgres test-sqlite-vendor test-redis pip-check pip-audit bandit secrets-scan security verify verify-fast docker-up docker-down
 
 help:
 	@printf '%s\n' 'Setad Jang commands:'
@@ -160,6 +160,11 @@ coverage-postgres:
 # از محیط ارث می‌رسد و باید بازنویسی شود) اجرا می‌کند.
 test-sqlite-vendor:
 	DJANGO_SETTINGS_MODULE=config.settings.test DATABASE_ENGINE=sqlite $(PYTHON) -m pytest -q -m "sqlite"
+
+# لایۀ کش روی Redis واقعی (یافتۀ P2-7 فاز 8)؛ در CI با سرویس redis اجرا
+# می‌شود. local بدونِ redis: همه skip — هرگز قرمز نمی‌شود.
+test-redis:
+	DJANGO_SETTINGS_MODULE=config.settings.test CACHE_BACKEND=redis REDIS_URL=redis://127.0.0.1:6379/2 $(PYTHON) -m pytest -q -m redis tests/test_cache_layer_redis_integration.py
 
 verify-fast: lint format-check check migrations-check schema-check structure-check
 

@@ -130,6 +130,16 @@ jobs:
       - name: SQLite vendor-specific tests
         run: make test-sqlite-vendor
 
+      # یافتۀ P2-7 فاز 8: کل لایۀ سفارشیِ کش (JSON+zlib serializer،
+      # namespace-version، SWR envelope) روی Redis *واقعی* آزموده می‌شود؛
+      # db شمارهٔ ۲ تا با هیچ چیزِ دیگری در این job تداخل نکند. در نبودِ
+      # redis تست‌ها skip می‌شوند (نه fail).
+      - name: Cache layer on real Redis
+        env:
+          CACHE_BACKEND: redis
+          REDIS_URL: redis://127.0.0.1:6379/2
+        run: make test-redis
+
       - name: Upload validated schema artifact
         if: always()
         uses: actions/upload-artifact@v4
