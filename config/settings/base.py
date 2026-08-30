@@ -145,12 +145,19 @@ AUTH_PASSWORD_VALIDATORS = [
     },
     {
         "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
+        "OPTIONS": {"min_length": 10},
     },
     {
         "NAME": "django.contrib.auth.password_validation.CommonPasswordValidator",
     },
     {
         "NAME": "django.contrib.auth.password_validation.NumericPasswordValidator",
+    },
+    # سیاستِ بومیِ ستاد جنگ (یافتهٔ P2-8 فاز 8): کلاس‌های کاراکتری،
+    # توالی/ردیفِ صفحه‌کلید، سالِ تولدِ شمسی، نامِ پلتفرم و黑名单ِ
+    # فارسی/فینگلیش. مستند در apps/authentication/password_policy.py.
+    {
+        "NAME": "apps.authentication.password_policy.BesatPasswordPolicyValidator",
     },
 ]
 
