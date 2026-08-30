@@ -115,16 +115,19 @@ make verify
 
 ```text
 pip check                         ✅ No broken requirements
+lock check                        ✅ lockfiles هم‌ارز با requirements‌ها
 pip-audit                         ✅ No known vulnerabilities
 bandit                            ✅ Production SAST gate clean
 detect-secrets                    ✅ Baseline-controlled secret scan
-ruff                              ✅ All checks passed
+ruff lint + format-check          ✅ All checks passed
+type gate (mypy)                  ✅ Success: no issues found in 343 source files
 django check                      ✅ No issues
 django deploy check               ✅ No issues
 makemigrations --check            ✅ No changes detected
 OpenAPI validation                ✅ Valid schema
-pytest + coverage gate            ✅ 1236 passed
-coverage                          ✅ 83.73% >= 82%
+STRUCTURE.md check                ✅ همگام با درخت واقعی مخزن
+pytest + coverage gate            ✅ 1824 passed / 25 skipped
+coverage                          ✅ 85.45% >= 82%
 ```
 
 Policyهای مهندسی enforced:
