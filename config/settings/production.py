@@ -188,6 +188,13 @@ SECURE_HSTS_PRELOAD = config(
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = "DENY"
 SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
+# یافتۀ P2-9 فاز 8: جداسازیِ browsing-context؛ پیش‌فرض جانگو None است و
+# یعنی کلیدهایِ APIِ بازِ مرورگر در tab هم‌منشأ با صفحاتِ ثالث قابلِ
+# access‌اند. same-origin بدونِ COPE امن است (API ما CORP لازم ندارد).
+SECURE_CROSS_ORIGIN_OPENER_POLICY = config(
+    "SECURE_CROSS_ORIGIN_OPENER_POLICY",
+    default="same-origin",
+)
 
 
 # ============================================================

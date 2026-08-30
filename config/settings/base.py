@@ -97,7 +97,17 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    # هدرهای مرورگریِ فاز 8 (یافتهٔ P2-9) — آخرِ زنجیره تا روی پاسخ‌های
+    # WhiteNoise هم الگویِ پوشش‌دهیِ ثابتی داشته باشیم و overrideهای view
+    # (setdefault نیست) حفظ شوند.
+    "apps.core.browser_headers.BrowserSecurityHeadersMiddleware",
 ]
+
+# پرچمِ خاموش‌شدنِ اضطراری هدرهای فاز 8 (incident-response): با False بودن،
+# middleware بدونِ هیچ هزینه‌ای رد می‌شود. SECURE_CSP_ENFORCE=False یعنی
+# Content-Security-Policy-Report-Only — حالتِ توصیه‌شده برای چرخهٔ اولِ استقرار.
+SECURE_BROWSER_HEADERS_ENABLED = config("SECURE_BROWSER_HEADERS_ENABLED", default=True, cast=bool)
+SECURE_CSP_ENFORCE = config("SECURE_CSP_ENFORCE", default=True, cast=bool)
 
 ROOT_URLCONF = "config.urls"
 
