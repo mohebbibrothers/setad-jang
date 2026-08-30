@@ -128,7 +128,7 @@ OpenAPI validation                ✅ Valid schema
 STRUCTURE.md check                ✅ همگام با درخت واقعی مخزن
 compose config (CI)               ✅ interpolate/`:?` زنده در هر push
 nginx config test (CI)            ✅ nginx -t روی deploy/nginx.conf
-pytest + coverage gate            ✅ 1867 passed / 25 skipped (راتچت: جدول با collect سوئیت می‌خواند)
+pytest + coverage gate            ✅ 1868 passed / 25 skipped (راتچت: جدول با collect سوئیت می‌خواند)
 coverage                          ✅ 85.53% >= 82%
 ```
 

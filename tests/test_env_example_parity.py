@@ -35,7 +35,12 @@ _ENV_PATTERN = re.compile(
 )
 # فقط خطوط «تعریف» (KEY=value بدون متن دنباله‌دار) شمرده می‌شوند؛
 # کامنت‌های توضیحی مثل «# LOG_FORMAT=text برای dev خوانا» تعریف نیستند.
-_DOC_LINE_PATTERN = re.compile(r"^#?\s*([A-Z0-9_]+)=([A-Za-z0-9_\-.,:/\[\]@ ]*)$")
+_DOC_LINE_PATTERN = re.compile(
+    # مقدار آزاد است (فارسی/یونیکد): الگوی ASCII-محور قبلاً خطِ
+    # فارسیِ درست را «مستندنیافته» می‌دید و فقط با خط‌های فاسدِ ASCII
+    # راضی می‌شد — ممیزیِ k6 همین کلاس حفره را در جای دیگری گرفته بود.
+    r"^#?\s*([A-Z0-9_]+)=(.*)$"
+)
 
 
 def _used_keys() -> set[str]:
@@ -73,10 +78,18 @@ def test_every_env_key_read_in_code_is_documented() -> None:
 
 
 def test_documented_keys_have_no_duplicates() -> None:
-    """کلید تکراری در .env.example گمراه‌کننده است (مقدار دوم بی‌صدا برنده است)."""
+    """کلید *فعالِ* تکراری در .env.example گمراه‌کننده است (مقدار دوم بی‌صدا برنده است).
+
+    خط‌های توضیحی («# LOG_FORMAT=text برای dev...») duplicate نیستند — قراردادِ
+    فایل همین است که کامنت، گزینه‌ها را شرح می‌دهد؛ لذا شمارش فقط روی خطوط
+    فعال، هم‌راستا با _documented_values() انجام می‌شود. (با الگوی یونیکدِ جدید،
+    شمارشِ کامنت‌دار false-positive می‌داد — خودِ الگو درست است، نه داده.)
+    """
     seen: list[str] = []
     for line in _DOC_FILE.read_text(encoding="utf-8").splitlines():
-        match = _DOC_LINE_PATTERN.match(line)
+        if line.lstrip().startswith("#"):
+            continue
+        match = re.match(r"^([A-Z0-9_]+)=(.*)$", line)
         if match:
             seen.append(match.group(1))
     duplicates = sorted({key for key in seen if seen.count(key) > 1})
