@@ -11917,7 +11917,15 @@ paths:
   /api/v1/tabyin/me/submissions/{content_id}/:
     get:
       operationId: tabyin_user_submission_retrieve
-      description: Authenticated users can inspect one of their own submissions.
+      description: |-
+        مدیریتِ کاملِ یک روایتِ خود کاربر: مشاهده، ویرایش و حذف.
+
+        - هر سه عمل با selector مالک‌محور فیلتر می‌شوند (IDOR-safe)؛
+        - ویرایش روی روایتِ بررسی‌شده آن را دوباره به صفِ بررسی می‌برد تا
+          هیچ محتوای ندیده‌گرفته‌ای مستقیم روی دیوارِ عمومی ننشیند؛
+        - حذف hard-delete است و signalهای post_delete کش‌های عمومی و ISR
+          فرانت را پس از commit باطل می‌کنند تا روایت بلافاصله از دیوارِ
+          خانه و فید برود.
       summary: جزئیات محتوای ارسالی من
       parameters:
       - in: path
@@ -11941,6 +11949,81 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/UserTabyinSubmissionNotFound'
+          description: ''
+    patch:
+      operationId: tabyin_user_submission_update
+      description: |-
+        ویرایشِ نقطه‌ایِ عنوان/شرح و جایگزینیِ کاملِ پیوست‌ها.
+
+        قانونِ امنیتِ محتوا: ویرایش روی روایتِ بررسی‌شده (تأیید یا رد) آن را به وضعیت «در انتظار بررسی» برمی‌گرداند و از نمایشِ عمومی پنهان می‌کند؛ مدیر با تأییدِ مجدد دوباره منتشرش می‌کند.
+      summary: ویرایش محتوای ارسالی من
+      parameters:
+      - in: path
+        name: content_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - تبیین — عمومی
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedUserTabyinSubmissionUpdate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedUserTabyinSubmissionUpdate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedUserTabyinSubmissionUpdate'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserTabyinSubmissionUpdatedResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserTabyinSubmissionUpdateBadRequest'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserTabyinSubmissionUpdateNotFound'
+          description: ''
+    delete:
+      operationId: tabyin_user_submission_delete
+      description: حذفِ کاملِ روایت (hard-delete) — روایت بلافاصله از دیوارِ خانه،
+        فیدِ روایت‌ها، جزئیات و جست‌وجو می‌رود و قابلِ بازیابی نیست.
+      summary: حذف محتوای ارسالی من
+      parameters:
+      - in: path
+        name: content_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - تبیین — عمومی
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserTabyinSubmissionDeletedResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserTabyinSubmissionDeleteNotFound'
           description: ''
   /api/v1/tabyin/me/uploads/:
     post:
@@ -21441,6 +21524,25 @@ components:
           maxLength: 100
         address:
           type: string
+    PatchedUserTabyinSubmissionUpdate:
+      type: object
+      description: |-
+        ویرایشِ روایتِ خود کاربر (PATCH) — جایگزینیِ نقطه‌ای با ماهیتِ کامل.
+
+        - title / description فقط در صورت ارسال، مقدار قبلی را جایگزین می‌کنند؛
+        - attachments اگر ارسال شود فهرستِ کاملِ جدید است (replace-all) و همان
+          قوانینِ ساخت — تک‌نوعیِ سخت‌گیرانه و سقفِ ۵ پیوست — را می‌گذراند؛
+        - دست‌کم یک فیلد باید ارسال شود تا ویرایشِ تهی معنا نداشته باشد.
+      properties:
+        title:
+          type: string
+          maxLength: 512
+        description:
+          type: string
+        attachments:
+          type: array
+          items:
+            $ref: '#/components/schemas/TabyinSubmissionAttachmentInput'
     PaymentReconciliationBatch:
       type: object
       description: Read serializer for provider settlement reconciliation batches.
@@ -27981,9 +28083,7 @@ components:
           type: string
           maxLength: 1024
         media_type:
-          allOf:
-          - $ref: '#/components/schemas/TabyinMediaTypeEnum'
-          default: other
+          $ref: '#/components/schemas/TabyinMediaTypeEnum'
         title:
           type: string
           maxLength: 512
@@ -28500,6 +28600,36 @@ components:
       required:
       - data
       - message
+    UserTabyinSubmissionDeleteNotFound:
+      type: object
+      properties:
+        success:
+          type: boolean
+          default: false
+        status_code:
+          type: integer
+        message:
+          type: string
+        errors:
+          nullable: true
+      required:
+      - message
+      - status_code
+    UserTabyinSubmissionDeletedResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          default: true
+        status_code:
+          type: integer
+          default: 200
+        message:
+          type: string
+        data:
+          nullable: true
+      required:
+      - message
     UserTabyinSubmissionDetail:
       type: object
       description: Detail serializer for a user's own submitted content.
@@ -28660,6 +28790,52 @@ components:
       required:
       - message
       - status_code
+    UserTabyinSubmissionUpdateBadRequest:
+      type: object
+      properties:
+        success:
+          type: boolean
+          default: false
+        status_code:
+          type: integer
+        message:
+          type: string
+        errors:
+          nullable: true
+      required:
+      - message
+      - status_code
+    UserTabyinSubmissionUpdateNotFound:
+      type: object
+      properties:
+        success:
+          type: boolean
+          default: false
+        status_code:
+          type: integer
+        message:
+          type: string
+        errors:
+          nullable: true
+      required:
+      - message
+      - status_code
+    UserTabyinSubmissionUpdatedResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          default: true
+        status_code:
+          type: integer
+          default: 200
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/UserTabyinSubmissionDetail'
+      required:
+      - data
+      - message
     VerifyEmail:
       type: object
       description: VerifyEmailSerializer implementation for the authentication application.

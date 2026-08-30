@@ -91,6 +91,61 @@ class SubmissionNotReviewable(TabyinServiceError):
 # ============================================================
 
 
+def _create_attachment_rows(
+    content: TabyinContent,
+    attachments: list[dict[str, Any]],
+) -> None:
+    """
+    ساختِ سطرهای پیوست برای یک محتوای مردمی — منطقِ مشترکِ ثبت و ویرایش.
+
+    - نشانیِ بومی (/media/ خودمان): نتیجه‌ی «آپلود مستقیم» است؛ بلافاصله
+      mirrored حساب می‌شود و متادیتا (ابعاد/مدت/حجم) همان‌جا از استوریج
+      بازخوانی می‌شود تا قراردادِ متادیتا با محتوای منبع خارجی یکی بماند.
+    - نشانیِ بیرونی: برای انتشارِ پایدار باید روی سرور خودمان آینه شود؛
+      نشانیِ اصلی در origin_url می‌ماند (rastrear؛ graceful fallback) و
+      وضعیت، pending است تا تَسکِ آینه‌سازی آن را بردارد.
+    """
+    for index, attachment in enumerate(attachments):
+        url = str(attachment["url"]).strip()
+        media_type = attachment.get("media_type", MediaType.OTHER)
+        meta = {"size": "", "duration": 0, "file_size": 0}
+        origin_url = ""
+        mirror_status = MirrorStatus.NONE
+        mime_type = ""
+
+        if uploading.is_local_media_url(url):
+            mirror_status = MirrorStatus.MIRRORED
+            name = uploading.local_media_name_from_url(url)
+            if name:
+                stored_meta = uploading.local_attachment_meta(name, media_type) or {}
+                meta = {**meta, **stored_meta}
+                mime_type = uploading.mimetypes.guess_type(name)[0] or ""
+        else:
+            origin_url = url
+            mirror_status = MirrorStatus.PENDING
+
+        TabyinAttachment.objects.create(
+            content=content,
+            url=url,
+            relative_url=url,
+            media_type=media_type,
+            title=attachment.get("title", ""),
+            order=attachment.get("order", index),
+            origin_url=origin_url,
+            mirror_status=mirror_status,
+            mime_type=mime_type,
+            size=str(meta.get("size") or ""),
+            duration=int(meta.get("duration") or 0),
+            file_size=int(meta.get("file_size") or 0),
+        )
+
+
+def _schedule_mirror_if_needed(content: TabyinContent) -> None:
+    """اگر پیوستِ درانتظارِ آینه دارد، تَسک را پس از commit به صف بفرست."""
+    if content.attachments.filter(mirror_status=MirrorStatus.PENDING).exists():
+        transaction.on_commit(lambda: _dispatch_attachment_mirror(content.pk))
+
+
 @transaction.atomic
 def submit_user_content(
     *,
@@ -122,50 +177,8 @@ def submit_user_content(
         raw_payload={"source": "user_submission"},
     )
 
-    for index, attachment in enumerate(attachments or []):
-        url = str(attachment["url"]).strip()
-        media_type = attachment.get("media_type", MediaType.OTHER)
-        meta = {"size": "", "duration": 0, "file_size": 0}
-        origin_url = ""
-        mirror_status = MirrorStatus.NONE
-        mime_type = ""
-
-        if uploading.is_local_media_url(url):
-            # فایل از قبل روی استوریج خودمان است (نتیجه‌ی «آپلود مستقیم» —
-            # یا یک آینه‌ی قبلی). متادیتا همان‌جا از استوریج بازخوانی می‌شود
-            # تا قراردادِ متادیتای محتوای مردمی با محتوای منبع خارجی یکی بماند.
-            mirror_status = MirrorStatus.MIRRORED
-            name = uploading.local_media_name_from_url(url)
-            if name:
-                stored_meta = uploading.local_attachment_meta(name, media_type) or {}
-                meta = {**meta, **stored_meta}
-                mime_type = uploading.mimetypes.guess_type(name)[0] or ""
-        else:
-            # نشانی بیرونی: برای انتشارِ پایدار باید روی سرور خودمان آینه
-            # شود؛ اگر نشانی فردا بمیرد، روایتِ کاربر نمی‌شکند. نشانی اصلی
-            # را هم در origin_url نگه می‌داریم (rastrear؛ graceful fallback).
-            origin_url = url
-            mirror_status = MirrorStatus.PENDING
-
-        TabyinAttachment.objects.create(
-            content=content,
-            url=url,
-            relative_url=url,
-            media_type=media_type,
-            title=attachment.get("title", ""),
-            order=attachment.get("order", index),
-            origin_url=origin_url,
-            mirror_status=mirror_status,
-            mime_type=mime_type,
-            size=str(meta.get("size") or ""),
-            duration=int(meta.get("duration") or 0),
-            file_size=int(meta.get("file_size") or 0),
-        )
-
-    if content.attachments.filter(mirror_status=MirrorStatus.PENDING).exists():
-        # بعد از commit تَسک آینه‌سازی در صف می‌رود تا قبل از/هم‌زمان با بررسی
-        # ادمین، فایل‌ها روی استوریج خودمان بنشینند.
-        transaction.on_commit(lambda: _dispatch_attachment_mirror(content.pk))
+    _create_attachment_rows(content, list(attachments or []))
+    _schedule_mirror_if_needed(content)
 
     logger.info(
         "User Tabyin submission created content_id=%s external_id=%s user_id=%s attachments=%s",
@@ -175,6 +188,91 @@ def submit_user_content(
         len(attachments or []),
     )
     return content
+
+
+@transaction.atomic
+def update_user_submission(
+    *,
+    content: TabyinContent,
+    title: str | None = None,
+    description: str | None = None,
+    attachments: list[dict[str, Any]] | None = None,
+) -> TabyinContent:
+    """
+    ویرایشِ روایتِ خود کاربر — با قانونِ «بررسیِ مجدد پس از هر تغییر».
+
+    امنیتِ محتوا: هر ویرایش روی روایتی که قبلاً نتیجه‌ی بررسی گرفته
+    (تأیید/رد) آن را دوباره به صفِ بررسی برمی‌گرداند (pending_review،
+    مخفی از نمایشِ عمومی، پاک‌شدنِ برگه‌ی بررسیِ قبلی) تا هیچ متن یا
+    رسانه‌ای که ادمین ندیده، بی‌واسطه روی دیوارِ عمومی بنشیند؛ مدیر با
+    تأییدِ مجدد همان روایت را دوباره منتشر می‌کند؛ روایتی که هنوز در
+    انتظار بررسی است (هنوز نتیجه‌ای نگرفته) در همان صف می‌ماند و وضعیتش
+    تکراری pending نمی‌شود — صرفاً محتوایش جایگزین می‌گردد.
+
+    پیوست‌ها — اگر ارسال شوند — جایگزینِ کاملِ فهرستِ قبلی می‌شوند
+    (replace-all): سطرهای قدیمی پاک و سطرهای جدید با همان قوانینِ ثبت
+    (بومی→mirrored / بیرونی→pending + صفِ آینه) ساخته می‌شوند. فایلِ
+    فیزیکیِ رسانه‌های حذف‌شده آگاهانه پاک *نمی‌شود*: نامِ فایل‌ها
+    یکتاست اما همان نشانی می‌تواند در روایتِ دیگری هم پیوست شده باشد؛
+    پاک‌سازیِ استوریج مسئولیتِ تکلیفِ مجزاست، نه ویرایشِ روایت.
+    """
+    update_fields: set[str] = set()
+    if title is not None:
+        content.title = title
+        update_fields.add("title")
+    if description is not None:
+        content.description = description
+        update_fields.add("description")
+
+    re_pended = False
+    if content.submission_status != SubmissionStatus.PENDING_REVIEW:
+        re_pended = True
+        content.submission_status = SubmissionStatus.PENDING_REVIEW
+        content.reviewed_by = None
+        content.reviewed_at = None
+        content.admin_note = ""
+        content.is_active = False
+        update_fields.update(
+            {"submission_status", "reviewed_by", "reviewed_at", "admin_note", "is_active"}
+        )
+
+    if update_fields:
+        update_fields.add("updated_at")
+        content.save(update_fields=sorted(update_fields))
+
+    if attachments is not None:
+        content.attachments.all().delete()
+        _create_attachment_rows(content, attachments)
+        _schedule_mirror_if_needed(content)
+
+    transaction.on_commit(_invalidate_public_caches)
+    logger.info(
+        "User Tabyin submission updated content_id=%s re_pended=%s attachments_replaced=%s",
+        content.pk,
+        re_pended,
+        attachments is not None,
+    )
+    return content
+
+
+@transaction.atomic
+def delete_user_submission(*, content: TabyinContent) -> None:
+    """
+    حذفِ کاملِ روایتِ خود کاربر (hard-delete).
+
+    سطرِ محتوا و — به‌واسطه‌ی cascade — همه‌ی پیوسته‌اش پاک می‌شوند؛ از آن
+    لحظه روایت در دیوارِ خانه، فید، جزئیات و جست‌وجو هیچ‌جا دیده نمی‌شود.
+    invalidationِ کش‌های عمومی توسط signalهای post_delete (on_commit)
+    انجام می‌شود تا هم حذفِ کاربر، هم حذفِ ادمین و هم حذف‌های برنامه‌ای —
+    از جمله از Django admin — را یک‌جا پوشش دهد. فایلِ فیزیکیِ استوریج —
+    مثل ویرایش — عمداً باقی می‌ماند.
+    """
+    logger.info(
+        "User Tabyin submission deleted content_id=%s external_id=%s",
+        content.pk,
+        content.external_id,
+    )
+    content.delete()
 
 
 def _dispatch_attachment_mirror(content_pk: int) -> None:
@@ -348,13 +446,19 @@ def run_sync(*, mode: SyncMode = "incremental") -> SyncStats:
     """
     logger.info("Running sync via service layer mode=%s", mode)
 
+    from apps.tabyin.signals import suppress_signal_invalidation
+
     with get_tabyin_provider() as provider:
         engine = SyncEngine(provider=provider)
 
-        if mode == "full":
-            stats = engine.sync_full()
-        else:
-            stats = engine.sync_incremental()
+        # همگام‌سازی انبوه: signalهای save/delete هر سطر نباید جداگانه کش
+        # عمومی را invalidate کنند (طوفانِ invalidate) — این سرویس در پایان،
+        # یک‌بار و فقط هنگام تغییرِ واقعی، این کار را انجام می‌دهد.
+        with suppress_signal_invalidation():
+            if mode == "full":
+                stats = engine.sync_full()
+            else:
+                stats = engine.sync_incremental()
 
     if stats.created > 0 or stats.updated > 0 or stats.soft_deleted > 0:
         _invalidate_public_caches()

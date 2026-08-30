@@ -21,7 +21,7 @@ from rest_framework import serializers
 from apps.tabyin import selectors as tabyin_selectors
 from apps.tabyin.choices import MediaType
 from apps.tabyin.models import TabyinAttachment, TabyinContent
-from apps.tabyin.uploading import is_local_media_url
+from apps.tabyin.uploading import is_local_media_url, sniff_media_type_from_url
 
 # ============================================================
 # Attachment Serializers
@@ -293,7 +293,10 @@ class TabyinSubmissionAttachmentInputSerializer(serializers.Serializer):
     """Input serializer for user-submitted content attachment URLs."""
 
     url = serializers.CharField(max_length=1024, trim_whitespace=True)
-    media_type = serializers.ChoiceField(choices=MediaType.choices, default=MediaType.OTHER)
+    # عمداً default ندارد: «کاربر نوع را انتخاب نکرده» باید از «آگاهانه other
+    # را انتخاب کرده» تفکیک شود تا object-level validation بتواند نوعِ واقعی
+    # را از پسوندِ نشانی حدس بزند (تک‌نوع‌سازیِ سخت‌گیرانه).
+    media_type = serializers.ChoiceField(choices=MediaType.choices, required=False)
     title = serializers.CharField(max_length=512, required=False, allow_blank=True)
     order = serializers.IntegerField(required=False, min_value=0, default=0)
 
@@ -312,6 +315,59 @@ class TabyinSubmissionAttachmentInputSerializer(serializers.Serializer):
         )
 
 
+HOMOGENEOUS_TYPES_MESSAGE = (
+    "هر روایت فقط یک نوع رسانه می‌پذیرد؛ همه‌ی پیوست‌ها باید هم‌نوع "
+    "باشند (همه تصویر یا همه ویدئو یا همه صوت یا همه سایر)."
+)
+
+
+def enforce_homogeneous_attachments(attachments: list[dict]) -> list[dict]:
+    """
+    تک‌نوع‌سازیِ سخت‌گیرانه‌ی پیوست‌ها — سه لایه‌ی دفاعی:
+
+    ۱) **نرمال‌سازیِ نوعِ واقعی:** وقتی کاربر media_type را نفرستاده
+       (پیش‌فرضِ خاموش)، نوع از پسوندِ مسیرِ نشانی بویده می‌شود و همان
+       مقدارِ نهایی در validated_data می‌نشیند؛ دیگر هر نشانیِ ناشناس
+       چترِ پیش‌فرضِ «other» نمی‌شود که مخلوطِ عکس+ویدئو را پنهان کند.
+    ۲) **ردِ ناسازگاریِ اعلام/واقعیت:** اگر پسوندِ نشانی قابل‌تشخیص باشد و
+       با نوعِ اعلانی نخواند (مثلاً نشانیِ mp4 با اعلامِ «تصویر») رد می‌شود
+       تا دورزدنِ دستیِ قانون هم ممکن نباشد؛ نشانیِ بدونِ پسوندِ شناخته‌شده
+       (URLهای داینامیک) به اعلامِ کاربر اعتماد می‌کند.
+    ۳) **قفلِ نهایی:** اگر بیش از یک نوعِ مؤثر در فهرست دیده شود، همان
+       خطای قرارداد (کلید attachments) برمی‌گردد.
+
+    هر دو serializer ساخت و ویرایش از همین تابع استفاده می‌کنند تا قانون
+    تک‌نوعی هرگز دو معنا نداشته باشد.
+    """
+    effective_types: set[str] = set()
+    for attachment in attachments:
+        declared = attachment.get("media_type")
+        sniffed = sniff_media_type_from_url(attachment.get("url", ""))
+        if declared and sniffed and declared != sniffed:
+            raise serializers.ValidationError(
+                {
+                    "attachments": (
+                        f"نوعِ اعلامیِ پیوست «{MediaType(declared).label}» با پسوندِ "
+                        f"نشانی‌اش («{MediaType(sniffed).label}») ناسازگار است؛ نوع را "
+                        "همان چیزی انتخاب کن که فایل واقعاً هست."
+                    )
+                }
+            )
+        resolved = declared or sniffed or MediaType.OTHER
+        attachment["media_type"] = resolved
+        effective_types.add(resolved)
+    if len(effective_types) > 1:
+        raise serializers.ValidationError({"attachments": HOMOGENEOUS_TYPES_MESSAGE})
+    return attachments
+
+
+def validate_attachments_count(value: list[dict]) -> list[dict]:
+    """Limit attachment count to keep review workload and payload size bounded."""
+    if len(value) > 5:
+        raise serializers.ValidationError("حداکثر ۵ پیوست برای هر محتوا مجاز است.")
+    return value
+
+
 class UserTabyinSubmissionCreateSerializer(serializers.Serializer):
     """Input serializer for authenticated user content submissions."""
 
@@ -324,24 +380,46 @@ class UserTabyinSubmissionCreateSerializer(serializers.Serializer):
     )
 
     def validate_attachments(self, value: list[dict]) -> list[dict]:
-        """Limit attachment count to keep review workload and payload size bounded."""
-        if len(value) > 5:
-            raise serializers.ValidationError("حداکثر ۵ پیوست برای هر محتوا مجاز است.")
-        return value
+        """سقفِ تعداد پیوست — همان قراردادِ نمایشیِ استودیو."""
+        return validate_attachments_count(value)
 
     def validate(self, attrs: dict) -> dict:
         """هر روایت یک‌نوع است: همه‌ی پیوست‌ها باید هم‌نوع رسانه باشند."""
-        attachments = attrs.get("attachments") or []
-        media_types = {att.get("media_type", MediaType.OTHER) for att in attachments}
-        if len(media_types) > 1:
+        enforce_homogeneous_attachments(attrs.get("attachments") or [])
+        return attrs
+
+
+class UserTabyinSubmissionUpdateSerializer(serializers.Serializer):
+    """
+    ویرایشِ روایتِ خود کاربر (PATCH) — جایگزینیِ نقطه‌ای با ماهیتِ کامل.
+
+    - title / description فقط در صورت ارسال، مقدار قبلی را جایگزین می‌کنند؛
+    - attachments اگر ارسال شود فهرستِ کاملِ جدید است (replace-all) و همان
+      قوانینِ ساخت — تک‌نوعیِ سخت‌گیرانه و سقفِ ۵ پیوست — را می‌گذراند؛
+    - دست‌کم یک فیلد باید ارسال شود تا ویرایشِ تهی معنا نداشته باشد.
+    """
+
+    title = serializers.CharField(max_length=512, required=False)
+    description = serializers.CharField(required=False)
+    attachments = TabyinSubmissionAttachmentInputSerializer(
+        many=True,
+        required=False,
+        allow_empty=True,
+    )
+
+    def validate_attachments(self, value: list[dict]) -> list[dict]:
+        """سقفِ تعداد پیوست — مشترک با مسیرِ ساخت."""
+        return validate_attachments_count(value)
+
+    def validate(self, attrs: dict) -> dict:
+        """دست‌کم یک تغییر باید ارسال شود و پیوست‌ها تک‌نوع بمانند."""
+        if not attrs:
             raise serializers.ValidationError(
-                {
-                    "attachments": (
-                        "هر روایت فقط یک نوع رسانه می‌پذیرد؛ همه‌ی پیوست‌ها باید هم‌نوع "
-                        "باشند (همه تصویر یا همه ویدئو یا همه صوت یا همه سایر)."
-                    )
-                }
+                "چیزی برای ویرایش ارسال نشده؛ دست‌کم یکی از عنوان، شرح یا پیوست‌ها را بفرست."
             )
+        attachments = attrs.get("attachments")
+        if attachments is not None:
+            enforce_homogeneous_attachments(attachments)
         return attrs
 
 

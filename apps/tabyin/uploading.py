@@ -300,6 +300,32 @@ def sniff_media_type_from_filename(filename: str) -> str | None:
     return None
 
 
+def sniff_media_type_from_url(url: str) -> str | None:
+    """
+    حدسِ نوعِ رسانه از پسوندِ مسیرِ یک نشانی.
+
+    این helper تک‌نوع‌سازیِ سخت‌گیرانه‌ی روایت‌ها را سرو می‌کند: وقتی کاربر
+    نوعِ پیوست را خودش انتخاب نکرده باشد (media_type پیش‌فرضِ other)، پسوندِ
+    مسیرِ نشانی تعیین می‌کند فایل واقعاً چیست تا ترکیبِ عکس+ویدئو از زیرِ
+    سایه‌ی پیش‌فرض «other» بیرون نیاید. خروجی None یعنی «پسوندِ ناشناخته» —
+    اعتبارسنجی در آن حالت به اعلامِ کاربر اعتماد می‌کند.
+
+    فقط بخشِ path ملاک است؛ «.»های داخل query/hash هرگز پسوند حساب
+    نمی‌شوند و کاراکترهای %-encoded هم بازگشایی می‌شوند تا مثلاً
+    a%20b.mp4 همان .mp4 بویده شود.
+    """
+    raw = (url or "").strip()
+    if not raw:
+        return None
+    try:
+        path = urlparse(raw).path or ""
+    except ValueError:
+        path = ""
+    if not path:
+        path = raw
+    return sniff_media_type_from_filename(unquote(path))
+
+
 def _extract_image_dimensions(file_obj: BinaryIO) -> str:
     """ابعاد WxH از هدرِ تصویر؛ verify() پیش از decode برای ردِ زودهنگامِ فایلِ نیمه‌خراب."""
     file_obj.seek(0)

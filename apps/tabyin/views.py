@@ -34,13 +34,14 @@ from apps.audit_logs.helpers import extract_audit_metadata
 from apps.audit_logs.services import log_action_async
 from apps.authentication.permissions import IsAdminUser
 from apps.core.pagination import StandardPagination
-from apps.core.responses import ErrorResponse, SuccessResponse
+from apps.core.responses import DeletedResponse, ErrorResponse, SuccessResponse
 from apps.core.schemas import (
     build_error_response_serializer,
     build_paginated_success_response_serializer,
     build_success_response_serializer,
 )
 from apps.tabyin import selectors, services
+from apps.tabyin.choices import SubmissionStatus
 from apps.tabyin.filters import (
     AdminTabyinContentFilter,
     PublicTabyinContentFilter,
@@ -62,6 +63,7 @@ from apps.tabyin.serializers import (
     UserTabyinSubmissionCreateSerializer,
     UserTabyinSubmissionDetailSerializer,
     UserTabyinSubmissionListSerializer,
+    UserTabyinSubmissionUpdateSerializer,
 )
 from apps.tabyin.throttles import (
     TabyinPublicAnonThrottle,
@@ -294,7 +296,16 @@ class UserTabyinSubmissionListCreateView(APIView):
 
 
 class UserTabyinSubmissionDetailView(APIView):
-    """Authenticated users can inspect one of their own submissions."""
+    """
+    مدیریتِ کاملِ یک روایتِ خود کاربر: مشاهده، ویرایش و حذف.
+
+    - هر سه عمل با selector مالک‌محور فیلتر می‌شوند (IDOR-safe)؛
+    - ویرایش روی روایتِ بررسی‌شده آن را دوباره به صفِ بررسی می‌برد تا
+      هیچ محتوای ندیده‌گرفته‌ای مستقیم روی دیوارِ عمومی ننشیند؛
+    - حذف hard-delete است و signalهای post_delete کش‌های عمومی و ISR
+      فرانت را پس از commit باطل می‌کنند تا روایت بلافاصله از دیوارِ
+      خانه و فید برود.
+    """
 
     permission_classes = [IsAuthenticated]
 
@@ -321,6 +332,114 @@ class UserTabyinSubmissionDetailView(APIView):
                 status_code=status.HTTP_404_NOT_FOUND,
             )
         return SuccessResponse(data=UserTabyinSubmissionDetailSerializer(content).data)
+
+    @extend_schema(
+        operation_id="tabyin_user_submission_update",
+        summary="ویرایش محتوای ارسالی من",
+        description=(
+            "ویرایشِ نقطه‌ایِ عنوان/شرح و جایگزینیِ کاملِ پیوست‌ها.\n\n"
+            "قانونِ امنیتِ محتوا: ویرایش روی روایتِ بررسی‌شده (تأیید یا رد) آن را به "
+            "وضعیت «در انتظار بررسی» برمی‌گرداند و از نمایشِ عمومی پنهان می‌کند؛ "
+            "مدیر با تأییدِ مجدد دوباره منتشرش می‌کند."
+        ),
+        tags=[TAG_TABYIN_PUBLIC],
+        request=UserTabyinSubmissionUpdateSerializer,
+        responses={
+            200: build_success_response_serializer(
+                name="UserTabyinSubmissionUpdatedResponse",
+                data_serializer=UserTabyinSubmissionDetailSerializer,
+            ),
+            400: build_error_response_serializer(name="UserTabyinSubmissionUpdateBadRequest"),
+            404: build_error_response_serializer(name="UserTabyinSubmissionUpdateNotFound"),
+        },
+    )
+    def patch(self, request: Request, content_id: int) -> SuccessResponse | ErrorResponse:
+        content = selectors.get_user_submission_by_id(
+            user_id=request.user.pk,
+            content_id=content_id,
+        )
+        if content is None:
+            return ErrorResponse(
+                message="محتوایی با این شناسه یافت نشد.",
+                status_code=status.HTTP_404_NOT_FOUND,
+            )
+
+        serializer = UserTabyinSubmissionUpdateSerializer(
+            data=request.data,
+            partial=True,
+        )
+        serializer.is_valid(raise_exception=True)
+        validated = serializer.validated_data
+
+        was_pending = content.submission_status == SubmissionStatus.PENDING_REVIEW
+        content = services.update_user_submission(
+            content=content,
+            title=validated.get("title"),
+            description=validated.get("description"),
+            attachments=validated.get("attachments") if "attachments" in validated else None,
+        )
+
+        metadata = extract_audit_metadata(request)
+        log_action_async(
+            user_id=request.user.pk,
+            action=audit_actions.TABYIN_USER_SUBMISSION_UPDATED,
+            resource_type="tabyin_content",
+            resource_id=str(content.pk),
+            extra_data={
+                "external_id": content.external_id,
+                "re_pended": not was_pending,
+                "edited_fields": sorted(validated.keys()),
+            },
+            **metadata,
+        )
+
+        return SuccessResponse(
+            data=UserTabyinSubmissionDetailSerializer(content).data,
+            message=(
+                "روایت به‌روزرسانی شد."
+                if was_pending
+                else "ویرایش ثبت شد؛ روایتت دوباره به صفِ بررسی رفت و پس از تأیید مدیر منتشر می‌شود."
+            ),
+        )
+
+    @extend_schema(
+        operation_id="tabyin_user_submission_delete",
+        summary="حذف محتوای ارسالی من",
+        description=(
+            "حذفِ کاملِ روایت (hard-delete) — روایت بلافاصله از دیوارِ خانه، فیدِ "
+            "روایت‌ها، جزئیات و جست‌وجو می‌رود و قابلِ بازیابی نیست."
+        ),
+        tags=[TAG_TABYIN_PUBLIC],
+        responses={
+            200: build_success_response_serializer(name="UserTabyinSubmissionDeletedResponse"),
+            404: build_error_response_serializer(name="UserTabyinSubmissionDeleteNotFound"),
+        },
+    )
+    def delete(self, request: Request, content_id: int) -> DeletedResponse | ErrorResponse:
+        content = selectors.get_user_submission_by_id(
+            user_id=request.user.pk,
+            content_id=content_id,
+        )
+        if content is None:
+            return ErrorResponse(
+                message="محتوایی با این شناسه یافت نشد.",
+                status_code=status.HTTP_404_NOT_FOUND,
+            )
+
+        external_id = content.external_id
+        services.delete_user_submission(content=content)
+
+        metadata = extract_audit_metadata(request)
+        log_action_async(
+            user_id=request.user.pk,
+            action=audit_actions.TABYIN_USER_SUBMISSION_DELETED,
+            resource_type="tabyin_content",
+            resource_id=str(content_id),
+            extra_data={"external_id": external_id},
+            **metadata,
+        )
+
+        return DeletedResponse(message="روایت حذف شد و دیگر در هیچ بخشی از سایت نمایش داده نمی‌شود.")
 
 
 class UserTabyinMediaUploadView(APIView):
