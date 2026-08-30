@@ -193,3 +193,29 @@ Definition of Done:
 
 Definition of Done:
 - main branch با quality gates خودکار محافظت می‌شود و همان دستورهای local در CI هم اجرا می‌شوند.
+
+## Phase 11 — Phase-8 Remediation & Ops Automation ✅ (این فاز)
+
+- امنیتی/عملیاتیِ P2: mypy gate، cache-integration روی Redis واقعی، سیاستِ رمز
+  بومی، هدرهای CSP/Permissions-Policy/COOP، parity مقدارِ .env.example،
+  سرویس بکاپ خودکار با verify چرخشی + WAL، دروازۀ سازگاری مایگریشن.
+- بهداشت P3: آمار README، sqlite-in-volume، تاریخِ Sunset واقعی، سناریوی
+  بارِ k6 (دو گسلِ حیاتی با thresholdهای هم‌راستا با Performance Contracts).
+
+### Backlogِ صریح (پذیرفته‌شده، نه فراموش‌شده)
+- **P3-19 media ثالث (hotlink-fragility):** مسیرِ پیشنهادی — پروکسیِ کش‌شونده
+  در `apps/tabyin`/`apps/lms` (backendِ MediaProxy: fetch-once + ذخیره روی
+  استوریج خود + rehostِ بی‌صدا با backoff؛ TTLِ ۳۰ روز برای contentِ منقضی‌شونده).
+  تصمیمِ اجرا با مالک محصول چون billingِ egress دارد.
+- **P3-22 schema.yaml:** commit‌شده *می‌ماند*؛ دروازۀ drift-check (schema-check)
+  عمداً به فایلِ committed تکیه می‌کند و release-only‌کردنش گیتِ CI را بی‌معنی
+  می‌کند. اگر دردِ diff خوانا شد: مسیرِ `make schema-update` + `.gitattributes
+  linguist-generated` (بدون حذف گیت).
+- **P3-21 پایتون:** CI روی 3.14 محکِ اصلی است (run سبزِ فعلی = تأیید)؛
+  local 3.13 عمدی برای buildِ سریع‌تر — در ENVIRONMENT_MATRIX مستند.
+- **P3-24 فرایند گیت‌هاب:** branch protection روی main (require PR + checks +
+  prohibit force-push) و signed commits — تنظیماتِ ایمیج/حساب است نه کد؛
+  مراحل در گزارشِ فاز ۸ (بخش «کار اپراتور») آمده.
+- **تفکیک فایل‌های غول (P3-16):** الگوی اثبات‌شده در فاز ۱۱ برای بزرگ‌ترین‌ها
+  (مدول‌های دامنه‌ای + facade سازگار); بقیه با همان الگو در فاز بعد — دستورِ
+  کار در کامیت‌های splitِ همین فاز ثبت شده است.
