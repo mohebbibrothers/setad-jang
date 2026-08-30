@@ -9,7 +9,10 @@ x-app-env: &app_env
   DEBUG: "False"
   ALLOWED_HOSTS: "127.0.0.1,localhost"
   CACHE_BACKEND: redis
-  REDIS_URL: redis://redis:6379/1
+  # رفع F4 ممیزی: رمزِ اختیاریِ redis — REDIS_PASSWORD خالی یعنی همان
+  # رفتارِ بی‌رمزِ سابق (dev بدونِ اصطکاک)؛ روی سرور ستش کن تا هر
+  # فرآیندِ هم‌شبکه نتواند کش/throttle/broker را مسموم کند.
+  REDIS_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/1
   CELERY_BROKER_URL: redis://redis:6379/2
   CELERY_RESULT_BACKEND: redis://redis:6379/2
   DATABASE_ENGINE: postgres
@@ -37,12 +40,35 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
+    # raise-on-previous-save: آخرین save خراب = مرگِ کش نه خاموشیِ بی‌صدا.
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --appendfsync
+      - everysec
+      - --save
+      - 3600 1 600 100 300 10000
+      - --stop-writes-on-bgsave-error
+      - "yes"
+      - --requirepass
+      - ${REDIS_PASSWORD:-}
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
     networks:
       - internal
     volumes:
       - redis_data:/data
+    deploy:
+      resources:
+        limits:
+          memory: ${REDIS_MEM_LIMIT:-512M}
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test:
+        [
+          "CMD-SHELL",
+          "if [ -n \"$$REDIS_PASSWORD\" ]; then redis-cli -a \"$$REDIS_PASSWORD\" --no-auth-warning ping; else redis-cli ping; fi | grep -q PONG",
+        ]
       interval: 10s
       timeout: 3s
       retries: 5
@@ -77,6 +103,12 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - backup_data:/backups
+    # رفع F4 ممیزی: سقفِ منابع — worker بدخواب نباید host را بکشد؛
+    # همه env-tunable (روی سرورِ کوچک بالا/پایینش کن).
+    deploy:
+      resources:
+        limits:
+          memory: ${PG_MEM_LIMIT:-3072M}
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 10s
@@ -90,6 +122,12 @@ services:
       context: .
       dockerfile: Dockerfile
     restart: unless-stopped
+    # رفع F4 ممیزی: سقفِ منابع — worker بدخواب نباید host را بکشد؛
+    # همه env-tunable (روی سرورِ کوچک بالا/پایینش کن).
+    deploy:
+      resources:
+        limits:
+          memory: ${WEB_MEM_LIMIT:-2048M}
     depends_on:
       redis:
         condition: service_healthy
@@ -141,6 +179,12 @@ services:
   backup:
     image: postgres:17-alpine
     restart: unless-stopped
+    # رفع F4 ممیزی: سقفِ منابع — worker بدخواب نباید host را بکشد؛
+    # همه env-tunable (روی سرورِ کوچک بالا/پایینش کن).
+    deploy:
+      resources:
+        limits:
+          memory: ${BACKUP_MEM_LIMIT:-1024M}
     depends_on:
       postgres:
         condition: service_healthy
@@ -154,6 +198,9 @@ services:
       BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
       BACKUP_WAL_KEEP_DAYS: ${BACKUP_WAL_KEEP_DAYS:-7}
       BACKUP_VERIFY_EVERY: ${BACKUP_VERIFY_EVERY:-4}
+      # رفع F1 ممیزی: پایهٔ فیزیکیِ روزانه — بدونش WAL یتیم است و PITR توهم.
+      BASE_BACKUP_INTERVAL_SECONDS: ${BASE_BACKUP_INTERVAL_SECONDS:-86400}
+      BASE_BACKUP_KEEP_DAYS: ${BASE_BACKUP_KEEP_DAYS:-7}
     networks:
       - internal
     volumes:
@@ -174,6 +221,12 @@ services:
   nginx:
     image: nginx:1.27-alpine
     restart: unless-stopped
+    # رفع F4 ممیزی: سقفِ منابع — worker بدخواب نباید host را بکشد؛
+    # همه env-tunable (روی سرورِ کوچک بالا/پایینش کن).
+    deploy:
+      resources:
+        limits:
+          memory: ${NGINX_MEM_LIMIT:-256M}
     depends_on:
       web:
         condition: service_healthy
@@ -196,6 +249,12 @@ services:
   worker:
     image: setadjang:latest
     restart: unless-stopped
+    # رفع F4 ممیزی: سقفِ منابع — worker بدخواب نباید host را بکشد؛
+    # همه env-tunable (روی سرورِ کوچک بالا/پایینش کن).
+    deploy:
+      resources:
+        limits:
+          memory: ${WORKER_MEM_LIMIT:-1536M}
     depends_on:
       redis:
         condition: service_healthy
@@ -248,6 +307,12 @@ services:
   madadkar-worker:
     image: setadjang:latest
     restart: unless-stopped
+    # رفع F4 ممیزی: سقفِ منابع — worker بدخواب نباید host را بکشد؛
+    # همه env-tunable (روی سرورِ کوچک بالا/پایینش کن).
+    deploy:
+      resources:
+        limits:
+          memory: ${MADADKAR_WORKER_MEM_LIMIT:-1024M}
     depends_on:
       redis:
         condition: service_healthy
@@ -287,6 +352,12 @@ services:
   beat:
     image: setadjang:latest
     restart: unless-stopped
+    # رفع F4 ممیزی: سقفِ منابع — worker بدخواب نباید host را بکشد؛
+    # همه env-tunable (روی سرورِ کوچک بالا/پایینش کن).
+    deploy:
+      resources:
+        limits:
+          memory: ${BEAT_MEM_LIMIT:-512M}
     depends_on:
       redis:
         condition: service_healthy
@@ -324,6 +395,12 @@ services:
   flower:
     image: setadjang:latest
     restart: unless-stopped
+    # رفع F4 ممیزی: سقفِ منابع — worker بدخواب نباید host را بکشد؛
+    # همه env-tunable (روی سرورِ کوچک بالا/پایینش کن).
+    deploy:
+      resources:
+        limits:
+          memory: ${FLOWER_MEM_LIMIT:-512M}
     depends_on:
       redis:
         condition: service_healthy

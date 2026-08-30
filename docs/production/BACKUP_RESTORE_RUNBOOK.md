@@ -107,27 +107,61 @@ interval ۶ ساعت، retention دامپ ۱۴ روز، retention WAL ۷ روز�
 `--exit-on-error` restore می‌شود، شمارش `django_migrations` و جداول public
 سنجیده می‌شوند، بعد drop. بکاپی که restoreنشده، بکاپ نیست.
 
+**رفع F1 ممیزی (۲۰۲۶-۰۸-۳۰):** دامپِ منطقی *پایۀ* replay وال نیست؛ لذا چرخه،
+هر `BASE_BACKUP_INTERVAL_SECONDS` (پیش‌فرض روزی یک) یک **pg_basebackup فیزیکی**
+(`-Ft -z -Xf`) در `/backups/base/setadjang-base-<stamp>/` می‌گیرد:
+`base.tar.gz` + `pg_wal.tar.gz` + `backup_manifest` + `SHA256SUMS`، پرچمِ
+`.basebackup_ok`، و verify چرخشی هم tar-integrity و manifestِ PG17 را می‌سنجد.
+نتیجه: پنجرۀ PITR واقعی = `min(BASE_BACKUP_KEEP_DAYS, BACKUP_WAL_KEEP_DAYS)`
+(پیش‌فرض ۷ روز) با RPO≤۵ دقیقه در *بعداز* نخستین basebackup؛ پیش از آن
+فقط بازیابیِ نقطه‌ایِ «تا زمانِ آخرین دامپ» در دسترس است.
+
 ### 7.1 دستی/فوری
 
 ```bash
 # بکاپ فوری (بدون صبر برای تایمر):
 docker compose exec backup sh -c 'cd /backups/dumps && pg_dump --format=custom --no-owner --no-acl -f "manual-$(date -u +%Y%m%d-%H%M%S).dump"'
-# آزمون بازگردانی روی آخرین dump:
+# آزمون بازگردانی روی آخرین dump + integrityِ basebackup:
 docker compose run --rm --no-deps backup sh /backup/verify_restore.sh
+# basebackup فوری (بدون صبر برای سررسید روزانه):
+docker compose exec backup sh -c '
+  s=$(date -u +%Y%m%dT%H%M%SZ); d=/backups/base/setadjang-base-$s
+  mkdir -p $d && pg_basebackup -D $d -Ft -z -Xf -P
+  (cd $d && sha256sum base.tar.gz pg_wal.tar.gz > SHA256SUMS) && touch /backups/.basebackup_ok'
 ```
 
-### 7.2 بازگردانی نقطه‌ای (PITR) تا پنجرۀ WAL
+### 7.2 بازگردانی نقطه‌ای (PITR) — روی پایهٔ فیزیکی، نه دامپ
+
+دو مسیرِ *جدا*، که نباید قاطی شوند:
+
+**الف) بازیابی منطقی (سریع، بدونِ وال):** `pg_restore` دامپِ دلخواه —
+رساندن به زمانِ دامپ و نه دقیق‌تر. برای خرابیِ منطقی/اپراتوریِ جدول‌محور.
+
+**ب) PITR واقعی (دقیق تا دقیقه):** فقط با basebackup:
 
 ```bash
-# در maintenance window؛ روی cluster تازه (نه همان DB زنده):
-pg_restore ... /backups/dumps/<dump>.dump      # تا زمانِ dump
-# و برای دقیقه‌های بعد از dump، replay تا هدفِ زمانی:
-recovery_target_time = '...'                   # با pg_rewind/restore_command روی /backups/wal
+# maintenance window؛ cluster تازه (نه همان volume زنده):
+docker compose stop web worker
+docker compose run --rm --no-deps -v setadjang_backup_data:/backups postgres sh -c '
+  rm -rf /var/lib/postgresql/data/*
+  tar -xzf /backups/base/setadjang-base-<STAMP>/base.tar.gz -C /var/lib/postgresql/data
+  mkdir -p /var/lib/postgresql/data/pg_wal/restore && cp /backups/wal/* /var/lib/postgresql/data/pg_wal/restore/ 2>/dev/null || true
+  tar -xzf /backups/base/setadjang-base-<STAMP>/pg_wal.tar.gz -C /var/lib/postgresql/data/pg_wal
+  echo "restore_command = '''cp /backups/wal/%f %p'''" > /var/lib/postgresql/data/postgresql.auto.conf
+  echo "recovery_target_time = '''2026-08-30 14:03:00+00'''" >> /var/lib/postgresql/data/postgresql.auto.conf
+  echo "recovery_target_action = '''promote'''" >> /var/lib/postgresql/data/postgresql.auto.conf
+  touch /var/lib/postgresql/data/RECOVERY.signal
+'
+docker compose up -d postgres   # لاگ را ببین: replay → promote
+docker compose up -d web worker
 ```
+
+اگر WALِ لازم پاک شده باشد (خارجِ پنجره)، pg_basebackupِ منطقی‌ترین
+fallback همان دامپ است — «دقیق تا دقیقه» را فقط داخلِ پنجره وعده بده.
 
 ### 7.3 محدودیت صادقانه و offsite
 
-`backup_data` **روی همان هاست** است: دربرابر حذف/فاسدشدگی منطقی و خطای
+`backup_data` (دامپ‌ها + `/backups/base` + `/backups/wal`) **روی همان هاست** است: دربرابر حذف/فاسدشدگی منطقی و خطای
 اپراتور محافظت می‌کند، نه مرگِ دیسک/سرور. حداقل روزی یک‌بار با rclone/restic
 از `/var/lib/docker/volumes/setadjang_backup_data/_data` (یا exportِ volume)
 به مقصدِ خارج از هاست همگام‌سازی شود؛ رمزنگاری در مقصد الزامی است (dump

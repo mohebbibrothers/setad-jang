@@ -62,6 +62,8 @@ def test_backup_env_contract(compose: dict) -> None:
         "BACKUP_KEEP_DAYS",
         "BACKUP_WAL_KEEP_DAYS",
         "BACKUP_VERIFY_EVERY",
+        "BASE_BACKUP_INTERVAL_SECONDS",
+        "BASE_BACKUP_KEEP_DAYS",
     ):
         assert key in env, f"env {key} در سرویس backup تزریق نمی‌شود"
     # PGPASSWORD عمداً fail-fast است، نه پیش‌فرض:
@@ -97,3 +99,23 @@ def test_scripts_use_strict_sh_and_shared_flags() -> None:
         assert flag in loop
     assert "/backups/.verify_ok" in verify
     assert "--exit-on-error" in verify  # verify بدونِ exit-on-error نمایشی است
+
+
+def test_physical_basebackup_closes_the_pitr_loop() -> None:
+    """رفع F1 ممیزی: WAL archive بدونِ پایهٔ فیزیکی = والِ یتیم.
+
+    قراردادِ سه‌لایه را یک‌جا میخکوب می‌کند تا ادعا و واقعیت جدا نشوند:
+    loop می‌گیرد، verify می‌سنجد، runbook *همین* را تبلیغ می‌کند.
+    """
+    loop = (ROOT / "deploy/backup/backup_loop.sh").read_text(encoding="utf-8")
+    verify = (ROOT / "deploy/backup/verify_restore.sh").read_text(encoding="utf-8")
+    runbook = (ROOT / "docs/production/BACKUP_RESTORE_RUNBOOK.md").read_text(encoding="utf-8")
+    assert "pg_basebackup" in loop
+    assert "-Ft" in loop and "-Xf" in loop  # tar + self-contained WAL
+    assert ".basebackup_ok" in loop
+    # verify بدونِ سنجشِ tar/manifest، basebackup را «سالم» تلقی می‌کرد:
+    assert "base.tar.gz" in verify and "backup_manifest" in verify
+    assert "tar -tzf" in verify
+    # و سند نباید جلوتر از کد حرف بزند:
+    assert "pg_basebackup" in runbook
+    assert "پایۀ replay وال نیست" in runbook or "پایۀ" in runbook
