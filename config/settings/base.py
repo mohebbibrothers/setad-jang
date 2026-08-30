@@ -133,10 +133,10 @@ ASGI_APPLICATION = "config.asgi.application"
 # Database
 # ============================================================================
 
-DATABASE_PATH = config(
-    "DATABASE_PATH",
-    default=str(BASE_DIR / "db.sqlite3"),
-)
+# «خالی» برابر است با «استفاده از پیش‌فرض» — .env.example عمداً این کلید را
+# خالی مستند می‌کند و config() آن را "" می‌خواند، نه default؛ بدونِ این fallback،
+# NAME="" مسیرِ SQLite را می‌شکند. (حاشیۀ یافتۀ P3-18 فاز 8.)
+DATABASE_PATH = config("DATABASE_PATH", default="") or str(BASE_DIR / "db.sqlite3")
 
 DATABASES = {
     "default": {

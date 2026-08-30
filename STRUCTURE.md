@@ -114,6 +114,7 @@ setad-jang/
 │   ├── models.py  # مدل‌های داده
 │   ├── normalizers.py
 │   ├── otp.py
+│   ├── password_policy.py
 │   ├── permissions.py  # کنترل دسترسی
 │   ├── providers.py
 │   ├── selectors.py  # خواندن داده (بدون side effect)
@@ -151,6 +152,7 @@ setad-jang/
 │   ├── api_cache.py
 │   ├── api_contracts.py
 │   ├── apps.py
+│   ├── browser_headers.py
 │   ├── cache.py
 │   ├── cache_invalidation.py
 │   ├── cache_policy.py
@@ -371,6 +373,7 @@ apps/core/
 ├── api_cache.py
 ├── api_contracts.py
 ├── apps.py
+├── browser_headers.py
 ├── cache.py
 ├── cache_invalidation.py
 ├── cache_policy.py

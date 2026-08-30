@@ -13,6 +13,11 @@ x-app-env: &app_env
   CELERY_BROKER_URL: redis://redis:6379/2
   CELERY_RESULT_BACKEND: redis://redis:6379/2
   DATABASE_ENGINE: postgres
+  # یافتۀ P3-18 فاز 8: مسیر پیش‌فرض SQLite (BASE_DIR/db.sqlite3) بیرونِ
+  # volumeِ db_data بود — هرکس compose را با DATABASE_ENGINE=sqlite بالا
+  # بیاورد، دیتابیسش با rmِ کانتینر می‌مرد. این پین، sqlite را هم داخل
+  # volume می‌اندازد؛ توسعهٔ لوکال (خارج compose) دست‌نخورده می‌ماند.
+  DATABASE_PATH: /app/data/db.sqlite3
   POSTGRES_DB: ${POSTGRES_DB:-setadjang}
   POSTGRES_USER: ${POSTGRES_USER:-setadjang}
   POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
@@ -47,6 +52,22 @@ services:
   postgres:
     image: postgres:17-alpine
     restart: unless-stopped
+    # یافتۀ P2-11 فاز 8: آرشیو WAL روی همان volume مشترکِ بکاپ — PITR تا
+    # پنجرۀ BACKUP_WAL_KEEP_DAYS (پاک‌سازیاش با سرویس backup انجام می‌شود).
+    # archive_timeout=300 یعنی RPO عملاً ≤۵ دقیقه، نه «تا آخرین dump».
+    # توجه: تغییرِ wal_level/archived برای DB موجود با restart اعمال می‌شود
+    # (اینیسیال‌سازیِ دوباره لازم نیست)؛ اگر روزی خاموشش کردی، runbook §7 را
+    # هم به‌روز کن تا ادعای PITR در مستندات نماند.
+    command:
+      - postgres
+      - -c
+      - wal_level=replica
+      - -c
+      - archive_mode=on
+      - -c
+      - archive_command=test -d /backups/wal || mkdir -p /backups/wal; cp %p /backups/wal/%f
+      - -c
+      - archive_timeout=300
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-setadjang}
       POSTGRES_USER: ${POSTGRES_USER:-setadjang}
@@ -55,6 +76,7 @@ services:
       - internal
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - backup_data:/backups
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 10s
@@ -111,6 +133,44 @@ services:
   # تنها نقطهٔ ورود عمومی؛ web فقط روی loopback هاست باز است.
   # ALLOWED_HOSTS باید دامنهٔ واقعی را شامل باشد و در صورت TLS در LB،
   # SECURE_PROXY_SSL_HEADER از قبل با X-Forwarded-Proto هماهنگ است.
+  # ── Backup daemon (یافتۀ P2-11 فاز 8) ─────────────────────────────────
+  # pg_dump دوره‌ای + sha256 + retention + verify چرخشی (restore واقعی در
+  # DB موقت). ایمیج = همان postgres:17-alpine تا نسخهٔ pg_dump/pg_restore
+  # با سرور قفل بماند (driftِ نسخه = restoreِ شکسته). سلامت‌سنجی: سنِ
+  # فایلِ .backup_ok باید کمتر از ۳×اینتروال باشد — سکوتِ سرویس یعنی مرگ.
+  backup:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGHOST: postgres
+      PGPORT: "5432"
+      PGDATABASE: ${POSTGRES_DB:-setadjang}
+      PGUSER: ${POSTGRES_USER:-setadjang}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
+      BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-21600}
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
+      BACKUP_WAL_KEEP_DAYS: ${BACKUP_WAL_KEEP_DAYS:-7}
+      BACKUP_VERIFY_EVERY: ${BACKUP_VERIFY_EVERY:-4}
+    networks:
+      - internal
+    volumes:
+      - backup_data:/backups
+      - ./deploy/backup:/backup:ro
+    entrypoint: ["/bin/sh", "/backup/backup_loop.sh"]
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "ok=/backups/.backup_ok; [ -f $$ok ] || exit 1; age=$(( $(date +%s) - $(stat -c %Y $$ok) )); [ $$age -lt $(( ${BACKUP_INTERVAL_SECONDS:-21600} * 3 )) ]",
+        ]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+
   nginx:
     image: nginx:1.27-alpine
     restart: unless-stopped
@@ -315,6 +375,8 @@ networks:
 
 volumes:
   postgres_data:
+  # /backups — dumpهای منطقی + WAL آرشیو + پرچم‌های سلامت (سرویس backup).
+  backup_data:
   redis_data:
   static_data:
   media_data:
