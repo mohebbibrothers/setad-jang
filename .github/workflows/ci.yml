@@ -120,6 +120,9 @@ jobs:
       # سینتکک/متغیرهای map/geo را (web به‌عنوان host جعلی resolve می‌شود).
       - name: Compose & nginx config validation
         run: |
+          # compose v2 برای service-level env_file موجودیت فایل را می‌خواهد؛
+          # CI .env ندارد — از .env.example می‌سازیم (کلیدهایش contract‌اند).
+          [ -f .env ] || cp .env.example .env
           POSTGRES_PASSWORD=ci-secret FLOWER_USER=ci FLOWER_PASSWORD=ci \
             docker compose -f docker-compose.yml config -q
           docker run --rm --add-host web:127.0.0.1 \
