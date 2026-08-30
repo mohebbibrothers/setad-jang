@@ -19,6 +19,7 @@
 
 from __future__ import annotations
 
+import ast
 import re
 from pathlib import Path
 
@@ -80,3 +81,118 @@ def test_documented_keys_have_no_duplicates() -> None:
             seen.append(match.group(1))
     duplicates = sorted({key for key in seen if seen.count(key) > 1})
     assert not duplicates, f"کلیدهای تکراری در .env.example: {duplicates}"
+
+
+# ============================================================
+# پاریتۀ «مقدار» — یافتۀ P2-10 فاز 8
+# ============================================================
+# تستِ کلیدِ خالی کافی نبود: اپراتوری که .env.example را کپی می‌کند،
+# «مقدارِ» نوشته‌شده را می‌گیرد — و نمونه‌ای با 2621440 درحالی‌که کد
+# عامداً 25MB انتخاب کرده، دقیقاً همان تله‌ای است که کامنتِ base.py
+# هشدارش را می‌دهد. این تست مقدارِ مستندشده را با defaultِ واقعیِ کد
+# (production.py وگرنه base.py) مقایسه می‌کند.
+
+_SETTINGS_ROOTS = ("config/settings/production.py", "config/settings/base.py")
+
+# واگرشی‌هایِ *عمدیِ* مستندشده‌درکامنت — هرکدام با دلیل؛ افزودن به این
+# لیست باید با کامنتِ دلیلی در .env.example همراه باشد (قانونِ بازبینی).
+_ALLOWED_VALUE_DIFFERENCES: dict[str, str] = {
+    "DEBUG": "نمونهٔ onboard کردنِ dev؛ production.py همیشه False پین می‌کند.",
+    "SECURE_HSTS_SECONDS": "نمونهٔ 0 برای docker-local (کامنت دارد)؛ prod پیش‌فرض 31536000.",
+    "SECURE_SSL_REDIRECT": "نمونهٔ False برای پشتِ reverse-proxy لوکال؛ prod True.",
+    "WHITENOISE_AUTOREFRESH": "راحتیِ dev در نمونهٔ؛ prod False.",
+    "WHITENOISE_USE_FINDERS": "راحتیِ dev در نمونهٔ؛ prod False.",
+    "MADADKAR_PAYMENT_CALLBACK_BASE_URL": "placeholderِ example.com به‌جای localhostِ کد.",
+    "OPENAPI_SERVER_URL": "خالی‌گذاشتن = مشتق‌ازِ request؛ بهتر از پینِ localhost در نمونهٔ.",
+    "FRONTEND_REVALIDATION_SECRET": "placeholderِ change-me؛ خالی‌بودنِ واقعی یعنی غیرفعال.",
+    "SECRET_KEY": "placeholderِ change-me؛ مقدارِ واقعی هرگز مستند نمی‌شود.",
+}
+
+_PLACEHOLDER_MARKERS = ("change-me", "changeme", "example.com", "your-", "replace")
+
+
+def _safe_literal(expr: str) -> object | None:
+    """ارزیابیِ امنِ defaultهایِ سادهٔ کد: literal، arithmetic ساده، timedelta روز."""
+    tree = ast.parse(expr.strip(), mode="eval")
+
+    def _ev(node: ast.AST) -> object:
+        match node:
+            case ast.Constant(value=v) if isinstance(v, (int, float, str, bool)) or v is None:
+                return v
+            case ast.BinOp(left=l, op=ast.Mult() | ast.Add(), right=r):
+                lv, rv = _ev(l), _ev(r)
+                if None in (lv, rv):
+                    raise ValueError
+                return lv * rv if isinstance(node.op, ast.Mult) else lv + rv  # type: ignore[operator]
+            case ast.Call(
+                func=ast.Name(id="timedelta"),
+                keywords=[ast.keyword(arg="days", value=ast.Constant(days))],
+            ):  # type: ignore[misc]
+                return ("timedelta-days", days)
+            case _:
+                raise ValueError
+
+    try:
+        return _ev(tree.body)
+    except (ValueError, SyntaxError, TypeError):
+        return None
+
+
+def _code_defaults() -> dict[str, object]:
+    """defaultهایِ واقعیِ config() در کد؛ production.py بر base.py اولویت دارد."""
+    pattern = re.compile(r"config\(\s*[\"']([A-Z0-9_]+)[\"']\s*,([^)]*)\)", re.S)
+    defaults: dict[str, object] = {}
+    for rel in reversed(_SETTINGS_ROOTS):  # base اول، production بعد (override)
+        text = (PROJECT_ROOT / rel).read_text(encoding="utf-8")
+        for m in pattern.finditer(text):
+            key, rest = m.group(1), m.group(2)
+            dm = re.search(r"default=([^\n]+?)(?=,\s*cast=|\)|,\s*$)", rest, re.S)
+            if not dm:
+                continue
+            value = _safe_literal(dm.group(1))
+            if value is not None:
+                defaults[key] = value
+    return defaults
+
+
+def _documented_values() -> dict[str, str]:
+    """فقط خطوطِ *فعالِ* KEY=value (کامنت‌ها نمونه‌گذاریِ اختیاری‌اند، نه قرارداد)."""
+    values: dict[str, str] = {}
+    for line in _DOC_FILE.read_text(encoding="utf-8").splitlines():
+        if line.lstrip().startswith("#"):
+            continue
+        match = re.match(r"^([A-Z0-9_]+)=(.*)$", line)
+        if match:
+            values.setdefault(match.group(1), match.group(2).strip())
+    return values
+
+
+def test_documented_values_match_code_defaults() -> None:
+    """مقدارِ هر کلیدِ فعال در .env.example = پیش‌فرضِ واقعیِ کد (یا allowlist دلیل‌دار)."""
+    defaults = _code_defaults()
+    mismatches: list[str] = []
+    for key, doc_raw in _documented_values().items():
+        if key in _ALLOWED_VALUE_DIFFERENCES or any(mk in doc_raw for mk in _PLACEHOLDER_MARKERS):
+            continue
+        if key not in defaults:
+            continue
+        default = defaults[key]
+        if isinstance(default, tuple):  # timedelta(days=N) — واحدِ متفاوت، skipِ صریح
+            continue
+        ok = False
+        if isinstance(default, bool):
+            parsed = doc_raw.lower() in ("true", "1", "yes")
+            ok = parsed == bool(default)
+        elif isinstance(default, (int, float)):
+            try:
+                ok = float(doc_raw) == float(default)
+            except ValueError:
+                ok = False
+        else:
+            ok = doc_raw == str(default)
+        if not ok:
+            mismatches.append(f"{key}: example={doc_raw!r} vs code-default={default!r}")
+    assert not mismatches, (
+        "مقادیرِ .env.example با پیش‌فرضِ واقعیِ کد واگراست — یافتۀ P2-10 فاز 8 "
+        f"(کپی‌کردنِ نمونه نباید رفتار را عوض کند): {mismatches}"
+    )
