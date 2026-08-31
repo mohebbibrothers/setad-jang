@@ -61,6 +61,21 @@ class R4JCriminalPublicFilter(django_filters.FilterSet):
     province = django_filters.CharFilter(field_name="province", lookup_expr="iexact")
     city = django_filters.CharFilter(field_name="city", lookup_expr="iexact")
     gender = django_filters.ChoiceFilter(choices=Gender.choices)
+    ordering = django_filters.OrderingFilter(
+        fields=(
+            ("total_bounty_toman", "total_bounty_toman"),
+            ("bounties_count", "bounties_count"),
+            ("published_at", "published_at"),
+            ("created_at", "created_at"),
+            ("first_name", "first_name"),
+            ("last_name", "last_name"),
+        ),
+        help_text=(
+            "مرتب‌سازی نتایج — مقادیر مجاز: total_bounty_toman، bounties_count، "
+            "published_at، created_at، first_name، last_name "
+            "(پیش‌وند «-» برای نزولی، مثل -total_bounty_toman)"
+        ),
+    )
 
     class Meta:
         model = R4JCriminal

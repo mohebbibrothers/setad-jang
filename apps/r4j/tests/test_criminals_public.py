@@ -88,6 +88,42 @@ class TestPublicCriminalList:
         assert a.pk in ids
         assert b.pk not in ids
 
+    def test_list_ordering_by_total_bounty_desc(self, api_client) -> None:
+        low = R4JCriminalFactory(total_bounty_toman=100_000)
+        high = R4JCriminalFactory(total_bounty_toman=900_000)
+        mid = R4JCriminalFactory(total_bounty_toman=500_000)
+        low.publish()
+        high.publish()
+        mid.publish()
+
+        response = api_client.get("/api/v1/r4j/criminals/?ordering=-total_bounty_toman")
+        assert response.status_code == status.HTTP_200_OK
+
+        results = response.data["data"]["results"]
+        ids = [r["id"] for r in results]
+        assert ids == [high.pk, mid.pk, low.pk]
+
+    def test_list_ordering_by_total_bounty_asc(self, api_client) -> None:
+        low = R4JCriminalFactory(total_bounty_toman=100_000)
+        high = R4JCriminalFactory(total_bounty_toman=900_000)
+        low.publish()
+        high.publish()
+
+        response = api_client.get("/api/v1/r4j/criminals/?ordering=total_bounty_toman")
+        assert response.status_code == status.HTTP_200_OK
+
+        results = response.data["data"]["results"]
+        ids = [r["id"] for r in results]
+        assert ids == [low.pk, high.pk]
+
+    def test_list_ordering_ignores_unsupported_field(self, api_client) -> None:
+        a = R4JCriminalFactory()
+        a.publish()
+
+        response = api_client.get("/api/v1/r4j/criminals/?ordering=national_code")
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["data"]["count"] == 1
+
 
 # ============================================================
 # Detail endpoint
