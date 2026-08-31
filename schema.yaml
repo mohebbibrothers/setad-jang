@@ -7888,6 +7888,24 @@ paths:
           type: boolean
         description: فیلتر بر اساس انتشار
       - in: query
+        name: ordering
+        schema:
+          type: string
+          enum:
+          - -bounties_count
+          - -created_at
+          - -first_name
+          - -last_name
+          - -published_at
+          - -total_bounty_toman
+          - bounties_count
+          - created_at
+          - first_name
+          - last_name
+          - published_at
+          - total_bounty_toman
+        description: مرتب‌سازی نتایج (پیش‌وند «-» برای نزولی)
+      - in: query
         name: page
         schema:
           type: integer
@@ -9238,6 +9256,24 @@ paths:
           - male
           - unknown
         description: فیلتر بر اساس جنسیت
+      - in: query
+        name: ordering
+        schema:
+          type: string
+          enum:
+          - -bounties_count
+          - -created_at
+          - -first_name
+          - -last_name
+          - -published_at
+          - -total_bounty_toman
+          - bounties_count
+          - created_at
+          - first_name
+          - last_name
+          - published_at
+          - total_bounty_toman
+        description: مرتب‌سازی نتایج (پیش‌وند «-» برای نزولی)
       - in: query
         name: page
         schema:
