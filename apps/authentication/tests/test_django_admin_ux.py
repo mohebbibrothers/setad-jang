@@ -166,6 +166,33 @@ class TestUserAdminIncludesInactiveUsers:
 
         assert inactive.pk in pks
 
+    def test_user_change_page_shows_complete_profile_badge(self, client):
+        """Regression: شاخهٔ «کامل» badge پروفایل R4J نباید صفحه را ۵۰۰ کند.
+
+        در Django 6.0+ فراخوانی format_html بدون آرگومان TypeError می‌دهد؛
+        این شاخه فقط وقتی اجرا می‌شود که پروفایل کاربر کامل باشد — همان حالتی
+        که در production صفحهٔ change را می‌شکست.
+        """
+        import datetime
+
+        admin_user = AdminUserFactory()
+        client.force_login(admin_user)
+        user = UserFactory(email="full-profile@test.local")
+        profile, _ = Profile.objects.get_or_create(user=user)
+        profile.national_code = "1234567890"
+        profile.birth_date = datetime.date(1990, 1, 1)
+        profile.gender = "male"
+        profile.province = "تهران"
+        profile.city = "تهران"
+        profile.address = "خیابان test"
+        profile.save()
+
+        response = client.get(reverse("admin:authentication_user_change", args=[user.pk]))
+
+        assert response.status_code == 200
+        html = response.content.decode("utf-8")
+        assert "کامل</strong>" in html
+
 
 class _FakeRequest:
     """Request مینیمال برای خواندن get_queryset بدون HTTP."""
