@@ -260,6 +260,8 @@ GET  /api/v1/auth/sessions/
 GET  /api/v1/madadkar/campaigns/
 GET  /api/v1/madadkar/campaigns/{slug}/
 POST /api/v1/madadkar/campaigns/{slug}/participate/
+GET  /api/v1/madadkar/payment/verify/
+POST /api/v1/madadkar/payment/verify/
 GET  /api/v1/madadkar/me/participations/
 GET  /api/v1/madadkar/me/receipts/
 POST /api/v1/madadkar/receipts/verify/
@@ -340,6 +342,10 @@ GET,POST /api/v1/tabyin/me/submissions/
 - روی `status_code` داخل body به‌تنهایی تکیه نکن؛ HTTP status هم مهم است.
 - خطاهای serializer ممکن است در `errors` به‌شکل object برگردند.
 - برای عملیات مالی Madadkar، بعد از `participate` کاربر باید به `gateway_url` هدایت شود.
+  در حالت درگاه واقعی، پاسخ participate شامل `gateway_url` و `authority` است؛ بعد از
+  بازگشت درگاه، فرانت روی `GET /api/v1/madadkar/payment/verify/?authority=...&status=...`
+  نتیجه را می‌خواند و صفحه وضعیت پرداخت را از همان envelope JSON رندر می‌کند
+  (redirect خودکار به SPA وجود ندارد). همه مبالغ در این API به تومان‌اند.
 - برای Support Desk، ticket ابتدا draft است و سپس submit می‌شود.
 - برای R4J، public visibility فیلدها ممکن است بعضی اطلاعات را `null` کند.
 - برای uploadها progress UI و error handling فایل لازم است.
@@ -359,6 +365,6 @@ JWT login در Swagger کار می‌کند؟
 endpointهای public بدون token کار می‌کنند؟
 endpointهای protected بدون token 401 می‌دهند؟
 فایل upload در multipart تست شده؟
-Madadkar sandbox payment flow تست شده؟
+Madadkar payment flow هم در sandbox و هم zarinpal تست شده؟ (participate→درگاه→verify→رسید، مبالغ تومان)
 Support ticket create/submit/reply تست شده؟
 ```

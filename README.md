@@ -128,7 +128,7 @@ OpenAPI validation                ✅ Valid schema
 STRUCTURE.md check                ✅ همگام با درخت واقعی مخزن
 compose config (CI)               ✅ interpolate/`:?` زنده در هر push
 nginx config test (CI)            ✅ nginx -t روی deploy/nginx.conf
-pytest + coverage gate            ✅ 1872 passed / 25 skipped (راتچت: جدول با collect سوئیت می‌خواند)
+pytest + coverage gate            ✅ 1874 passed / 25 skipped (راتچت: جدول با collect سوئیت می‌خواند)
 coverage                          ✅ 85.85% >= 82%
 ```
 
@@ -481,12 +481,19 @@ OTP_SMS_API_KEY=...
 
 ### 7.6 Payment Provider / Zarinpal Readiness
 
-Madadkar از provider contract استفاده می‌کند. تا قبل از مجوز رسمی، sandbox/dev provider قابل استفاده است. بعد از دریافت مجوز، جایگزینی باید از طریق تنظیم env و provider implementation انجام شود، نه تغییر workflow مالی.
+Madadkar از provider contract استفاده می‌کند؛ کلید تنظیمیِ واقعیِ این بخش در `.env.example` مستند است. برای فعال‌سازی زرین‌پال در production (دریافت مجوز انجام شده — merchant id فقط در `.env` سرور، هرگز در مخزن):
 
 ```env
-MADADKAR_PAYMENT_PROVIDER=sandbox
-MADADKAR_PAYMENT_CALLBACK_URL=https://example.com/api/v1/madadkar/payment/verify/
+MADADKAR_PAYMENT_PROVIDER=zarinpal
+MADADKAR_ZARINPAL_MERCHANT_ID=<merchant id از پنل زرین‌پال — فقط در .env سرور>
+MADADKAR_ZARINPAL_SANDBOX=False
+MADADKAR_PAYMENT_CALLBACK_BASE_URL=https://api.example.com
+MADADKAR_PAYMENT_TIMEOUT_MINUTES=15
 ```
+
+- واحد قرارداد داخلی تومان است؛ provider خودش به ریال (×۱۰) تبدیل می‌کند. واحد «مبلغ» در گزارشِ پنل زرین‌پال هم تومان است، پس ماژول reconciliation بدون تبدیل کار می‌کند.
+- `MADADKAR_ZARINPAL_SANDBOX` در production باید `False` باشد (default خودش از DEBUG پیروی می‌کند؛ sandbox را عمداً روشن‌کردن در prod فقط برای تستِ pre-release مجاز است).
+- Readiness را از `/api/v1/health/ready/` چک کنید: تا merchant id ست نشده، provider zarinpal «آماده» گزارش نمی‌شود.
 
 ### 7.7 Media / Object Storage
 

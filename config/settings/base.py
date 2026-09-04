@@ -1245,6 +1245,8 @@ MADADKAR_PAYMENT_CALLBACK_BASE_URL = config(
 )
 
 # مدت زمان معتبر بودن یک تراکنش PENDING (دقیقه) — بعد از این مدت expire می‌شود
+# اندازه استخر اتصال Session مشترک زرین‌پال (keep-alive بین‌درخواستی).
+ZARINPAL_HTTP_POOL_MAXSIZE = config("ZARINPAL_HTTP_POOL_MAXSIZE", default=16, cast=int)
 MADADKAR_PAYMENT_TIMEOUT_MINUTES = config(
     "MADADKAR_PAYMENT_TIMEOUT_MINUTES",
     default=15,
@@ -1256,9 +1258,13 @@ MADADKAR_ZARINPAL_MERCHANT_ID = config(
     "MADADKAR_ZARINPAL_MERCHANT_ID",
     default="",
 )
+# default از DEBUG پیروی می‌کند: در dev/test خودبه‌خود sandbox (که با
+# merchant واقعی کار نمی‌کند و نباید هم بکند)، در production خودبه‌خود
+# واقعی. خطای قبلی: default ثابت True یعنی فراموشیِ تنظیم در سرورِ عملیاتی
+# ترافیک پرداخت را بی‌سروصدا به درگاه sandbox می‌فرستاد.
 MADADKAR_ZARINPAL_SANDBOX = config(
     "MADADKAR_ZARINPAL_SANDBOX",
-    default=True,
+    default=DEBUG,
     cast=bool,
 )
 
