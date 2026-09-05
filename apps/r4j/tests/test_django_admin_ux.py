@@ -14,6 +14,7 @@ import pytest
 from django.contrib import admin
 from django.urls import reverse
 
+from apps.r4j import services
 from apps.r4j.admin import (
     R4JCriminalAdmin,
     R4JCriminalAliasInline,
@@ -29,7 +30,6 @@ from apps.r4j.admin import (
     R4JReportPhoneSuggestionInline,
     R4JReportSocialSuggestionInline,
 )
-from apps.r4j import services
 from apps.r4j.choices import (
     BountyStatus,
     PublicVisibilityField,
@@ -408,7 +408,7 @@ class TestR4JBountyAdminIntegrity:
     def test_action_skips_bounties_not_in_cancel_requested(self, audit_task, client):
         admin_user = AdminUserFactory()
         client.force_login(admin_user)
-        criminal, bounty, *_ = self._criminal_with_two_bounties()
+        criminal, _bounty, *_ = self._criminal_with_two_bounties()
         active_bounty = R4JBounty.objects.filter(status=BountyStatus.ACTIVE).first()
 
         response = self._run_action(client, "approve_cancel_requests", active_bounty.pk)

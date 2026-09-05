@@ -1232,6 +1232,99 @@ def verify_payment(*, authority: str) -> Payment:
         return locked_payment
 
 
+def cancel_pending_payment(*, authority: str) -> Payment:
+    """
+    لغوی کاربر روی صفحهٔ درگاه (callback با Status=NOK) — بدون تماس با provider.
+
+    چرا این تابع جداست: وقتی کاربر پرداخت را در صفحهٔ درگاه لغو می‌کند،
+    فراخوانی API verifyِ همان درگاه بی‌فایده است — زرین‌پال در این حالت کد
+    ‎-21 برمی‌گرداند و مسیر معمول verify به PaymentGatewayError (502) می‌خورد.
+    درحالی‌که واقعیت روشن است: کاربر لغو کرده، پس مستقیم FAILED ثبت می‌کنیم
+    و سهم‌های رزروشده را همان‌جا آزاد می‌کنیم تا امکان تلاش مجدد فوری باشد.
+
+    idempotent مثل verify_payment:
+    - SUCCESS → به وضعیت درگاه اعتماد نمی‌کنیم؛ verifyِ قبلی نتیجهٔ قطعی است.
+      (race دیده‌شده: کاربر NOK گرفته ولی تراکنش از مسیر دیگری verify شده.)
+    - FAILED → بدون تغییر برمی‌گردد.
+    - PENDING → در یک atomic block با select_for_update به FAILED می‌رود،
+      رویداد ledger ثبت و شمارنده‌های حرکت سینک می‌شوند.
+
+    تماس با provider اتفاق نمی‌افتد — I/O سنگینی رد نمی‌شود و پاسخ callback
+    فوری می‌ماند.
+    """
+    payment = (
+        Payment.objects.select_related("participation", "participation__campaign", "user")
+        .filter(authority=authority)
+        .first()
+    )
+
+    if payment is None:
+        msg = f"پرداختی با کد رهگیری «{authority}» یافت نشد."
+        raise PaymentNotFoundError(msg)
+
+    if payment.status in (PaymentStatus.SUCCESS, PaymentStatus.FAILED):
+        logger.info(
+            "Madadkar payment cancel idempotent return payment_id=%s authority=%s status=%s",
+            payment.pk,
+            authority,
+            payment.status,
+        )
+        return payment
+
+    now = timezone.now()
+    with transaction.atomic():
+        locked_payment = (
+            Payment.objects.select_for_update()
+            .select_related("participation", "participation__campaign")
+            .get(pk=payment.pk)
+        )
+
+        # double-check idempotency داخل lock — race با verify همزمان/دوبل.
+        if locked_payment.status in (PaymentStatus.SUCCESS, PaymentStatus.FAILED):
+            return locked_payment
+
+        locked_campaign = Campaign.objects.select_for_update().get(
+            pk=locked_payment.participation.campaign_id
+        )
+        locked_participation = locked_payment.participation
+
+        previous_status = locked_payment.status
+        locked_payment.status = PaymentStatus.FAILED
+        locked_payment.gateway_status = "NOK"
+        locked_payment.verified_at = now
+        locked_payment.save(
+            update_fields=[
+                "status",
+                "gateway_status",
+                "verified_at",
+                "updated_at",
+            ],
+        )
+        _record_payment_event(
+            payment=locked_payment,
+            event_kind=PaymentEventKind.VERIFY_FAILED,
+            previous_status=previous_status,
+            new_status=PaymentStatus.FAILED,
+            metadata={
+                "cancelled_by_user": True,
+                "error_message": "کاربر پرداخت را در صفحه درگاه لغو کرد.",
+            },
+        )
+
+        locked_participation.status = ParticipationStatus.FAILED
+        locked_participation.save(update_fields=["status", "updated_at"])
+
+        _sync_campaign_counters(campaign=locked_campaign)
+
+    logger.info(
+        "Madadkar payment canceled by user payment_id=%s authority=%s amount=%s",
+        locked_payment.pk,
+        authority,
+        locked_payment.amount,
+    )
+    return locked_payment
+
+
 # ===========================================================================
 # Maintenance services — Celery taskها از این‌ها استفاده می‌کنند
 # ===========================================================================

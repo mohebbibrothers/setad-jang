@@ -1244,6 +1244,18 @@ MADADKAR_PAYMENT_CALLBACK_BASE_URL = config(
     default="http://127.0.0.1:8000",
 )
 
+# Base URL صفحهٔ نتیجهٔ پرداخت روی **فرانت** (بدون trailing slash).
+#
+# کاربر پس از اتمام کار در صفحهٔ درگاه، ابتدا به endpoint بک‌اند
+# (/api/v1/madadkar/payment/verify/) برمی‌گردد تا تراکنش verify شود؛ سپس
+# view او را با 302 به این مسیر فرانت می‌فرستد:
+#   {MADADKAR_PAYMENT_RESULT_BASE_URL}/madadkar/paydone/?authority=…&result=…
+# بدون این تنظیم، کاربر روی JSON خامِ API بک‌اند فرود می‌آمد.
+MADADKAR_PAYMENT_RESULT_BASE_URL = config(
+    "MADADKAR_PAYMENT_RESULT_BASE_URL",
+    default="http://127.0.0.1:3000",
+)
+
 # مدت زمان معتبر بودن یک تراکنش PENDING (دقیقه) — بعد از این مدت expire می‌شود
 # اندازه استخر اتصال Session مشترک زرین‌پال (keep-alive بین‌درخواستی).
 ZARINPAL_HTTP_POOL_MAXSIZE = config("ZARINPAL_HTTP_POOL_MAXSIZE", default=16, cast=int)

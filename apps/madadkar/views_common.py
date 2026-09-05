@@ -6,6 +6,8 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
+from urllib.parse import urlencode
 
 from django.conf import settings
 from drf_spectacular.utils import (
@@ -389,6 +391,46 @@ def _build_callback_url() -> str:
     """ساخت URL کامل برای callback verify بر اساس settings."""
     base = settings.MADADKAR_PAYMENT_CALLBACK_BASE_URL.rstrip("/")
     return f"{base}/api/v1/madadkar/payment/verify/"
+
+
+def _build_payment_result_url(*, authority: str, result: str) -> str:
+    """
+    ساخت URL صفحهٔ نتیجهٔ پرداخت روی فرانت — مقصد نهاییِ کاربر پس از callback.
+
+    GET callbackِ مرورگر: ابتدا تراکنش در بک‌اند verify می‌شود و بعد کاربر
+    با 302 به این صفحه می‌رود. خودِ صفحه دوباره (idempotent) با POST همان
+    authority را تأیید می‌گیرد تا پارامترهای URL هرگز «منبع حقیقت» نباشند.
+    """
+    base = settings.MADADKAR_PAYMENT_RESULT_BASE_URL.rstrip("/")
+    query = urlencode({"authority": authority, "result": result})
+    return f"{base}/madadkar/paydone/?{query}"
+
+
+def _normalized_callback_params(source: Any) -> dict[str, str]:
+    """
+    نرمال‌سازی caseِ پارامترهای callback درگاه‌ها.
+
+    زرین‌پال v4 کاربر را با نام‌های capitalized برمی‌گرداند
+    (`?Authority=…&Status=OK|NOK`) درحالی‌که سریالایزر ما lowercase است.
+    نگاشت دقیقاً همین‌جا در مرز ورود انجام می‌شود تا contract داخلی یکدست
+    بماند و callback واقعی درگاه هرگز به‌خاطر case خطای 400 نگیرد.
+
+    مقادیرِ truthy اول برنده‌اند؛ ترتیب lowercase → Titlecase → UPPERCASE
+    عمدی است تا اگر روزی هر دو شکل با هم آمدند، کلاینت‌های قدیمی (سندباکس،
+    تست‌ها) اولویت داشته باشند.
+    """
+    out: dict[str, str] = {}
+    for key in ("authority", "Authority", "AUTHORITY"):
+        value = source.get(key)
+        if value:
+            out["authority"] = str(value)
+            break
+    for key in ("status", "Status", "STATUS"):
+        value = source.get(key)
+        if value:
+            out["status"] = str(value)
+            break
+    return out
 
 
 def _extract_mobile_email(user, fallback_mobile: str, fallback_email: str) -> tuple[str, str]:

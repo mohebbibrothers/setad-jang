@@ -6902,47 +6902,36 @@ paths:
     get:
       operationId: madadkar_payment_verify
       description: |-
-        این endpoint توسط درگاه پرداخت بعد از تکمیل تراکنش فراخوانی می‌شود.
+        درگاه پرداخت مرورگر کاربر را بعد از پایان تراکنش به این آدرس می‌فرستد (با `Authority` و `Status` در query — case-insensitive پذیرفته می‌شود).
 
-        ورودی شامل `authority` (و گاهی `status`) است که توسط درگاه به‌صورت query string یا body ارسال می‌گردد.
+        پاسخ همیشه **302** به صفحهٔ نتیجهٔ فرانت است (`{base}/madadkar/paydone/?authority=…&result=success|failed|canceled|pending|error`) تا کاربر هرگز JSON خام نبیند. استثنا: نبودِ کد رهگیری (درخواست نامعتبر) 400 می‌ماند.
 
-        این endpoint **idempotent** است: فراخوانی دوباره با همان authority نتیجه قبلی را برمی‌گرداند بدون تماس مجدد با درگاه.
-      summary: تأیید پرداخت — callback از سمت درگاه
+        مصرف برنامه‌ای (JSON) را از متد POST همین endpoint استفاده کنید.
+
+        این endpoint **idempotent** است.
+      summary: تأیید پرداخت — callback مرورگر از سمت درگاه (302 به فرانت)
       parameters:
       - in: query
         name: authority
         schema:
           type: string
+        description: کد رهگیری (نام‌های Authority/AUTHORITY هم پذیرفته می‌شوند).
         required: true
       - in: query
         name: status
         schema:
           type: string
+        description: وضعیت اولیه درگاه (OK/NOK — قابل اعتماد نیست؛ NOK → آزادسازی
+          فوری).
       tags:
       - مددکار — کاربر
       security:
       - jwtAuth: []
       - {}
       responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MadadkarPaymentVerifyResponse'
-          description: ''
+        '302':
+          description: No response body
         '400':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MadadkarGenericErrorResponse'
-          description: ''
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MadadkarGenericErrorResponse'
-          description: ''
-        '502':
           content:
             application/json:
               schema:
@@ -6951,17 +6940,11 @@ paths:
     post:
       operationId: madadkar_payment_verify_post
       description: |-
-        Callback تأیید پرداخت — GET/POST /api/v1/madadkar/payment/verify/
+        همان منطق GET ولی با پاسخ JSON کامل. صفحهٔ نتیجهٔ فرانت پس از فرود، با همین POST نتیجهٔ قطعی تراکنش را (idempotent) بازیابی می‌کند.
 
-        نکته مهم: این endpoint از سمت **درگاه پرداخت** فراخوانی می‌شود
-        (نه مستقیم از طرف کلاینت ما). در زمان فراخوانی session کاربر
-        معمولاً موجود نیست.
-
-        بنابراین:
-        - permission: AllowAny (verify بر اساس authority انجام می‌شود)
-        - throttle: مخصوص (مبتنی بر IP)
-        - method: هم GET (Zarinpal) و هم POST (سایر درگاه‌ها) پشتیبانی می‌شوند.
-      summary: تأیید پرداخت — POST callback (درگاه‌های POST-based)
+        نام پارامترها case-insensitive است.
+      summary: 'تأیید پرداخت — POST (مصرف برنامه‌ای: صفحهٔ نتیجهٔ فرانت و درگاه‌های
+        POST-based)'
       tags:
       - مددکار — کاربر
       requestBody:
