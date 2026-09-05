@@ -29,7 +29,9 @@ from apps.r4j.admin import (
     R4JReportPhoneSuggestionInline,
     R4JReportSocialSuggestionInline,
 )
+from apps.r4j import services
 from apps.r4j.choices import (
+    BountyStatus,
     PublicVisibilityField,
     ReportFieldChangeStatus,
     ReportStatus,
@@ -48,8 +50,13 @@ from apps.r4j.models import (
     R4JReportPhoneSuggestion,
     R4JReportSocialSuggestion,
 )
-from tests.factories.auth import AdminUserFactory
-from tests.factories.r4j import R4JCriminalFactory, R4JReportFactory, R4JReportFieldChangeFactory
+from tests.factories.auth import AdminUserFactory, UserFactory
+from tests.factories.r4j import (
+    R4JCriminalFactory,
+    R4JCriminalPublishedFactory,
+    R4JReportFactory,
+    R4JReportFieldChangeFactory,
+)
 
 pytestmark = pytest.mark.django_db
 
@@ -303,3 +310,113 @@ class TestR4JDjangoAdminUX:
         assert social.status == ReportFieldChangeStatus.REJECTED
         assert social.applied_social_id is None
         mock_task.delay.assert_called_once()
+
+
+class TestR4JBountyAdminIntegrity:
+    """
+    قفلِ drift شمارنده‌های صندوق (root fix باگ: تعهدِ لغوشده هنوز در صندوق حساب می‌شد).
+
+    پیش از این, R4JBountyAdmin فیلد status را آزادانه editable داشت و هیچ
+    اکشنی به service layer وصل نبود، پس تأییدِ لغو از داخلِ پنل جنگو
+    ``services.approve_bounty_cancel`` را دور می‌زد و total_bounty_toman /
+    bounties_count روی پرونده برای همیشه ناهماهنگ می‌ماند.
+    """
+
+    def _criminal_with_two_bounties(self) -> tuple:
+        """یک پرونده با تعهدِ فعال ۳۰۰هزار + تعهدِ درخواست‌لغوی ۵۰۰هزار."""
+        criminal = R4JCriminalPublishedFactory()
+        steady_user = UserFactory()
+        canceling_user = UserFactory()
+        services.set_or_update_bounty(criminal=criminal, user=steady_user, amount_toman=300_000)
+        bounty, _ = services.set_or_update_bounty(
+            criminal=criminal, user=canceling_user, amount_toman=500_000
+        )
+        services.request_bounty_cancel(bounty=bounty, user=canceling_user)
+        criminal.refresh_from_db()
+        # قرارداد: active + cancel_requested در صندوق حساب می‌شوند
+        assert criminal.total_bounty_toman == 800_000
+        assert criminal.bounties_count == 2
+        return criminal, bounty, steady_user, canceling_user
+
+    def _run_action(self, client, action: str, *bounty_pks: int):
+        return client.post(
+            reverse("admin:r4j_r4jbounty_changelist"),
+            {
+                "action": action,
+                "_selected_action": [str(pk) for pk in bounty_pks],
+            },
+            follow=True,
+        )
+
+    def test_state_changing_fields_are_readonly_and_crud_is_disabled(self):
+        bounty_admin = admin.site._registry[R4JBounty]
+
+        for field in (
+            "status",
+            "amount_toman",
+            "criminal",
+            "user",
+            "cancel_requested_at",
+            "canceled_at",
+            "created_at",
+        ):
+            assert field in bounty_admin.readonly_fields
+        assert bounty_admin.has_add_permission(MagicMock()) is False
+        assert bounty_admin.has_delete_permission(MagicMock()) is False
+        assert set(bounty_admin.actions) == {"approve_cancel_requests", "reject_cancel_requests"}
+
+    @patch(_TASK_PATCH_PATH)
+    def test_approve_cancel_action_goes_through_service_and_syncs_counters(
+        self, audit_task, client
+    ):
+        admin_user = AdminUserFactory()
+        client.force_login(admin_user)
+        criminal, bounty, *_ = self._criminal_with_two_bounties()
+
+        response = self._run_action(client, "approve_cancel_requests", bounty.pk)
+
+        assert response.status_code == 200
+        bounty.refresh_from_db()
+        assert bounty.status == BountyStatus.CANCELED
+        assert bounty.canceled_at is not None
+        criminal.refresh_from_db()
+        # تعهدِ لغوشده دیگر در صندوق و شمارش نیست — این همان باگِ گزارش‌شده بود
+        assert criminal.total_bounty_toman == 300_000
+        assert criminal.bounties_count == 1
+        # audit مسیرِ service همراهی شد
+        audit_task.delay.assert_called_once()
+
+    @patch(_TASK_PATCH_PATH)
+    def test_reject_cancel_action_restores_active_and_counters(self, audit_task, client):
+        admin_user = AdminUserFactory()
+        client.force_login(admin_user)
+        criminal, bounty, *_ = self._criminal_with_two_bounties()
+
+        response = self._run_action(client, "reject_cancel_requests", bounty.pk)
+
+        assert response.status_code == 200
+        bounty.refresh_from_db()
+        assert bounty.status == BountyStatus.ACTIVE
+        assert bounty.cancel_requested_at is None
+        criminal.refresh_from_db()
+        # تعهد به صندوق برگشت
+        assert criminal.total_bounty_toman == 800_000
+        assert criminal.bounties_count == 2
+        audit_task.delay.assert_called_once()
+
+    @patch(_TASK_PATCH_PATH)
+    def test_action_skips_bounties_not_in_cancel_requested(self, audit_task, client):
+        admin_user = AdminUserFactory()
+        client.force_login(admin_user)
+        criminal, bounty, *_ = self._criminal_with_two_bounties()
+        active_bounty = R4JBounty.objects.filter(status=BountyStatus.ACTIVE).first()
+
+        response = self._run_action(client, "approve_cancel_requests", active_bounty.pk)
+
+        assert response.status_code == 200
+        active_bounty.refresh_from_db()
+        # تعهدِ فعال نباید لغو شود؛ وضعیت و صندوق دست‌نخورده می‌ماند
+        assert active_bounty.status == BountyStatus.ACTIVE
+        criminal.refresh_from_db()
+        assert criminal.total_bounty_toman == 800_000
+        assert criminal.bounties_count == 2
