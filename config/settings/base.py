@@ -826,6 +826,28 @@ AUTH_OTP_COOLDOWN_SECONDS = config("AUTH_OTP_COOLDOWN_SECONDS", default=60, cast
 AUTH_OTP_GLOBAL_THRESHOLD = config("AUTH_OTP_GLOBAL_THRESHOLD", default=500, cast=int)
 AUTH_OTP_GLOBAL_WINDOW_SECONDS = config("AUTH_OTP_GLOBAL_WINDOW_SECONDS", default=60, cast=int)
 
+# --- IranPayamak (الگوی تأییدشده/Pattern) — برای OTP_SMS_PROVIDER=iranpayamak ---
+# API key راز است: فقط در .env. کد الگوها و شمارهٔ خط، خروجی پنل‌اند و در .env
+# می‌آیند (پیش‌فرض‌های خالی = fail loud در readiness، نه ترافیک نیمه‌کاره).
+SMS_IRANPAYAMAK_API_KEY = config("SMS_IRANPAYAMAK_API_KEY", default="")
+SMS_IRANPAYAMAK_PATTERN_URL = config(
+    "SMS_IRANPAYAMAK_PATTERN_URL",
+    default="https://api.iranpayamak.com/ws/v1/sms/pattern",
+)
+SMS_IRANPAYAMAK_LINE_NUMBER = config("SMS_IRANPAYAMAK_LINE_NUMBER", default="50002178584000")
+SMS_IRANPAYAMAK_NUMBER_FORMAT = config("SMS_IRANPAYAMAK_NUMBER_FORMAT", default="persian")
+SMS_IRANPAYAMAK_TIMEOUT_SECONDS = config("SMS_IRANPAYAMAK_TIMEOUT_SECONDS", default=10, cast=int)
+SMS_IRANPAYAMAK_PATTERN_LOGIN = config("SMS_IRANPAYAMAK_PATTERN_LOGIN", default="")
+SMS_IRANPAYAMAK_PATTERN_SIGNUP = config("SMS_IRANPAYAMAK_PATTERN_SIGNUP", default="")
+SMS_IRANPAYAMAK_PATTERN_PASSWORD_RESET = config(
+    "SMS_IRANPAYAMAK_PATTERN_PASSWORD_RESET",
+    default="",
+)
+SMS_IRANPAYAMAK_PATTERN_IDENTIFIER_ADD = config(
+    "SMS_IRANPAYAMAK_PATTERN_IDENTIFIER_ADD",
+    default="",
+)
+
 SMS_API_URL = config("SMS_API_URL", default="")
 SMS_API_KEY = config("SMS_API_KEY", default="")
 SMS_SENDER = config("SMS_SENDER", default="")

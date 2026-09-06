@@ -128,7 +128,7 @@ OpenAPI validation                ✅ Valid schema
 STRUCTURE.md check                ✅ همگام با درخت واقعی مخزن
 compose config (CI)               ✅ interpolate/`:?` زنده در هر push
 nginx config test (CI)            ✅ nginx -t روی deploy/nginx.conf
-pytest + coverage gate            ✅ 1886 passed / 25 skipped (راتچت: جدول با collect سوئیت می‌خواند)
+pytest + coverage gate            ✅ 1898 passed / 25 skipped (راتچت: جدول با collect سوئیت می‌خواند)
 coverage                          ✅ 85.85% >= 82%
 ```
 
@@ -468,16 +468,24 @@ DEFAULT_FROM_EMAIL=no-reply@example.com
 
 هیچ credential واقعی نباید commit شود.
 
-### 7.5 SMS Provider
+### 7.5 SMS Provider (IranPayamak Pattern)
 
-تا قبل از گرفتن مجوز SMS، provider می‌تواند dev/console بماند. کدها provider-ready هستند تا بعد از گرفتن مجوز با تغییر env فعال شوند:
+SMS برای OTP از provider contract استفاده می‌کند؛ backend با `OTP_SMS_PROVIDER` انتخاب می‌شود: `console` (dev)، `http` (generic) یا `iranpayamak` (الگوی تأییدشده — فعال در prod). کانال ارسال بر اساس نوع identifier کاربر انتخاب می‌شود؛ `OTP_PROVIDER` فقط fallback قدیمی است.
 
 ```env
-OTP_PROVIDER=sms
-OTP_SMS_PROVIDER=http
-OTP_SMS_ENDPOINT=https://provider.example/api/send
-OTP_SMS_API_KEY=...
+OTP_SMS_PROVIDER=iranpayamak
+SMS_IRANPAYAMAK_API_KEY=<کلید API از پنل ایران‌پیامک — فقط در .env>
+SMS_IRANPAYAMAK_LINE_NUMBER=50002178584000
+SMS_IRANPAYAMAK_NUMBER_FORMAT=persian
+SMS_IRANPAYAMAK_PATTERN_LOGIN=<کد الگوی ورود از پنل>
+SMS_IRANPAYAMAK_PATTERN_SIGNUP=<کد الگوی ثبت‌نام>
+SMS_IRANPAYAMAK_PATTERN_PASSWORD_RESET=<کد الگوی بازیابی رمز>
+SMS_IRANPAYAMAK_PATTERN_IDENTIFIER_ADD=<اختیاری — افزودن شماره>
 ```
+
+- placeholder هر الگو باید دقیقاً `code` باشد (متن‌های تأییدشده همین را دارند).
+- الگوی تأییدنشده/غایب = ارسال fail loud می‌شود و OTP یتیم ساخته نمی‌شود؛ readiness از `/api/v1/health/ready/` وضعیت کلید و الگوها را نشان می‌دهد.
+- ایمیل OTP: Django `MAILERS` (پیش‌فرض Brevo SMTP رایگان با `EMAIL_BACKEND=...smtp.EmailBackend` + اعتبارنامه در `.env`).
 
 ### 7.6 Payment Provider / Zarinpal Readiness
 

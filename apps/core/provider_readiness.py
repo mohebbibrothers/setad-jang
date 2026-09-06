@@ -52,6 +52,25 @@ def check_sms_provider_readiness() -> ProviderReadinessResult:
         return ProviderReadinessResult(
             "sms", settings.DEBUG, "console", "Console SMS backend is development-only."
         )
+    if provider == "iranpayamak":
+        api_key = bool(getattr(settings, "SMS_IRANPAYAMAK_API_KEY", ""))
+        missing = [
+            name
+            for name in (
+                "SMS_IRANPAYAMAK_PATTERN_LOGIN",
+                "SMS_IRANPAYAMAK_PATTERN_SIGNUP",
+                "SMS_IRANPAYAMAK_PATTERN_PASSWORD_RESET",
+            )
+            if not getattr(settings, name, "")
+        ]
+        ready = api_key and not missing
+        if not api_key:
+            detail = "SMS_IRANPAYAMAK_API_KEY is required."
+        elif missing:
+            detail = "Missing pattern codes: " + ", ".join(missing)
+        else:
+            detail = "IranPayamak API key and OTP patterns configured."
+        return ProviderReadinessResult("sms", ready, "iranpayamak", detail)
     if provider == "http":
         ready = bool(getattr(settings, "SMS_API_URL", "") and getattr(settings, "SMS_API_KEY", ""))
         return ProviderReadinessResult(

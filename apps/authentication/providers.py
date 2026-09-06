@@ -36,6 +36,7 @@ _LEGACY_PROVIDER_SMS: Final[str] = "sms"
 _EMAIL_BACKEND_DJANGO: Final[str] = "django_email"
 _SMS_BACKEND_CONSOLE: Final[str] = "console"
 _SMS_BACKEND_HTTP: Final[str] = "http"
+_SMS_BACKEND_IRANPAYAMAK: Final[str] = "iranpayamak"
 
 
 # ============================================================
@@ -298,6 +299,11 @@ def get_sms_otp_provider() -> OTPDeliveryProvider:
         return ConsoleSMSOTPProvider()
     if provider_backend == _SMS_BACKEND_HTTP:
         return HTTPAPIOTPProvider()
+    if provider_backend == _SMS_BACKEND_IRANPAYAMAK:
+        # import داخل تابع: ماژول iranpayamak خودش از providers تغذیه می‌کند.
+        from .iranpayamak import IranPayamakOTPProvider
+
+        return IranPayamakOTPProvider()
 
     raise UnsupportedOTPProviderError(
         f"Unsupported SMS OTP provider backend: {provider_backend}",

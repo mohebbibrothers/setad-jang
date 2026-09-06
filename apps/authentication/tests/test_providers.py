@@ -234,3 +234,159 @@ class TestOTPDeliveryRollback:
         assert existing_otp.is_used is False
         assert remaining_otps.count() == 1
         assert remaining_otps.first().pk == existing_otp.pk
+
+
+# ============================================================
+# IranPayamak pattern SMS provider
+# ============================================================
+
+
+class _FakePayamakResponse:
+    """Response deterministic برای mock ایران‌پیامک."""
+
+    def __init__(self, *, status_code: int = 201, payload: dict | None = None) -> None:
+        self.status_code = status_code
+        self._payload = payload if payload is not None else {"status": "success", "data": 0}
+        self.text = str(self._payload)
+
+    def json(self) -> dict:
+        return self._payload
+
+
+class TestIranPayamakProvider:
+    """تست‌های adapter الگوی پیامکی ایران‌پیامک (بدون شبکه واقعی)."""
+
+    @staticmethod
+    def _configure(settings) -> None:
+        settings.SMS_IRANPAYAMAK_API_KEY = "test-api-key"
+        settings.SMS_IRANPAYAMAK_LINE_NUMBER = "50002178584000"
+        settings.SMS_IRANPAYAMAK_NUMBER_FORMAT = "persian"
+        settings.SMS_IRANPAYAMAK_PATTERN_URL = "https://api.iranpayamak.com/ws/v1/sms/pattern"
+        settings.SMS_IRANPAYAMAK_TIMEOUT_SECONDS = 10
+        settings.SMS_IRANPAYAMAK_PATTERN_LOGIN = "PATTERN-LOGIN"
+        settings.SMS_IRANPAYAMAK_PATTERN_SIGNUP = "PATTERN-SIGNUP"
+        settings.SMS_IRANPAYAMAK_PATTERN_PASSWORD_RESET = "PATTERN-RESET"
+        settings.SMS_IRANPAYAMAK_PATTERN_IDENTIFIER_ADD = ""
+
+    def test_factory_selects_iranpayamak(self, settings, monkeypatch):
+        settings.OTP_SMS_PROVIDER = "iranpayamak"
+        from apps.authentication.iranpayamak import IranPayamakOTPProvider
+
+        self._configure(settings)
+        provider = providers.get_sms_otp_provider()
+        assert isinstance(provider, IranPayamakOTPProvider)
+
+    def test_send_builds_documented_payload_and_headers(self, settings, monkeypatch):
+        self._configure(settings)
+        from apps.authentication.iranpayamak import IranPayamakOTPProvider
+
+        captured: dict = {}
+
+        def fake_post(url, *, json, headers, timeout):
+            captured.update(url=url, json=json, headers=headers, timeout=timeout)
+            return _FakePayamakResponse()
+
+        monkeypatch.setattr("apps.authentication.iranpayamak.requests.post", fake_post)
+
+        provider = IranPayamakOTPProvider()
+        ok = provider.send(recipient="+989366208105", code="313456", purpose="login")
+
+        assert ok is True
+        assert captured["url"] == "https://api.iranpayamak.com/ws/v1/sms/pattern"
+        assert captured["headers"]["Api-Key"] == "test-api-key"
+        payload = captured["json"]
+        assert payload["code"] == "PATTERN-LOGIN"
+        assert payload["attributes"] == {"code": "313456"}
+        assert payload["recipient"] == "09366208105"
+        assert payload["line_number"] == "50002178584000"
+        assert payload["number_format"] == "persian"
+
+    @pytest.mark.parametrize(
+        ("raw", "normalized"),
+        [
+            ("+989121234567", "09121234567"),
+            ("0098 912 123 4567", "09121234567"),
+            ("989121234567", "09121234567"),
+            ("0912-123-4567", "09121234567"),
+        ],
+    )
+    def test_recipient_normalization_accepts_common_formats(self, raw, normalized):
+        from apps.authentication.iranpayamak import IranPayamakOTPProvider
+
+        assert IranPayamakOTPProvider._normalize_recipient(raw) == normalized
+
+    def test_invalid_recipient_fails_before_network(self, settings, monkeypatch):
+        self._configure(settings)
+        from apps.authentication.iranpayamak import IranPayamakOTPProvider
+
+        calls: list = []
+        monkeypatch.setattr(
+            "apps.authentication.iranpayamak.requests.post",
+            lambda *a, **k: calls.append(a),
+        )
+
+        provider = IranPayamakOTPProvider()
+        with pytest.raises(providers.OTPDeliveryFailedError):
+            provider.send(recipient="12345", code="1", purpose="login")
+
+        assert calls == []
+
+    def test_missing_api_key_fails_loud(self, settings):
+        self._configure(settings)
+        settings.SMS_IRANPAYAMAK_API_KEY = ""
+        from apps.authentication.iranpayamak import IranPayamakOTPProvider
+
+        with pytest.raises(providers.OTPDeliveryFailedError, match="API key"):
+            IranPayamakOTPProvider().send(recipient="09121234567", code="1", purpose="login")
+
+    def test_missing_pattern_for_purpose_fails_loud(self, settings):
+        self._configure(settings)
+        from apps.authentication.iranpayamak import IranPayamakOTPProvider
+
+        provider = IranPayamakOTPProvider()
+        with pytest.raises(providers.OTPDeliveryFailedError, match="identifier_add"):
+            provider.send(recipient="09121234567", code="1", purpose="identifier_add")
+
+    def test_vendor_rejection_raises_with_logging(self, settings, monkeypatch):
+        self._configure(settings)
+        from apps.authentication.iranpayamak import IranPayamakOTPProvider
+
+        def fake_post(url, *, json, headers, timeout):
+            return _FakePayamakResponse(
+                status_code=400,
+                payload={"status": "error", "messages": "کد الگو نامعتبر است."},
+            )
+
+        monkeypatch.setattr("apps.authentication.iranpayamak.requests.post", fake_post)
+
+        with pytest.raises(providers.OTPDeliveryFailedError, match="not accepted"):
+            IranPayamakOTPProvider().send(recipient="09121234567", code="1", purpose="signup")
+
+    def test_status_ok_but_business_status_error_raises(self, settings, monkeypatch):
+        """HTTP 200 + status!=success هم باید fail شود (سند: success در body)."""
+        self._configure(settings)
+        from apps.authentication.iranpayamak import IranPayamakOTPProvider
+
+        def fake_post(url, *, json, headers, timeout):
+            return _FakePayamakResponse(
+                status_code=200, payload={"status": "error", "messages": ["line disabled"]}
+            )
+
+        monkeypatch.setattr("apps.authentication.iranpayamak.requests.post", fake_post)
+
+        with pytest.raises(providers.OTPDeliveryFailedError, match="not accepted"):
+            IranPayamakOTPProvider().send(recipient="09121234567", code="1", purpose="login")
+
+    def test_network_error_is_wrapped(self, settings, monkeypatch):
+        self._configure(settings)
+        import requests as requests_lib
+
+        from apps.authentication.iranpayamak import IranPayamakOTPProvider
+
+        def fake_post(url, *, json, headers, timeout):
+            raise requests_lib.exceptions.ConnectionError("down")
+
+        monkeypatch.setattr("apps.authentication.iranpayamak.requests.post", fake_post)
+
+        with pytest.raises(providers.OTPDeliveryFailedError, match="request failed"):
+            IranPayamakOTPProvider().send(recipient="09121234567", code="1", purpose="login")
