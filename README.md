@@ -454,16 +454,16 @@ CELERY_RESULT_BACKEND=redis://redis:6379/2
 
 ### 7.4 Email SMTP
 
-پروژه provider-ready است. پیش‌فرض توسعه console-readable است، اما برای SMTP واقعی می‌توان از Brevo SMTP رایگان/transactional استفاده کرد:
+پروژه provider-ready است. پیش‌فرض توسعه console-readable است؛ برای SMTP واقعی، پیش‌فرض پروژه Gmail است (رایگان، ۵۰۰ ایمیل/روز، بدون تأیید شماره و کارت — مناسب سرورهای داخل ایران). اعتبارنامه = جیمیل کامل + App Password (ابتدا 2-Step Verification را روشن کنید؛ سپس از myaccount.google.com/apppasswords). هر ESP دیگری (Mailgun/Resend/…) فقط با تغییر همین متغیرها قابل‌جایگزینی است:
 
 ```env
 EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
-EMAIL_HOST=smtp-relay.brevo.com
+EMAIL_HOST=smtp.gmail.com
 EMAIL_PORT=587
 EMAIL_USE_TLS=True
-EMAIL_HOST_USER=...
-EMAIL_HOST_PASSWORD=...
-DEFAULT_FROM_EMAIL=no-reply@example.com
+EMAIL_HOST_USER=your-account@gmail.com
+EMAIL_HOST_PASSWORD=<16-digit app password>
+DEFAULT_FROM_EMAIL=your-account@gmail.com
 ```
 
 هیچ credential واقعی نباید commit شود.
@@ -485,7 +485,7 @@ SMS_IRANPAYAMAK_PATTERN_IDENTIFIER_ADD=<اختیاری — افزودن شمار
 
 - placeholder هر الگو باید دقیقاً `code` باشد (متن‌های تأییدشده همین را دارند).
 - الگوی تأییدنشده/غایب = ارسال fail loud می‌شود و OTP یتیم ساخته نمی‌شود؛ readiness از `/api/v1/health/ready/` وضعیت کلید و الگوها را نشان می‌دهد.
-- ایمیل OTP: Django `MAILERS` (پیش‌فرض Brevo SMTP رایگان با `EMAIL_BACKEND=...smtp.EmailBackend` + اعتبارنامه در `.env`).
+- ایمیل OTP: Django `MAILERS` (پیش‌فرض Gmail SMTP رایگان؛ اعتبارنامه فقط در `.env`).
 
 ### 7.6 Payment Provider / Zarinpal Readiness
 

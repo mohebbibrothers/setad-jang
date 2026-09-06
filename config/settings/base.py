@@ -773,7 +773,11 @@ _EMAIL_BACKEND = config(
 _EMAIL_SMTP_OPTIONS: dict[str, object] = {}
 if "smtp" in _EMAIL_BACKEND.lower():
     _EMAIL_SMTP_OPTIONS = {
-        "host": config("EMAIL_HOST", default="smtp-relay.brevo.com"),
+        # Gmail SMTP پیش‌فرض است: رایگان (۵۰۰/روز)، بدون تأیید شمارهٔ
+        # موبایل و بدون کارت، و از سرورهای ایران/خارج ایران قابل استفاده.
+        # (پیش‌تر smtp-relay.brevo.com بود که ثبت‌نامش شمارهٔ غیرایرانی می‌خواهد.)
+        # اعتبارنامه = آدرس کامل جیمیل + App Password (نیازمند 2-Step Verification).
+        "host": config("EMAIL_HOST", default="smtp.gmail.com"),
         "port": config("EMAIL_PORT", default=587, cast=int),
         "use_tls": config("EMAIL_USE_TLS", default=True, cast=bool),
         "timeout": config("EMAIL_TIMEOUT", default=15, cast=int),
