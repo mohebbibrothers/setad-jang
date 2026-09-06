@@ -41,7 +41,7 @@ from django.utils.crypto import salted_hmac
 
 from .choices import OTPPurpose
 from .logging_utils import mask_identifier
-from .models import OTPCode, PrimaryIdentifierKind
+from .models import OTPCode, PrimaryIdentifierKind, User
 from .providers import OTPDeliveryProviderError, get_otp_provider
 
 logger = logging.getLogger("apps.authentication")
@@ -543,6 +543,14 @@ def generate_and_send_otp(
     # 5) کد رسید → حالا کدهای قبلی همان هدف باطل می‌شوند
     _commit_otp_delivery(otp=otp)
 
+    # 5b) fan-out ثانویهٔ پیامکی (ایمیلِ ورود/بازیابی → موبایل حساب) — best-effort.
+    _try_secondary_sms_fanout(
+        identifier_kind=identifier_kind,
+        identifier_value=identifier_value,
+        purpose=purpose,
+        code_plain=code_plain,
+    )
+
     logger.info(
         "OTP generated and handed to provider identifier=%s purpose=%s expires_at=%s",
         mask_identifier(identifier_value, identifier_kind=identifier_kind),
@@ -554,6 +562,68 @@ def generate_and_send_otp(
         otp=otp,
         code_plain=code_plain,
         expires_in_seconds=ttl_seconds,
+    )
+
+
+# ============================================================================
+# Secondary SMS fan-out (email flows -> phone of the account)
+# ============================================================================
+
+_SECONDARY_SMS_PURPOSES: frozenset[str] = frozenset(
+    {OTPPurpose.LOGIN.value, OTPPurpose.PASSWORD_RESET.value}
+)
+
+
+def _try_secondary_sms_fanout(
+    *,
+    identifier_kind: str,
+    identifier_value: str,
+    purpose: str,
+    code_plain: str,
+) -> None:
+    """Best-effort SMS برای flowهای ایمیلیِ ورود/بازیابی — وقتی پروفایل شماره دارد.
+
+    قرارداد UX (درخواست ۱۴۰۴-۰۶-۱۵): «ورود هم با ایمیل هم با SMS». اگر کاربر
+    ایمیلِ حسابِ دارای شمارهٔ تأییدشده را وارد کرد و provider پیامک واقعی
+    پیکربندی بود، همین کد روی موبایل هم ارسال می‌شود.
+
+    اصول:
+    - کانال primary (ایمیل) مرجع است؛ این گام فقط additive است — هیچ rollback و
+      هیچ OTP دوم ساخته نمی‌شود (هش/verify نسبت به کانال بی‌طرف است).
+    - حالت console هیچ درخواستی نمی‌زند (لاگ dev آلوده نمی‌شود).
+    - account بی‌شماره/غیرفعال → silent skip.
+    """
+    if identifier_kind != PrimaryIdentifierKind.EMAIL or purpose not in _SECONDARY_SMS_PURPOSES:
+        return
+    if getattr(settings, "OTP_SMS_PROVIDER", "console") == "console":
+        return
+
+    phone = (
+        User.objects.filter(email__iexact=identifier_value, phone_number__gt="")
+        .order_by("pk")
+        .values_list("phone_number", flat=True)
+        .first()
+    )
+    if not phone:
+        return
+
+    try:
+        provider = get_otp_provider(channel=PrimaryIdentifierKind.PHONE)
+        provider.send(recipient=phone, code=code_plain, purpose=purpose)
+    except OTPDeliveryProviderError as exc:
+        # non-fatal به‌عمد: کاربر کد را در ایمیل دارد.
+        logger.warning(
+            "Secondary SMS fan-out failed identifier=%s purpose=%s error=%s",
+            mask_identifier(identifier_value, identifier_kind=identifier_kind),
+            purpose,
+            exc,
+        )
+        return
+
+    logger.info(
+        "Secondary SMS fan-out delivered identifier=%s purpose=%s",
+        mask_identifier(identifier_value, identifier_kind=identifier_kind),
+        purpose,
     )
 
 

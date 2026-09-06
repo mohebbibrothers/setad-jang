@@ -470,3 +470,140 @@ class TestCrossPurposeIsolation:
                 purpose="signup",
                 code=result.code_plain,
             )
+
+
+# ============================================================
+# Secondary SMS fan-out (email login/reset -> account phone)
+# ============================================================
+
+
+class _RecordingProvider:
+    """provider ساختگی که کانال‌ها را برای assert ضبط می‌کند."""
+
+    def __init__(self, channel: str, calls: list[tuple[str, str, str]], *, fail: bool = False):
+        self.channel = channel
+        self._calls = calls
+        self._fail = fail
+
+    def send(self, recipient: str, code: str, purpose: str) -> bool:
+        if self._fail:
+            from apps.authentication.providers import OTPDeliveryFailedError
+
+            raise OTPDeliveryFailedError("simulated vendor outage")
+        self._calls.append((self.channel, recipient, purpose))
+        return True
+
+
+def _patch_fanout_providers(
+    monkeypatch: pytest.MonkeyPatch,
+    calls: list[tuple[str, str, str]],
+    *,
+    phone_fail: bool = False,
+) -> None:
+    """get_otp_provider را با fake ضبط‌کننده جایگزین می‌کند."""
+
+    def fake_get_otp_provider(channel: str | None = None):
+        assert channel is not None
+        fail = phone_fail and channel == PrimaryIdentifierKind.PHONE
+        return _RecordingProvider(channel, calls, fail=fail)
+
+    monkeypatch.setattr(otp_service, "get_otp_provider", fake_get_otp_provider)
+
+
+class TestSecondarySmsFanout:
+    """fan-out ثانویه پیامکی فقط برای login/reset ایمیلی و با provider فعال."""
+
+    @staticmethod
+    def _user_with_phone():
+        from django.contrib.auth import get_user_model
+
+        return get_user_model().all_objects.create(
+            email="fanout@example.com",
+            phone_number="+989121234567",
+            primary_identifier=PrimaryIdentifierKind.EMAIL,
+            is_active=True,
+        )
+
+    def _run(self, *, settings, monkeypatch, purpose: str, phone: str):
+        self._user_with_phone()
+        settings.OTP_SMS_PROVIDER = "iranpayamak"
+        if not phone:
+            from django.contrib.auth import get_user_model
+
+            get_user_model().all_objects.update(phone_number="")
+        calls: list[tuple[str, str, str]] = []
+        _patch_fanout_providers(monkeypatch, calls)
+        result = otp_service.generate_and_send_otp(
+            identifier_kind=PrimaryIdentifierKind.EMAIL,
+            identifier_value="fanout@example.com",
+            purpose=purpose,
+        )
+        return result, calls
+
+    def test_email_login_also_sends_to_account_phone(self, settings, monkeypatch):
+        result, calls = self._run(
+            settings=settings, monkeypatch=monkeypatch, purpose="login", phone="+989121234567"
+        )
+
+        assert calls == [
+            ("email", "fanout@example.com", "login"),
+            ("phone", "+989121234567", "login"),
+        ]
+        result.otp.refresh_from_db()
+        assert result.otp.is_used is False
+
+    def test_password_reset_also_fans_out(self, settings, monkeypatch):
+        _result, calls = self._run(
+            settings=settings,
+            monkeypatch=monkeypatch,
+            purpose="password_reset",
+            phone="+989121234567",
+        )
+        assert [c[0] for c in calls] == ["email", "phone"]
+
+    def test_signup_does_not_fan_out(self, settings, monkeypatch):
+        _result, calls = self._run(
+            settings=settings, monkeypatch=monkeypatch, purpose="signup", phone="+989121234567"
+        )
+        assert [c[0] for c in calls] == ["email"]
+
+    def test_console_provider_disables_fanout(self, settings, monkeypatch):
+        settings.OTP_SMS_PROVIDER = "console"
+        calls: list[tuple[str, str, str]] = []
+        _patch_fanout_providers(monkeypatch, calls)
+        self._user_with_phone()
+
+        otp_service.generate_and_send_otp(
+            identifier_kind=PrimaryIdentifierKind.EMAIL,
+            identifier_value="fanout@example.com",
+            purpose="login",
+        )
+        assert [c[0] for c in calls] == ["email"]
+
+    def test_missing_phone_skips_silently(self, settings, monkeypatch):
+        _result, calls = self._run(
+            settings=settings, monkeypatch=monkeypatch, purpose="login", phone=""
+        )
+        assert [c[0] for c in calls] == ["email"]
+
+    def test_fanout_failure_keeps_primary_otp_valid(self, settings, monkeypatch):
+        self._user_with_phone()
+        settings.OTP_SMS_PROVIDER = "iranpayamak"
+        calls: list[tuple[str, str, str]] = []
+        _patch_fanout_providers(monkeypatch, calls, phone_fail=True)
+
+        result = otp_service.generate_and_send_otp(
+            identifier_kind=PrimaryIdentifierKind.EMAIL,
+            identifier_value="fanout@example.com",
+            purpose="login",
+        )
+        # کانال primary موفق بوده → OTP اعتبار دارد و cooldown آزاد نشده.
+        result.otp.refresh_from_db()
+        assert result.otp.is_used is False
+        verified = otp_service.verify_otp(
+            identifier_kind=PrimaryIdentifierKind.EMAIL,
+            identifier_value="fanout@example.com",
+            purpose="login",
+            code=result.code_plain,
+        )
+        assert verified.pk == result.otp.pk

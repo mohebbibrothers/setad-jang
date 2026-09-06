@@ -128,7 +128,7 @@ OpenAPI validation                ✅ Valid schema
 STRUCTURE.md check                ✅ همگام با درخت واقعی مخزن
 compose config (CI)               ✅ interpolate/`:?` زنده در هر push
 nginx config test (CI)            ✅ nginx -t روی deploy/nginx.conf
-pytest + coverage gate            ✅ 1898 passed / 25 skipped (راتچت: جدول با collect سوئیت می‌خواند)
+pytest + coverage gate            ✅ 1904 passed / 25 skipped (راتچت: جدول با collect سوئیت می‌خواند)
 coverage                          ✅ 85.85% >= 82%
 ```
 
@@ -485,6 +485,7 @@ SMS_IRANPAYAMAK_PATTERN_IDENTIFIER_ADD=<اختیاری — افزودن شمار
 
 - placeholder هر الگو باید دقیقاً `code` باشد (متن‌های تأییدشده همین را دارند).
 - الگوی تأییدنشده/غایب = ارسال fail loud می‌شود و OTP یتیم ساخته نمی‌شود؛ readiness از `/api/v1/health/ready/` وضعیت کلید و الگوها را نشان می‌دهد.
+- ورود/بازیابی با **ایمیل** روی حسابی که شمارهٔ ثبت‌شده دارد: همان کد best-effort به‌صورت پیامک هم ارسال می‌شود (کانال دوم، بدون اثر روی verify/rollback؛ با `OTP_SMS_PROVIDER=console` کاملاً غیرفعال).
 - ایمیل OTP: Django `MAILERS` (پیش‌فرض Gmail SMTP رایگان؛ اعتبارنامه فقط در `.env`).
 
 ### 7.6 Payment Provider / Zarinpal Readiness
