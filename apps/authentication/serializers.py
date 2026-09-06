@@ -10,6 +10,7 @@ from django.conf import settings
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.utils import timezone
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 from rest_framework_simplejwt.serializers import TokenRefreshSerializer
@@ -296,32 +297,81 @@ class ProfileSerializer(serializers.ModelSerializer):
         )
 
 
+class UserIdentifierSerializer(serializers.Serializer):
+    """یک شناسه‌ی متصل به حساب (ایمیل یا شماره موبایل) — قراردادِ مصرفِ فرانت.
+
+    بک‌اند فاز H دو کانالِ شناسه روی خودِ User نگه می‌دارد (email و
+    phone_number که هر کدام unique و nullable‌اند) و نه یک مدلِ جدا؛ پس
+    لیستِ شناسه‌ها در محضِ خواندن از همین دو ستون + دو فلگِ تأیید ساخته
+    می‌شود. شناسه‌ی «اصلی» با فلدِ user.primary_identifier تعیین می‌شود.
+    """
+
+    # enumِ این ChoiceField به همراه دو مصرفِ دیگرPrimaryIdentifierKind
+    # (primary_identifier در UserMe و identifier_kind در MakePrimary) با
+    # ENUM_NAME_OVERRIDES به یک enumِ واحدِ «PrimaryIdentifierEnum» اختصاص
+    # یافته تا نام‌های هم‌نامِ دوقلویِ اسکیما پدید نیایند.
+    kind = serializers.ChoiceField(choices=PrimaryIdentifierKind.choices)
+    value = serializers.CharField()
+    is_primary = serializers.BooleanField()
+    is_verified = serializers.BooleanField()
+
+
 class UserMeSerializer(serializers.ModelSerializer):
     """UserMeSerializer implementation for the authentication application."""
 
     profile = ProfileSerializer(read_only=True)
     full_name = serializers.CharField(read_only=True)
+    identifiers = serializers.SerializerMethodField()
 
     class Meta:
         model = User
         fields = (
             "id",
             "email",
+            "phone_number",
+            "primary_identifier",
             "first_name",
             "last_name",
             "full_name",
             "role",
             "is_email_verified",
+            "is_phone_verified",
+            "identifiers",
             "date_joined",
             "profile",
         )
-        read_only_fields = (
-            "id",
-            "email",
-            "role",
-            "is_email_verified",
-            "date_joined",
-        )
+        read_only_fields = fields
+
+    @extend_schema_field(UserIdentifierSerializer(many=True))
+    def get_identifiers(self, obj: User) -> list[dict[str, object]]:
+        """لیستِ شناسه‌های متصل، با نشانِ «اصلی» و وضعیتِ تأیید هر کانال.
+
+        همیشه فقط شناسه‌های «موجود» برگردانده می‌شوند؛ پس کاربری که فقط
+        با ایمیل ثبت‌نام کرده، آرایه‌ی تک‌تایی ایمیلی می‌گیرد و پس از اتصالِ
+        موبایل، آیتمِ phone هم پدیدار می‌شود. نظمِ لیست پایدار است:
+        ایمیل اول، موبایل دوم — تا فرانت بتواند بدون مرتب‌سازیِ موقتی
+        رندر کند.
+        """
+        result: list[dict[str, object]] = []
+        if obj.email:
+            result.append(
+                {
+                    "kind": PrimaryIdentifierKind.EMAIL,
+                    "value": obj.email,
+                    "is_primary": obj.primary_identifier == PrimaryIdentifierKind.EMAIL,
+                    "is_verified": obj.is_email_verified,
+                }
+            )
+        if obj.phone_number:
+            result.append(
+                {
+                    "kind": PrimaryIdentifierKind.PHONE,
+                    "value": obj.phone_number,
+                    "is_primary": obj.primary_identifier == PrimaryIdentifierKind.PHONE,
+                    "is_verified": obj.is_phone_verified,
+                }
+            )
+        return result
 
 
 class UserAdminSerializer(serializers.ModelSerializer):

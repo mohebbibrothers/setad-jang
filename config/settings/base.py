@@ -694,6 +694,12 @@ SPECTACULAR_SETTINGS = {
         "TabyinMediaTypeEnum": "apps.tabyin.choices.MediaType",
         "AuthGenderEnum": "apps.authentication.choices.Gender",
         "AuthRiskSignalTypeEnum": "apps.authentication.choices.AuthRiskSignalType",
+        # سه مصرفِ موازیِ PrimaryIdentifierKind (primary_identifier در
+        # UserMeSerializer، kind در UserIdentifierSerializer و
+        # identifier_kind در IdentifierMakePrimarySerializer) قبلاً به
+        # یک enum محاسبه می‌شدند و با دوتاشدن، نامِ دوقلو اتفاق می‌برند —
+        # این نگاشت هر سه را به یک enumِ واحدِ معنادار نگه می‌دارد.
+        "PrimaryIdentifierEnum": "apps.authentication.models.PrimaryIdentifierKind",
         "RiskReviewStatusEnum": (
             ("reviewed", "بررسی‌شده"),
             ("dismissed", "ردشده"),

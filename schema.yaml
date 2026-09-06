@@ -15951,20 +15951,12 @@ components:
           maxLength: 254
       required:
       - identifier
-    IdentifierKindEnum:
-      enum:
-      - email
-      - phone
-      type: string
-      description: |-
-        * `email` - ایمیل
-        * `phone` - شماره موبایل
     IdentifierMakePrimary:
       type: object
       description: Switch primary identifier to an already attached + verified channel.
       properties:
         identifier_kind:
-          $ref: '#/components/schemas/IdentifierKindEnum'
+          $ref: '#/components/schemas/PrimaryIdentifierEnum'
       required:
       - identifier_kind
     KindnessAdminAnalytics:
@@ -21970,6 +21962,14 @@ components:
       - participation
       - payment_status
       - payment_status_display
+    PrimaryIdentifierEnum:
+      enum:
+      - email
+      - phone
+      type: string
+      description: |-
+        * `email` - ایمیل
+        * `phone` - شماره موبایل
     Profile:
       type: object
       description: ProfileSerializer implementation for the authentication application.
@@ -28402,6 +28402,29 @@ components:
       required:
       - data
       - message
+    UserIdentifier:
+      type: object
+      description: |-
+        یک شناسه‌ی متصل به حساب (ایمیل یا شماره موبایل) — قراردادِ مصرفِ فرانت.
+
+        بک‌اند فاز H دو کانالِ شناسه روی خودِ User نگه می‌دارد (email و
+        phone_number که هر کدام unique و nullable‌اند) و نه یک مدلِ جدا؛ پس
+        لیستِ شناسه‌ها در محضِ خواندن از همین دو ستون + دو فلگِ تأیید ساخته
+        می‌شود. شناسه‌ی «اصلی» با فلدِ user.primary_identifier تعیین می‌شود.
+      properties:
+        kind:
+          $ref: '#/components/schemas/PrimaryIdentifierEnum'
+        value:
+          type: string
+        is_primary:
+          type: boolean
+        is_verified:
+          type: boolean
+      required:
+      - is_primary
+      - is_verified
+      - kind
+      - value
     UserMe:
       type: object
       description: UserMeSerializer implementation for the authentication application.
@@ -28415,14 +28438,30 @@ components:
           readOnly: true
           nullable: true
           title: ایمیل
+        phone_number:
+          type: string
+          readOnly: true
+          nullable: true
+          title: شماره موبایل
+          description: در فرمت E.164 ذخیره می‌شود (مثلاً +989120000000).
+        primary_identifier:
+          allOf:
+          - $ref: '#/components/schemas/PrimaryIdentifierEnum'
+          readOnly: true
+          title: شناسه اصلی
+          description: |-
+            نوع شناسه‌ای که کاربر در ابتدا با آن ثبت‌نام کرده است.
+
+            * `email` - ایمیل
+            * `phone` - شماره موبایل
         first_name:
           type: string
+          readOnly: true
           title: نام
-          maxLength: 100
         last_name:
           type: string
+          readOnly: true
           title: نام خانوادگی
-          maxLength: 100
         full_name:
           type: string
           readOnly: true
@@ -28435,6 +28474,15 @@ components:
           type: boolean
           readOnly: true
           title: ایمیل تأیید شده
+        is_phone_verified:
+          type: boolean
+          readOnly: true
+          title: شماره موبایل تأیید شده
+        identifiers:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserIdentifier'
+          readOnly: true
         date_joined:
           type: string
           format: date-time
@@ -28447,9 +28495,15 @@ components:
       required:
       - date_joined
       - email
+      - first_name
       - full_name
       - id
+      - identifiers
       - is_email_verified
+      - is_phone_verified
+      - last_name
+      - phone_number
+      - primary_identifier
       - profile
       - role
     UserMeSuccessResponse:
