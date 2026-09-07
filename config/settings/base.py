@@ -815,6 +815,9 @@ KINDNESS_MATCH_NOTIFICATION_THRESHOLD = config(
 
 OTP_PROVIDER = config("OTP_PROVIDER", default="email")
 OTP_EMAIL_PROVIDER = config("OTP_EMAIL_PROVIDER", default="django_email")
+# نام نمایشیِ فرستنده در ایمیل OTP؛ خالی = بدون نام. اگر DEFAULT_FROM_EMAIL
+# خودش به شکل «نام <آدرس>» نوشته شود، همین مقدار نادیده گرفته می‌شود.
+OTP_EMAIL_BRAND_NAME = config("OTP_EMAIL_BRAND_NAME", default="ستاد جنگ")
 OTP_SMS_PROVIDER = config("OTP_SMS_PROVIDER", default="console")
 
 # --- OTP tunables -----------------------------------------------------------

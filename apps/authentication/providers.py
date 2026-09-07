@@ -106,25 +106,79 @@ class EmailOTPProvider(OTPDeliveryProvider):
         "password_reset": "بازیابی رمز عبور - ستاد جنگ",
         "login": "کد ورود - ستاد جنگ",
         "signup": "تکمیل ثبت‌نام - ستاد جنگ",
+        "identifier_add": "تأیید شناسه جدید - ستاد جنگ",
+    }
+
+    _INTRO_MAP: Final[dict[str, str]] = {
+        "login": "برای ورود به حساب کاربری خود، کد زیر را وارد کنید.",
+        "signup": "برای تکمیل ثبت‌نام، کد زیر را وارد کنید.",
+        "password_reset": "برای تعیین رمز عبور جدید، کد زیر را وارد کنید.",
+        "email_verification": "برای تأیید آدرس ایمیل خود، کد زیر را وارد کنید.",
+        "identifier_add": "برای افزودن این شناسه به حساب کاربری، کد زیر را وارد کنید.",
     }
 
     def _build_subject(self, purpose: str) -> str:
         return self._SUBJECT_MAP.get(purpose, "کد تأیید - ستاد جنگ")
 
-    def _build_message(self, code: str) -> str:
+    def _build_intro(self, purpose: str) -> str:
+        return self._INTRO_MAP.get(purpose, "برای ادامهٔ عملیات، کد زیر را وارد کنید.")
+
+    def _build_message(self, code: str, purpose: str) -> str:
         return (
+            f"{self._build_intro(purpose)}\n\n"
             f"کد تأیید شما: {code}\n\n"
-            "این کد تا ۵ دقیقه اعتبار دارد.\n"
-            "در صورتی که شما این درخواست را نداده‌اید، این پیام را نادیده بگیرید."
+            "این کد تا ۵ دقیقه اعتبار دارد و فقط یک‌بار قابل استفاده است.\n"
+            "در صورتی که شما این درخواست را نداده‌اید، این پیام را نادیده بگیرید "
+            "و رمز حساب خود را تغییر دهید."
         )
+
+    def _build_html_message(self, code: str, purpose: str) -> str:
+        """قالب HTML سادهٔ inlined — بدون تصویر/لینک خارجی (اسپم‌فرندلی).
+
+        کد در تگ <span> جداگانه تا فونت/جهت متن بهم نریزد؛ هیچ <a> ای در
+        قالب نیست چون لینک‌های کوتاه/مبهم یکی از سیگنال‌های اسپم‌فیلترند.
+        """
+        brand = getattr(settings, "OTP_EMAIL_BRAND_NAME", "ستاد جنگ")
+        return f"""<!DOCTYPE html>
+<html dir="rtl" lang="fa">
+  <body style="margin:0;padding:24px;background:#f4f5f7;font-family:Tahoma,Vazirmatn,sans-serif;color:#1f2937;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+      <tr><td align="center">
+        <table role="presentation" width="520" cellpadding="0" cellspacing="0"
+               style="background:#ffffff;border-radius:12px;padding:28px 24px;">
+          <tr><td style="font-size:15px;font-weight:700;padding-bottom:12px;">{brand}</td></tr>
+          <tr><td style="font-size:14px;line-height:1.9;padding-bottom:18px;">{self._build_intro(purpose)}</td></tr>
+          <tr><td align="center" style="padding:14px 0 18px;">
+            <span style="display:inline-block;letter-spacing:10px;font-size:26px;font-weight:800;
+                         background:#eef2ff;border-radius:10px;padding:12px 26px 12px 12px;direction:ltr;">{code}</span>
+          </td></tr>
+          <tr><td style="font-size:12px;color:#6b7280;line-height:1.9;border-top:1px solid #e5e7eb;padding-top:14px;">
+            این کد تا ۵ دقیقه اعتبار دارد و فقط یک‌بار قابل استفاده است.<br/>
+            اگر درخواستی نداده‌اید، این پیام را نادیده بگیرید و رمز حساب خود را تغییر دهید.<br/>
+            کد تأیید را در هیچ گفت‌وگویی در اختیار دیگران قرار ندهید.
+          </td></tr>
+        </table>
+      </td></tr>
+    </table>
+  </body>
+</html>"""
+
+    def _resolve_from_email(self) -> str:
+        """از: «نام نمایشی <آدرس>» — اگر DEFAULT_FROM_EMAIL ساده باشد نام برند می‌گیرد."""
+        from_email = settings.DEFAULT_FROM_EMAIL
+        if "<" in from_email:
+            return from_email
+        brand = getattr(settings, "OTP_EMAIL_BRAND_NAME", "ستاد جنگ")
+        return f"{brand} <{from_email}>" if brand else from_email
 
     def send(self, recipient: str, code: str, purpose: str) -> bool:
         try:
             send_text_email(
                 subject=self._build_subject(purpose),
-                message=self._build_message(code),
-                from_email=settings.DEFAULT_FROM_EMAIL,
+                message=self._build_message(code, purpose),
+                from_email=self._resolve_from_email(),
                 recipient_list=[recipient],
+                html_message=self._build_html_message(code, purpose),
             )
         except Exception as exc:
             logger.exception(

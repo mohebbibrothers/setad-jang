@@ -128,7 +128,7 @@ OpenAPI validation                ✅ Valid schema
 STRUCTURE.md check                ✅ همگام با درخت واقعی مخزن
 compose config (CI)               ✅ interpolate/`:?` زنده در هر push
 nginx config test (CI)            ✅ nginx -t روی deploy/nginx.conf
-pytest + coverage gate            ✅ 1908 passed / 25 skipped (راتچت: جدول با collect سوئیت می‌خواند)
+pytest + coverage gate            ✅ 1906 passed / 25 skipped (راتچت: جدول با collect سوئیت می‌خواند)
 coverage                          ✅ 85.85% >= 82%
 ```
 
@@ -485,7 +485,8 @@ SMS_IRANPAYAMAK_PATTERN_IDENTIFIER_ADD=<اختیاری — افزودن شمار
 
 - placeholder هر الگو باید دقیقاً `code` باشد (متن‌های تأییدشده همین را دارند).
 - الگوی تأییدنشده/غایب = ارسال fail loud می‌شود و OTP یتیم ساخته نمی‌شود؛ readiness از `/api/v1/health/ready/` وضعیت کلید و الگوها را نشان می‌دهد.
-- ورود/بازیابی با **ایمیل** روی حسابی که شمارهٔ ثبت‌شده دارد: همان کد best-effort به‌صورت پیامک هم ارسال می‌شود (کانال دوم، بدون اثر روی verify/rollback؛ با `OTP_SMS_PROVIDER=console` کاملاً غیرفعال).
+- **قرارداد تک‌کانالی:** کد دقیقاً روی کانالِ خودِ شناسه ارسال می‌شود (ورود/ثبت‌نام/بازیابی با ایمیل → فقط ایمیل؛ با شماره → فقط پیامک). هیچ fan-out دومکانالی وجود ندارد — هزینهٔ پیامک و ابهامِ «کدام کد معتبر است» عمداً حذف شده است.
+- ایمیل OTP به‌صورت multipart/alternative با قالب HTML برنددار (بدون لینک/تصویر خارجی) و From به شکل «نام <آدرس>» ارسال می‌شود؛ نام نمایشی از `OTP_EMAIL_BRAND_NAME` (اگر `DEFAULT_FROM_EMAIL` خودش فرمت «نام <آدرس>» داشته باشد، همان حفظ می‌شود).
 - ایمیل OTP: Django `MAILERS` (پیش‌فرض Gmail SMTP رایگان؛ اعتبارنامه فقط در `.env`).
 
 ### 7.6 Payment Provider / Zarinpal Readiness

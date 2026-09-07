@@ -62,14 +62,17 @@ class TestEmailOTPProvider:
             message: str,
             from_email: str,
             recipient_list: list[str],
+            html_message: str | None = None,
         ) -> int:
             sent_payload["subject"] = subject
             sent_payload["message"] = message
             sent_payload["from_email"] = from_email
             sent_payload["recipient_list"] = recipient_list
+            sent_payload["html_message"] = html_message
             return 1
 
         settings.DEFAULT_FROM_EMAIL = "noreply@test.local"
+        settings.OTP_EMAIL_BRAND_NAME = ""
         monkeypatch.setattr(providers, "send_text_email", fake_send_text_email)
 
         provider = providers.EmailOTPProvider()
@@ -82,8 +85,48 @@ class TestEmailOTPProvider:
         assert result is True
         assert sent_payload["subject"] == "بازیابی رمز عبور - ستاد جنگ"
         assert "12345" in str(sent_payload["message"])
+        assert "رمز عبور جدید" in str(sent_payload["message"])
         assert sent_payload["from_email"] == "noreply@test.local"
         assert sent_payload["recipient_list"] == ["user@example.com"]
+        html = str(sent_payload["html_message"])
+        assert html.startswith("<!DOCTYPE html>")
+        assert "12345" in html
+
+    def test_email_html_alternative_and_display_name(self, monkeypatch, settings) -> None:
+        """قالب HTML + نام نمایشیِ برند وقتی DEFAULT_FROM_EMAIL ساده است."""
+        sent: dict[str, object] = {}
+
+        def fake_send_text_email(**kwargs: object) -> int:
+            sent.update(kwargs)
+            return 1
+
+        settings.DEFAULT_FROM_EMAIL = "noreply@test.local"
+        settings.OTP_EMAIL_BRAND_NAME = "ستاد جنگ"
+        monkeypatch.setattr(providers, "send_text_email", fake_send_text_email)
+
+        providers.EmailOTPProvider().send(recipient="u@example.com", code="998877", purpose="login")
+
+        assert sent["from_email"] == "ستاد جنگ <noreply@test.local>"
+        html = str(sent["html_message"])
+        assert "ورود به حساب کاربری" in html
+        assert "998877" in html
+        assert "<a " not in html  # بدون لینک — سیگنال اسپم‌فیلتر
+
+    def test_email_from_kept_when_already_display_form(self, monkeypatch, settings) -> None:
+        """اگر اپراتور خودش «نام <آدرس>» را در DEFAULT_FROM_EMAIL ست کرده، دستکاری نمی‌شود."""
+        sent: dict[str, object] = {}
+
+        def fake_send_text_email(**kwargs: object) -> int:
+            sent.update(kwargs)
+            return 1
+
+        settings.DEFAULT_FROM_EMAIL = "Besat <no-reply@besat.me>"
+        settings.OTP_EMAIL_BRAND_NAME = "ستاد جنگ"
+        monkeypatch.setattr(providers, "send_text_email", fake_send_text_email)
+
+        providers.EmailOTPProvider().send(recipient="u@example.com", code="1", purpose="signup")
+
+        assert sent["from_email"] == "Besat <no-reply@besat.me>"
 
     def test_wraps_backend_failure(
         self,
