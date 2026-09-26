@@ -19,6 +19,7 @@ from apps.lms.choices import (
     CourseLevel,
     CourseStatus,
     EnrollmentStatus,
+    LessonContentType,
     QuizAttemptStatus,
     QuizStatus,
 )
@@ -77,7 +78,7 @@ class PublishedCourseFactory(CourseFactory):
 
 
 class LessonFactory(DjangoModelFactory):
-    """Factory for LMS lessons."""
+    """Factory for LMS lessons (video-type by default)."""
 
     class Meta:
         model = Lesson
@@ -86,8 +87,26 @@ class LessonFactory(DjangoModelFactory):
     title = factory.Sequence(lambda n: f"جلسه {n}")
     description = "توضیحات جلسه"
     order = factory.Sequence(lambda n: n + 1)
+    content_type = LessonContentType.VIDEO
     duration_seconds = 600
     is_active = True
+
+
+class DocumentLessonFactory(LessonFactory):
+    """جلسه سند/PDFمحور با فایلِ معتبرِ آمادهٔ انتشار."""
+
+    content_type = LessonContentType.DOCUMENT
+    document_file = factory.django.FileField(data=b"%PDF-1.4 fixture", filename="lesson.pdf")
+    document_title = "سند جلسه"
+    duration_seconds = 0
+
+
+class ArticleLessonFactory(LessonFactory):
+    """جلسه متنی (article) با بدنهٔ غیرخالی."""
+
+    content_type = LessonContentType.ARTICLE
+    article_body = "متن کامل جلسهٔ آموزشی برای مطالعهٔ درون‌برنامه‌ای."
+    duration_seconds = 0
 
 
 class EnrollmentFactory(DjangoModelFactory):

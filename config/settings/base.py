@@ -725,6 +725,7 @@ SPECTACULAR_SETTINGS = {
         "MadadkarRiskStatusEnum": "apps.madadkar.choices.MadadkarRiskStatus",
         "LMSCourseLevelEnum": "apps.lms.choices.CourseLevel",
         "LMSCourseStatusEnum": "apps.lms.choices.CourseStatus",
+        "LMSLessonContentTypeEnum": "apps.lms.choices.LessonContentType",
         "LMSEnrollmentStatusEnum": "apps.lms.choices.EnrollmentStatus",
         "LMSDiscussionStatusEnum": "apps.lms.choices.DiscussionStatus",
         "LMSDiscussionReportStatusEnum": "apps.lms.choices.DiscussionReportStatus",

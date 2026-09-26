@@ -11,7 +11,7 @@
   <img alt="PostgreSQL" src="https://img.shields.io/badge/PostgreSQL-production-4169E1?style=for-the-badge&logo=postgresql&logoColor=white" />
   <img alt="Redis" src="https://img.shields.io/badge/Redis-cache%20%2B%20broker-DC382D?style=for-the-badge&logo=redis&logoColor=white" />
   <img alt="Celery" src="https://img.shields.io/badge/Celery-worker%20%2B%20beat-37814A?style=for-the-badge&logo=celery&logoColor=white" />
-  <img alt="Tests" src="https://img.shields.io/badge/tests-1908%20passed-brightgreen?style=for-the-badge" />
+  <img alt="Tests" src="https://img.shields.io/badge/tests-1928%20passed-brightgreen?style=for-the-badge" />
   <img alt="Security" src="https://img.shields.io/badge/security-pip--audit%20%2B%20bandit%20%2B%20detect--secrets-blue?style=for-the-badge" />
 </p>
 
@@ -128,7 +128,7 @@ OpenAPI validation                ✅ Valid schema
 STRUCTURE.md check                ✅ همگام با درخت واقعی مخزن
 compose config (CI)               ✅ interpolate/`:?` زنده در هر push
 nginx config test (CI)            ✅ nginx -t روی deploy/nginx.conf
-pytest + coverage gate            ✅ 1906 passed / 25 skipped (راتچت: جدول با collect سوئیت می‌خواند)
+pytest + coverage gate            ✅ 1928 passed / 25 skipped (راتچت: جدول با collect سوئیت می‌خواند)
 coverage                          ✅ 85.85% >= 82%
 ```
 
@@ -1560,7 +1560,7 @@ apps.madadkar.tasks.generate_financial_control_snapshot_task
 ```text
 Category
 Course
-Lesson
+Lesson            # چندنوعی: video / audio / document(PDF) / article
 Enrollment
 LessonProgress
 Question
@@ -1570,11 +1570,33 @@ Quiz
 QuizQuestion
 QuizOption
 QuizAttempt
-Certificate
+Certificate       # صدورش از سیاست is_required_for_certificate آزمون پیروی می‌کند
 Badge/Skill-oriented data
 LessonVideoProcessingJob
 LearningActivityStatement
 ```
+
+یک جلسه (Lesson) با فیلد `content_type` نوع‌بندی می‌شود؛ «جلسه» لزوماً ویدئو
+نیست. سند/PDF و متن درون‌برنامه‌ای (article) شهروند درجه‌یک‌اند، نه پیوست.
+
+| content_type | رسانه/محتوا | تکمیل جلسه |
+|---|---|---|
+| video / audio | `video_file` یا `video_url` یا `embed_url` | درصد تماشا؛ آستانه ۹۰٪ |
+| document | `document_file` (PDF و اِماندِ متنی) | علامت صریح `mark_completed` («خواندم») |
+| article | `article_body` (بدنه درون‌برنامه‌ای) | علامت صریح `mark_completed` |
+
+### 19.1.1 سیاست گواهی (Certificate Policy)
+
+هر آزمون یک کلید `is_required_for_certificate` دارد:
+
+```text
+True  → قبولی، گواهی + مهارت + اعلان صادر می‌کند (رفتار کلاسی)
+False → آزمون «بدون مدرک» است؛ قبولی فقط ثبت‌نام را completed می‌کند
+```
+
+تصمیم «برگزار یا نکردن آزمون» با خودِ وجودِ آزمونِ منتشرشده برای دوره است؛
+تصمیم «مدرک‌دار یا بدون‌مدرک» روی همان آزمون تنظیم می‌شود و در
+`submit_quiz_attempt` اعمال می‌گردد.
 
 ### 19.2 Course Lifecycle
 
@@ -1603,7 +1625,18 @@ GET /api/v1/lms/courses/{slug}/lessons/{lesson_slug}/
 POST /api/v1/lms/lessons/{lesson_id}/progress/
 ```
 
-Progress service باید enrollment و state را enforce کند.
+Progress service باید enrollment و state را enforce کند. بدنهٔ درخواست دو
+سیگنال دارد و «حالت تکمیل» از نوع جلسه مشتق می‌شود (منبع حقیقت یکی است):
+
+```text
+جلسهٔ رسانه‌ای (video/audio):  {"watched_seconds": N, "last_position_seconds": P}
+    → درصد از مدت جلسه؛ تکمیل خودکار در ≥۹۰٪؛ mark_completed ⇒ ۴۰۰
+جلسهٔ دستی (document/article): {"mark_completed": true}
+    → «خواندم»؛ درصد ۰/۱۰۰ دوحالته؛ ثانیه‌های دلخواه به‌عنوان زمان مطالعه ثبت می‌شود
+```
+
+قید publish: هیچ جلسهٔ فعالی بدون محتوای متناسب با نوعش نمی‌تواند منتشر شود
+(`validate_course_publishable`)؛ پیام خطا شماره/عنوان جلسات ناقص را می‌گوید.
 
 ### 19.4 Signed Media / CDN Readiness
 
@@ -1611,6 +1644,7 @@ Media access از endpoint کنترل‌شده می‌آید:
 
 ```text
 GET /api/v1/lms/lessons/{lesson_id}/media/{media_kind}/
+# media_kind ∈ {video, document, article, attachment}
 ```
 
 هدف:
@@ -1620,6 +1654,12 @@ GET /api/v1/lms/lessons/{lesson_id}/media/{media_kind}/
 قابلیت جایگزینی با signed URL/CDN
 audit media access
 ```
+
+برای `document`، لینک امضاشدهٔ `document_file` (عمر ۶۰۰ ثانیه روی استوریج
+خصوصی) برگردانده می‌شود و برای `article`، بدنهٔ `article_body` به‌صورت
+in-line. هر دو از همان گیتِ ثبت‌نام+preview رد می‌شوند.
+`document_file`/`article_body` در `LessonSummarySerializer` منتشر **نمی‌شوند**
+— محتوای جلسه فقط از همین مسیرِ احراز‌شده خوانده می‌شود.
 
 ### 19.5 Video Processing Worker
 
@@ -1658,6 +1698,13 @@ GET  /api/v1/lms/quiz/attempts/{attempt_id}/
 POST /api/v1/lms/quiz/attempts/{attempt_id}/submit/
 GET  /api/v1/lms/certificates/verify/{verification_slug}/
 ```
+
+آزمون برای دوره اختیاری است (ساختار OneToOne؛ نبودِ آزمونِ منتشرشده = دورهٔ
+بدون آزمون). وقتی آزمون ساخته می‌شود، کلید `is_required_for_certificate`
+(پیش‌فرض True) در همان `POST admin/courses/{id}/quiz/` تنظیم می‌شود: با False،
+قبولی گواهی صادر نمی‌کند و فقط ثبت‌نام را completed می‌کند. صدور مدرک در همان
+تراکنشِ submit اتمیک است: PDF، مهارت/نشان، اعلان و تکمیل ثبت‌نام یا با هم
+نشین می‌شوند یا هیچ‌کدام.
 
 ### 19.7 Recommendations
 

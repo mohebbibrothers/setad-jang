@@ -2,7 +2,7 @@
 
 from rest_framework import serializers
 
-from apps.lms.choices import DiscussionReportStatus, DiscussionStatus
+from apps.lms.choices import DiscussionReportStatus, DiscussionStatus, LessonContentType
 from apps.lms.models import (
     Certificate,
     Course,
@@ -22,6 +22,7 @@ from apps.lms.models import (
     QuizQuestion,
     QuizUnlock,
 )
+from apps.lms.validators import validate_lesson_document_file
 
 
 class LMSCategorySerializer(serializers.ModelSerializer):
@@ -44,7 +45,15 @@ class LMSCategoryCreateUpdateSerializer(serializers.Serializer):
 
 
 class LessonSummarySerializer(serializers.ModelSerializer):
-    """Compact lesson representation for course detail pages."""
+    """Compact lesson representation for course detail pages.
+
+    نکتهٔ امنیتی: `document_file`/`article_body` عمداً اینجا نیستند — محتوای
+    اصلیِ جلسات سند/متنی فقط از مسیرِ کنترل‌شدهٔ media access (با گیت
+    ثبت‌نام، استثنای preview و ممیزی) سرو می‌شود تا کاتالوگ عمومی، کل جلسه
+    را مجانی لو ندهد.
+    """
+
+    content_type_display = serializers.CharField(source="get_content_type_display", read_only=True)
 
     class Meta:
         model = Lesson
@@ -54,6 +63,8 @@ class LessonSummarySerializer(serializers.ModelSerializer):
             "slug",
             "description",
             "order",
+            "content_type",
+            "content_type_display",
             "video_provider",
             "video_url",
             "embed_url",
@@ -67,15 +78,20 @@ class LessonSummarySerializer(serializers.ModelSerializer):
 
 
 class LessonMediaAccessSerializer(serializers.Serializer):
-    """Signed/CDN-ready lesson media access payload."""
+    """Signed/CDN-ready lesson media access payload.
+
+    برای جلسهٔ متنی (article) فیلد `body` محتوای درون‌برنامه‌ای را می‌آورد و
+    `url` تهی است؛ بقیهٔ نوع‌ها آدرس رسانه را.
+    """
 
     media_kind = serializers.CharField()
     provider = serializers.CharField()
-    url = serializers.CharField()
+    url = serializers.CharField(allow_blank=True)
     expires_in_seconds = serializers.IntegerField(allow_null=True, required=False)
     lesson_id = serializers.IntegerField()
     course_id = serializers.IntegerField()
     title = serializers.CharField(required=False, allow_blank=True)
+    body = serializers.CharField(required=False, allow_blank=True)
 
 
 class LessonCreateUpdateSerializer(serializers.Serializer):
@@ -84,6 +100,10 @@ class LessonCreateUpdateSerializer(serializers.Serializer):
     title = serializers.CharField(max_length=255, required=False)
     description = serializers.CharField(required=False, allow_blank=True)
     order = serializers.IntegerField(required=False, min_value=1)
+    content_type = serializers.ChoiceField(choices=LessonContentType.choices, required=False)
+    document_file = serializers.FileField(required=False, allow_null=True)
+    document_title = serializers.CharField(required=False, allow_blank=True)
+    article_body = serializers.CharField(required=False, allow_blank=True)
     video_provider = serializers.CharField(required=False)
     video_url = serializers.URLField(required=False, allow_blank=True)
     embed_url = serializers.URLField(required=False, allow_blank=True)
@@ -96,6 +116,13 @@ class LessonCreateUpdateSerializer(serializers.Serializer):
     attachment_title = serializers.CharField(required=False, allow_blank=True)
     is_preview = serializers.BooleanField(required=False)
     is_active = serializers.BooleanField(required=False)
+
+    def validate_document_file(self, value):
+        """اعتبارسنج صریح فایل سند: مسیر API هیچ full_clean مودلی نمی‌کند،
+        پس اگر اینجا نپرسیم، validator سطح مدل هرگز اجرا نمی‌شود."""
+        if value:
+            validate_lesson_document_file(value)
+        return value
 
 
 class CourseSummarySerializer(serializers.ModelSerializer):
@@ -241,10 +268,29 @@ class LMSUserSkillSerializer(serializers.ModelSerializer):
 
 
 class LessonProgressUpdateSerializer(serializers.Serializer):
-    """Input serializer for lesson progress updates."""
+    """Input serializer for lesson progress updates.
 
-    watched_seconds = serializers.IntegerField(min_value=0)
+    قرارداد دو-حالتی:
+    - جلسات رسانه‌ای: `watched_seconds` (اختیاری در ترکیب با mark_completed نه —
+      این یکی الزامی رفتار می‌کند چون سرویس حالت رسانه فقط با ثانیه جلو می‌رود).
+    - جلسات سند/متنی: `mark_completed=true` یعنی «خواندم/تمام شد».
+    قانون سطح serializer: حداقل یکی از دو سیگنال باید باشد؛ تطبیق «نوع جلسه ×
+    سیگنال» در سرویس انجام می‌شود (serializer به session دسترسی ندارد).
+    """
+
+    watched_seconds = serializers.IntegerField(required=False, min_value=0)
     last_position_seconds = serializers.IntegerField(required=False, min_value=0)
+    mark_completed = serializers.BooleanField(required=False, default=False)
+
+    def validate(self, attrs: dict) -> dict:
+        """حداقل یک سیگنالِ معنا‌دار لازم است؛ صفر-صفر بی‌فایده و پر‌هزینه است."""
+        has_watched = attrs.get("watched_seconds") is not None and attrs["watched_seconds"] > 0
+        if not has_watched and not attrs.get("mark_completed"):
+            raise serializers.ValidationError(
+                "حداقل یکی از watched_seconds یا mark_completed لازم است."
+            )
+        attrs.setdefault("watched_seconds", 0)
+        return attrs
 
 
 class LessonProgressSerializer(serializers.ModelSerializer):

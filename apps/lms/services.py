@@ -20,6 +20,7 @@ from apps.lms.choices import (
     CourseStatus,
     EnrollmentStatus,
     LearningStatementVerb,
+    LessonContentType,
     VideoProcessingStatus,
 )
 from apps.lms.models import (
@@ -48,7 +49,7 @@ class CourseNotEnrollabeError(LMSServiceError):
 
 
 class CourseInvalidStateError(LMSServiceError):
-    """Raised when a course lifecycle transition is not valid."""
+    """Raised when a course lifecycle transition or content gate is not valid."""
 
 
 class EnrollmentNotActiveError(LMSServiceError):
@@ -65,6 +66,14 @@ class LessonMediaAccessError(LMSServiceError):
 
 class LessonMediaUnavailableError(LMSServiceError):
     """Raised when requested lesson media does not exist."""
+
+
+class LessonCompletionModeError(LMSServiceError):
+    """Raised when a completion signal does not match the lesson content type.
+
+    مثلاً «علامت دستی خواندم» روی جلسهٔ ویدئویی مجاز نیست (دورزدن آستانهٔ ۹۰٪)
+    و «٪ از ثانیهٔ تماشا» روی جلسهٔ سند/متنی تنها با «خواندم» تکمیل را می‌آورد.
+    """
 
 
 class VideoProcessingJobError(LMSServiceError):
@@ -184,9 +193,29 @@ def update_course(*, course: Course, **fields: Any) -> Course:
     return course
 
 
+def validate_course_publishable(*, course: Course) -> None:
+    """هر جلسهٔ فعال دوره باید محتوای متناسب با نوعش را داشته باشد.
+
+    این گیت در لحظهٔ publish اجرا می‌شود (نه در هر ویرایش) تا جریان کارِ
+    «اول بساز، بعد پر کن» نشکند؛ ولی «انتشارِ ویترینِ خالی» غیرممکن می‌شود.
+    پیام خطا شمارهٔ ترتیب و عنوان تک‌تک جلسات ناقص را می‌گوید تا مدیر بداند
+    کجا را درست کند.
+    """
+    broken = [
+        f"جلسهٔ {lesson.order} ({lesson.title})"
+        for lesson in course.lessons.filter(is_active=True).order_by("order", "id")
+        if not lesson.has_required_content()
+    ]
+    if broken:
+        raise CourseInvalidStateError(
+            "انتشار دوره ممکن نیست؛ این جلسات محتوای نوع خودشان را ندارند: " + "؛ ".join(broken)
+        )
+
+
 @transaction.atomic
 def publish_course(*, course: Course) -> Course:
     """Publish a course and set published_at idempotently."""
+    validate_course_publishable(course=course)
     if course.status != CourseStatus.PUBLISHED:
         course.status = CourseStatus.PUBLISHED
         course.published_at = timezone.now()
@@ -226,6 +255,10 @@ def update_lesson(*, lesson: Lesson, **fields: Any) -> Lesson:
         "title",
         "description",
         "order",
+        "content_type",
+        "document_file",
+        "document_title",
+        "article_body",
         "video_provider",
         "video_url",
         "embed_url",
@@ -489,6 +522,31 @@ def build_lesson_media_access(*, lesson: Lesson, user: Any, media_kind: str) -> 
                 "lesson_id": lesson.pk,
                 "course_id": lesson.course_id,
             }
+    if media_kind == "document" and lesson.content_type == LessonContentType.DOCUMENT:
+        if not lesson.document_file:
+            raise LessonMediaUnavailableError("فایل سند این جلسه هنوز بارگذاری نشده است.")
+        return {
+            "media_kind": "document",
+            "provider": "uploaded_file",
+            "url": lesson.document_file.url,
+            "expires_in_seconds": 600,
+            "lesson_id": lesson.pk,
+            "course_id": lesson.course_id,
+            "title": lesson.document_title or lesson.title,
+        }
+    if media_kind == "article" and lesson.content_type == LessonContentType.ARTICLE:
+        if not lesson.article_body.strip():
+            raise LessonMediaUnavailableError("متن این جلسه هنوز نوشته نشده است.")
+        return {
+            "media_kind": "article",
+            "provider": "inline",
+            "url": "",
+            "expires_in_seconds": None,
+            "lesson_id": lesson.pk,
+            "course_id": lesson.course_id,
+            "title": lesson.title,
+            "body": lesson.article_body,
+        }
     if media_kind == "attachment" and lesson.attachment_file:
         return {
             "media_kind": "attachment",
@@ -555,8 +613,9 @@ def update_lesson_progress(
     *,
     enrollment: Enrollment,
     lesson: Lesson,
-    watched_seconds: int,
+    watched_seconds: int = 0,
     last_position_seconds: int | None = None,
+    mark_completed: bool = False,
 ) -> LessonProgress:
     """
     Update lesson progress monotonically and sync aggregate enrollment progress.
@@ -564,6 +623,13 @@ def update_lesson_progress(
     watched_seconds is monotonic: clients may send repeated/out-of-order progress
     events and the server keeps the maximum watched value. last_position_seconds
     represents current playback position and may move backwards for rewinds.
+
+    دو حالت تکمیل، بر اساس نوع جلسه:
+    - رسانه‌ای (video/audio): درصد از ثانیه تماشا؛ تکمیل خودکار در آستانه ۹۰٪.
+      «علامت دستی» اینجا مجاز نیست تا آستانه دور زده نشود.
+    - دستی (document/article): ثانیه‌ها به‌عنوان زمان مطالعه ثبت می‌شوند ولی
+      «تکمیل» فقط با mark_completed صریح رخ می‌دهد؛ درصد جلسه پیش از آن صفر و
+      پس از آن ۱۰۰ است — دقت جعلیِ «۴۳٪ِ خوانده‌شده» وجود ندارد.
     """
     locked_enrollment = (
         Enrollment.objects.select_for_update().select_related("course").get(pk=enrollment.pk)
@@ -574,6 +640,12 @@ def update_lesson_progress(
     locked_lesson = Lesson.objects.select_related("course").get(pk=lesson.pk)
     if locked_lesson.course_id != locked_enrollment.course_id:
         raise LessonNotInEnrollmentCourseError("این جلسه متعلق به کلاس ثبت‌نام‌شده شما نیست.")
+
+    manual_completion = locked_lesson.supports_manual_completion
+    if mark_completed and not manual_completion:
+        raise LessonCompletionModeError(
+            "جلسات رسانه‌ای با درصد تماشا تکمیل می‌شوند؛ علامت «تکمیل دستی» برای این نوع مجاز نیست."
+        )
 
     duration_snapshot = locked_lesson.duration_seconds or 0
     progress, _created = LessonProgress.objects.select_for_update().get_or_create(
@@ -589,6 +661,10 @@ def update_lesson_progress(
     capped_watched = (
         min(normalized_watched, duration_snapshot) if duration_snapshot else normalized_watched
     )
+    if mark_completed and duration_snapshot:
+        # تکمیل صریح یک جلسه سند/متنی، زمان را به «کامل» می‌رساند تا جمع
+        # ثانیه‌های ثبت‌نام با وضعیت «تمام‌شده» تناقض نداشته باشد.
+        capped_watched = max(capped_watched, duration_snapshot)
     progress.watched_seconds = max(progress.watched_seconds, capped_watched)
     progress.duration_seconds_snapshot = duration_snapshot
     if last_position_seconds is not None:
@@ -601,15 +677,22 @@ def update_lesson_progress(
     else:
         progress.last_position_seconds = progress.watched_seconds
 
-    progress.progress_percent = _calculate_percent(
-        watched_seconds=progress.watched_seconds,
-        duration_seconds=duration_snapshot,
-    )
+    if manual_completion:
+        progress.progress_percent = (
+            Decimal("100.00") if (mark_completed or progress.is_completed) else Decimal("0.00")
+        )
+    else:
+        progress.progress_percent = _calculate_percent(
+            watched_seconds=progress.watched_seconds,
+            duration_seconds=duration_snapshot,
+        )
     progress.last_watched_at = timezone.now()
     if progress.first_watched_at is None:
         progress.first_watched_at = progress.last_watched_at
 
-    if progress.progress_percent >= LESSON_COMPLETION_THRESHOLD_PERCENT:
+    if (mark_completed and manual_completion) or (
+        not manual_completion and progress.progress_percent >= LESSON_COMPLETION_THRESHOLD_PERCENT
+    ):
         progress.is_completed = True
         if progress.completed_at is None:
             progress.completed_at = progress.last_watched_at
@@ -645,8 +728,13 @@ def update_lesson_progress(
             "watched_seconds": progress.watched_seconds,
             "progress_percent": float(progress.progress_percent),
             "is_completed": progress.is_completed,
+            "mark_completed": mark_completed,
         },
-        context={"source": "lesson_progress_update"},
+        context={
+            "source": "lesson_progress_update",
+            "content_type": locked_lesson.content_type,
+            "completion_mode": "manual" if manual_completion else "media",
+        },
         idempotency_key=f"lesson-progress:{progress.pk}:{progress.updated_at.isoformat()}",
     )
     return progress
@@ -1156,7 +1244,14 @@ def submit_quiz_attempt(*, attempt, answers: list[dict[str, int]]):
         idempotency_key=f"quiz-submit:{locked_attempt.pk}",
     )
     if is_passed:
-        issue_certificate_for_attempt(attempt=locked_attempt)
+        # سیاست مدرک آزمون: «پذیرنده» خودش در تنظیمات آزمون اعلام می‌کند که
+        # قبولیِ این آزمون باید گواهی صادر کند یا فقط دوره تکمیل شود. این
+        # همان فلگِ is_required_for_certificate است که تا پیش از این ذخیره
+        # می‌شد ولی هیچ‌جا اعمال نمی‌شد (ناهمخوانی ثبت‌شده در ممیزی).
+        if locked_attempt.quiz.is_required_for_certificate:
+            issue_certificate_for_attempt(attempt=locked_attempt)
+        else:
+            complete_enrollment_after_pass(attempt=locked_attempt)
     return locked_attempt
 
 
@@ -1185,6 +1280,23 @@ def unlock_quiz_for_user(
 
 class CertificateIssueError(LMSServiceError):
     """Raised when certificate issuance is not allowed."""
+
+
+@transaction.atomic
+def complete_enrollment_after_pass(*, attempt) -> bool:
+    """ثبت تکمیلِ ثبت‌نام پس از قبولی آزمون و به‌روزرسانی شمارندهٔ دوره.
+
+    برگردان True اگر وضعیت همین حالا تغییر کرد (تا فراخوان‌ها بتوانند در صورت
+    لزوم اقدام جانبی بکنند). برای آزمون‌هایی که گواهی‌محور نیستند، این تنها
+    عارضهٔ قبولی است؛ برای مسیر گواهی، انتهای issue_certificate صداش می‌زند.
+    """
+    if attempt.enrollment.status == EnrollmentStatus.COMPLETED:
+        return False
+    attempt.enrollment.status = EnrollmentStatus.COMPLETED
+    attempt.enrollment.completed_at = timezone.now()
+    attempt.enrollment.save(update_fields=["status", "completed_at", "updated_at"])
+    sync_course_counters(course=attempt.course)
+    return True
 
 
 @transaction.atomic
@@ -1240,11 +1352,7 @@ def issue_certificate_for_attempt(*, attempt) -> Certificate:
         idempotency_key=f"certificate-issued:{certificate.pk}",
     )
     create_skill_for_certificate(certificate=certificate)
-    if attempt.enrollment.status != EnrollmentStatus.COMPLETED:
-        attempt.enrollment.status = EnrollmentStatus.COMPLETED
-        attempt.enrollment.completed_at = timezone.now()
-        attempt.enrollment.save(update_fields=["status", "completed_at", "updated_at"])
-        sync_course_counters(course=attempt.course)
+    complete_enrollment_after_pass(attempt=attempt)
     return certificate
 
 

@@ -33,6 +33,7 @@ from apps.lms.serializers import (
 from apps.lms.services import (
     CourseNotEnrollabeError,
     EnrollmentNotActiveError,
+    LessonCompletionModeError,
     LessonMediaAccessError,
     LessonMediaUnavailableError,
     LessonNotInEnrollmentCourseError,
@@ -218,8 +219,13 @@ class LMSLessonProgressUpdateView(APIView):
                 lesson=lesson,
                 watched_seconds=serializer.validated_data["watched_seconds"],
                 last_position_seconds=serializer.validated_data.get("last_position_seconds"),
+                mark_completed=serializer.validated_data["mark_completed"],
             )
-        except (EnrollmentNotActiveError, LessonNotInEnrollmentCourseError) as exc:
+        except (
+            EnrollmentNotActiveError,
+            LessonNotInEnrollmentCourseError,
+            LessonCompletionModeError,
+        ) as exc:
             return ErrorResponse(message=str(exc), status_code=status.HTTP_400_BAD_REQUEST)
 
         log_action_async(

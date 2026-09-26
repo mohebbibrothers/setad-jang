@@ -3406,6 +3406,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/LMSCourseResponse'
           description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LMSErrorResponse'
+          description: ''
         '404':
           content:
             application/json:
@@ -4313,7 +4319,6 @@ paths:
           multipart/form-data:
             schema:
               $ref: '#/components/schemas/LessonProgressUpdate'
-        required: true
       security:
       - jwtAuth: []
       responses:
@@ -17941,6 +17946,18 @@ components:
       required:
       - data
       - message
+    LMSLessonContentTypeEnum:
+      enum:
+      - video
+      - audio
+      - document
+      - article
+      type: string
+      description: |-
+        * `video` - ویدئویی
+        * `audio` - صوتی
+        * `document` - سند/PDF
+        * `article` - متنی
     LMSLessonDeletedResponse:
       type: object
       properties:
@@ -18495,6 +18512,16 @@ components:
         order:
           type: integer
           minimum: 1
+        content_type:
+          $ref: '#/components/schemas/LMSLessonContentTypeEnum'
+        document_file:
+          type: string
+          format: uri
+          nullable: true
+        document_title:
+          type: string
+        article_body:
+          type: string
         video_provider:
           type: string
         video_url:
@@ -18528,7 +18555,11 @@ components:
           type: boolean
     LessonMediaAccess:
       type: object
-      description: Signed/CDN-ready lesson media access payload.
+      description: |-
+        Signed/CDN-ready lesson media access payload.
+
+        برای جلسهٔ متنی (article) فیلد `body` محتوای درون‌برنامه‌ای را می‌آورد و
+        `url` تهی است؛ بقیهٔ نوع‌ها آدرس رسانه را.
       properties:
         media_kind:
           type: string
@@ -18544,6 +18575,8 @@ components:
         course_id:
           type: integer
         title:
+          type: string
+        body:
           type: string
       required:
       - course_id
@@ -18607,7 +18640,15 @@ components:
       - watched_seconds
     LessonProgressUpdate:
       type: object
-      description: Input serializer for lesson progress updates.
+      description: |-
+        Input serializer for lesson progress updates.
+
+        قرارداد دو-حالتی:
+        - جلسات رسانه‌ای: `watched_seconds` (اختیاری در ترکیب با mark_completed نه —
+          این یکی الزامی رفتار می‌کند چون سرویس حالت رسانه فقط با ثانیه جلو می‌رود).
+        - جلسات سند/متنی: `mark_completed=true` یعنی «خواندم/تمام شد».
+        قانون سطح serializer: حداقل یکی از دو سیگنال باید باشد؛ تطبیق «نوع جلسه ×
+        سیگنال» در سرویس انجام می‌شود (serializer به session دسترسی ندارد).
       properties:
         watched_seconds:
           type: integer
@@ -18615,8 +18656,9 @@ components:
         last_position_seconds:
           type: integer
           minimum: 0
-      required:
-      - watched_seconds
+        mark_completed:
+          type: boolean
+          default: false
     LessonQuestion:
       type: object
       description: Output serializer for lesson questions with nested visible answers.
@@ -18695,7 +18737,13 @@ components:
       - title
     LessonSummary:
       type: object
-      description: Compact lesson representation for course detail pages.
+      description: |-
+        Compact lesson representation for course detail pages.
+
+        نکتهٔ امنیتی: `document_file`/`article_body` عمداً اینجا نیستند — محتوای
+        اصلیِ جلسات سند/متنی فقط از مسیرِ کنترل‌شدهٔ media access (با گیت
+        ثبت‌نام، استثنای preview و ممیزی) سرو می‌شود تا کاتالوگ عمومی، کل جلسه
+        را مجانی لو ندهد.
       properties:
         id:
           type: integer
@@ -18712,6 +18760,14 @@ components:
           readOnly: true
         order:
           type: integer
+          readOnly: true
+        content_type:
+          allOf:
+          - $ref: '#/components/schemas/LMSLessonContentTypeEnum'
+          readOnly: true
+          title: نوع محتوا
+        content_type_display:
+          type: string
           readOnly: true
         video_provider:
           allOf:
@@ -18745,6 +18801,8 @@ components:
       required:
       - attachment_file
       - attachment_title
+      - content_type
+      - content_type_display
       - description
       - duration_seconds
       - embed_url
@@ -21028,6 +21086,16 @@ components:
         order:
           type: integer
           minimum: 1
+        content_type:
+          $ref: '#/components/schemas/LMSLessonContentTypeEnum'
+        document_file:
+          type: string
+          format: uri
+          nullable: true
+        document_title:
+          type: string
+        article_body:
+          type: string
         video_provider:
           type: string
         video_url:
@@ -22283,6 +22351,7 @@ components:
           type: boolean
         is_required_for_certificate:
           type: boolean
+          title: الزامی برای صدور گواهی
         published_at:
           type: string
           format: date-time

@@ -22,8 +22,10 @@ from .auth import AdminUserFactory, UserFactory
 
 # ── LMS (Learning Management System) ────────────────────────
 from .lms import (
+    ArticleLessonFactory,
     CertificateFactory,
     CourseFactory,
+    DocumentLessonFactory,
     EnrollmentFactory,
     LessonFactory,
     LessonProgressFactory,
@@ -84,6 +86,7 @@ from .tabyin import TabyinAttachmentFactory, TabyinContentFactory
 
 __all__ = [
     "AdminUserFactory",
+    "ArticleLessonFactory",
     "AuditLogFactory",
     "CampaignFactory",
     "CampaignImageFactory",
@@ -92,6 +95,7 @@ __all__ = [
     "ClosedCampaignFactory",
     "CompletedCampaignFactory",
     "CourseFactory",
+    "DocumentLessonFactory",
     "EnrollmentFactory",
     "ExpiredParticipationFactory",
     "FailedParticipationFactory",

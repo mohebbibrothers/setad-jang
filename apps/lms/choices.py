@@ -95,6 +95,35 @@ class VideoProvider(models.TextChoices):
     HYBRID = "hybrid", "ترکیبی"
 
 
+class LessonContentType(models.TextChoices):
+    """نوع محتوای جلسه — منبع حقیقت برای «این جلسه چیست و چطور تکمیل می‌شود».
+
+    - video/audio: جلسات رسانه‌محور؛ تکمیل با آستانهٔ درصد تماشا (۹۰٪).
+    - document: جلسه سند‌محور (PDF و اِماندِ متنی)؛ تکمیل با علامت دستی
+      «خواندم» — چون مدت‌زمان خواندن ادعای سرور نیست.
+    - article: جلسه متن‌غنی (بدنه درون‌برنامه‌ای، بدون فایل)؛ تکمیل دستی.
+
+    نوعِ پیش‌فرض video است تا تمام جلسات تاریخیِ این سامانه بدون هیچ
+    تغییر رفتاری «جلسه ویدئویی» باقی بمانند.
+    """
+
+    VIDEO = "video", "ویدئویی"
+    AUDIO = "audio", "صوتی"
+    DOCUMENT = "document", "سند/PDF"
+    ARTICLE = "article", "متنی"
+
+
+#: انواعی که پیشرفت‌شان بر پایهٔ «ثانیه تماشا/گوش‌دادن» است.
+MEDIA_COMPLETION_TYPES: frozenset[str] = frozenset(
+    {LessonContentType.VIDEO, LessonContentType.AUDIO}
+)
+
+#: انواعی که تکمیل‌شان با علامت صریح کاربر («خواندم/تمام شد») است.
+MANUAL_COMPLETION_TYPES: frozenset[str] = frozenset(
+    {LessonContentType.DOCUMENT, LessonContentType.ARTICLE}
+)
+
+
 class VideoProcessingStatus(models.TextChoices):
     """Lifecycle for lesson video processing jobs."""
 
