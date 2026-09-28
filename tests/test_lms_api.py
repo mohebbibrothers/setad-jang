@@ -110,6 +110,53 @@ class TestLMSPublicCatalogAPI:
         assert response.status_code == status.HTTP_200_OK
         assert [item["title"] for item in response.data["data"]] == [category.title]
 
+    def test_public_course_list_filters_featured_courses(self) -> None:
+        """پارامترِ is_featured=true باید فقط دوره‌های ویژهٔ منتشرشده را بدهد."""
+        featured = PublishedCourseFactory(title="دوره ویژه", is_featured=True)
+        PublishedCourseFactory(title="دوره عادی", is_featured=False)
+
+        response = APIClient().get(reverse("lms:course-list"), {"is_featured": "true"})
+
+        assert response.status_code == status.HTTP_200_OK
+        assert [item["title"] for item in response.data["data"]["results"]] == [featured.title]
+
+    def test_public_course_list_filters_non_featured_courses(self) -> None:
+        """پارامترِ is_featured=false باید دوره‌های ویژه را کنار بگذارد."""
+        PublishedCourseFactory(title="دوره ویژه", is_featured=True)
+        normal = PublishedCourseFactory(title="دوره عادی", is_featured=False)
+
+        response = APIClient().get(reverse("lms:course-list"), {"is_featured": "false"})
+
+        assert response.status_code == status.HTTP_200_OK
+        assert [item["title"] for item in response.data["data"]["results"]] == [normal.title]
+
+    def test_public_course_list_combines_featured_and_category_filters(self) -> None:
+        """ترکیبِ is_featured با category باید اشتراکِ دو فیلتر را برگرداند."""
+        category = LMSCategory.objects.create(title="نظامی")
+        wanted = PublishedCourseFactory(
+            title="کلاس ویژه نظامی", is_featured=True, category=category
+        )
+        PublishedCourseFactory(title="کلاس عادی نظامی", is_featured=False, category=category)
+        PublishedCourseFactory(title="کلاس ویژه دیگر", is_featured=True)
+
+        response = APIClient().get(
+            reverse("lms:course-list"),
+            {"is_featured": "true", "category": category.slug},
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert [item["title"] for item in response.data["data"]["results"]] == [wanted.title]
+
+    def test_public_course_list_rejects_invalid_featured_value(self) -> None:
+        """مقدارِ نامعتبرِ is_featured نباید نتیجه را تغییر دهد (fallback بدون فیلتر)."""
+        PublishedCourseFactory(title="دوره ویژه", is_featured=True)
+        PublishedCourseFactory(title="دوره عادی", is_featured=False)
+
+        response = APIClient().get(reverse("lms:course-list"), {"is_featured": "maybe"})
+
+        assert response.status_code == status.HTTP_200_OK
+        assert len(response.data["data"]["results"]) == 2
+
 
 class TestLMSAdminCourseManagementAPI:
     """Admin management APIs for categories, courses, lessons, and reports."""

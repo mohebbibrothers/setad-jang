@@ -4040,6 +4040,43 @@ paths:
     get:
       operationId: lms_public_courses_list
       description: Return paginated public course catalog.
+      parameters:
+      - in: query
+        name: category
+        schema:
+          type: string
+        description: اسلاگِ دسته (iexact روی category__slug)
+      - in: query
+        name: is_featured
+        schema:
+          type: boolean
+        description: true ⇒ فقط دوره‌های ویژه؛ false ⇒ فقط غیرویژه
+      - in: query
+        name: level
+        schema:
+          type: string
+          enum:
+          - advanced
+          - beginner
+          - intermediate
+          - professional
+        description: سطح دوره
+      - in: query
+        name: page
+        schema:
+          type: integer
+        description: شماره صفحه (۱-مبنا؛ خارج از محدوده ⇒ ۴۰۴)
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+        description: اندازه صفحه (پیش‌فرض ۲۰، حداکثر ۱۰۰)
+      - in: query
+        name: search
+        schema:
+          type: string
+        description: جست‌وجوی هوشمند (FTS+trigram) روی عنوان، زیرعنوان، توضیح و نام
+          مدرس
       tags:
       - آموزش — عمومی
       security:
