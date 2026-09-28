@@ -68,6 +68,39 @@ class TestLMSPublicCatalogAPI:
             second.pk,
         ]
 
+    def test_public_course_list_exposes_instructor_avatar_field(self) -> None:
+        """فیلدِ instructor_avatar باید در payload لیست حضور داشته باشد.
+
+        قراردادِ جدید: کارت‌های عمومی (مثل استریپِ آموزش در صفحهٔ اصلی سایت)
+        باید بتوانند بدون N+1 زدن به endpoint جزئیات، تصویرِ مدرس را
+        نشان دهند؛ پس کلید همیشه سریالایز می‌شود (در نبودِ فایل: null).
+        """
+        PublishedCourseFactory(title="دوره بدون تصویر مدرس")
+
+        response = APIClient().get(reverse("lms:course-list"))
+
+        assert response.status_code == status.HTTP_200_OK
+        item = response.data["data"]["results"][0]
+        assert "instructor_avatar" in item
+
+    def test_public_course_list_returns_instructor_avatar_url(self) -> None:
+        """وقتی تصویرِ مدرس بارگذاری شده، URL آن در payload لیست برمی‌گردد."""
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        avatar = SimpleUploadedFile(
+            "avatar.jpg",
+            b"\xff\xd8\xff\xe0" + b"\x00" * 64 + b"\xff\xd9",
+            content_type="image/jpeg",
+        )
+        course = PublishedCourseFactory(instructor_avatar=avatar)
+
+        response = APIClient().get(reverse("lms:course-list"))
+
+        assert response.status_code == status.HTTP_200_OK
+        item = response.data["data"]["results"][0]
+        assert item["instructor_avatar"]
+        assert course.instructor_avatar.name.split("/")[-1] in item["instructor_avatar"]
+
     def test_public_category_list_uses_dynamic_admin_categories(self) -> None:
         category = LMSCategory.objects.create(title="هوش مصنوعی", order=1)
         LMSCategory.objects.create(title="غیرفعال", is_active=False, order=2)

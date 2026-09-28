@@ -15074,7 +15074,12 @@ components:
           type: boolean
     CourseDetail:
       type: object
-      description: Detailed course representation including active lessons.
+      description: |-
+        Detailed course representation including active lessons.
+
+        ``instructor_avatar`` is inherited from the summary serializer (it was
+        promoted to the list payload) — only the heavier, detail-only fields
+        are declared here explicitly.
       properties:
         id:
           type: integer
@@ -15103,6 +15108,12 @@ components:
           type: string
           readOnly: true
           title: نام استاد
+        instructor_avatar:
+          type: string
+          format: uri
+          readOnly: true
+          nullable: true
+          title: تصویر استاد
         level:
           allOf:
           - $ref: '#/components/schemas/LMSCourseLevelEnum'
@@ -15144,11 +15155,6 @@ components:
         instructor_bio:
           type: string
           title: معرفی استاد
-        instructor_avatar:
-          type: string
-          format: uri
-          nullable: true
-          title: تصویر استاد
         intro_video_url:
           type: string
           format: uri
@@ -15167,6 +15173,7 @@ components:
       - estimated_duration_seconds
       - graduates_count
       - id
+      - instructor_avatar
       - instructor_name
       - is_featured
       - lessons
@@ -15284,7 +15291,13 @@ components:
       - watched_seconds
     CourseSummary:
       type: object
-      description: Compact course representation for course lists.
+      description: |-
+        Compact course representation for course lists.
+
+        ``instructor_avatar`` is part of the LIST payload too: public surfaces
+        like the homepage education strip and the catalog grid must be able
+        to render the real instructor photo next to ``instructor_name``
+        without an N+1 round-trip to the detail endpoint per card.
       properties:
         id:
           type: integer
@@ -15313,6 +15326,12 @@ components:
           type: string
           readOnly: true
           title: نام استاد
+        instructor_avatar:
+          type: string
+          format: uri
+          readOnly: true
+          nullable: true
+          title: تصویر استاد
         level:
           allOf:
           - $ref: '#/components/schemas/LMSCourseLevelEnum'
@@ -15355,6 +15374,7 @@ components:
       - estimated_duration_seconds
       - graduates_count
       - id
+      - instructor_avatar
       - instructor_name
       - is_featured
       - lessons_count

@@ -126,7 +126,13 @@ class LessonCreateUpdateSerializer(serializers.Serializer):
 
 
 class CourseSummarySerializer(serializers.ModelSerializer):
-    """Compact course representation for course lists."""
+    """Compact course representation for course lists.
+
+    ``instructor_avatar`` is part of the LIST payload too: public surfaces
+    like the homepage education strip and the catalog grid must be able
+    to render the real instructor photo next to ``instructor_name``
+    without an N+1 round-trip to the detail endpoint per card.
+    """
 
     category = LMSCategorySerializer(read_only=True)
 
@@ -140,6 +146,7 @@ class CourseSummarySerializer(serializers.ModelSerializer):
             "subtitle",
             "short_description",
             "instructor_name",
+            "instructor_avatar",
             "level",
             "status",
             "is_featured",
@@ -154,7 +161,12 @@ class CourseSummarySerializer(serializers.ModelSerializer):
 
 
 class CourseDetailSerializer(CourseSummarySerializer):
-    """Detailed course representation including active lessons."""
+    """Detailed course representation including active lessons.
+
+    ``instructor_avatar`` is inherited from the summary serializer (it was
+    promoted to the list payload) — only the heavier, detail-only fields
+    are declared here explicitly.
+    """
 
     lessons = LessonSummarySerializer(many=True, read_only=True)
 
@@ -163,7 +175,6 @@ class CourseDetailSerializer(CourseSummarySerializer):
             *CourseSummarySerializer.Meta.fields,
             "description",
             "instructor_bio",
-            "instructor_avatar",
             "intro_video_url",
             "lessons",
         )
