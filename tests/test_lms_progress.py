@@ -153,7 +153,66 @@ class TestLMSLessonProgressAPI:
         enrollment.refresh_from_db()
         assert enrollment.status == EnrollmentStatus.COMPLETED
         assert enrollment.completed_at is not None
-        assert enrollment.progress_percent == 90
+        # قراردادِ اصلاح‌شده: جلسه‌ای که در آستانه‌ی ۹۰٪ «تکمیل» شود در جمعِ
+        # کلاس ۱۰۰ حساب می‌شود؛ کلاسِ COMPLETED دیگر روی ۹۰٪ نمی‌ایستد —
+        # وضعیت و نوارِ پیشرفت باید همیشه یک قصه بگویند.
+        assert enrollment.progress_percent == 100
+
+    def test_completed_zero_duration_lessons_move_the_class_progress_bar(self) -> None:
+        """جلسه‌ی متنی/سندیِ بدونِ duration با mark_completed کامل می‌شود و باید
+        نوارِ کلاس را هم جلو ببرد؛ فرمولِ قدیمیِ ثانیه‌محور این را ۰٪ نشان می‌داد."""
+        course = PublishedCourseFactory()
+        video = LessonFactory(course=course, order=1, duration_seconds=100)
+        article = LessonFactory(course=course, order=2, duration_seconds=0, content_type="article")
+        sync_course_counters(course=course)
+        user = UserFactory()
+        enrollment = _enroll(user, course)
+        client = _client_for(user)
+
+        response = client.post(
+            reverse("lms:lesson-progress-update", kwargs={"lesson_id": article.pk}),
+            data={"mark_completed": True},
+            format="json",
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        enrollment.refresh_from_db()
+        assert enrollment.progress_percent == 50
+        assert enrollment.status == EnrollmentStatus.ACTIVE
+
+        # حالا ویدئو هم در آستانه‌ی تکمیل دیده شود: هر دو جلسه کامل‌اند.
+        client.post(
+            reverse("lms:lesson-progress-update", kwargs={"lesson_id": video.pk}),
+            data={"watched_seconds": 95},
+            format="json",
+        )
+        enrollment.refresh_from_db()
+        assert enrollment.status == EnrollmentStatus.COMPLETED
+        assert enrollment.progress_percent == 100
+
+    def test_class_percent_ignores_stale_estimated_duration(self) -> None:
+        """اگر برآوردِ مدتِ کلاس (estimated_duration_seconds) با واقعیتِ جلسات
+        فاصله بگیرد، درصدِ کاربر باید از خودِ جلسات حساب شود نه آن برآورد."""
+        course = PublishedCourseFactory()
+        lesson = LessonFactory(course=course, order=1, duration_seconds=100)
+        LessonFactory(course=course, order=2, duration_seconds=100)
+        sync_course_counters(course=course)
+        # شبیه‌سازیِ رانشِ داده: ادمین بعداً برآورد را دستی خراب کرده است.
+        course.estimated_duration_seconds = 99999
+        course.save(update_fields=["estimated_duration_seconds"])
+        user = UserFactory()
+        enrollment = _enroll(user, course)
+
+        response = _client_for(user).post(
+            reverse("lms:lesson-progress-update", kwargs={"lesson_id": lesson.pk}),
+            data={"watched_seconds": 100},
+            format="json",
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        enrollment.refresh_from_db()
+        # با فرمولِ قدیمی این عدد ۰٫۱ ٪ می‌شد؛ قراردادِ جدید: نصفِ مسیر = ۵۰٪.
+        assert enrollment.progress_percent == 50
 
     def test_user_cannot_update_progress_without_enrollment(self) -> None:
         course = PublishedCourseFactory()

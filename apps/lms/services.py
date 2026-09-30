@@ -574,22 +574,54 @@ def _calculate_percent(*, watched_seconds: int, duration_seconds: int) -> Decima
 
 
 def _sync_enrollment_progress(*, enrollment: Enrollment) -> Enrollment:
-    """Recalculate aggregate enrollment progress from lesson progress records."""
-    aggregates = enrollment.lesson_progress.aggregate(
-        watched=Sum("watched_seconds"),
-        duration=Sum("duration_seconds_snapshot"),
+    """Recalculate aggregate enrollment progress from lesson progress records.
+
+    درصدِ پیشرفتِ کلاس = میانگینِ درصدِ همه‌ی جلساتِ فعال (جلسه‌ی دست‌نخورده = ۰٪
+    و جلسه‌ی تکمیل‌شده = ۱۰۰٪). فرمولِ قبلی «مجموعِ ثانیه‌های دیده‌شده تقسیم بر
+    estimated_duration_seconds» بود که دو باگِ کاربرپیدا داشت:
+      ۱) جلسه‌ی رسانه‌ای در آستانه‌ی ۹۰٪ «تکمیل» می‌شود ولی درصدش همان ۹۰ می‌ماند؛
+         پس کلاسِ کاملاً تمام‌شده روی نوار ۹۰٪ می‌ایستاد — یعنی وضعیت COMPLETED
+         و نوار با هم ناسازگار بودند.
+      ۲) جلسه‌ی سند/متنِ بدونِ duration (duration_seconds=0) با mark_completed
+         تکمیل می‌شد ولی صفر ثانیه به صورت و صفر به مخرج اضافه می‌کرد؛ یعنی
+         خواندنِ چند جلسه‌ی متنی هیچ‌وقت نوار را تکان نمی‌داد.
+    با فرمولِ جلسه‌محور، «k جلسه از n» و درصدِ نوار همیشه یک قصه می‌گویند و
+    اگر برآوردِ دستیِ مدتِ کلاس با واقعیتِ جلسات فاصله بگیرد، نوار دروغ نمی‌گوید.
+    """
+    progress_rows = list(enrollment.lesson_progress.all())
+    watched = sum(p.watched_seconds for p in progress_rows)
+
+    active_lessons = list(
+        Lesson.objects.filter(course=enrollment.course, is_active=True).values_list(
+            "id", "duration_seconds"
+        )
     )
-    watched = aggregates["watched"] or 0
-    duration = enrollment.course.estimated_duration_seconds or aggregates["duration"] or 0
+    active_lessons_count = len(active_lessons)
+    duration = sum((d or 0) for _lid, d in active_lessons)
+
+    if active_lessons_count:
+        by_lesson = {p.lesson_id: p for p in progress_rows}
+        hundred = Decimal("100.00")
+        total_percent = sum(
+            (
+                hundred
+                if (row := by_lesson.get(lesson_id)) is not None and row.is_completed
+                else (row.progress_percent if row is not None else Decimal("0.00"))
+            )
+            for lesson_id, _d in active_lessons
+        )
+        progress_percent = (total_percent / Decimal(active_lessons_count)).quantize(
+            Decimal("0.01")
+        )
+    else:
+        progress_percent = Decimal("0.00")
+
+    completed_lessons_count = sum(1 for p in progress_rows if p.is_completed)
+
     enrollment.watched_seconds = watched
     enrollment.total_seconds_snapshot = duration
-    enrollment.progress_percent = _calculate_percent(
-        watched_seconds=watched,
-        duration_seconds=duration,
-    )
+    enrollment.progress_percent = progress_percent
 
-    active_lessons_count = Lesson.objects.filter(course=enrollment.course, is_active=True).count()
-    completed_lessons_count = enrollment.lesson_progress.filter(is_completed=True).count()
     should_complete = active_lessons_count > 0 and completed_lessons_count >= active_lessons_count
     if should_complete and enrollment.status == EnrollmentStatus.ACTIVE:
         enrollment.status = EnrollmentStatus.COMPLETED
