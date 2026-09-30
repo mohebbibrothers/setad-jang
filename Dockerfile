@@ -43,9 +43,24 @@ WORKDIR /build
 # از قفل کامل استفاده می‌شود، نه requirements.txt.
 # requirements.txt وابستگی‌های غیرمستقیم را پین نمی‌کند، پس دو build از یک
 # commit یکسان می‌توانند نسخه‌های متفاوتی بگیرند و image قابل بازتولید نباشد.
+#
+# فال‌بکِ شبکه (استقرارهای ایران): CDN رسمی پکیج‌ها (files.pythonhosted.org)
+# در برخی اینترنت‌ها روی لایه‌ی انتقال ناپایدار/فیلتر است درحالی‌که خودِ
+# ایندکس pypi.org جواب می‌دهد — بیلد بدونِ فال‌بک قرمز می‌شود. لذا اول با
+# retry کوتاه از منبع رسمی wheel می‌گیریم و اگر نشد، «فقط» به آینه‌ی Tencent
+# سوییچ می‌کنیم: کل ۶۶ پینِ قفل را verified سرو می‌کند و عمداً pypi به‌صورت
+# extra-index کنارش نیست، چون آنگاه pip برای اکثرِ فایل‌ها لینکِ CDNِ مسدودشده
+# را برمی‌دارد و فال‌بک بی‌اثر می‌شود. نسخه‌ها دقیقاً از requirements-lock.txt
+# می‌آیند، پس محتوای نهایی در هر دو مسیر یکی است. اگر پینِ خیلی تازه‌ای را
+# آینه هنوز سینک نکرده بود:  docker build --build-arg PIP_MIRROR_URL=…
+ARG PIP_INDEX_URL=https://pypi.org/simple
+ARG PIP_MIRROR_URL=https://mirrors.cloud.tencent.com/pypi/simple
 COPY requirements.txt requirements-lock.txt ./
 RUN pip install --upgrade pip \
-    && pip wheel --wheel-dir=/wheels -r requirements-lock.txt
+    && ( pip wheel --wheel-dir=/wheels -r requirements-lock.txt \
+            --index-url "${PIP_INDEX_URL}" --retries 2 --timeout 20 \
+      || pip wheel --wheel-dir=/wheels -r requirements-lock.txt \
+            --index-url "${PIP_MIRROR_URL}" --retries 5 --timeout 30 )
 
 
 # ============================================================
