@@ -610,9 +610,7 @@ def _sync_enrollment_progress(*, enrollment: Enrollment) -> Enrollment:
             )
             for lesson_id, _d in active_lessons
         )
-        progress_percent = (total_percent / Decimal(active_lessons_count)).quantize(
-            Decimal("0.01")
-        )
+        progress_percent = (total_percent / Decimal(active_lessons_count)).quantize(Decimal("0.01"))
     else:
         progress_percent = Decimal("0.00")
 
