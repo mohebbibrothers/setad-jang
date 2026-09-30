@@ -11,7 +11,7 @@
 CacheControl==0.14.4
 Django==6.1
 Faker==40.40.0
-PyJWT==2.13.0
+PyJWT==2.14.0
 PyYAML==6.0.3
 Pygments==2.21.0
 amqp==5.4.0
