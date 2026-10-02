@@ -494,6 +494,8 @@ def build_lesson_media_access(*, lesson: Lesson, user: Any, media_kind: str) -> 
         raise LessonMediaAccessError(
             "برای دسترسی به رسانه این جلسه باید در کلاس ثبت‌نام کرده باشید."
         )
+    if enrollment is not None:
+        ensure_lesson_sequence_open(user=user, lesson=lesson, enrollment=enrollment)
     if media_kind == "video":
         if lesson.video_file:
             return {
@@ -662,7 +664,9 @@ def update_lesson_progress(
       پس از آن ۱۰۰ است — دقت جعلیِ «۴۳٪ِ خوانده‌شده» وجود ندارد.
     """
     locked_enrollment = (
-        Enrollment.objects.select_for_update().select_related("course").get(pk=enrollment.pk)
+        Enrollment.objects.select_for_update()
+        .select_related("course", "user")
+        .get(pk=enrollment.pk)
     )
     if locked_enrollment.status not in {EnrollmentStatus.ACTIVE, EnrollmentStatus.COMPLETED}:
         raise EnrollmentNotActiveError("ثبت‌نام شما برای ثبت پیشرفت فعال نیست.")
@@ -670,6 +674,9 @@ def update_lesson_progress(
     locked_lesson = Lesson.objects.select_related("course").get(pk=lesson.pk)
     if locked_lesson.course_id != locked_enrollment.course_id:
         raise LessonNotInEnrollmentCourseError("این جلسه متعلق به کلاس ثبت‌نام‌شده شما نیست.")
+    ensure_lesson_sequence_open(
+        user=locked_enrollment.user, lesson=locked_lesson, enrollment=locked_enrollment
+    )
 
     manual_completion = locked_lesson.supports_manual_completion
     if mark_completed and not manual_completion:
@@ -787,6 +794,62 @@ class LMSDiscussionReplyError(LMSServiceError):
     """Raised when an answer reply target is invalid (client-side mistake)."""
 
 
+class LessonSequenceLockedError(LMSDiscussionAccessError):
+    """جلسه در زنجیره‌ی تماشا قفل است — جلسه‌ی قبلی هنوز کامل نشده.
+
+    زیرکلاسِ خطای دسترسیِ گفتگو است تا دکل‌های گفتگو بدون هیچ تغییری همان
+    ۴۰۳ِ آشنا را برگردانند؛ دکلِ رسانه/پیشرفت صراحتاً هندلش می‌کنند.
+    """
+
+
+def ensure_lesson_sequence_open(
+    *, user: Any, lesson: Lesson, enrollment: Enrollment | None = None
+) -> None:
+    """زنجیره‌ی تماشای پشت‌سرهم: جلسه‌ی N فقط وقتی باز است که همه‌ی جلساتِ
+    فعالِ قبلی (به ترتیبِ order) برای ثبت‌نامِ فعالِ کاربر تکمیل شده باشند.
+
+    معافیت‌ها:
+      • جلساتِ پیش‌نمایش (is_preview) — ویترینِ بازاریابیِ کلاس است؛
+      • ادمین/استاف — پیش‌نمایشِ محتوا بدون محدودیت؛
+      • ثبت‌نامِ تکمیل‌شده — بازتماشای آزاد پس از پایانِ مسیر؛
+      • جلسه‌ی اولِ مسیر — همیشه باز.
+    نبودِ ثبت‌نام را این گارد مدیریت نمی‌کند (گاردِ ثبت‌نام پیامِ خودش را دارد).
+    """
+    if lesson.is_preview:
+        return
+    if getattr(user, "is_staff", False) or getattr(user, "is_superuser", False):
+        return
+    if enrollment is None:
+        enrollment = Enrollment.objects.filter(
+            user=user,
+            course=lesson.course,
+            status__in=[EnrollmentStatus.ACTIVE, EnrollmentStatus.COMPLETED],
+        ).first()
+        if enrollment is None:
+            return  # گاردِ ثبت‌نام، پیامِ مناسب را خودش می‌دهد
+    if enrollment.status == EnrollmentStatus.COMPLETED:
+        return
+    previous_rows = list(
+        Lesson.objects.filter(course_id=lesson.course_id, is_active=True, order__lt=lesson.order)
+        .order_by("order", "id")
+        .values_list("id", "title")
+    )
+    if not previous_rows:
+        return
+    completed_ids = set(
+        LessonProgress.objects.filter(
+            enrollment=enrollment,
+            lesson_id__in=[row[0] for row in previous_rows],
+            is_completed=True,
+        ).values_list("lesson_id", flat=True)
+    )
+    for previous_id, previous_title in previous_rows:
+        if previous_id not in completed_ids:
+            raise LessonSequenceLockedError(
+                f"این جلسه هنوز قفل است؛ اول جلسه‌ی «{previous_title}» را کامل تماشا کن تا باز شود."
+            )
+
+
 def ensure_user_enrolled_for_lesson(*, user: Any, lesson: Lesson) -> Enrollment:
     """Return active/completed enrollment that allows discussion access for a lesson."""
     enrollment = Enrollment.objects.filter(
@@ -807,7 +870,8 @@ def create_lesson_question(*, lesson: Lesson, user: Any, title: str, body: str):
     from apps.lms.choices import DiscussionStatus
     from apps.lms.models import LessonQuestion
 
-    ensure_user_enrolled_for_lesson(user=user, lesson=lesson)
+    enrollment = ensure_user_enrolled_for_lesson(user=user, lesson=lesson)
+    ensure_lesson_sequence_open(user=user, lesson=lesson, enrollment=enrollment)
     question = LessonQuestion.objects.create(
         lesson=lesson,
         user=user,
@@ -838,7 +902,8 @@ def create_lesson_answer(
     from apps.lms.choices import DiscussionStatus
     from apps.lms.models import LessonAnswer
 
-    ensure_user_enrolled_for_lesson(user=user, lesson=question.lesson)
+    enrollment = ensure_user_enrolled_for_lesson(user=user, lesson=question.lesson)
+    ensure_lesson_sequence_open(user=user, lesson=question.lesson, enrollment=enrollment)
     parent = None
     reply_to = None
     if parent_id is not None:

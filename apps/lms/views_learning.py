@@ -37,6 +37,7 @@ from apps.lms.services import (
     LessonMediaAccessError,
     LessonMediaUnavailableError,
     LessonNotInEnrollmentCourseError,
+    LessonSequenceLockedError,
     LMSProfileIncompleteError,
 )
 from apps.lms.throttles import (
@@ -221,6 +222,8 @@ class LMSLessonProgressUpdateView(APIView):
                 last_position_seconds=serializer.validated_data.get("last_position_seconds"),
                 mark_completed=serializer.validated_data["mark_completed"],
             )
+        except LessonSequenceLockedError as exc:
+            return ErrorResponse(message=str(exc), status_code=status.HTTP_403_FORBIDDEN)
         except (
             EnrollmentNotActiveError,
             LessonNotInEnrollmentCourseError,
@@ -331,7 +334,7 @@ class LMSLessonMediaAccessView(APIView):
             payload = services.build_lesson_media_access(
                 lesson=lesson, user=request.user, media_kind=media_kind
             )
-        except LessonMediaAccessError as exc:
+        except (LessonMediaAccessError, LessonSequenceLockedError) as exc:
             return ErrorResponse(message=str(exc), status_code=status.HTTP_403_FORBIDDEN)
         except LessonMediaUnavailableError as exc:
             return ErrorResponse(message=str(exc), status_code=status.HTTP_404_NOT_FOUND)

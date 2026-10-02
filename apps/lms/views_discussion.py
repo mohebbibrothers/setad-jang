@@ -96,7 +96,10 @@ class LMSLessonQuestionListCreateView(APIView):
         if lesson is None:
             return ErrorResponse(message="جلسه یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
         try:
-            services.ensure_user_enrolled_for_lesson(user=request.user, lesson=lesson)
+            enrollment = services.ensure_user_enrolled_for_lesson(user=request.user, lesson=lesson)
+            services.ensure_lesson_sequence_open(
+                user=request.user, lesson=lesson, enrollment=enrollment
+            )
         except LMSDiscussionAccessError as exc:
             return ErrorResponse(message=str(exc), status_code=status.HTTP_403_FORBIDDEN)
         queryset = selectors.get_lesson_questions(lesson_id=lesson.pk)

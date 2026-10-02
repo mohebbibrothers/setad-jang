@@ -169,6 +169,16 @@ class TestLMSLessonProgressAPI:
         enrollment = _enroll(user, course)
         client = _client_for(user)
 
+        # زنجیره‌ی تماشا: ویدئو (جلسه‌ی اول) باید پیش از مقاله کامل شود.
+        client.post(
+            reverse("lms:lesson-progress-update", kwargs={"lesson_id": video.pk}),
+            data={"watched_seconds": 95},
+            format="json",
+        )
+        enrollment.refresh_from_db()
+        assert enrollment.progress_percent == 50
+        assert enrollment.status == EnrollmentStatus.ACTIVE
+
         response = client.post(
             reverse("lms:lesson-progress-update", kwargs={"lesson_id": article.pk}),
             data={"mark_completed": True},
@@ -176,16 +186,6 @@ class TestLMSLessonProgressAPI:
         )
 
         assert response.status_code == status.HTTP_200_OK
-        enrollment.refresh_from_db()
-        assert enrollment.progress_percent == 50
-        assert enrollment.status == EnrollmentStatus.ACTIVE
-
-        # حالا ویدئو هم در آستانه‌ی تکمیل دیده شود: هر دو جلسه کامل‌اند.
-        client.post(
-            reverse("lms:lesson-progress-update", kwargs={"lesson_id": video.pk}),
-            data={"watched_seconds": 95},
-            format="json",
-        )
         enrollment.refresh_from_db()
         assert enrollment.status == EnrollmentStatus.COMPLETED
         assert enrollment.progress_percent == 100
@@ -260,3 +260,148 @@ class TestLMSLessonProgressAPI:
         assert response.status_code == status.HTTP_200_OK
         assert len(response.data["data"]["lesson_progress"]) == 1
         assert response.data["data"]["lesson_progress"][0]["watched_seconds"] == 40
+
+
+class TestLessonSequenceGate:
+    """زنجیره‌ی تماشای پشت‌سرهم — درخواستِ مشتری (یافتهٔ راندِ QA):
+
+    جلسه‌ی N فقط وقتی باز است که همه‌ی جلساتِ فعالِ قبلی تکمیل شده باشند؛
+    این قاعده روی رسانه، پیشرفت، و مشارکتِ گفتگو (خواندن/نوشتن) اعمال می‌شود.
+    معافیت‌ها: جلسه‌ی اول مسیر، جلساتِ is_preview، ادمین/استاف، و ثبت‌نامِ
+    تکمیل‌شده (بازتماشای آزاد).
+    """
+
+    VIDEO = "https://cdn.example.com/seq.mp4"
+
+    def _two_lesson_course(self):
+        course = PublishedCourseFactory()
+        first = LessonFactory(course=course, order=1, duration_seconds=100, video_url=self.VIDEO)
+        second = LessonFactory(course=course, order=2, duration_seconds=100, video_url=self.VIDEO)
+        sync_course_counters(course=course)
+        return course, first, second
+
+    def _media(self, user, lesson):
+        return _client_for(user).get(
+            reverse(
+                "lms:lesson-media-access",
+                kwargs={"lesson_id": lesson.pk, "media_kind": "video"},
+            )
+        )
+
+    def _progress(self, user, lesson, watched):
+        with patch(_AUDIT_TASK_PATH) as mock_task:
+            mock_task.delay = MagicMock()
+            return _client_for(user).post(
+                reverse("lms:lesson-progress-update", kwargs={"lesson_id": lesson.pk}),
+                data={"watched_seconds": watched},
+                format="json",
+            )
+
+    def test_second_lesson_media_locked_until_first_completed(self) -> None:
+        course, first, second = self._two_lesson_course()
+        user = UserFactory()
+        _enroll(user, course)
+
+        blocked = self._media(user, second)
+        assert blocked.status_code == status.HTTP_403_FORBIDDEN
+        assert first.title in blocked.data["message"] or "قفل" in blocked.data["message"]
+
+        # جلسه‌ی اول مسیر همیشه باز است
+        assert self._media(user, first).status_code == status.HTTP_200_OK
+
+        # با کامل‌شدن جلسه‌ی اول، دومی باز می‌شود
+        done = self._progress(user, first, 95)
+        assert done.status_code == status.HTTP_200_OK
+        assert self._media(user, second).status_code == status.HTTP_200_OK
+
+    def test_progress_update_rejected_before_previous_completed(self) -> None:
+        course, first, second = self._two_lesson_course()
+        user = UserFactory()
+        _enroll(user, course)
+
+        blocked = self._progress(user, second, 30)
+        assert blocked.status_code == status.HTTP_403_FORBIDDEN
+        assert first.title in blocked.data["message"] or "قفل" in blocked.data["message"]
+        assert not LessonProgress.objects.filter(lesson=second).exists()
+
+    def test_preview_lesson_is_exempt_from_sequence(self) -> None:
+        course, first, _second = self._two_lesson_course()
+        preview = LessonFactory(
+            course=course, order=3, duration_seconds=100, video_url=self.VIDEO, is_preview=True
+        )
+        user = UserFactory()
+        _enroll(user, course)
+        # بدون تماشای اول/دوم، پیش‌نمایش باز است (ویترینِ بازاریابی)
+        assert self._media(user, preview).status_code == status.HTTP_200_OK
+        # ولی پاسخ به جلسه‌ی قفل، همچنان نیازمندِ زنجیره است
+        assert self._progress(user, first, 95).status_code == status.HTTP_200_OK
+
+    def test_staff_user_skips_sequence(self) -> None:
+        course, _first, second = self._two_lesson_course()
+        staff = UserFactory(is_staff=True)
+        _enroll(staff, course)
+        assert self._media(user=staff, lesson=second).status_code == status.HTTP_200_OK
+
+    def test_completed_enrollment_can_rewatch_out_of_order(self) -> None:
+        course, first, second = self._two_lesson_course()
+        user = UserFactory()
+        _enroll(user, course)
+        assert self._progress(user, first, 95).status_code == status.HTTP_200_OK
+        assert self._progress(user, second, 95).status_code == status.HTTP_200_OK
+        enrollment = Enrollment.objects.get(user=user, course=course)
+        assert enrollment.status == EnrollmentStatus.COMPLETED
+
+        # جلسه‌ی تازه (بعد از پایانِ مسیر اضافه شده) برای فارغ‌التحصیل باز است
+        late = LessonFactory(course=course, order=3, duration_seconds=100, video_url=self.VIDEO)
+        assert self._media(user, late).status_code == status.HTTP_200_OK
+
+    def test_questions_reads_and_writes_follow_sequence(self) -> None:
+        course, first, second = self._two_lesson_course()
+        user = UserFactory()
+        _enroll(user, course)
+
+        list_url = reverse("lms:lesson-question-list-create", kwargs={"lesson_id": second.pk})
+        assert _client_for(user).get(list_url).status_code == status.HTTP_403_FORBIDDEN
+        asked = _client_for(user).post(
+            list_url,
+            data={"title": "سؤال درباره جلسه", "body": "متن سؤال معتبر است"},
+            format="json",
+        )
+        assert asked.status_code == status.HTTP_403_FORBIDDEN
+
+        assert self._progress(user, first, 95).status_code == status.HTTP_200_OK
+        assert _client_for(user).get(list_url).status_code == status.HTTP_200_OK
+        asked2 = _client_for(user).post(
+            list_url,
+            data={"title": "سؤال درباره جلسه", "body": "متن سؤال معتبر است"},
+            format="json",
+        )
+        assert asked2.status_code == status.HTTP_201_CREATED
+
+    def test_answer_create_locked_under_locked_lesson(self) -> None:
+        from apps.lms.models import LessonQuestion
+
+        course, first, second = self._two_lesson_course()
+        asker = UserFactory()
+        replier = UserFactory()
+        _enroll(asker, course)
+        _enroll(replier, course)
+        assert self._progress(asker, first, 95).status_code == status.HTTP_200_OK
+        question = LessonQuestion.objects.create(
+            lesson=second, user=asker, title="عنوان سؤال", body="متن سؤال معتبر"
+        )
+
+        blocked = _client_for(replier).post(
+            reverse("lms:question-answer-create", kwargs={"question_id": question.pk}),
+            data={"body": "پاسخ من به سؤال تو"},
+            format="json",
+        )
+        assert blocked.status_code == status.HTTP_403_FORBIDDEN
+
+        assert self._progress(replier, first, 95).status_code == status.HTTP_200_OK
+        allowed = _client_for(replier).post(
+            reverse("lms:question-answer-create", kwargs={"question_id": question.pk}),
+            data={"body": "پاسخ من به سؤال تو"},
+            format="json",
+        )
+        assert allowed.status_code == status.HTTP_201_CREATED

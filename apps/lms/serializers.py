@@ -340,7 +340,9 @@ class LessonAnswerSerializer(serializers.ModelSerializer):
 
     user_id = serializers.IntegerField(read_only=True)
     user_display = serializers.SerializerMethodField()
+    reply_to_id = serializers.IntegerField(read_only=True)
     reply_to_display = serializers.SerializerMethodField()
+    reply_to_excerpt = serializers.SerializerMethodField()
     replies = serializers.SerializerMethodField()
 
     class Meta:
@@ -350,7 +352,9 @@ class LessonAnswerSerializer(serializers.ModelSerializer):
             "user_id",
             "user_display",
             "parent_id",
+            "reply_to_id",
             "reply_to_display",
+            "reply_to_excerpt",
             "body",
             "status",
             "is_instructor_answer",
@@ -371,6 +375,19 @@ class LessonAnswerSerializer(serializers.ModelSerializer):
             return None
         user = obj.reply_to.user
         return getattr(user, "full_name", "") or getattr(user, "email", "کاربر")
+
+    def get_reply_to_excerpt(self, obj) -> str | None:
+        """گزیده‌ی متنِ پیامی که روی آن رد خورده — برای نقل‌قولِ دقیق زیرِ ردها.
+
+        با حذفِ بدنه‌ی هدف (reply_to SET_NULL) مقدارش None می‌شود و رابط، نقل‌قول
+        را به حالتِ «پیامِ حذف‌شده» دگرگون می‌کند.
+        """
+        if obj.reply_to_id is None:
+            return None
+        body = (obj.reply_to.body or "").strip()
+        if len(body) <= 140:
+            return body
+        return body[:137].rstrip() + "…"
 
     def get_replies(self, obj) -> list:
         """Serialize visible children — depth is capped at one level by design."""

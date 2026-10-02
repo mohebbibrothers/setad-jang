@@ -322,6 +322,47 @@ class TestLMSLessonAnswerReplies:
 
         assert response.status_code == status.HTTP_201_CREATED
 
+    def test_reply_payload_carries_reply_to_id_and_excerpt(self) -> None:
+        """نقل‌قولِ دقیقِ هدفِ رد: reply_to_id + reply_to_excerpt (بریده تا ۱۴۰ نویسه)."""
+        course = PublishedCourseFactory()
+        lesson = LessonFactory(course=course, order=1)
+        owner = UserFactory()
+        replier = UserFactory()
+        _enroll(owner, course)
+        _enroll(replier, course)
+        question = self._question(lesson, owner)
+        long_body = "چون var فقط یک اسکوپ تابعی دارد و این خیلی مهم است " * 9
+        root = LessonAnswer.objects.create(question=question, user=owner, body=long_body)
+
+        response = self._reply(replier, question, "پاسخ دقیق همین بود، ممنون", root.pk)
+
+        assert response.status_code == status.HTTP_201_CREATED
+        payload = response.data["data"]
+        assert payload["reply_to_id"] == root.pk
+        excerpt = payload["reply_to_excerpt"]
+        assert excerpt is not None
+        assert excerpt.endswith("…")
+        body_part = excerpt[:-1]
+        assert 120 <= len(body_part) <= 137
+        assert long_body.startswith(body_part)
+
+        short = LessonAnswer.objects.create(question=question, user=owner, body="کوتاه و شفاف")
+        response2 = self._reply(replier, question, "رد کوتاه هم اوکی است", short.pk)
+        assert response2.status_code == status.HTTP_201_CREATED
+        assert response2.data["data"]["reply_to_excerpt"] == "کوتاه و شفاف"
+
+        listing = _client_for(replier).get(
+            reverse("lms:lesson-question-list-create", kwargs={"lesson_id": lesson.pk})
+        )
+        assert listing.status_code == status.HTTP_200_OK
+        top_answers = listing.data["data"]["results"][0]["answers"]
+        nested = top_answers[0]["replies"][0]
+        assert nested["reply_to_id"] == root.pk
+        assert nested["reply_to_excerpt"].startswith(long_body[:20])
+        # پاسخِ سطح‌صفر هرگز نقل‌قول ندارد
+        assert top_answers[0]["reply_to_id"] is None
+        assert top_answers[0]["reply_to_excerpt"] is None
+
     def test_reply_to_reply_is_anchored_to_thread_root(self) -> None:
         course = PublishedCourseFactory()
         lesson = LessonFactory(course=course, order=1)

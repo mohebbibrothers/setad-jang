@@ -18521,11 +18521,23 @@ components:
           nullable: true
           title: پاسخِ مادر (لنگرِ رشته)
           readOnly: true
+        reply_to_id:
+          type: integer
+          readOnly: true
         reply_to_display:
           type: string
           nullable: true
           description: Display name of the author this answer replies to (display-only
             chain).
+          readOnly: true
+        reply_to_excerpt:
+          type: string
+          nullable: true
+          description: |-
+            گزیده‌ی متنِ پیامی که روی آن رد خورده — برای نقل‌قولِ دقیق زیرِ ردها.
+
+            با حذفِ بدنه‌ی هدف (reply_to SET_NULL) مقدارش None می‌شود و رابط، نقل‌قول
+            را به حالتِ «پیامِ حذف‌شده» دگرگون می‌کند.
           readOnly: true
         body:
           type: string
@@ -18565,6 +18577,8 @@ components:
       - parent_id
       - replies
       - reply_to_display
+      - reply_to_excerpt
+      - reply_to_id
       - status
       - updated_at
       - user_display
