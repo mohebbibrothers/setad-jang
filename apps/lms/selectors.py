@@ -146,7 +146,13 @@ def get_lesson_questions(*, lesson_id: int) -> QuerySet:
                 queryset=LessonAnswer.objects.filter(
                     status__in=[DiscussionStatus.VISIBLE, DiscussionStatus.FLAGGED],
                 ).select_related("user"),
-            )
+            ),
+            Prefetch(
+                "answers__replies",
+                queryset=LessonAnswer.objects.filter(
+                    status__in=[DiscussionStatus.VISIBLE, DiscussionStatus.FLAGGED],
+                ).select_related("user", "reply_to__user"),
+            ),
         )
         .order_by("-is_pinned", "-last_activity_at")
     )
@@ -158,7 +164,11 @@ def get_lesson_question_by_id(*, question_id: int):
 
     return (
         LessonQuestion.objects.select_related("user", "lesson", "lesson__course")
-        .prefetch_related("answers__user")
+        .prefetch_related(
+            "answers__user",
+            "answers__replies__user",
+            "answers__replies__reply_to__user",
+        )
         .filter(pk=question_id)
         .first()
     )

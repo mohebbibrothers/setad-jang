@@ -32,6 +32,7 @@ from apps.lms.serializers import (
 from apps.lms.services import (
     LMSDiscussionAccessError,
     LMSDiscussionModerationError,
+    LMSDiscussionReplyError,
 )
 from apps.lms.throttles import (
     LMSDiscussionThrottle,
@@ -176,7 +177,10 @@ class LMSQuestionAnswerCreateView(APIView):
                 user=request.user,
                 body=serializer.validated_data["body"],
                 is_instructor_answer=bool(request.user.is_staff or request.user.is_superuser),
+                parent_id=serializer.validated_data.get("parent_id"),
             )
+        except LMSDiscussionReplyError as exc:
+            return ErrorResponse(message=str(exc), status_code=status.HTTP_400_BAD_REQUEST)
         except LMSDiscussionAccessError as exc:
             return ErrorResponse(message=str(exc), status_code=status.HTTP_403_FORBIDDEN)
         log_action_async(

@@ -548,11 +548,33 @@ class LessonQuestion(BaseModel):
 
 
 class LessonAnswer(BaseModel):
-    """A threaded answer for a lesson question."""
+    """A threaded answer for a lesson question (one reply level, YouTube-style).
+
+    «parent» لنگرِ ریشه‌ی یک رشته است (فقط برای ردها پر می‌شود؛ پاسخ‌های سطح‌صفر
+    مقدارش None است) و «reply_to» دقیقاً همان پاسخی است که کاربر روی آن رد زده —
+    این دو با هم امکان نمایشِ «در پاسخ به @فلانی» را حتی زیرِ رشته‌های شل می‌دهند.
+    عمقِ تودرتو عمداً یک‌سطحی نگه داشته می‌شود تا گفتگو خوانا بماند.
+    """
 
     question = models.ForeignKey(LessonQuestion, on_delete=models.CASCADE, related_name="answers")
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="lms_answers"
+    )
+    parent = models.ForeignKey(
+        "self",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="replies",
+        verbose_name="پاسخِ مادر (لنگرِ رشته)",
+    )
+    reply_to = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="mentioned_by",
+        verbose_name="در پاسخ به",
     )
     body = models.TextField()
     status = models.CharField(
@@ -565,7 +587,10 @@ class LessonAnswer(BaseModel):
         verbose_name = "پاسخ سؤال"
         verbose_name_plural = "پاسخ‌های سؤالات"
         ordering = ["created_at"]
-        indexes = [models.Index(fields=["question", "status", "created_at"])]
+        indexes = [
+            models.Index(fields=["question", "status", "created_at"]),
+            models.Index(fields=["parent", "status", "created_at"]),
+        ]
 
 
 class LessonDiscussionReport(BaseModel):

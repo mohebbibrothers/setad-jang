@@ -19,7 +19,7 @@ from rest_framework.test import APIClient
 
 from apps.audit_logs import actions as audit_actions
 from apps.lms.choices import QuizAttemptStatus, QuizStatus
-from apps.lms.models import Enrollment, QuizAttempt, QuizOption, QuizQuestion
+from apps.lms.models import Enrollment, LessonProgress, QuizAttempt, QuizOption, QuizQuestion
 from apps.lms.services import publish_quiz, sync_course_counters
 from tests.factories import AdminUserFactory, UserFactory
 from tests.factories.lms import LessonFactory, PublishedCourseFactory, QuizFactory
@@ -157,10 +157,12 @@ class TestLMSQuizAttemptFlow:
 
     def test_enrolled_user_can_start_attempt_with_question_snapshot(self) -> None:
         course = PublishedCourseFactory()
-        LessonFactory(course=course, order=1, duration_seconds=100)
+        lesson = LessonFactory(course=course, order=1, duration_seconds=100)
         sync_course_counters(course=course)
         user = UserFactory()
-        _enroll(user, course)
+        enrollment = _enroll(user, course)
+        # دروازه‌ی آمادگی: جلسه‌ی کلاس باید پیش از آغاز آزمون تکمیل شده باشد
+        LessonProgress.objects.create(enrollment=enrollment, lesson=lesson, is_completed=True)
         quiz, _correct, _wrong = _build_publishable_quiz(course)
 
         with patch(_AUDIT_TASK_PATH) as mock_task:
@@ -291,3 +293,84 @@ class TestLMSQuizAttemptFlow:
         )
         assert unlocked_start.status_code == status.HTTP_201_CREATED
         assert unlocked_start.data["data"]["attempt_number"] == 3
+
+
+class TestQuizReadinessGate:
+    """دروازه‌ی آمادگی: ساختِ تلاشِ تازه فقط بعد از تکمیلِ همه‌ی جلساتِ فعال."""
+
+    def _setup(self, *, lesson_count: int = 2):
+        course = PublishedCourseFactory()
+        lessons = [LessonFactory(course=course, order=i + 1) for i in range(lesson_count)]
+        quiz, _correct, _wrong = _build_publishable_quiz(course)
+        return course, lessons, quiz
+
+    def _start(self, user, slug):
+        with patch(_AUDIT_TASK_PATH) as mock_task:
+            mock_task.delay = MagicMock()
+            return _client_for(user).post(reverse("lms:quiz-attempt-start", kwargs={"slug": slug}))
+
+    def test_start_blocked_until_all_lessons_completed(self) -> None:
+        course, lessons, _quiz = self._setup()
+        user = UserFactory()
+        enrollment = _enroll(user, course)
+
+        blocked = self._start(user, course.slug)
+        assert blocked.status_code == status.HTTP_403_FORBIDDEN
+        assert "جلسه مانده" in str(blocked.data)
+
+        LessonProgress.objects.create(enrollment=enrollment, lesson=lessons[0], is_completed=True)
+        still_blocked = self._start(user, course.slug)
+        assert still_blocked.status_code == status.HTTP_403_FORBIDDEN
+
+        LessonProgress.objects.create(enrollment=enrollment, lesson=lessons[1], is_completed=True)
+        allowed = self._start(user, course.slug)
+        assert allowed.status_code == status.HTTP_201_CREATED
+
+    def test_inactive_lessons_do_not_hold_the_gate(self) -> None:
+        course, lessons, _quiz = self._setup(lesson_count=1)
+        inactive = LessonFactory(course=course, order=9, is_active=False)
+        user = UserFactory()
+        enrollment = _enroll(user, course)
+        LessonProgress.objects.create(enrollment=enrollment, lesson=lessons[0], is_completed=True)
+        assert inactive.is_active is False
+
+        response = self._start(user, course.slug)
+
+        assert response.status_code == status.HTTP_201_CREATED
+
+    def test_resume_of_in_progress_attempt_ignores_gate(self) -> None:
+        course, lessons, _quiz = self._setup(lesson_count=1)
+        user = UserFactory()
+        enrollment = _enroll(user, course)
+        LessonProgress.objects.create(enrollment=enrollment, lesson=lessons[0], is_completed=True)
+        started = self._start(user, course.slug)
+        assert started.status_code == status.HTTP_201_CREATED
+        attempt_id = started.data["data"]["id"]
+
+        # جلسه ناتمام می‌شود؛ تلاشِ در‌حال‌انجام باید resume شود نه ۴۰۳
+        LessonProgress.objects.filter(enrollment=enrollment).update(is_completed=False)
+        resumed = self._start(user, course.slug)
+
+        assert resumed.status_code == status.HTTP_200_OK
+        assert resumed.data["data"]["id"] == attempt_id
+
+    def test_completed_enrollment_bypasses_gate(self) -> None:
+        course, _lessons, _quiz = self._setup(lesson_count=1)
+        user = UserFactory()
+        enrollment = _enroll(user, course)
+        enrollment.status = "completed"
+        enrollment.save(update_fields=["status", "updated_at"])
+
+        response = self._start(user, course.slug)
+
+        assert response.status_code == status.HTTP_201_CREATED
+
+    def test_course_without_lessons_keeps_quiz_open(self) -> None:
+        course, lessons, _quiz = self._setup(lesson_count=0)
+        assert lessons == []
+        user = UserFactory()
+        _enroll(user, course)
+
+        response = self._start(user, course.slug)
+
+        assert response.status_code == status.HTTP_201_CREATED

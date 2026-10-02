@@ -336,10 +336,12 @@ class EnrollmentDetailSerializer(EnrollmentSerializer):
 
 
 class LessonAnswerSerializer(serializers.ModelSerializer):
-    """Output serializer for lesson answers."""
+    """Output serializer for lesson answers (with one nested reply level)."""
 
     user_id = serializers.IntegerField(read_only=True)
     user_display = serializers.SerializerMethodField()
+    reply_to_display = serializers.SerializerMethodField()
+    replies = serializers.SerializerMethodField()
 
     class Meta:
         model = LessonAnswer
@@ -347,12 +349,15 @@ class LessonAnswerSerializer(serializers.ModelSerializer):
             "id",
             "user_id",
             "user_display",
+            "parent_id",
+            "reply_to_display",
             "body",
             "status",
             "is_instructor_answer",
             "is_accepted",
             "created_at",
             "updated_at",
+            "replies",
         )
         read_only_fields = fields
 
@@ -360,13 +365,35 @@ class LessonAnswerSerializer(serializers.ModelSerializer):
         """Return safe display name for answer author."""
         return getattr(obj.user, "full_name", "") or getattr(obj.user, "email", "کاربر")
 
+    def get_reply_to_display(self, obj) -> str | None:
+        """Display name of the author this answer replies to (display-only chain)."""
+        if obj.reply_to_id is None:
+            return None
+        user = obj.reply_to.user
+        return getattr(user, "full_name", "") or getattr(user, "email", "کاربر")
+
+    def get_replies(self, obj) -> list:
+        """Serialize visible children — depth is capped at one level by design."""
+        if self.context.get("depth", 0) >= 1:
+            return []
+        from apps.lms.choices import DiscussionStatus
+
+        children = [
+            child
+            for child in obj.replies.all()
+            if child.status in (DiscussionStatus.VISIBLE, DiscussionStatus.FLAGGED)
+        ]
+        return LessonAnswerSerializer(
+            children, many=True, context={**self.context, "depth": 1}
+        ).data
+
 
 class LessonQuestionSerializer(serializers.ModelSerializer):
     """Output serializer for lesson questions with nested visible answers."""
 
     user_id = serializers.IntegerField(read_only=True)
     user_display = serializers.SerializerMethodField()
-    answers = LessonAnswerSerializer(many=True, read_only=True)
+    answers = serializers.SerializerMethodField()
 
     class Meta:
         model = LessonQuestion
@@ -391,6 +418,11 @@ class LessonQuestionSerializer(serializers.ModelSerializer):
         """Return safe display name for question author."""
         return getattr(obj.user, "full_name", "") or getattr(obj.user, "email", "کاربر")
 
+    def get_answers(self, obj) -> list:
+        """Top-level answers only — replies hang under their root via `replies`."""
+        tops = [answer for answer in obj.answers.all() if answer.parent_id is None]
+        return LessonAnswerSerializer(tops, many=True, context=self.context).data
+
 
 class LessonQuestionCreateSerializer(serializers.Serializer):
     """Input serializer for creating a lesson question."""
@@ -414,9 +446,10 @@ class LessonQuestionCreateSerializer(serializers.Serializer):
 
 
 class LessonAnswerCreateSerializer(serializers.Serializer):
-    """Input serializer for creating a lesson answer."""
+    """Input serializer for creating a lesson answer (optionally a reply)."""
 
     body = serializers.CharField()
+    parent_id = serializers.IntegerField(required=False, min_value=1)
 
     def validate_body(self, value: str) -> str:
         """Require meaningful answer body."""

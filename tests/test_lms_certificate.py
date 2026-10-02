@@ -19,7 +19,14 @@ from apps.audit_logs import actions as audit_actions
 from apps.authentication.choices import Gender
 from apps.lms.certificate import build_certificate_text, honorific_for_gender
 from apps.lms.choices import BadgeLevel, CertificateStatus
-from apps.lms.models import Certificate, LMSUserSkill, QuizOption, QuizQuestion
+from apps.lms.models import (
+    Certificate,
+    Enrollment,
+    LessonProgress,
+    LMSUserSkill,
+    QuizOption,
+    QuizQuestion,
+)
 from apps.lms.services import publish_quiz, sync_course_counters
 from tests.factories import AdminUserFactory, UserFactory
 from tests.factories.lms import LessonFactory, PublishedCourseFactory, QuizFactory
@@ -68,6 +75,10 @@ def _pass_quiz_and_return_certificate(*, user, course) -> Certificate:
     client = _client_for(user)
     enroll_response = client.post(reverse("lms:course-enroll", kwargs={"slug": course.slug}))
     assert enroll_response.status_code == status.HTTP_201_CREATED
+    # دروازه‌ی آمادگی: همه‌ی جلساتِ فعال باید پیش از آغاز آزمون تکمیل شده باشند
+    enrollment = Enrollment.objects.get(user=user, course=course)
+    for lesson in course.lessons.filter(is_active=True):
+        LessonProgress.objects.create(enrollment=enrollment, lesson=lesson, is_completed=True)
     _quiz, question, correct, _wrong = _build_quiz(course)
     start_response = client.post(reverse("lms:quiz-attempt-start", kwargs={"slug": course.slug}))
     assert start_response.status_code == status.HTTP_201_CREATED

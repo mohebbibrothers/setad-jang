@@ -783,6 +783,10 @@ class LMSDiscussionModerationError(LMSServiceError):
     """Raised when a discussion moderation action is invalid."""
 
 
+class LMSDiscussionReplyError(LMSServiceError):
+    """Raised when an answer reply target is invalid (client-side mistake)."""
+
+
 def ensure_user_enrolled_for_lesson(*, user: Any, lesson: Lesson) -> Enrollment:
     """Return active/completed enrollment that allows discussion access for a lesson."""
     enrollment = Enrollment.objects.filter(
@@ -816,18 +820,44 @@ def create_lesson_question(*, lesson: Lesson, user: Any, title: str, body: str):
 
 
 @transaction.atomic
-def create_lesson_answer(*, question, user: Any, body: str, is_instructor_answer: bool = False):
-    """Create an answer under a lesson question and update counters/activity."""
+def create_lesson_answer(
+    *,
+    question,
+    user: Any,
+    body: str,
+    is_instructor_answer: bool = False,
+    parent_id: int | None = None,
+):
+    """Create an answer (optionally a one-level reply) and update counters/activity.
+
+    قواعدِ رد (reply):
+      • هدفِ رد باید پاسخی visible در همین سؤال باشد؛ در غیر این صورت ۴۰۰.
+      • عمق تودرتو فقط یک سطح است؛ ردِ رویِ رد به لنگرِ رشته متصل می‌شود ولی
+        زنجیره‌ی نمایشی («در پاسخ به …») همان هدفِ واقعی را نگه می‌دارد.
+    """
     from apps.lms.choices import DiscussionStatus
     from apps.lms.models import LessonAnswer
 
     ensure_user_enrolled_for_lesson(user=user, lesson=question.lesson)
+    parent = None
+    reply_to = None
+    if parent_id is not None:
+        reply_to = (
+            question.answers.filter(pk=parent_id, status=DiscussionStatus.VISIBLE)
+            .select_related("parent", "user")
+            .first()
+        )
+        if reply_to is None:
+            raise LMSDiscussionReplyError("پاسخی که می‌خواهی به آن رد بزنی یافت نشد.")
+        parent = reply_to.parent if reply_to.parent_id is not None else reply_to
     answer = LessonAnswer.objects.create(
         question=question,
         user=user,
         body=body.strip(),
         status=DiscussionStatus.VISIBLE,
         is_instructor_answer=is_instructor_answer,
+        parent=parent,
+        reply_to=reply_to,
     )
     question.answer_count = question.answers.filter(status=DiscussionStatus.VISIBLE).count()
     question.last_activity_at = timezone.now()
@@ -948,6 +978,10 @@ class QuizValidationError(LMSQuizError):
 
 class QuizAttemptLockedError(LMSQuizError):
     """Raised when the user cannot start another quiz attempt."""
+
+
+class QuizNotReadyError(LMSQuizError):
+    """Raised when the learner has not finished all lessons of the course yet."""
 
 
 class QuizAttemptSubmissionError(LMSQuizError):
@@ -1128,6 +1162,24 @@ def start_quiz_attempt(*, quiz, user: Any):
     )
     if terminal_attempts.filter(is_passed=True).exists():
         raise QuizAttemptLockedError("شما قبلاً این آزمون را با موفقیت گذرانده‌اید.")
+
+    # دروازه‌ی آمادگی: آزمونِ پایانی «جلسه‌ی آخرِ مسیر» است؛ ساختِ تلاشِ تازه فقط
+    # بعد از تکمیلِ همه‌ی جلساتِ فعال. تلاش‌های در‌حال‌انجامِ قبلی (resume) و
+    # ثبت‌نام‌های COMPLETED (فارغ‌التحصیل‌ها) از این دروازه معاف‌اند.
+    if enrollment.status != EnrollmentStatus.COMPLETED:
+        active_lessons = quiz.course.lessons.filter(is_active=True)
+        if active_lessons.exists():
+            done_lesson_ids = set(
+                enrollment.lesson_progress.filter(is_completed=True).values_list(
+                    "lesson_id", flat=True
+                )
+            )
+            remaining = active_lessons.exclude(pk__in=done_lesson_ids).count()
+            if remaining:
+                raise QuizNotReadyError(
+                    "دروازه‌ی آزمون بعد از تماشای همه‌ی جلسات باز می‌شود؛ "
+                    f"هنوز {remaining} جلسه مانده است."
+                )
 
     attempt_number = _next_attempt_number(quiz=quiz, user=user)
     allowed_attempts = quiz.max_attempts + _valid_unlocks_count(quiz=quiz, user=user)

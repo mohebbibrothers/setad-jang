@@ -227,6 +227,7 @@ class LessonAnswerAdmin(admin.ModelAdmin):
     )
     list_filter = ("status", "is_instructor_answer", "is_accepted")
     search_fields = ("body", "user__email", "question__title")
+    raw_id_fields = ("parent", "reply_to")
 
 
 @admin.register(LessonDiscussionReport)

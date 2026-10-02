@@ -35,6 +35,7 @@ from apps.lms.services import (
     QuizAttemptLockedError,
     QuizAttemptSubmissionError,
     QuizNotAvailableError,
+    QuizNotReadyError,
     QuizValidationError,
 )
 
@@ -135,7 +136,12 @@ class LMSQuizAttemptStartView(APIView):
             )
         try:
             attempt, created = services.start_quiz_attempt(quiz=quiz, user=request.user)
-        except (QuizNotAvailableError, QuizAttemptLockedError, QuizValidationError) as exc:
+        except (
+            QuizNotAvailableError,
+            QuizAttemptLockedError,
+            QuizNotReadyError,
+            QuizValidationError,
+        ) as exc:
             return ErrorResponse(message=str(exc), status_code=status.HTTP_403_FORBIDDEN)
         action = audit_actions.LMS_QUIZ_ATTEMPT_STARTED
         log_action_async(
