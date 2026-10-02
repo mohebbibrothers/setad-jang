@@ -18504,7 +18504,7 @@ components:
       - top_recommendable_courses
     LessonAnswer:
       type: object
-      description: Output serializer for lesson answers.
+      description: Output serializer for lesson answers (with one nested reply level).
       properties:
         id:
           type: integer
@@ -18515,6 +18515,17 @@ components:
         user_display:
           type: string
           description: Return safe display name for answer author.
+          readOnly: true
+        parent_id:
+          type: integer
+          nullable: true
+          title: پاسخِ مادر (لنگرِ رشته)
+          readOnly: true
+        reply_to_display:
+          type: string
+          nullable: true
+          description: Display name of the author this answer replies to (display-only
+            chain).
           readOnly: true
         body:
           type: string
@@ -18539,22 +18550,34 @@ components:
           format: date-time
           readOnly: true
           title: تاریخ بروزرسانی
+        replies:
+          type: array
+          items: {}
+          description: Serialize visible children — depth is capped at one level by
+            design.
+          readOnly: true
       required:
       - body
       - created_at
       - id
       - is_accepted
       - is_instructor_answer
+      - parent_id
+      - replies
+      - reply_to_display
       - status
       - updated_at
       - user_display
       - user_id
     LessonAnswerCreate:
       type: object
-      description: Input serializer for creating a lesson answer.
+      description: Input serializer for creating a lesson answer (optionally a reply).
       properties:
         body:
           type: string
+        parent_id:
+          type: integer
+          minimum: 1
       required:
       - body
     LessonCreateUpdate:
@@ -18758,8 +18781,9 @@ components:
           readOnly: true
         answers:
           type: array
-          items:
-            $ref: '#/components/schemas/LessonAnswer'
+          items: {}
+          description: Top-level answers only — replies hang under their root via
+            `replies`.
           readOnly: true
         created_at:
           type: string
