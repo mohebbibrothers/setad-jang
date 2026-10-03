@@ -16,7 +16,7 @@ PyYAML==6.0.3
 Pygments==2.21.0
 amqp==5.4.0
 asgiref==3.11.1
-ast_serialize==0.12.0
+ast_serialize==0.12.1
 attrs==26.1.0
 bandit==1.9.4
 billiard==4.3.0
@@ -112,4 +112,4 @@ urllib3==2.8.0
 vine==5.1.0
 wcwidth==0.9.1
 whitenoise==6.12.0
-zipp==4.1.0
+zipp==4.1.1
