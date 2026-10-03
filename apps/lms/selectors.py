@@ -128,29 +128,45 @@ def get_lesson_for_progress(*, lesson_id: int) -> Lesson | None:
 
 
 def get_lesson_questions(*, lesson_id: int) -> QuerySet:
-    """Return visible/flagged questions for a lesson with visible answers prefetched."""
-    from django.db.models import Prefetch
+    """Return visible/flagged questions for a lesson with answers prefetched.
+
+    پرسش/پاسخ‌های «حذف‌شده» فقط وقتی سوار می‌شوند که زیرِشان گفتگوی زنده هست
+    (سنگ‌قبر برای خواناییِ رشته)؛ پنهان‌کردن/فیلترِ سطحِ نمایش در serializer
+    انجام می‌شود و متنِ سنگ‌قبر هرگز به بیرون درز نمی‌کند.
+    """
+    from django.db.models import Prefetch, Q
 
     from apps.lms.choices import DiscussionStatus
     from apps.lms.models import LessonAnswer, LessonQuestion
 
+    answer_qs = LessonAnswer.objects.filter(
+        status__in=[
+            DiscussionStatus.VISIBLE,
+            DiscussionStatus.FLAGGED,
+            DiscussionStatus.DELETED,
+        ]
+    ).select_related("user")
     return (
-        LessonQuestion.objects.filter(
-            lesson_id=lesson_id,
-            status__in=[DiscussionStatus.VISIBLE, DiscussionStatus.FLAGGED],
+        LessonQuestion.objects.filter(lesson_id=lesson_id)
+        .filter(
+            Q(status__in=[DiscussionStatus.VISIBLE, DiscussionStatus.FLAGGED])
+            | Q(
+                status=DiscussionStatus.DELETED,
+                answers__status__in=[DiscussionStatus.VISIBLE, DiscussionStatus.FLAGGED],
+            )
         )
+        .distinct()
         .select_related("user", "lesson", "lesson__course")
         .prefetch_related(
-            Prefetch(
-                "answers",
-                queryset=LessonAnswer.objects.filter(
-                    status__in=[DiscussionStatus.VISIBLE, DiscussionStatus.FLAGGED],
-                ).select_related("user"),
-            ),
+            Prefetch("answers", queryset=answer_qs),
             Prefetch(
                 "answers__replies",
                 queryset=LessonAnswer.objects.filter(
-                    status__in=[DiscussionStatus.VISIBLE, DiscussionStatus.FLAGGED],
+                    status__in=[
+                        DiscussionStatus.VISIBLE,
+                        DiscussionStatus.FLAGGED,
+                        DiscussionStatus.DELETED,
+                    ]
                 ).select_related("user", "reply_to__user"),
             ),
         )

@@ -26,8 +26,10 @@ from apps.lms.serializers import (
     DiscussionReportSerializer,
     LessonAnswerCreateSerializer,
     LessonAnswerSerializer,
+    LessonAnswerUpdateSerializer,
     LessonQuestionCreateSerializer,
     LessonQuestionSerializer,
+    LessonQuestionUpdateSerializer,
 )
 from apps.lms.services import (
     LMSDiscussionAccessError,
@@ -260,6 +262,8 @@ class LMSQuestionReportView(APIView):
             )
         except LMSDiscussionAccessError as exc:
             return ErrorResponse(message=str(exc), status_code=status.HTTP_403_FORBIDDEN)
+        except LMSDiscussionModerationError as exc:
+            return ErrorResponse(message=str(exc), status_code=status.HTTP_400_BAD_REQUEST)
         log_action_async(
             user_id=request.user.pk,
             action=audit_actions.LMS_DISCUSSION_REPORTED,
@@ -303,6 +307,8 @@ class LMSAnswerReportView(APIView):
             )
         except LMSDiscussionAccessError as exc:
             return ErrorResponse(message=str(exc), status_code=status.HTTP_403_FORBIDDEN)
+        except LMSDiscussionModerationError as exc:
+            return ErrorResponse(message=str(exc), status_code=status.HTTP_400_BAD_REQUEST)
         log_action_async(
             user_id=request.user.pk,
             action=audit_actions.LMS_DISCUSSION_REPORTED,
@@ -314,6 +320,174 @@ class LMSAnswerReportView(APIView):
         return CreatedResponse(
             data=DiscussionReportSerializer(report).data,
             message="گزارش شما ثبت شد و توسط ادمین بررسی می‌شود.",
+        )
+
+
+class LMSLessonQuestionDetailView(APIView):
+    """Edit or delete an own lesson question (author or admin)."""
+
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [LMSDiscussionThrottle]
+
+    @extend_schema(
+        operation_id="lms_questions_update",
+        tags=[TAG_LMS_USER],
+        request=LessonQuestionUpdateSerializer,
+        responses={
+            200: QUESTION_RESPONSE,
+            400: LMS_ERROR_RESPONSE,
+            403: LMS_ERROR_RESPONSE,
+            404: LMS_ERROR_RESPONSE,
+        },
+    )
+    def patch(self, request: Request, question_id: int) -> SuccessResponse | ErrorResponse:
+        """Edit question title/body by its author with an «edited» stamp."""
+        question = selectors.get_lesson_question_by_id(question_id=question_id)
+        if question is None:
+            return ErrorResponse(message="سؤال یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+        serializer = LessonQuestionUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            question = services.update_lesson_question(
+                question=question, user=request.user, **serializer.validated_data
+            )
+        except LMSDiscussionAccessError as exc:
+            return ErrorResponse(message=str(exc), status_code=status.HTTP_403_FORBIDDEN)
+        except LMSDiscussionModerationError as exc:
+            return ErrorResponse(message=str(exc), status_code=status.HTTP_400_BAD_REQUEST)
+        log_action_async(
+            user_id=request.user.pk,
+            action=audit_actions.LMS_QUESTION_UPDATED,
+            resource_type="lms_lesson_question",
+            resource_id=str(question.pk),
+            extra_data={"lesson_id": question.lesson_id},
+            **extract_audit_metadata(request),
+        )
+        return SuccessResponse(
+            data=LessonQuestionSerializer(question).data,
+            message="پرسش شما ویرایش شد.",
+        )
+
+    @extend_schema(
+        operation_id="lms_questions_delete",
+        tags=[TAG_LMS_USER],
+        responses={
+            200: None,
+            400: LMS_ERROR_RESPONSE,
+            403: LMS_ERROR_RESPONSE,
+            404: LMS_ERROR_RESPONSE,
+        },
+    )
+    def delete(self, request: Request, question_id: int) -> SuccessResponse | ErrorResponse:
+        """Delete own question; tombstones keep a thread with live answers readable."""
+        question = selectors.get_lesson_question_by_id(question_id=question_id)
+        if question is None:
+            return ErrorResponse(message="سؤال یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+        try:
+            mode = services.delete_lesson_question(question=question, user=request.user)
+        except LMSDiscussionAccessError as exc:
+            return ErrorResponse(message=str(exc), status_code=status.HTTP_403_FORBIDDEN)
+        except LMSDiscussionModerationError as exc:
+            return ErrorResponse(message=str(exc), status_code=status.HTTP_400_BAD_REQUEST)
+        log_action_async(
+            user_id=request.user.pk,
+            action=audit_actions.LMS_QUESTION_DELETED,
+            resource_type="lms_lesson_question",
+            resource_id=str(question_id),
+            extra_data={"mode": mode},
+            **extract_audit_metadata(request),
+        )
+        return SuccessResponse(
+            data={"mode": mode},
+            message=(
+                "پرسش حذف شد؛ پاسخ‌های دیگران به‌صورت سنگ‌قبر حفظ می‌شود."
+                if mode == "tombstone"
+                else "پرسش شما برای همیشه حذف شد."
+            ),
+        )
+
+
+class LMSLessonAnswerDetailView(APIView):
+    """Edit or delete an own lesson answer/reply (author or admin)."""
+
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [LMSDiscussionThrottle]
+
+    @extend_schema(
+        operation_id="lms_answers_update",
+        tags=[TAG_LMS_USER],
+        request=LessonAnswerUpdateSerializer,
+        responses={
+            200: ANSWER_RESPONSE,
+            400: LMS_ERROR_RESPONSE,
+            403: LMS_ERROR_RESPONSE,
+            404: LMS_ERROR_RESPONSE,
+        },
+    )
+    def patch(self, request: Request, answer_id: int) -> SuccessResponse | ErrorResponse:
+        """Edit answer body by its author with an «edited» stamp."""
+        answer = selectors.get_lesson_answer_by_id(answer_id=answer_id)
+        if answer is None:
+            return ErrorResponse(message="پاسخ یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+        serializer = LessonAnswerUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            answer = services.update_lesson_answer(
+                answer=answer, user=request.user, **serializer.validated_data
+            )
+        except LMSDiscussionAccessError as exc:
+            return ErrorResponse(message=str(exc), status_code=status.HTTP_403_FORBIDDEN)
+        except LMSDiscussionModerationError as exc:
+            return ErrorResponse(message=str(exc), status_code=status.HTTP_400_BAD_REQUEST)
+        log_action_async(
+            user_id=request.user.pk,
+            action=audit_actions.LMS_ANSWER_UPDATED,
+            resource_type="lms_lesson_answer",
+            resource_id=str(answer.pk),
+            extra_data={"question_id": answer.question_id},
+            **extract_audit_metadata(request),
+        )
+        return SuccessResponse(
+            data=LessonAnswerSerializer(answer).data,
+            message="پاسخ شما ویرایش شد.",
+        )
+
+    @extend_schema(
+        operation_id="lms_answers_delete",
+        tags=[TAG_LMS_USER],
+        responses={
+            200: None,
+            400: LMS_ERROR_RESPONSE,
+            403: LMS_ERROR_RESPONSE,
+            404: LMS_ERROR_RESPONSE,
+        },
+    )
+    def delete(self, request: Request, answer_id: int) -> SuccessResponse | ErrorResponse:
+        """Delete own answer; tombstones keep a live reply chain readable."""
+        answer = selectors.get_lesson_answer_by_id(answer_id=answer_id)
+        if answer is None:
+            return ErrorResponse(message="پاسخ یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+        try:
+            mode = services.delete_lesson_answer(answer=answer, user=request.user)
+        except LMSDiscussionAccessError as exc:
+            return ErrorResponse(message=str(exc), status_code=status.HTTP_403_FORBIDDEN)
+        except LMSDiscussionModerationError as exc:
+            return ErrorResponse(message=str(exc), status_code=status.HTTP_400_BAD_REQUEST)
+        log_action_async(
+            user_id=request.user.pk,
+            action=audit_actions.LMS_ANSWER_DELETED,
+            resource_type="lms_lesson_answer",
+            resource_id=str(answer_id),
+            extra_data={"mode": mode},
+            **extract_audit_metadata(request),
+        )
+        return SuccessResponse(
+            data={"mode": mode},
+            message=(
+                "پاسخ حذف شد و رشته‌ی ردها به‌صورت سنگ‌قبر حفظ می‌شود."
+                if mode == "tombstone"
+                else "پاسخ شما برای همیشه حذف شد."
+            ),
         )
 
 

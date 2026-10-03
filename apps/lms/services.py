@@ -6,6 +6,7 @@ state transitions remain auditable, transactional, and testable.
 
 from __future__ import annotations
 
+import logging
 from decimal import Decimal
 from typing import Any
 
@@ -18,6 +19,7 @@ from apps.lms.choices import (
     BadgeLevel,
     CertificateStatus,
     CourseStatus,
+    DiscussionStatus,
     EnrollmentStatus,
     LearningStatementVerb,
     LessonContentType,
@@ -29,11 +31,15 @@ from apps.lms.models import (
     Enrollment,
     LearningActivityStatement,
     Lesson,
+    LessonAnswer,
     LessonProgress,
+    LessonQuestion,
     LessonVideoProcessingJob,
     LMSCategory,
     LMSUserSkill,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class LMSServiceError(Exception):
@@ -73,6 +79,15 @@ class LessonCompletionModeError(LMSServiceError):
 
     مثلاً «علامت دستی خواندم» روی جلسهٔ ویدئویی مجاز نیست (دورزدن آستانهٔ ۹۰٪)
     و «٪ از ثانیهٔ تماشا» روی جلسهٔ سند/متنی تنها با «خواندم» تکمیل را می‌آورد.
+    """
+
+
+class LessonMediaEngagementRequiredError(LMSServiceError):
+    """Raised when a lesson requires real media engagement before completion.
+
+    جلسه‌ی سند‌محور فقط وقتی با «خواندم» بسته می‌شود که دانش‌پذیر اثبات‌پذیر
+    (مهرِ media_opened_at) دست‌کم یک‌بار سند را باز کرده باشد — «اول ببین،
+    بعد علامت بزن».
     """
 
 
@@ -501,8 +516,10 @@ def build_lesson_media_access(*, lesson: Lesson, user: Any, media_kind: str) -> 
             return {
                 "media_kind": "video",
                 "provider": "uploaded_file",
-                "url": lesson.video_file.url,
-                "expires_in_seconds": 600,
+                # جایگزینِ لینکِ خامِ دانلود: مسیرِ استریمِ امضاشده‌ی کوتاه‌عمر که
+                # فایل را فقط «درون‌سایتی» (inline) سرو می‌کند.
+                "url": _lesson_media_stream_api_path(lesson=lesson, user=user, media_kind="video"),
+                "expires_in_seconds": MEDIA_STREAM_TOKEN_MAX_AGE_SECONDS,
                 "lesson_id": lesson.pk,
                 "course_id": lesson.course_id,
             }
@@ -530,8 +547,8 @@ def build_lesson_media_access(*, lesson: Lesson, user: Any, media_kind: str) -> 
         return {
             "media_kind": "document",
             "provider": "uploaded_file",
-            "url": lesson.document_file.url,
-            "expires_in_seconds": 600,
+            "url": _lesson_media_stream_api_path(lesson=lesson, user=user, media_kind="document"),
+            "expires_in_seconds": MEDIA_STREAM_TOKEN_MAX_AGE_SECONDS,
             "lesson_id": lesson.pk,
             "course_id": lesson.course_id,
             "title": lesson.document_title or lesson.title,
@@ -560,6 +577,102 @@ def build_lesson_media_access(*, lesson: Lesson, user: Any, media_kind: str) -> 
             "title": lesson.attachment_title,
         }
     raise LessonMediaUnavailableError("رسانه درخواستی برای این جلسه موجود نیست.")
+
+
+def build_lesson_media_stream(*, lesson: Lesson, user: Any, media_kind: str) -> dict[str, Any]:
+    """Resolve an authenticated in-site media stream for a lesson file.
+
+    کنتراست با build_lesson_media_access: آن «نشانیِ ذخیره‌سازی» می‌دهد؛ این‌جا
+    فایلِ واقعی از خودِ بک‌اند (با همان دروازه‌های عضویت/زنجیره) استریم می‌شود
+    تا لینکِ خامِ دانلود هیچ‌وقت به مرورگر کاربر نرسد و سند/ویدئو فقط داخل
+    صفحه‌ی سایت دیده شود.
+    """
+    enrollment = Enrollment.objects.filter(
+        user=user,
+        course=lesson.course,
+        status__in=[EnrollmentStatus.ACTIVE, EnrollmentStatus.COMPLETED],
+    ).first()
+    if enrollment is None and not lesson.is_preview:
+        raise LessonMediaAccessError(
+            "برای دسترسی به رسانه این جلسه باید در کلاس ثبت‌نام کرده باشید."
+        )
+    if enrollment is not None:
+        ensure_lesson_sequence_open(user=user, lesson=lesson, enrollment=enrollment)
+    return resolve_lesson_media_stream_file(lesson=lesson, media_kind=media_kind)
+
+
+def resolve_lesson_media_stream_file(*, lesson: Lesson, media_kind: str) -> dict[str, Any]:
+    """فایلِ قابل‌استریمِ هر نوع رسانه — بدون دروازه‌ی عضویت (دو برقرارِ مسیر).
+
+    این تابع صرف «نگاشتِ نوع‌رسانه → فایل» است و خودش هیچ دروازه‌ای اعمال
+    نمی‌کند؛ مسیرِ JWT از build_lesson_media_stream می‌آید و مسیرِ امضاشده از
+    resolve_lesson_media_stream_token — پس دور زدنی در کار نیست.
+    """
+    if media_kind == "document":
+        if lesson.content_type != LessonContentType.DOCUMENT or not lesson.document_file:
+            raise LessonMediaUnavailableError("فایل سند این جلسه هنوز بارگذاری نشده است.")
+        return {
+            "file_field": lesson.document_file,
+            "base_name": f"lesson-{lesson.pk}-document",
+        }
+    if media_kind == "video":
+        if not lesson.video_file:
+            raise LessonMediaUnavailableError("فایل ویدئوی این جلسه هنوز بارگذاری نشده است.")
+        return {"file_field": lesson.video_file, "base_name": f"lesson-{lesson.pk}-video"}
+    raise LessonMediaUnavailableError("استریمِ درون‌سایتی برای این نوع رسانه تعریف نشده است.")
+
+
+# ── امضای کوتاه‌عمرِ استریمِ درون‌سایتی ─────────────────────────────────────
+# عناصرِ HTML همچون <video> توانِ فرستادن هدرِ Authorization را ندارند؛ از
+# این رو لینکِ پخش/مطالعه با امضای HMAC کوتاه‌عمر (۱۲ ساعت) و کلیدِ سرور ساخته
+# می‌شود. امضا در «زمانِ صدورِ دسترسی» و پس از عبور از همه‌ی دروازه‌های
+# عضویت/زنجیره زده می‌شود؛ درست درجای لینکِ خامِ /media/ (که دانلودپذیر بود).
+_MEDIA_STREAM_TOKEN_SALT = "lms.lesson-media-stream.v1"
+MEDIA_STREAM_TOKEN_MAX_AGE_SECONDS = 12 * 60 * 60  # ۱۲ ساعت — تماشای جلسات طولانی
+
+
+def sign_lesson_media_token(*, lesson: Lesson, user: Any, media_kind: str) -> str:
+    """امضای فشرده‌ی کوتاه‌عمر برای استریمِ درون‌سایتیِ یک فایلِ جلسه."""
+    from django.core import signing
+
+    return signing.dumps(
+        {"l": lesson.pk, "k": media_kind, "u": user.pk},
+        salt=_MEDIA_STREAM_TOKEN_SALT,
+        compress=True,
+    )
+
+
+def _lesson_media_stream_api_path(*, lesson: Lesson, user: Any, media_kind: str) -> str:
+    """مسیرِ نسبیِ API استریمِ امضاشده — فرانت آن را زیر /api/proxy مصرف می‌کند."""
+    token = sign_lesson_media_token(lesson=lesson, user=user, media_kind=media_kind)
+    return f"lms/lessons/{lesson.pk}/media/{media_kind}/stream/?t={token}"
+
+
+def resolve_lesson_media_stream_token(*, token: str, media_kind: str) -> Lesson:
+    """اعتبارسنجیِ امضای استریم و واکشیِ جلسه — بدون نیاز به نشستِ کاربر.
+
+    امضا فقط در انتهای موفقِ build_lesson_media_access زده شده (یعنی عضویت و
+    زنجیره‌ی تماشا قبلاً گذرانده شده‌اند)؛ این‌جا صرفاً اعتبار/تطابقِ امضا چک
+    می‌شود تا همان فایلِ همان جلسه سرو شود، نه بیشتر.
+    """
+    from django.core import signing
+
+    try:
+        data = signing.loads(
+            token,
+            salt=_MEDIA_STREAM_TOKEN_SALT,
+            max_age=MEDIA_STREAM_TOKEN_MAX_AGE_SECONDS,
+        )
+    except signing.BadSignature as exc:
+        raise LessonMediaAccessError(
+            "نشستِ پخش منقضی شده است؛ صفحه را تازه‌سازی کنید تا نشانیِ تازه بگیرید."
+        ) from exc
+    if not isinstance(data, dict) or data.get("k") != media_kind:
+        raise LessonMediaAccessError("نشانیِ استریم برای این رسانه معتبر نیست.")
+    lesson = Lesson.objects.filter(pk=data.get("l")).first()
+    if lesson is None:
+        raise LessonMediaUnavailableError("جلسه‌ی این رسانه دیگر موجود نیست.")
+    return lesson
 
 
 # ============================================================
@@ -648,6 +761,7 @@ def update_lesson_progress(
     watched_seconds: int = 0,
     last_position_seconds: int | None = None,
     mark_completed: bool = False,
+    media_opened: bool = False,
 ) -> LessonProgress:
     """
     Update lesson progress monotonically and sync aggregate enrollment progress.
@@ -684,6 +798,21 @@ def update_lesson_progress(
             "جلسات رسانه‌ای با درصد تماشا تکمیل می‌شوند؛ علامت «تکمیل دستی» برای این نوع مجاز نیست."
         )
 
+    # دروازه‌ی «اول سند را باز کن»: تکمیلِ جلسه‌ی سندی فقط وقتی معنا دارد که
+    # دانش‌پذیر لااقل یک‌بار سند را در نمایشگرِ درون‌برنامه باز کرده باشد. این
+    # قاعده روی سیم (و نه فقط روی دکمه‌ی UI) اعمال می‌شود تا دور زدنی نباشد.
+    # چک بدون ساختِ رکورد انجام می‌شود تا در مسیرِ ۴۰۰ ردی رول‌بک‌نشده باقی نماند.
+    if mark_completed and locked_lesson.content_type == LessonContentType.DOCUMENT:
+        already_opened = LessonProgress.objects.filter(
+            enrollment=locked_enrollment,
+            lesson=locked_lesson,
+            media_opened_at__isnull=False,
+        ).exists()
+        if not (media_opened or already_opened):
+            raise LessonMediaEngagementRequiredError(
+                "اول سند این جلسه را باز و مطالعه کن؛ بعد می‌توانی تکمیلش را تأیید کنی."
+            )
+
     duration_snapshot = locked_lesson.duration_seconds or 0
     progress, _created = LessonProgress.objects.select_for_update().get_or_create(
         enrollment=locked_enrollment,
@@ -693,6 +822,9 @@ def update_lesson_progress(
             "first_watched_at": timezone.now(),
         },
     )
+
+    if media_opened and progress.media_opened_at is None:
+        progress.media_opened_at = timezone.now()
 
     normalized_watched = max(0, watched_seconds)
     capped_watched = (
@@ -744,6 +876,7 @@ def update_lesson_progress(
             "first_watched_at",
             "last_watched_at",
             "completed_at",
+            "media_opened_at",
             "updated_at",
         ]
     )
@@ -868,7 +1001,6 @@ def ensure_user_enrolled_for_lesson(*, user: Any, lesson: Lesson) -> Enrollment:
 def create_lesson_question(*, lesson: Lesson, user: Any, title: str, body: str):
     """Create an immediately visible lesson question for an enrolled user."""
     from apps.lms.choices import DiscussionStatus
-    from apps.lms.models import LessonQuestion
 
     enrollment = ensure_user_enrolled_for_lesson(user=user, lesson=lesson)
     ensure_lesson_sequence_open(user=user, lesson=lesson, enrollment=enrollment)
@@ -950,11 +1082,99 @@ def accept_lesson_answer(*, question, answer, user: Any):
     return answer
 
 
+def _is_discussion_admin(user: Any) -> bool:
+    """ستونِ اجازه‌ی تیمِ مدیریت برای ویرایش/حذف/تأییدِ گفتگوها."""
+    return bool(
+        getattr(user, "is_staff", False)
+        or getattr(user, "is_superuser", False)
+        or getattr(user, "role", "") == "admin"
+    )
+
+
+def _ensure_discussion_owner(*, author_id: int, user: Any, what: str) -> None:
+    """فقط نویسنده‌ی متن یا تیمِ مدیریت اجازه‌ی ویرایش/حذف دارد."""
+    if author_id != user.pk and not _is_discussion_admin(user):
+        raise LMSDiscussionAccessError(f"فقط نویسنده‌ی {what} می‌تواند آن را تغییر دهد.")
+
+
+@transaction.atomic
+def update_lesson_question(*, question, user: Any, title: str, body: str):
+    """ویرایشِ عنوان و متنِ پرسش توسط نویسنده/ادمین با مهرِ «ویرایش‌شده»."""
+    _ensure_discussion_owner(author_id=question.user_id, user=user, what="پرسش")
+    if question.status != DiscussionStatus.VISIBLE:
+        raise LMSDiscussionModerationError("پرسشِ حذف/مخفی‌شده قابل ویرایش نیست.")
+    question.title = title.strip()
+    question.body = body.strip()
+    question.edited_at = timezone.now()
+    question.save(update_fields=["title", "body", "edited_at", "updated_at"])
+    return question
+
+
+@transaction.atomic
+def delete_lesson_question(*, question, user: Any) -> str:
+    """حذفِ پرسش توسط نویسنده/ادمین.
+
+    اگر پرسش پاسخِ قابل‌نمایش دارد، حذف به‌صورت نرم (سنگ‌قبر) انجام می‌شود تا
+    رشته‌ی گفتگو و پاسخ‌های ارزشمندِ دیگران نابود نشود؛ در غیر این صورت رکورد
+    به‌طور کامل پاک می‌شود. خروجی: «hard» یا «tombstone».
+    """
+    _ensure_discussion_owner(author_id=question.user_id, user=user, what="پرسش")
+    if question.status == DiscussionStatus.DELETED:
+        raise LMSDiscussionModerationError("این پرسش قبلاً حذف شده است.")
+    has_visible_answers = question.answers.filter(status=DiscussionStatus.VISIBLE).exists()
+    if has_visible_answers:
+        question.status = DiscussionStatus.DELETED
+        question.save(update_fields=["status", "updated_at"])
+        return "tombstone"
+    question.delete()
+    return "hard"
+
+
+@transaction.atomic
+def update_lesson_answer(*, answer, user: Any, body: str):
+    """ویرایشِ متنِ پاسخ/رد توسط نویسنده/ادمین با مهرِ «ویرایش‌شده»."""
+    _ensure_discussion_owner(author_id=answer.user_id, user=user, what="پاسخ")
+    if answer.status != DiscussionStatus.VISIBLE:
+        raise LMSDiscussionModerationError("پاسخِ حذف/مخفی‌شده قابل ویرایش نیست.")
+    answer.body = body.strip()
+    answer.edited_at = timezone.now()
+    answer.save(update_fields=["body", "edited_at", "updated_at"])
+    return answer
+
+
+@transaction.atomic
+def delete_lesson_answer(*, answer, user: Any) -> str:
+    """حذفِ پاسخ/رد توسط نویسنده/ادمین.
+
+    اگر زیرِ این پاسخ ردِ قابل‌نمایشی هست یا ردِ دیگری با «در پاسخ به» به آن
+    اشاره می‌کند، حذف نرم انجام می‌شود تا زنجیره‌ی گفتگو نپوسد؛ وگرنه حذفِ کامل
+    و شمارندگانِ پرسش همگام می‌شوند. خروجی: «hard» یا «tombstone».
+    """
+    _ensure_discussion_owner(author_id=answer.user_id, user=user, what="پاسخ")
+    if answer.status == DiscussionStatus.DELETED:
+        raise LMSDiscussionModerationError("این پاسخ قبلاً حذف شده است.")
+    has_visible_children = (
+        LessonAnswer.objects.filter(parent=answer, status=DiscussionStatus.VISIBLE).exists()
+        or LessonAnswer.objects.filter(reply_to=answer, status=DiscussionStatus.VISIBLE).exists()
+    )
+    if has_visible_children:
+        answer.status = DiscussionStatus.DELETED
+        answer.save(update_fields=["status", "updated_at"])
+        return "tombstone"
+    question = answer.question
+    answer.delete()
+    question.answer_count = question.answers.filter(status=DiscussionStatus.VISIBLE).count()
+    question.save(update_fields=["answer_count", "updated_at"])
+    return "hard"
+
+
 @transaction.atomic
 def report_lesson_question(*, question, reported_by: Any, reason: str, description: str = ""):
     """Report a question for admin moderation."""
     from apps.lms.models import LessonDiscussionReport
 
+    if question.user_id == reported_by.pk:
+        raise LMSDiscussionModerationError("گزارشِ متنِ خودتان معنا ندارد.")
     ensure_user_enrolled_for_lesson(user=reported_by, lesson=question.lesson)
     return LessonDiscussionReport.objects.create(
         question=question,
@@ -969,6 +1189,8 @@ def report_lesson_answer(*, answer, reported_by: Any, reason: str, description: 
     """Report an answer for admin moderation."""
     from apps.lms.models import LessonDiscussionReport
 
+    if answer.user_id == reported_by.pk:
+        raise LMSDiscussionModerationError("گزارشِ متنِ خودتان معنا ندارد.")
     ensure_user_enrolled_for_lesson(user=reported_by, lesson=answer.question.lesson)
     return LessonDiscussionReport.objects.create(
         answer=answer,
@@ -1190,6 +1412,79 @@ def _build_attempt_snapshots(*, quiz) -> tuple[list[int], dict[str, list[int]]]:
 
 
 @transaction.atomic
+def get_quiz_attempt_state(*, quiz, user: Any) -> dict[str, Any]:
+    """آینه‌ی دقیقِ سیاستِ قفلِ تلاش برای UI — بدون هیچ‌گونه جهش‌زمان.
+
+    خروجی برای صحنه‌ی «تلاش بعدی کی باز می‌شود»: تعداد تلاش‌های رفته/مانده،
+    لحظه‌ی بازشدن (retry_at) و علتِ قفل. منطق دقیقاً همان شاخه‌های start_quiz_attempt
+    است تا هیچ‌وقت UI چیزی غیر از رفتارِ واقعی POST start نشان ندهد.
+    """
+    from apps.lms.choices import QuizAttemptStatus
+    from apps.lms.models import Enrollment, QuizAttempt
+
+    now = timezone.now()
+    enrollment = Enrollment.objects.filter(
+        user=user,
+        course=quiz.course,
+        status__in=[EnrollmentStatus.ACTIVE, EnrollmentStatus.COMPLETED],
+    ).first()
+    attempts = QuizAttempt.objects.filter(quiz=quiz, user=user)
+    latest = attempts.order_by("-attempt_number").first()
+    next_attempt_number = (latest.attempt_number + 1) if latest else 1
+    unlocks = _valid_unlocks_count(quiz=quiz, user=user)
+    allowed_attempts = quiz.max_attempts + unlocks
+    attempts_used = max(next_attempt_number - 1, 0)
+    attempts_left = max(allowed_attempts - attempts_used, 0)
+    passed_before = attempts.filter(is_passed=True).exists()
+    from django.db.models import Q
+
+    live_attempt = (
+        attempts.filter(status=QuizAttemptStatus.IN_PROGRESS)
+        .filter(Q(expires_at__isnull=True) | Q(expires_at__gt=now))
+        .order_by("-started_at")
+        .first()
+    )
+    terminal = attempts.exclude(status=QuizAttemptStatus.IN_PROGRESS)
+    retry_at = None
+    locked_reason = None
+    if passed_before:
+        locked_reason = "passed"
+    elif next_attempt_number > allowed_attempts:
+        locked_reason = "out_of_attempts"
+    else:
+        # شاخه‌ی کول‌داونِ start: آخرین شکستِ ترمینال + تلاش درونِ سقفِ max_attempts
+        # + نبودِ unlock معتبر؛ آینه‌ی دقیقِ همان شرط‌ها (حتی با تلاشِ EXPIRED جدیدتر).
+        last_failed = (
+            terminal.filter(status=QuizAttemptStatus.FAILED).order_by("-submitted_at").first()
+        )
+        if (
+            last_failed is not None
+            and last_failed.submitted_at is not None
+            and next_attempt_number <= quiz.max_attempts
+            and unlocks <= 0
+        ):
+            candidate = last_failed.submitted_at + timezone.timedelta(days=quiz.retake_delay_days)
+            if now < candidate:
+                retry_at = candidate
+                locked_reason = "cooldown"
+    can_attempt = (
+        enrollment is not None
+        and locked_reason is None
+        and (live_attempt is not None or attempts_left >= 1)
+    )
+    return {
+        "enrolled": enrollment is not None,
+        "has_in_progress": live_attempt is not None,
+        "attempts_used": attempts_used,
+        "attempts_left": attempts_left,
+        "allowed_attempts": allowed_attempts,
+        "passed_before": passed_before,
+        "retry_at": retry_at,
+        "locked_reason": locked_reason,
+        "can_attempt": can_attempt,
+    }
+
+
 def start_quiz_attempt(*, quiz, user: Any):
     """Start a new quiz attempt with immutable question/option order snapshots."""
     from apps.lms.choices import QuizAttemptStatus, QuizStatus
@@ -1452,8 +1747,6 @@ def issue_certificate_for_attempt(*, attempt) -> Certificate:
     if not attempt.is_passed:
         raise CertificateIssueError("صدور مدرک فقط برای آزمون قبول‌شده امکان‌پذیر است.")
 
-    from apps.lms.certificate import build_certificate_pdf_bytes
-
     user = attempt.user
     profile = getattr(user, "profile", None)
     full_name = getattr(user, "full_name", "") or f"{user.first_name} {user.last_name}".strip()
@@ -1476,11 +1769,10 @@ def issue_certificate_for_attempt(*, attempt) -> Certificate:
         },
     )
     if created and not certificate.pdf_file:
-        certificate.pdf_file.save(
-            f"certificate-{certificate.certificate_code}.pdf",
-            ContentFile(build_certificate_pdf_bytes(certificate)),
-            save=True,
-        )
+        # ساختِ PDF هرگز نباید تراکنشِ قبولیِ آزمون را بشکند: اگر رندر (فونت،
+        # لوگو، Pillow) در محیطِ اجرا خطا بخورد، گواهی صادر می‌ماند و فایل در
+        # نخستین دانلود/مشاهده به‌صورت on-demand بازسازی می‌شود.
+        ensure_certificate_pdf_ready(certificate=certificate)
 
     record_learning_activity_statement(
         actor=user,
@@ -1501,6 +1793,31 @@ def issue_certificate_for_attempt(*, attempt) -> Certificate:
     create_skill_for_certificate(certificate=certificate)
     complete_enrollment_after_pass(attempt=attempt)
     return certificate
+
+
+def ensure_certificate_pdf_ready(*, certificate: Certificate) -> bool:
+    """Build and attach the certificate PDF if missing; never raise.
+
+    Returns True when a PDF is attached afterwards. Failures are logged so the
+    submit/verify flows stay healthy and the file can be regenerated on demand.
+    """
+    from apps.lms.certificate import build_certificate_pdf_bytes
+
+    if certificate.pdf_file:
+        return True
+    try:
+        certificate.pdf_file.save(
+            f"certificate-{certificate.certificate_code}.pdf",
+            ContentFile(build_certificate_pdf_bytes(certificate)),
+            save=True,
+        )
+    except Exception:
+        logger.exception(
+            "certificate.pdf_build_failed",
+            extra={"certificate_id": certificate.pk},
+        )
+        return False
+    return True
 
 
 @transaction.atomic

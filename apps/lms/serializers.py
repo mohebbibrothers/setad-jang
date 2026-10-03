@@ -292,13 +292,16 @@ class LessonProgressUpdateSerializer(serializers.Serializer):
     watched_seconds = serializers.IntegerField(required=False, min_value=0)
     last_position_seconds = serializers.IntegerField(required=False, min_value=0)
     mark_completed = serializers.BooleanField(required=False, default=False)
+    # «سند را باز کردم» — سیگنالِ گیتِ دکمه‌ی تکمیلِ جلسات سندی؛ فرانت در اولین
+    # بازشدنِ نمایشگرِ درون‌برنامه با watched_seconds=0 آن را ارسال می‌کند.
+    media_opened = serializers.BooleanField(required=False, default=False)
 
     def validate(self, attrs: dict) -> dict:
         """حداقل یک سیگنالِ معنا‌دار لازم است؛ صفر-صفر بی‌فایده و پر‌هزینه است."""
         has_watched = attrs.get("watched_seconds") is not None and attrs["watched_seconds"] > 0
-        if not has_watched and not attrs.get("mark_completed"):
+        if not has_watched and not attrs.get("mark_completed") and not attrs.get("media_opened"):
             raise serializers.ValidationError(
-                "حداقل یکی از watched_seconds یا mark_completed لازم است."
+                "حداقل یکی از watched_seconds یا mark_completed یا media_opened لازم است."
             )
         attrs.setdefault("watched_seconds", 0)
         return attrs
@@ -308,6 +311,7 @@ class LessonProgressSerializer(serializers.ModelSerializer):
     """Output serializer for lesson progress state."""
 
     lesson = LessonSummarySerializer(read_only=True)
+    media_opened = serializers.SerializerMethodField()
 
     class Meta:
         model = LessonProgress
@@ -318,12 +322,17 @@ class LessonProgressSerializer(serializers.ModelSerializer):
             "duration_seconds_snapshot",
             "progress_percent",
             "is_completed",
+            "media_opened",
             "last_position_seconds",
             "first_watched_at",
             "last_watched_at",
             "completed_at",
         )
         read_only_fields = fields
+
+    def get_media_opened(self, obj) -> bool:
+        """آیا سند/رسانه‌ی جلسه دست‌کم یک‌بار توسط کاربر باز شده؟ (گیتِ دکمه‌ی تکمیل)."""
+        return obj.media_opened_at is not None
 
 
 class EnrollmentDetailSerializer(EnrollmentSerializer):
@@ -343,6 +352,8 @@ class LessonAnswerSerializer(serializers.ModelSerializer):
     reply_to_id = serializers.IntegerField(read_only=True)
     reply_to_display = serializers.SerializerMethodField()
     reply_to_excerpt = serializers.SerializerMethodField()
+    body = serializers.SerializerMethodField()
+    is_deleted = serializers.SerializerMethodField()
     replies = serializers.SerializerMethodField()
 
     class Meta:
@@ -357,13 +368,25 @@ class LessonAnswerSerializer(serializers.ModelSerializer):
             "reply_to_excerpt",
             "body",
             "status",
+            "is_deleted",
             "is_instructor_answer",
             "is_accepted",
             "created_at",
+            "edited_at",
             "updated_at",
             "replies",
         )
         read_only_fields = fields
+
+    def get_body(self, obj) -> str:
+        """متنِ پاسخ — برای سنگ‌قبرِ حذف‌شده هرگز بدنه‌ی اصلی لو نمی‌رود."""
+        if obj.status == DiscussionStatus.DELETED:
+            return ""
+        return obj.body
+
+    def get_is_deleted(self, obj) -> bool:
+        """سنگ‌قبرِ «این پاسخ حذف شد» برای پاسخ‌هایی که رشته‌ی زنده دارند."""
+        return obj.status == DiscussionStatus.DELETED
 
     def get_user_display(self, obj) -> str:
         """Return safe display name for answer author."""
@@ -382,7 +405,7 @@ class LessonAnswerSerializer(serializers.ModelSerializer):
         با حذفِ بدنه‌ی هدف (reply_to SET_NULL) مقدارش None می‌شود و رابط، نقل‌قول
         را به حالتِ «پیامِ حذف‌شده» دگرگون می‌کند.
         """
-        if obj.reply_to_id is None:
+        if obj.reply_to_id is None or obj.reply_to.status == DiscussionStatus.DELETED:
             return None
         body = (obj.reply_to.body or "").strip()
         if len(body) <= 140:
@@ -390,15 +413,24 @@ class LessonAnswerSerializer(serializers.ModelSerializer):
         return body[:137].rstrip() + "…"
 
     def get_replies(self, obj) -> list:
-        """Serialize visible children — depth is capped at one level by design."""
+        """Serialize visible children — depth is capped at one level by design.
+
+        سنگ‌قبرِ حذف‌شده هم وقتی زیرِش ردِ زنده هست می‌آید تا بافتِ گفتگو نپوسد.
+        """
         if self.context.get("depth", 0) >= 1:
             return []
-        from apps.lms.choices import DiscussionStatus
 
         children = [
             child
             for child in obj.replies.all()
             if child.status in (DiscussionStatus.VISIBLE, DiscussionStatus.FLAGGED)
+            or (
+                child.status == DiscussionStatus.DELETED
+                and any(
+                    grand.status in (DiscussionStatus.VISIBLE, DiscussionStatus.FLAGGED)
+                    for grand in child.replies.all()
+                )
+            )
         ]
         return LessonAnswerSerializer(
             children, many=True, context={**self.context, "depth": 1}
@@ -410,6 +442,9 @@ class LessonQuestionSerializer(serializers.ModelSerializer):
 
     user_id = serializers.IntegerField(read_only=True)
     user_display = serializers.SerializerMethodField()
+    title = serializers.SerializerMethodField()
+    body = serializers.SerializerMethodField()
+    is_deleted = serializers.SerializerMethodField()
     answers = serializers.SerializerMethodField()
 
     class Meta:
@@ -422,12 +457,14 @@ class LessonQuestionSerializer(serializers.ModelSerializer):
             "title",
             "body",
             "status",
+            "is_deleted",
             "is_pinned",
             "is_answered",
             "answer_count",
             "last_activity_at",
             "answers",
             "created_at",
+            "edited_at",
         )
         read_only_fields = fields
 
@@ -435,9 +472,40 @@ class LessonQuestionSerializer(serializers.ModelSerializer):
         """Return safe display name for question author."""
         return getattr(obj.user, "full_name", "") or getattr(obj.user, "email", "کاربر")
 
+    def get_title(self, obj) -> str:
+        """عنوان — سنگ‌قبرِ حذف‌شده متنِ اصلی را لو نمی‌دهد."""
+        if obj.status == DiscussionStatus.DELETED:
+            return ""
+        return obj.title
+
+    def get_body(self, obj) -> str:
+        """متن — سنگ‌قبرِ حذف‌شده متنِ اصلی را لو نمی‌دهد."""
+        if obj.status == DiscussionStatus.DELETED:
+            return ""
+        return obj.body
+
+    def get_is_deleted(self, obj) -> bool:
+        """سنگ‌قبرِ «این پرسش حذف شد» وقتی پاسخ‌های رشته هنوز زنده‌اند."""
+        return obj.status == DiscussionStatus.DELETED
+
     def get_answers(self, obj) -> list:
-        """Top-level answers only — replies hang under their root via `replies`."""
-        tops = [answer for answer in obj.answers.all() if answer.parent_id is None]
+        """Top-level answers only — replies hang under their root via `replies`.
+
+        سنگ‌قبرِ پاسخِ حذف‌شده فقط وقتی می‌آید که زیرِش ردِ زنده باشد تا شالوده‌ی
+        رشته نپوسد؛ وگرنه پاسخِ حذف‌شده کاملاً ناپدید می‌شود (قاعده‌ی یوتیوب).
+        """
+        tops = [
+            answer
+            for answer in obj.answers.all()
+            if answer.parent_id is None
+            and (
+                answer.status in (DiscussionStatus.VISIBLE, DiscussionStatus.FLAGGED)
+                or any(
+                    reply.status in (DiscussionStatus.VISIBLE, DiscussionStatus.FLAGGED)
+                    for reply in answer.replies.all()
+                )
+            )
+        ]
         return LessonAnswerSerializer(tops, many=True, context=self.context).data
 
 
@@ -467,6 +535,40 @@ class LessonAnswerCreateSerializer(serializers.Serializer):
 
     body = serializers.CharField()
     parent_id = serializers.IntegerField(required=False, min_value=1)
+
+    def validate_body(self, value: str) -> str:
+        """Require meaningful answer body."""
+        value = value.strip()
+        if len(value) < 5:
+            raise serializers.ValidationError("متن پاسخ باید حداقل ۵ کاراکتر باشد.")
+        return value
+
+
+class LessonQuestionUpdateSerializer(serializers.Serializer):
+    """Input serializer for editing an own question (author/admin)."""
+
+    title = serializers.CharField(max_length=255)
+    body = serializers.CharField()
+
+    def validate_title(self, value: str) -> str:
+        """Require meaningful question title."""
+        value = value.strip()
+        if len(value) < 5:
+            raise serializers.ValidationError("عنوان سؤال باید حداقل ۵ کاراکتر باشد.")
+        return value
+
+    def validate_body(self, value: str) -> str:
+        """Require meaningful question body."""
+        value = value.strip()
+        if len(value) < 10:
+            raise serializers.ValidationError("متن سؤال باید حداقل ۱۰ کاراکتر باشد.")
+        return value
+
+
+class LessonAnswerUpdateSerializer(serializers.Serializer):
+    """Input serializer for editing an own answer/reply (author/admin)."""
+
+    body = serializers.CharField()
 
     def validate_body(self, value: str) -> str:
         """Require meaningful answer body."""

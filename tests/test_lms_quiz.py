@@ -374,3 +374,124 @@ class TestQuizReadinessGate:
         response = self._start(user, course.slug)
 
         assert response.status_code == status.HTTP_201_CREATED
+
+
+class TestQuizAttemptStateMeta:
+    """آینه‌ی سیاستِ قفل در meta آزمون — صحنه‌ی «تلاش بعدی کی باز می‌شود»."""
+
+    def _meta(self, client, slug):
+        response = client.get(reverse("lms:course-quiz", kwargs={"slug": slug}))
+        assert response.status_code == status.HTTP_200_OK
+        return response.data["data"]["attempt_state"]
+
+    def test_fresh_enrolled_user_sees_open_state(self) -> None:
+        course = PublishedCourseFactory()
+        user = UserFactory()
+        _enroll(user, course)
+        quiz, _c, _w = _build_publishable_quiz(course)
+        state = self._meta(_client_for(user), course.slug)
+        assert state["locked_reason"] is None
+        assert state["retry_at"] is None
+        assert state["can_attempt"] is True
+        assert state["attempts_used"] == 0
+        assert state["attempts_left"] == quiz.max_attempts
+        assert state["allowed_attempts"] == quiz.max_attempts
+
+    def test_failed_attempt_mirrors_cooldown_with_retry_timestamp(self) -> None:
+        course = PublishedCourseFactory()
+        user = UserFactory()
+        _enroll(user, course)
+        _quiz, _correct, wrong = _build_publishable_quiz(course, passing_score=Decimal("20.00"))
+        client = _client_for(user)
+        start = client.post(reverse("lms:quiz-attempt-start", kwargs={"slug": course.slug}))
+        attempt_id = start.data["data"]["id"]
+        client.post(
+            reverse("lms:quiz-attempt-submit", kwargs={"attempt_id": attempt_id}),
+            data={
+                "answers": [{"question_id": q, "selected_option_id": o} for q, o in wrong.items()]
+            },
+            format="json",
+        )
+
+        state = self._meta(client, course.slug)
+
+        assert state["locked_reason"] == "cooldown"
+        assert state["can_attempt"] is False
+        retry_at = timezone.datetime.fromisoformat(state["retry_at"])
+        assert retry_at > timezone.now()
+        assert state["attempts_left"] == 1  # یکی از دو تلاش رفت
+        # آینه‌ی دقیق: همان زمانِ start هم ۴۰۳ می‌دهد — سردرگمیِ UI-سرور صفر
+        blocked = client.post(reverse("lms:quiz-attempt-start", kwargs={"slug": course.slug}))
+        assert blocked.status_code == status.HTTP_403_FORBIDDEN
+
+    def test_cooldown_lifts_after_retry_at_passes(self) -> None:
+        course = PublishedCourseFactory()
+        user = UserFactory()
+        _enroll(user, course)
+        _quiz, _correct, wrong = _build_publishable_quiz(course, passing_score=Decimal("20.00"))
+        client = _client_for(user)
+        start = client.post(reverse("lms:quiz-attempt-start", kwargs={"slug": course.slug}))
+        attempt_id = start.data["data"]["id"]
+        QuizAttempt.objects.filter(pk=attempt_id).update(
+            submitted_at=timezone.now() - timezone.timedelta(days=15)
+        )
+        client.post(
+            reverse("lms:quiz-attempt-submit", kwargs={"attempt_id": attempt_id}),
+            data={
+                "answers": [{"question_id": q, "selected_option_id": o} for q, o in wrong.items()]
+            },
+            format="json",
+        )
+        QuizAttempt.objects.filter(pk=attempt_id).update(
+            submitted_at=timezone.now() - timezone.timedelta(days=15)
+        )
+
+        state = self._meta(client, course.slug)
+
+        assert state["locked_reason"] is None
+        assert state["retry_at"] is None
+        assert state["can_attempt"] is True
+
+    def test_passed_state_locks_forever_with_reason_passed(self) -> None:
+        course = PublishedCourseFactory()
+        user = UserFactory()
+        _enroll(user, course)
+        _quiz, correct, _wrong = _build_publishable_quiz(course)
+        client = _client_for(user)
+        start = client.post(reverse("lms:quiz-attempt-start", kwargs={"slug": course.slug}))
+        attempt_id = start.data["data"]["id"]
+        client.post(
+            reverse("lms:quiz-attempt-submit", kwargs={"attempt_id": attempt_id}),
+            data={
+                "answers": [{"question_id": q, "selected_option_id": o} for q, o in correct.items()]
+            },
+            format="json",
+        )
+
+        state = self._meta(client, course.slug)
+
+        assert state["locked_reason"] == "passed"
+        assert state["can_attempt"] is False
+        assert state["passed_before"] is True
+
+    def test_out_of_attempts_when_quota_exhausted_beyond_max(self) -> None:
+        course = PublishedCourseFactory()
+        user = UserFactory()
+        enrollment = _enroll(user, course)
+        quiz, _correct, _wrong = _build_publishable_quiz(course, passing_score=Decimal("20.00"))
+        for i in range(quiz.max_attempts):
+            QuizAttempt.objects.create(
+                quiz=quiz,
+                course=course,
+                user=user,
+                enrollment=enrollment,
+                attempt_number=i + 1,
+                status=QuizAttemptStatus.FAILED,
+                score_raw=Decimal("0.00"),
+                score_out_of_20=Decimal("0.00"),
+                submitted_at=timezone.now() - timezone.timedelta(days=30 + i),
+            )
+        state = self._meta(_client_for(user), course.slug)
+        assert state["locked_reason"] == "out_of_attempts"
+        assert state["attempts_left"] == 0
+        assert state["can_attempt"] is False

@@ -405,3 +405,80 @@ class TestLessonSequenceGate:
             format="json",
         )
         assert allowed.status_code == status.HTTP_201_CREATED
+
+
+class TestDocumentEngagementGate:
+    """گیتِ «اول سند را باز کن، بعد تأیید تکمیل» — روی سیم، نه فقط UI."""
+
+    def test_document_mark_completed_without_opening_is_400(self) -> None:
+        from tests.factories.lms import DocumentLessonFactory
+
+        course = PublishedCourseFactory()
+        lesson = DocumentLessonFactory(course=course, order=1)
+        user = UserFactory()
+        _enroll(user, course)
+        response = _client_for(user).post(
+            reverse("lms:lesson-progress-update", kwargs={"lesson_id": lesson.pk}),
+            data={"watched_seconds": 10, "mark_completed": True},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "باز" in str(response.data)
+        # بدون رکوردِ نیمه‌کاره
+        assert LessonProgress.objects.filter(lesson=lesson).count() == 0
+
+    def test_media_opened_signal_stamps_and_unlocks_completion(self) -> None:
+        from tests.factories.lms import DocumentLessonFactory
+
+        course = PublishedCourseFactory()
+        lesson = DocumentLessonFactory(course=course, order=1)
+        user = UserFactory()
+        _enroll(user, course)
+        client = _client_for(user)
+        open_resp = client.post(
+            reverse("lms:lesson-progress-update", kwargs={"lesson_id": lesson.pk}),
+            data={"media_opened": True},
+            format="json",
+        )
+        assert open_resp.status_code == status.HTTP_200_OK
+        progress = LessonProgress.objects.get(lesson=lesson)
+        assert progress.media_opened_at is not None
+        assert progress.is_completed is False
+        done = client.post(
+            reverse("lms:lesson-progress-update", kwargs={"lesson_id": lesson.pk}),
+            data={"watched_seconds": 5, "mark_completed": True},
+            format="json",
+        )
+        assert done.status_code == status.HTTP_200_OK
+        progress.refresh_from_db()
+        assert progress.is_completed is True
+
+    def test_completion_in_same_request_with_open_signal_is_allowed(self) -> None:
+        from tests.factories.lms import DocumentLessonFactory
+
+        course = PublishedCourseFactory()
+        lesson = DocumentLessonFactory(course=course, order=1)
+        user = UserFactory()
+        _enroll(user, course)
+        response = _client_for(user).post(
+            reverse("lms:lesson-progress-update", kwargs={"lesson_id": lesson.pk}),
+            data={"mark_completed": True, "media_opened": True},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_200_OK
+        progress = LessonProgress.objects.get(lesson=lesson)
+        assert progress.is_completed is True
+        assert progress.media_opened_at is not None
+
+    def test_video_completion_is_unaffected_by_document_gate(self) -> None:
+        course = PublishedCourseFactory()
+        lesson = LessonFactory(course=course, order=1, duration_seconds=100)
+        user = UserFactory()
+        _enroll(user, course)
+        response = _client_for(user).post(
+            reverse("lms:lesson-progress-update", kwargs={"lesson_id": lesson.pk}),
+            data={"watched_seconds": 95, "last_position_seconds": 95},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert LessonProgress.objects.get(lesson=lesson).is_completed is True

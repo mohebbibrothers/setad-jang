@@ -181,10 +181,14 @@ class TestManualCompletionProgress:
 
         first = Lesson.objects.filter(course=course).order_by("order").first()
         second = Lesson.objects.filter(course=course).order_by("order").last()
-        update_lesson_progress(enrollment=enrollment, lesson=first, mark_completed=True)
+        update_lesson_progress(
+            enrollment=enrollment, lesson=first, mark_completed=True, media_opened=True
+        )
         enrollment.refresh_from_db()
         assert enrollment.status == EnrollmentStatus.ACTIVE  # یکی از دو جلسه
-        update_lesson_progress(enrollment=enrollment, lesson=second, mark_completed=True)
+        update_lesson_progress(
+            enrollment=enrollment, lesson=second, mark_completed=True, media_opened=True
+        )
         enrollment.refresh_from_db()
         progress = LessonProgress.objects.get(enrollment=enrollment, lesson=second)
         assert progress.is_completed is True
@@ -218,7 +222,7 @@ class TestManualCompletionProgress:
         _enroll(user, course)
         response = _client_for(user).post(
             reverse("lms:lesson-progress-update", kwargs={"lesson_id": lesson.pk}),
-            data={"mark_completed": True},
+            data={"mark_completed": True, "media_opened": True},
             format="json",
         )
         assert response.status_code == status.HTTP_200_OK
@@ -252,7 +256,9 @@ class TestDocumentArticleMediaAccess:
         )
         assert payload["media_kind"] == "document"
         assert payload["provider"] == "uploaded_file"
-        assert payload["expires_in_seconds"] == 600
+        assert payload["expires_in_seconds"] == 12 * 60 * 60
+        assert payload["url"].startswith(f"lms/lessons/{lesson.pk}/media/document/stream/?t=")
+        assert not payload["url"].startswith("/media/")
         assert payload["title"] == "سند جلسه"
 
     def test_enrolled_user_gets_inline_article_body(self) -> None:

@@ -3919,6 +3919,90 @@ paths:
               schema:
                 $ref: '#/components/schemas/LMSLearningRecommendationOverviewResponse'
           description: ''
+  /api/v1/lms/answers/{answer_id}/:
+    patch:
+      operationId: lms_answers_update
+      description: Edit answer body by its author with an «edited» stamp.
+      parameters:
+      - in: path
+        name: answer_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - آموزش — کاربر
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedLessonAnswerUpdate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedLessonAnswerUpdate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedLessonAnswerUpdate'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LMSLessonAnswerResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LMSErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LMSErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LMSErrorResponse'
+          description: ''
+    delete:
+      operationId: lms_answers_delete
+      description: Delete own answer; tombstones keep a live reply chain readable.
+      parameters:
+      - in: path
+        name: answer_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - آموزش — کاربر
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LMSErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LMSErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LMSErrorResponse'
+          description: ''
   /api/v1/lms/answers/{answer_id}/report/:
     post:
       operationId: lms_answers_report
@@ -4333,6 +4417,41 @@ paths:
               schema:
                 $ref: '#/components/schemas/LMSErrorResponse'
           description: ''
+  /api/v1/lms/lessons/{lesson_id}/media/{media_kind}/stream/:
+    get:
+      operationId: lms_user_lessons_media_stream
+      description: Stream lesson media with inline disposition and hardened headers.
+      parameters:
+      - in: path
+        name: lesson_id
+        schema:
+          type: integer
+        required: true
+      - in: path
+        name: media_kind
+        schema:
+          type: string
+        required: true
+      tags:
+      - آموزش — کاربر
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LMSErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LMSErrorResponse'
+          description: ''
   /api/v1/lms/lessons/{lesson_id}/progress/:
     post:
       operationId: lms_user_lessons_progress_update
@@ -4579,6 +4698,91 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/LMSSkillListResponse'
+          description: ''
+  /api/v1/lms/questions/{question_id}/:
+    patch:
+      operationId: lms_questions_update
+      description: Edit question title/body by its author with an «edited» stamp.
+      parameters:
+      - in: path
+        name: question_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - آموزش — کاربر
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedLessonQuestionUpdate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedLessonQuestionUpdate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedLessonQuestionUpdate'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LMSLessonQuestionResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LMSErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LMSErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LMSErrorResponse'
+          description: ''
+    delete:
+      operationId: lms_questions_delete
+      description: Delete own question; tombstones keep a thread with live answers
+        readable.
+      parameters:
+      - in: path
+        name: question_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - آموزش — کاربر
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LMSErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LMSErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LMSErrorResponse'
           description: ''
   /api/v1/lms/questions/{question_id}/answers/:
     post:
@@ -18541,10 +18745,15 @@ components:
           readOnly: true
         body:
           type: string
+          description: متنِ پاسخ — برای سنگ‌قبرِ حذف‌شده هرگز بدنه‌ی اصلی لو نمی‌رود.
           readOnly: true
         status:
           allOf:
           - $ref: '#/components/schemas/LMSDiscussionStatusEnum'
+          readOnly: true
+        is_deleted:
+          type: boolean
+          description: سنگ‌قبرِ «این پاسخ حذف شد» برای پاسخ‌هایی که رشته‌ی زنده دارند.
           readOnly: true
         is_instructor_answer:
           type: boolean
@@ -18557,6 +18766,11 @@ components:
           format: date-time
           readOnly: true
           title: تاریخ ایجاد
+        edited_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
         updated_at:
           type: string
           format: date-time
@@ -18565,14 +18779,18 @@ components:
         replies:
           type: array
           items: {}
-          description: Serialize visible children — depth is capped at one level by
-            design.
+          description: |-
+            Serialize visible children — depth is capped at one level by design.
+
+            سنگ‌قبرِ حذف‌شده هم وقتی زیرِش ردِ زنده هست می‌آید تا بافتِ گفتگو نپوسد.
           readOnly: true
       required:
       - body
       - created_at
+      - edited_at
       - id
       - is_accepted
+      - is_deleted
       - is_instructor_answer
       - parent_id
       - replies
@@ -18703,6 +18921,11 @@ components:
         is_completed:
           type: boolean
           readOnly: true
+        media_opened:
+          type: boolean
+          description: آیا سند/رسانه‌ی جلسه دست‌کم یک‌بار توسط کاربر باز شده؟ (گیتِ
+            دکمه‌ی تکمیل).
+          readOnly: true
         last_position_seconds:
           type: integer
           readOnly: true
@@ -18730,6 +18953,7 @@ components:
       - last_position_seconds
       - last_watched_at
       - lesson
+      - media_opened
       - progress_percent
       - watched_seconds
     LessonProgressUpdate:
@@ -18753,6 +18977,9 @@ components:
         mark_completed:
           type: boolean
           default: false
+        media_opened:
+          type: boolean
+          default: false
     LessonQuestion:
       type: object
       description: Output serializer for lesson questions with nested visible answers.
@@ -18772,13 +18999,19 @@ components:
           readOnly: true
         title:
           type: string
+          description: عنوان — سنگ‌قبرِ حذف‌شده متنِ اصلی را لو نمی‌دهد.
           readOnly: true
         body:
           type: string
+          description: متن — سنگ‌قبرِ حذف‌شده متنِ اصلی را لو نمی‌دهد.
           readOnly: true
         status:
           allOf:
           - $ref: '#/components/schemas/LMSDiscussionStatusEnum'
+          readOnly: true
+        is_deleted:
+          type: boolean
+          description: سنگ‌قبرِ «این پرسش حذف شد» وقتی پاسخ‌های رشته هنوز زنده‌اند.
           readOnly: true
         is_pinned:
           type: boolean
@@ -18796,21 +19029,31 @@ components:
         answers:
           type: array
           items: {}
-          description: Top-level answers only — replies hang under their root via
-            `replies`.
+          description: |-
+            Top-level answers only — replies hang under their root via `replies`.
+
+            سنگ‌قبرِ پاسخِ حذف‌شده فقط وقتی می‌آید که زیرِش ردِ زنده باشد تا شالوده‌ی
+            رشته نپوسد؛ وگرنه پاسخِ حذف‌شده کاملاً ناپدید می‌شود (قاعده‌ی یوتیوب).
           readOnly: true
         created_at:
           type: string
           format: date-time
           readOnly: true
           title: تاریخ ایجاد
+        edited_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
       required:
       - answer_count
       - answers
       - body
       - created_at
+      - edited_at
       - id
       - is_answered
+      - is_deleted
       - is_pinned
       - last_activity_at
       - lesson_id
@@ -21169,6 +21412,12 @@ components:
           minimum: 0
         is_active:
           type: boolean
+    PatchedLessonAnswerUpdate:
+      type: object
+      description: Input serializer for editing an own answer/reply (author/admin).
+      properties:
+        body:
+          type: string
     PatchedLessonCreateUpdate:
       type: object
       description: Input serializer for lesson create/update.
@@ -21222,6 +21471,15 @@ components:
           type: boolean
         is_active:
           type: boolean
+    PatchedLessonQuestionUpdate:
+      type: object
+      description: Input serializer for editing an own question (author/admin).
+      properties:
+        title:
+          type: string
+          maxLength: 255
+        body:
+          type: string
     PatchedR4JCriminalUpdate:
       type: object
       description: ورودی ویرایش پروفایل criminal توسط admin.

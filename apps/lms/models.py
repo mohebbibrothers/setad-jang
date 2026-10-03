@@ -503,6 +503,9 @@ class LessonProgress(BaseModel):
     first_watched_at = models.DateTimeField(null=True, blank=True)
     last_watched_at = models.DateTimeField(null=True, blank=True)
     completed_at = models.DateTimeField(null=True, blank=True)
+    # نخستین زمانی که کاربر سند/رسانه‌ی جلسه را واقعاً «باز» کرد (برای دروازه‌ی
+    # دکمه‌ی تکمیلِ جلسات سندی — «اول ببین، بعد علامت بزن»).
+    media_opened_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         verbose_name = "پیشرفت جلسه"
@@ -536,6 +539,7 @@ class LessonQuestion(BaseModel):
     is_answered = models.BooleanField(default=False)
     answer_count = models.PositiveIntegerField(default=0)
     last_activity_at = models.DateTimeField(default=timezone.now)
+    edited_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         verbose_name = "سؤال جلسه"
@@ -577,6 +581,7 @@ class LessonAnswer(BaseModel):
         verbose_name="در پاسخ به",
     )
     body = models.TextField()
+    edited_at = models.DateTimeField(null=True, blank=True)
     status = models.CharField(
         max_length=20, choices=DiscussionStatus.choices, default=DiscussionStatus.VISIBLE
     )

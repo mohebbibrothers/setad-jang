@@ -203,3 +203,80 @@ class TestLMSCertificateAPIs:
         )
         assert verify_response.status_code == status.HTTP_404_NOT_FOUND
         assert mock_task.delay.call_args.kwargs["action"] == audit_actions.LMS_CERTIFICATE_REVOKED
+
+
+class TestCertificatePdfResilience:
+    """Regression: certificate PDF build must never crash the quiz submit flow.
+
+    ریشه‌ی باگِ «خطا در ارسال به سرور» هنگام قبولی: ساختِ PDF مدرک داخل
+    تراکنشِ submit می‌ترکید (فونتِ DejaVu در کانتینرِ پروداکشن غایب بود).
+    این تست‌ها تضمین می‌کنند ساختِ PDF هرگز فلویِ ارسال را نمی‌شکند.
+    """
+
+    def test_font_loader_falls_back_to_default_when_files_missing(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from pathlib import Path
+
+        from apps.lms import certificate as cert_module
+
+        monkeypatch.setattr(
+            cert_module, "_FONT_CANDIDATES_REGULAR", [Path("/no/such/regular-font.ttf")]
+        )
+        monkeypatch.setattr(cert_module, "_FONT_CANDIDATES_BOLD", [Path("/no/such/bold-font.ttf")])
+
+        regular = cert_module._font(20)
+        bold = cert_module._font(20, bold=True)
+
+        assert regular is not None
+        assert bold is not None
+
+    def test_pdf_bytes_are_built_with_bundled_vazirmatn(self) -> None:
+        course = PublishedCourseFactory()
+        user = UserFactory(email="cert-pdf-bytes@example.com")
+        certificate = _pass_quiz_and_return_certificate(user=user, course=course)
+
+        from apps.lms.certificate import build_certificate_pdf_bytes
+
+        pdf_bytes = build_certificate_pdf_bytes(certificate)
+
+        assert pdf_bytes.startswith(b"%PDF")
+        assert len(pdf_bytes) > 10_000
+
+    def test_ensure_certificate_pdf_ready_never_raises_on_build_failure(self) -> None:
+        from apps.lms.services import ensure_certificate_pdf_ready
+
+        course = PublishedCourseFactory()
+        user = UserFactory(email="cert-resilient@example.com")
+        certificate = _pass_quiz_and_return_certificate(user=user, course=course)
+        # PDF قبلاً ساخته شده؛ آن را خالی می‌کنیم تا شاخه‌ی بازسازیِ خطادار اجرا شود
+        certificate.pdf_file.delete(save=True)
+
+        with (
+            patch(
+                "apps.lms.certificate.build_certificate_pdf_bytes",
+                side_effect=RuntimeError("font boom"),
+            ),
+            patch("apps.lms.services.logger") as mock_logger,
+        ):
+            ready = ensure_certificate_pdf_ready(certificate=certificate)
+
+        assert ready is False
+        certificate.refresh_from_db()
+        assert not certificate.pdf_file
+        mock_logger.exception.assert_called_once()
+        assert mock_logger.exception.call_args.args[0] == "certificate.pdf_build_failed"
+
+    def test_passed_submit_returns_200_and_attachs_pdf(self) -> None:
+        """فلویِ کاملِ قبولی: وضعیت ۲۰۰ + فایلِ PDFِ واقعی — باگِ ۵۰۰ِ قبولی."""
+        course = PublishedCourseFactory(title="آزمون قبولی بدون خطا")
+        LessonFactory(course=course, order=1, duration_seconds=100)
+        sync_course_counters(course=course)
+        user = UserFactory(email="cert-200@example.com")
+
+        certificate = _pass_quiz_and_return_certificate(user=user, course=course)
+
+        certificate.refresh_from_db()
+        assert certificate.status == CertificateStatus.ISSUED
+        with certificate.pdf_file.open("rb") as pdf_handle:
+            assert pdf_handle.read(4) == b"%PDF"
