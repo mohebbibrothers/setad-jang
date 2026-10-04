@@ -7,7 +7,7 @@ query optimization and visibility rules stay centralized.
 
 from __future__ import annotations
 
-from django.db.models import Count, Prefetch, QuerySet
+from django.db.models import Count, Prefetch, Q, QuerySet, Sum
 
 from apps.lms.choices import CourseLevel, EnrollmentStatus
 from apps.lms.models import (
@@ -43,11 +43,29 @@ def get_admin_category_by_id(category_id: int) -> LMSCategory | None:
 
 
 def get_public_courses() -> QuerySet[Course]:
-    """Return published courses with category and active lessons prefetched."""
+    """Return published courses with category and active lessons prefetched.
+
+    The live lesson aggregates are annotated here so catalog list AND course
+    detail payloads always report the true syllabus size even when the
+    denormalized ``lessons_count`` / ``estimated_duration_seconds`` columns
+    drifted (e.g. a course whose lessons were seeded outside the service
+    layer). Only the active-lesson relation is joined, so there is no
+    cross-product inflation between the two aggregates.
+    """
     return (
         Course.objects.published()
         .with_category()
+        .annotate(
+            live_lessons_count=Count("lessons", filter=Q(lessons__is_active=True), distinct=True),
+            live_lessons_duration_seconds=Sum(
+                "lessons__duration_seconds", filter=Q(lessons__is_active=True)
+            ),
+        )
         .prefetch_related(Prefetch("lessons", queryset=Lesson.objects.active().ordered()))
+        # Explicit ordering: on GROUP BY (annotated) queries the model default
+        # ordering no longer counts as «ordered» for DRF pagination in modern
+        # Django — and deterministic pages need a stable tiebreaker anyway.
+        .order_by("-published_at", "-created_at", "-id")
     )
 
 

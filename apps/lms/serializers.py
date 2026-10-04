@@ -132,9 +132,20 @@ class CourseSummarySerializer(serializers.ModelSerializer):
     like the homepage education strip and the catalog grid must be able
     to render the real instructor photo next to ``instructor_name``
     without an N+1 round-trip to the detail endpoint per card.
+
+    ``lessons_count`` / ``estimated_duration_seconds`` are LIVE reads from
+    source-of-truth lesson rows, never the denormalized columns blindly:
+    the public selector annotates both aggregates, and any other path that
+    prefetches ``lessons`` lets us count/sum the prefetched rows in memory.
+    Only when neither hint exists do we fall back to the stored columns.
+    This is the root fix for «۰ جلسه» chips on courses that clearly have
+    lessons: a stale denormalized counter can never again contradict the
+    actual syllabus the same payload renders.
     """
 
     category = LMSCategorySerializer(read_only=True)
+    lessons_count = serializers.SerializerMethodField()
+    estimated_duration_seconds = serializers.SerializerMethodField()
 
     class Meta:
         model = Course
@@ -158,6 +169,32 @@ class CourseSummarySerializer(serializers.ModelSerializer):
             "published_at",
         )
         read_only_fields = fields
+
+    def _live_lesson_stats(self, obj: Course) -> tuple[int, int] | None:
+        """Return ``(active_lessons_count, active_duration_seconds)`` when
+        live data is reachable without extra queries, else ``None``."""
+        annotated_count = getattr(obj, "live_lessons_count", None)
+        annotated_duration = getattr(obj, "live_lessons_duration_seconds", None)
+        if annotated_count is not None:
+            # Sum() yields None when the course has no active lessons at all.
+            return int(annotated_count), int(annotated_duration or 0)
+        prefetch_cache = getattr(obj, "_prefetched_objects_cache", None) or {}
+        if "lessons" in prefetch_cache:
+            active_lessons = [lesson for lesson in prefetch_cache["lessons"] if lesson.is_active]
+            return len(active_lessons), sum(
+                lesson.duration_seconds or 0 for lesson in active_lessons
+            )
+        return None
+
+    def get_lessons_count(self, obj: Course) -> int:
+        """Live count of active lessons; denormalized column only as fallback."""
+        stats = self._live_lesson_stats(obj)
+        return stats[0] if stats is not None else obj.lessons_count
+
+    def get_estimated_duration_seconds(self, obj: Course) -> int:
+        """Live duration sum over active lessons; denormalized fallback."""
+        stats = self._live_lesson_stats(obj)
+        return stats[1] if stats is not None else obj.estimated_duration_seconds
 
 
 class CourseDetailSerializer(CourseSummarySerializer):

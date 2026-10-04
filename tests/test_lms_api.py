@@ -16,7 +16,7 @@ from rest_framework.test import APIClient
 
 from apps.audit_logs import actions as audit_actions
 from apps.lms.choices import CourseStatus, EnrollmentStatus
-from apps.lms.models import Enrollment, Lesson, LMSCategory
+from apps.lms.models import Course, Enrollment, Lesson, LMSCategory
 from tests.factories import AdminUserFactory, UserFactory
 from tests.factories.lms import CourseFactory, LessonFactory, PublishedCourseFactory
 
@@ -67,6 +67,58 @@ class TestLMSPublicCatalogAPI:
             first.pk,
             second.pk,
         ]
+
+    def test_public_course_detail_reports_live_lessons_count_despite_stale_counter(self) -> None:
+        """چیپ «۰ جلسه» نباید برای کلاسی که جلسه دارد رخ دهد.
+
+        سناریوی واقعیِ باگ: جلسات خارج از service layer (ادمین/اسکریپت/ایمپورت)
+        ساخته شده‌اند و ستونِ denormalizeشدهٔ ``lessons_count`` هرگز sync نشده.
+        payload باید همیشه از روی ردیف‌های منبعِ حقیقت (جلسات فعال) گزارش کند،
+        نه از ستونِ کهنه — همان جلساتی که خودِ payload هم رندرشان می‌کند.
+        """
+        course = PublishedCourseFactory(title="چریک سایبری")
+        LessonFactory(course=course, order=1, title="جلسه اول", duration_seconds=600)
+        LessonFactory(course=course, order=2, title="جلسه دوم", duration_seconds=900)
+        LessonFactory(
+            course=course, order=3, title="جلسه غیرفعال", duration_seconds=1200, is_active=False
+        )
+        # فاکتوری‌ها service layer را صدا نمی‌زنند؛ ستون را صریحاً کهنه می‌کنیم
+        # تا دقیقاً همان وضعیتِ پروداکشن بازتولید شود.
+        Course.objects.filter(pk=course.pk).update(lessons_count=0, estimated_duration_seconds=0)
+
+        response = APIClient().get(reverse("lms:course-detail", kwargs={"slug": course.slug}))
+
+        assert response.status_code == status.HTTP_200_OK
+        payload = response.data["data"]
+        assert len(payload["lessons"]) == 2
+        assert payload["lessons_count"] == 2
+        assert payload["estimated_duration_seconds"] == 600 + 900
+
+    def test_public_course_list_reports_live_lessons_count(self) -> None:
+        """کارتِ کاتالوگ هم باید شمارشِ زنده بدهد، نه ستونِ denormalizeشدهٔ کهنه."""
+        course = PublishedCourseFactory(title="کلاس با جلسهٔ واقعی")
+        LessonFactory(course=course, order=1, duration_seconds=300)
+        LessonFactory(course=course, order=2, duration_seconds=300)
+        Course.objects.filter(pk=course.pk).update(lessons_count=0, estimated_duration_seconds=0)
+
+        response = APIClient().get(reverse("lms:course-list"))
+
+        assert response.status_code == status.HTTP_200_OK
+        item = response.data["data"]["results"][0]
+        assert item["lessons_count"] == 2
+        assert item["estimated_duration_seconds"] == 600
+
+    def test_public_course_detail_without_lessons_reports_zero(self) -> None:
+        """کلاسِ بدون جلسه باید صادقانه ۰ بدهد (جایگاهِ کپی «به‌زودی» در فرانت)."""
+        course = PublishedCourseFactory(title="کلاسِ سیلابوس‌درراه")
+
+        response = APIClient().get(reverse("lms:course-detail", kwargs={"slug": course.slug}))
+
+        assert response.status_code == status.HTTP_200_OK
+        payload = response.data["data"]
+        assert payload["lessons"] == []
+        assert payload["lessons_count"] == 0
+        assert payload["estimated_duration_seconds"] == 0
 
     def test_public_course_list_exposes_instructor_avatar_field(self) -> None:
         """فیلدِ instructor_avatar باید در payload لیست حضور داشته باشد.
