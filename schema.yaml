@@ -15375,9 +15375,11 @@ components:
           title: تصویر کاور
         lessons_count:
           type: integer
+          description: Live count of active lessons; denormalized column only as fallback.
           readOnly: true
         estimated_duration_seconds:
           type: integer
+          description: Live duration sum over active lessons; denormalized fallback.
           readOnly: true
         enrollments_count:
           type: integer
@@ -15539,6 +15541,15 @@ components:
         like the homepage education strip and the catalog grid must be able
         to render the real instructor photo next to ``instructor_name``
         without an N+1 round-trip to the detail endpoint per card.
+
+        ``lessons_count`` / ``estimated_duration_seconds`` are LIVE reads from
+        source-of-truth lesson rows, never the denormalized columns blindly:
+        the public selector annotates both aggregates, and any other path that
+        prefetches ``lessons`` lets us count/sum the prefetched rows in memory.
+        Only when neither hint exists do we fall back to the stored columns.
+        This is the root fix for «۰ جلسه» chips on courses that clearly have
+        lessons: a stale denormalized counter can never again contradict the
+        actual syllabus the same payload renders.
       properties:
         id:
           type: integer
@@ -15593,9 +15604,11 @@ components:
           title: تصویر کاور
         lessons_count:
           type: integer
+          description: Live count of active lessons; denormalized column only as fallback.
           readOnly: true
         estimated_duration_seconds:
           type: integer
+          description: Live duration sum over active lessons; denormalized fallback.
           readOnly: true
         enrollments_count:
           type: integer
