@@ -11,7 +11,7 @@
   <img alt="PostgreSQL" src="https://img.shields.io/badge/PostgreSQL-production-4169E1?style=for-the-badge&logo=postgresql&logoColor=white" />
   <img alt="Redis" src="https://img.shields.io/badge/Redis-cache%20%2B%20broker-DC382D?style=for-the-badge&logo=redis&logoColor=white" />
   <img alt="Celery" src="https://img.shields.io/badge/Celery-worker%20%2B%20beat-37814A?style=for-the-badge&logo=celery&logoColor=white" />
-  <img alt="Tests" src="https://img.shields.io/badge/tests-1998%20passed-brightgreen?style=for-the-badge" />
+  <img alt="Tests" src="https://img.shields.io/badge/tests-2005%20passed-brightgreen?style=for-the-badge" />
   <img alt="Security" src="https://img.shields.io/badge/security-pip--audit%20%2B%20bandit%20%2B%20detect--secrets-blue?style=for-the-badge" />
 </p>
 
@@ -128,7 +128,7 @@ OpenAPI validation                ✅ Valid schema
 STRUCTURE.md check                ✅ همگام با درخت واقعی مخزن
 compose config (CI)               ✅ interpolate/`:?` زنده در هر push
 nginx config test (CI)            ✅ nginx -t روی deploy/nginx.conf
-pytest + coverage gate            ✅ 1998 passed / 25 skipped (راتچت: جدول با collect سوئیت می‌خواند)
+pytest + coverage gate            ✅ 2005 passed / 25 skipped (راتچت: جدول با collect سوئیت می‌خواند)
 coverage                          ✅ 85.85% >= 82%
 ```
 

@@ -552,6 +552,10 @@ def build_lesson_media_access(*, lesson: Lesson, user: Any, media_kind: str) -> 
             "lesson_id": lesson.pk,
             "course_id": lesson.course_id,
             "title": lesson.document_title or lesson.title,
+            # صفحاتِ سروررندرشده (PDFium → WebP): ریشه‌ی رفعِ «متنِ به‌هم‌ریخته»؛
+            # هر صفحه نشانیِ استریمِ امضاشده‌ی خودش را دارد و فرانت وقتی این
+            # فهرست هست به‌جای pdf.js تصویرِ دقیق نشان می‌دهد (fallback باقی است).
+            "pages": _lesson_document_page_entries(lesson=lesson, user=user),
         }
     if media_kind == "article" and lesson.content_type == LessonContentType.ARTICLE:
         if not lesson.article_body.strip():
@@ -615,6 +619,20 @@ def resolve_lesson_media_stream_file(*, lesson: Lesson, media_kind: str) -> dict
             "file_field": lesson.document_file,
             "base_name": f"lesson-{lesson.pk}-document",
         }
+    # docpage<N>: صفحه‌ی سروررندرشده‌ی سند (WebP) — نسخه‌ی پیکسل‌پرفکتِ مطالعه؛
+    # همان دروازه‌ها و امضای HMAC، فقط محتوا تصویر است نه PDF خام.
+    import re
+
+    from apps.lms.pdf_pages import open_rendered_document_page
+
+    page_match = re.fullmatch(r"docpage(\d{1,3})", media_kind)
+    if page_match:
+        if lesson.content_type != LessonContentType.DOCUMENT or not lesson.document_file:
+            raise LessonMediaUnavailableError("فایل سند این جلسه هنوز بارگذاری نشده است.")
+        payload = open_rendered_document_page(lesson=lesson, page_number=int(page_match.group(1)))
+        if payload is None:
+            raise LessonMediaUnavailableError("صفحه‌ی درخواستی از سند موجود نیست.")
+        return payload
     if media_kind == "video":
         if not lesson.video_file:
             raise LessonMediaUnavailableError("فایل ویدئوی این جلسه هنوز بارگذاری نشده است.")
@@ -646,6 +664,31 @@ def _lesson_media_stream_api_path(*, lesson: Lesson, user: Any, media_kind: str)
     """مسیرِ نسبیِ API استریمِ امضاشده — فرانت آن را زیر /api/proxy مصرف می‌کند."""
     token = sign_lesson_media_token(lesson=lesson, user=user, media_kind=media_kind)
     return f"lms/lessons/{lesson.pk}/media/{media_kind}/stream/?t={token}"
+
+
+def _lesson_document_page_entries(*, lesson: Lesson, user: Any) -> list[dict[str, Any]]:
+    """فهرستِ صفحاتِ سروررندرشده‌ی سند با نشانیِ استریمِ امضاشده‌ی هر صفحه.
+
+    سند رندرناپذیر بود ⇒ [] تا فرانت بی‌صدا به نمایشگرِ pdf.js (fallback) برگردد.
+    هر صفحه media_kind مخصوصِ خود (docpage<N>) را دارد تا امضا دقیقاً همان برگه
+    را باز کند — دورزدنی در کار نیست.
+    """
+    from apps.lms.pdf_pages import ensure_document_pages
+
+    pages = ensure_document_pages(lesson)
+    if not pages:
+        return []
+    return [
+        {
+            "n": page["n"],
+            "width": page["width"],
+            "height": page["height"],
+            "url": _lesson_media_stream_api_path(
+                lesson=lesson, user=user, media_kind=f"docpage{page['n']}"
+            ),
+        }
+        for page in pages
+    ]
 
 
 def resolve_lesson_media_stream_token(*, token: str, media_kind: str) -> Lesson:

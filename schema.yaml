@@ -18903,6 +18903,11 @@ components:
           type: string
         body:
           type: string
+        pages:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
       required:
       - course_id
       - lesson_id

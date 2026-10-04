@@ -228,6 +228,7 @@ setad-jang/
 │   ├── views_public.py
 │   └── views_user.py
 ├── lms/
+│   ├── management/
 │   ├── migrations/
 │   ├── tests/
 │   ├── __init__.py
@@ -239,6 +240,7 @@ setad-jang/
 │   ├── filters.py  # فیلترهای queryset
 │   ├── managers.py
 │   ├── models.py  # مدل‌های داده
+│   ├── pdf_pages.py
 │   ├── permissions.py  # کنترل دسترسی
 │   ├── selectors.py  # خواندن داده (بدون side effect)
 │   ├── serializers.py  # اعتبارسنجی ورودی/خروجی

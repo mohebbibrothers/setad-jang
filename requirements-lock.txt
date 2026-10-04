@@ -60,6 +60,7 @@ prometheus_client==0.25.0
 prompt_toolkit==3.0.53
 psycopg==3.3.2
 psycopg-binary==3.3.2
+pypdfium2==5.14.0
 python-dateutil==2.9.0.post0
 python-decouple==3.8
 pytz==2026.5

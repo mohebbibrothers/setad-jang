@@ -92,6 +92,10 @@ class LessonMediaAccessSerializer(serializers.Serializer):
     course_id = serializers.IntegerField()
     title = serializers.CharField(required=False, allow_blank=True)
     body = serializers.CharField(required=False, allow_blank=True)
+    # فقط برای media_kind=document: صفحاتِ سروررندرشده‌ی سند (PDFium → WebP) با
+    # نشانیِ استریمِ امضاشده‌ی هر برگه؛ [] یعنی رندر ممکن نشد و فرانت به
+    # نمایشگرِ pdf.js برمی‌گردد.
+    pages = serializers.ListField(child=serializers.DictField(), required=False)
 
 
 class LessonCreateUpdateSerializer(serializers.Serializer):
