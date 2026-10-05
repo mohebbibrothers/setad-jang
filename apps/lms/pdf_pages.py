@@ -84,10 +84,11 @@ def _wipe_rendered(lesson: Any) -> None:
     except Exception:
         return
     for name in files:
-        try:
+        # حذفِ بهترین‌تلاش: فایلی که پاک نشود (مثلاً مسابقه‌ی رندرِ موازی) نباید
+        # کل پاک‌سازی را بشکند — صفحه‌های بعدی هم پاک می‌شوند و manifestِ تازه
+        # هرگز به آن‌ها ارجاع نمی‌دهد.
+        with contextlib.suppress(Exception):
             default_storage.delete(f"{directory}/{name}")
-        except Exception:
-            continue
 
 
 def _render_and_store(lesson: Any) -> list[dict[str, int]] | None:
