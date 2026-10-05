@@ -12849,10 +12849,13 @@ components:
           nullable: true
           title: تاریخ ویرایش در منبع
         source_url:
-          type: string
-          format: uri
           title: لینک محتوا در محتوانگار
-          maxLength: 512
+          oneOf:
+          - type: string
+            format: uri
+            maxLength: 512
+          - type: string
+            maxLength: 0
         content_hash:
           type: string
           title: هش محتوا
@@ -14006,6 +14009,7 @@ components:
         cover_image:
           type: string
           format: uri
+          nullable: true
           readOnly: true
           title: تصویر اصلی
         total_amount:
@@ -14161,6 +14165,7 @@ components:
         cover_image:
           type: string
           format: uri
+          nullable: true
           readOnly: true
           title: تصویر اصلی
         total_amount:
@@ -14556,6 +14561,7 @@ components:
         image:
           type: string
           format: uri
+          nullable: true
           readOnly: true
           title: تصویر
         alt_text:
@@ -14649,6 +14655,7 @@ components:
         cover_image:
           type: string
           format: uri
+          nullable: true
           readOnly: true
           title: تصویر اصلی
         total_amount:
@@ -14781,6 +14788,7 @@ components:
         cover_image:
           type: string
           format: uri
+          nullable: true
           readOnly: true
           title: تصویر اصلی
         total_amount:
@@ -15021,8 +15029,8 @@ components:
         pdf_file:
           type: string
           format: uri
-          readOnly: true
           nullable: true
+          readOnly: true
         statement:
           type: string
           description: Return official certificate statement.
@@ -15309,8 +15317,11 @@ components:
         is_featured:
           type: boolean
         intro_video_url:
-          type: string
-          format: uri
+          oneOf:
+          - type: string
+            format: uri
+          - type: string
+            maxLength: 0
         is_active:
           type: boolean
     CourseDetail:
@@ -15352,8 +15363,8 @@ components:
         instructor_avatar:
           type: string
           format: uri
-          readOnly: true
           nullable: true
+          readOnly: true
           title: تصویر استاد
         level:
           allOf:
@@ -15370,8 +15381,8 @@ components:
         cover_image:
           type: string
           format: uri
-          readOnly: true
           nullable: true
+          readOnly: true
           title: تصویر کاور
         lessons_count:
           type: integer
@@ -15399,10 +15410,13 @@ components:
           type: string
           title: معرفی استاد
         intro_video_url:
-          type: string
-          format: uri
           title: ویدئوی معرفی
-          maxLength: 1024
+          oneOf:
+          - type: string
+            format: uri
+            maxLength: 1024
+          - type: string
+            maxLength: 0
         lessons:
           type: array
           items:
@@ -15437,8 +15451,11 @@ components:
         full_name:
           type: string
         email:
-          type: string
-          format: email
+          oneOf:
+          - type: string
+            format: email
+          - type: string
+            maxLength: 0
         progress_percent:
           type: number
           format: double
@@ -15581,8 +15598,8 @@ components:
         instructor_avatar:
           type: string
           format: uri
-          readOnly: true
           nullable: true
+          readOnly: true
           title: تصویر استاد
         level:
           allOf:
@@ -15599,8 +15616,8 @@ components:
         cover_image:
           type: string
           format: uri
-          readOnly: true
           nullable: true
+          readOnly: true
           title: تصویر کاور
         lessons_count:
           type: integer
@@ -16723,8 +16740,8 @@ components:
         cover_image:
           type: string
           format: uri
-          readOnly: true
           nullable: true
+          readOnly: true
           title: تصویر کاور
         path:
           type: string
@@ -17011,6 +17028,7 @@ components:
         image:
           type: string
           format: uri
+          nullable: true
           readOnly: true
         caption:
           type: string
@@ -18850,11 +18868,17 @@ components:
         video_provider:
           type: string
         video_url:
-          type: string
-          format: uri
+          oneOf:
+          - type: string
+            format: uri
+          - type: string
+            maxLength: 0
         embed_url:
-          type: string
-          format: uri
+          oneOf:
+          - type: string
+            format: uri
+          - type: string
+            maxLength: 0
         video_file:
           type: string
           format: uri
@@ -19149,8 +19173,8 @@ components:
         attachment_file:
           type: string
           format: uri
-          readOnly: true
           nullable: true
+          readOnly: true
         is_preview:
           type: boolean
           readOnly: true
@@ -20944,6 +20968,7 @@ components:
         cover_image:
           type: string
           format: uri
+          nullable: true
           readOnly: true
           title: تصویر اصلی
         sponsor:
@@ -20988,10 +21013,13 @@ components:
           description: شماره موبایل برای ارسال به درگاه (اختیاری).
           maxLength: 20
         email:
-          type: string
-          format: email
-          default: ''
           description: ایمیل برای ارسال به درگاه (اختیاری).
+          oneOf:
+          - type: string
+            format: email
+            default: ''
+          - type: string
+            maxLength: 0
       required:
       - share_count
     ParticipationInitiatedResponse:
@@ -21165,6 +21193,7 @@ components:
         cover_image:
           type: string
           format: uri
+          nullable: true
         total_amount:
           type: integer
           minimum: 1000
@@ -21217,8 +21246,11 @@ components:
         is_featured:
           type: boolean
         intro_video_url:
-          type: string
-          format: uri
+          oneOf:
+          - type: string
+            format: uri
+          - type: string
+            maxLength: 0
         is_active:
           type: boolean
     PatchedDiscussionModeration:
@@ -21268,8 +21300,8 @@ components:
         cover_image:
           type: string
           format: uri
-          readOnly: true
           nullable: true
+          readOnly: true
           title: تصویر کاور
         path:
           type: string
@@ -21461,11 +21493,17 @@ components:
         video_provider:
           type: string
         video_url:
-          type: string
-          format: uri
+          oneOf:
+          - type: string
+            format: uri
+          - type: string
+            maxLength: 0
         embed_url:
-          type: string
-          format: uri
+          oneOf:
+          - type: string
+            format: uri
+          - type: string
+            maxLength: 0
         video_file:
           type: string
           format: uri
@@ -22542,10 +22580,13 @@ components:
           nullable: true
           title: تاریخ ویرایش در منبع
         source_url:
-          type: string
-          format: uri
           title: لینک محتوا در محتوانگار
-          maxLength: 512
+          oneOf:
+          - type: string
+            format: uri
+            maxLength: 512
+          - type: string
+            maxLength: 0
         primary_media_type:
           type: string
           readOnly: true
@@ -22623,10 +22664,13 @@ components:
           nullable: true
           title: تاریخ ایجاد در منبع
         source_url:
-          type: string
-          format: uri
           title: لینک محتوا در محتوانگار
-          maxLength: 512
+          oneOf:
+          - type: string
+            format: uri
+            maxLength: 512
+          - type: string
+            maxLength: 0
         primary_media_type:
           type: string
           readOnly: true
@@ -24494,6 +24538,7 @@ components:
         file:
           type: string
           format: uri
+          nullable: true
           readOnly: true
           title: فایل
         title:
@@ -24782,6 +24827,7 @@ components:
         image:
           type: string
           format: uri
+          nullable: true
           readOnly: true
           title: تصویر
           description: متادیتای تصویر (از جمله مختصات GPS در EXIF) هنگام ذخیره حذف
@@ -24874,6 +24920,7 @@ components:
         file:
           type: string
           format: uri
+          nullable: true
           readOnly: true
           title: فایل
         title:
@@ -25977,10 +26024,13 @@ components:
           title: عنوان موضوع
           maxLength: 150
         slug:
-          type: string
           title: شناسه
-          maxLength: 170
-          pattern: ^[-a-zA-Z0-9_]+$
+          oneOf:
+          - type: string
+            maxLength: 170
+            pattern: ^[-a-zA-Z0-9_]+$
+          - type: string
+            maxLength: 0
         description:
           type: string
           title: توضیحات
@@ -26195,8 +26245,8 @@ components:
         logo:
           type: string
           format: uri
-          readOnly: true
           nullable: true
+          readOnly: true
           title: لوگو
       required:
       - id
@@ -27622,6 +27672,7 @@ components:
         file:
           type: string
           format: uri
+          nullable: true
           readOnly: true
         original_filename:
           type: string
@@ -28734,11 +28785,14 @@ components:
           type: integer
           readOnly: true
         email:
-          type: string
-          format: email
           nullable: true
           title: ایمیل
-          maxLength: 254
+          oneOf:
+          - type: string
+            format: email
+            maxLength: 254
+          - type: string
+            maxLength: 0
         first_name:
           type: string
           title: نام
@@ -29044,12 +29098,15 @@ components:
           format: int64
           title: ترتیب
         origin_url:
-          type: string
-          format: uri
           title: نشانی اصلی پیش از آینه‌سازی
           description: برای پیوست‌هایی که اول با نشانی بیرونی ثبت و بعد روی سرور ما
             ذخیره شدند.
-          maxLength: 1024
+          oneOf:
+          - type: string
+            format: uri
+            maxLength: 1024
+          - type: string
+            maxLength: 0
         mirror_status:
           allOf:
           - $ref: '#/components/schemas/MirrorStatusEnum'
