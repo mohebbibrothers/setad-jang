@@ -333,8 +333,10 @@ class LessonProgressUpdateSerializer(serializers.Serializer):
     watched_seconds = serializers.IntegerField(required=False, min_value=0)
     last_position_seconds = serializers.IntegerField(required=False, min_value=0)
     mark_completed = serializers.BooleanField(required=False, default=False)
-    # «سند را باز کردم» — سیگنالِ گیتِ دکمه‌ی تکمیلِ جلسات سندی؛ فرانت در اولین
-    # بازشدنِ نمایشگرِ درون‌برنامه با watched_seconds=0 آن را ارسال می‌کند.
+    # «سند را باز کردم» — سازگاریِ عقب‌رو. منبع‌حقیقتِ تازه خودِ سرور است:
+    # هر بازکردنِ رسانه از مسیرِ media-access مهرِ media_opened_at را می‌زند و
+    # گیتِ تکمیل اول آن مهر را می‌پرسد؛ این flag برای فرانت‌هایی است که هنوز
+    # مسیرِ access را صدا نمی‌زنند (مثلاً رندرِ کاستومِ PDF).
     media_opened = serializers.BooleanField(required=False, default=False)
 
     def validate(self, attrs: dict) -> dict:

@@ -385,10 +385,13 @@ class LMSLessonMediaStreamView(APIView):
         from django.http import FileResponse
 
         token = request.query_params.get("t") or ""
+        # صاحبِ ممیزی: در مسیرِ JWT خودِ نشست؛ در مسیرِ توکنی، کاربرِ درونِ
+        # امضا — تا هر دوِ برقرارِ دسترسی ردپا بگذارند.
+        token_user_id: int | None = None
         if token:
             # مسیرِ امضاشده: بدون نشست، ولی فقط با توکنِ تازه و تطابقِ کاملِ جلسه.
             try:
-                lesson = services.resolve_lesson_media_stream_token(
+                lesson, token_user_id = services.resolve_lesson_media_stream_token(
                     token=token, media_kind=media_kind
                 )
             except LessonMediaAccessError as exc:
@@ -400,10 +403,16 @@ class LMSLessonMediaStreamView(APIView):
                     message="نشانیِ استریم برای این رسانه معتبر نیست.",
                     status_code=status.HTTP_403_FORBIDDEN,
                 )
+
             try:
                 payload = services.resolve_lesson_media_stream_file(
                     lesson=lesson, media_kind=media_kind
                 )
+                # بازبینیِ زنده‌ی عضویت «پس از» تعیینِ فایل تا قراردادِ پاسخ
+                # حفظ شود: رسانه‌ی ناموجود ۴۰۴، دسترسی‌ی ساقط‌شده ۴۰۳.
+                services.ensure_lesson_media_stream_membership(lesson=lesson, user_id=token_user_id)
+            except LessonMediaAccessError as exc:
+                return ErrorResponse(message=str(exc), status_code=status.HTTP_403_FORBIDDEN)
             except LessonMediaUnavailableError as exc:
                 return ErrorResponse(message=str(exc), status_code=status.HTTP_404_NOT_FOUND)
         else:
@@ -440,9 +449,10 @@ class LMSLessonMediaStreamView(APIView):
         response["X-Content-Type-Options"] = "nosniff"
         response["Cache-Control"] = "private, must-revalidate"
         response["Content-Security-Policy"] = "sandbox"
-        if request.user.is_authenticated:
+        audit_user_id = request.user.pk if request.user.is_authenticated else token_user_id
+        if audit_user_id is not None:
             log_action_async(
-                user_id=request.user.pk,
+                user_id=audit_user_id,
                 action=audit_actions.LMS_LESSON_MEDIA_STREAMED,
                 resource_type="lms_lesson",
                 resource_id=str(lesson.pk),
