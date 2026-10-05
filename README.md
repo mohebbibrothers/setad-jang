@@ -11,7 +11,7 @@
   <img alt="PostgreSQL" src="https://img.shields.io/badge/PostgreSQL-production-4169E1?style=for-the-badge&logo=postgresql&logoColor=white" />
   <img alt="Redis" src="https://img.shields.io/badge/Redis-cache%20%2B%20broker-DC382D?style=for-the-badge&logo=redis&logoColor=white" />
   <img alt="Celery" src="https://img.shields.io/badge/Celery-worker%20%2B%20beat-37814A?style=for-the-badge&logo=celery&logoColor=white" />
-  <img alt="Tests" src="https://img.shields.io/badge/tests-1451%20passed-brightgreen?style=for-the-badge" />
+  <img alt="Tests" src="https://img.shields.io/badge/tests-2005%20passed-brightgreen?style=for-the-badge" />
   <img alt="Security" src="https://img.shields.io/badge/security-pip--audit%20%2B%20bandit%20%2B%20detect--secrets-blue?style=for-the-badge" />
 </p>
 
@@ -128,8 +128,8 @@ OpenAPI validation                ✅ Valid schema
 STRUCTURE.md check                ✅ همگام با درخت واقعی مخزن
 compose config (CI)               ✅ interpolate/`:?` زنده در هر push
 nginx config test (CI)            ✅ nginx -t روی deploy/nginx.conf
-pytest + coverage gate            ✅ 1868 passed / 25 skipped (راتچت: جدول با collect سوئیت می‌خواند)
-coverage                          ✅ 85.53% >= 82%
+pytest + coverage gate            ✅ 2023 passed / 25 skipped (راتچت: جدول با collect سوئیت می‌خواند)
+coverage                          ✅ 85.85% >= 82%
 ```
 
 Policyهای مهندسی enforced:
@@ -454,30 +454,40 @@ CELERY_RESULT_BACKEND=redis://redis:6379/2
 
 ### 7.4 Email SMTP
 
-پروژه provider-ready است. پیش‌فرض توسعه console-readable است، اما برای SMTP واقعی می‌توان از Brevo SMTP رایگان/transactional استفاده کرد:
+پروژه provider-ready است. پیش‌فرض توسعه console-readable است؛ برای SMTP واقعی، پیش‌فرض پروژه Gmail است (رایگان، ۵۰۰ ایمیل/روز، بدون تأیید شماره و کارت — مناسب سرورهای داخل ایران). اعتبارنامه = جیمیل کامل + App Password (ابتدا 2-Step Verification را روشن کنید؛ سپس از myaccount.google.com/apppasswords). هر ESP دیگری (Mailgun/Resend/…) فقط با تغییر همین متغیرها قابل‌جایگزینی است:
 
 ```env
 EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
-EMAIL_HOST=smtp-relay.brevo.com
+EMAIL_HOST=smtp.gmail.com
 EMAIL_PORT=587
 EMAIL_USE_TLS=True
-EMAIL_HOST_USER=...
-EMAIL_HOST_PASSWORD=...
-DEFAULT_FROM_EMAIL=no-reply@example.com
+EMAIL_HOST_USER=your-account@gmail.com
+EMAIL_HOST_PASSWORD=<16-digit app password>
+DEFAULT_FROM_EMAIL=your-account@gmail.com
 ```
 
 هیچ credential واقعی نباید commit شود.
 
-### 7.5 SMS Provider
+### 7.5 SMS Provider (IranPayamak Pattern)
 
-تا قبل از گرفتن مجوز SMS، provider می‌تواند dev/console بماند. کدها provider-ready هستند تا بعد از گرفتن مجوز با تغییر env فعال شوند:
+SMS برای OTP از provider contract استفاده می‌کند؛ backend با `OTP_SMS_PROVIDER` انتخاب می‌شود: `console` (dev)، `http` (generic) یا `iranpayamak` (الگوی تأییدشده — فعال در prod). کانال ارسال بر اساس نوع identifier کاربر انتخاب می‌شود؛ `OTP_PROVIDER` فقط fallback قدیمی است.
 
 ```env
-OTP_PROVIDER=sms
-OTP_SMS_PROVIDER=http
-OTP_SMS_ENDPOINT=https://provider.example/api/send
-OTP_SMS_API_KEY=...
+OTP_SMS_PROVIDER=iranpayamak
+SMS_IRANPAYAMAK_API_KEY=<کلید API از پنل ایران‌پیامک — فقط در .env>
+SMS_IRANPAYAMAK_LINE_NUMBER=50002178584000
+SMS_IRANPAYAMAK_NUMBER_FORMAT=persian
+SMS_IRANPAYAMAK_PATTERN_LOGIN=<کد الگوی ورود از پنل>
+SMS_IRANPAYAMAK_PATTERN_SIGNUP=<کد الگوی ثبت‌نام>
+SMS_IRANPAYAMAK_PATTERN_PASSWORD_RESET=<کد الگوی بازیابی رمز>
+SMS_IRANPAYAMAK_PATTERN_IDENTIFIER_ADD=<اختیاری — افزودن شماره>
 ```
+
+- placeholder هر الگو باید دقیقاً `code` باشد (متن‌های تأییدشده همین را دارند).
+- الگوی تأییدنشده/غایب = ارسال fail loud می‌شود و OTP یتیم ساخته نمی‌شود؛ readiness از `/api/v1/health/ready/` وضعیت کلید و الگوها را نشان می‌دهد.
+- **قرارداد تک‌کانالی:** کد دقیقاً روی کانالِ خودِ شناسه ارسال می‌شود (ورود/ثبت‌نام/بازیابی با ایمیل → فقط ایمیل؛ با شماره → فقط پیامک). هیچ fan-out دومکانالی وجود ندارد — هزینهٔ پیامک و ابهامِ «کدام کد معتبر است» عمداً حذف شده است.
+- ایمیل OTP به‌صورت multipart/alternative با قالب HTML برنددار (بدون لینک/تصویر خارجی) و From به شکل «نام <آدرس>» ارسال می‌شود؛ نام نمایشی از `OTP_EMAIL_BRAND_NAME` (اگر `DEFAULT_FROM_EMAIL` خودش فرمت «نام <آدرس>» داشته باشد، همان حفظ می‌شود).
+- ایمیل OTP: Django `MAILERS` (پیش‌فرض Gmail SMTP رایگان؛ اعتبارنامه فقط در `.env`).
 
 ### 7.6 Payment Provider / Zarinpal Readiness
 
@@ -1550,7 +1560,7 @@ apps.madadkar.tasks.generate_financial_control_snapshot_task
 ```text
 Category
 Course
-Lesson
+Lesson            # چندنوعی: video / audio / document(PDF) / article
 Enrollment
 LessonProgress
 Question
@@ -1560,11 +1570,33 @@ Quiz
 QuizQuestion
 QuizOption
 QuizAttempt
-Certificate
+Certificate       # صدورش از سیاست is_required_for_certificate آزمون پیروی می‌کند
 Badge/Skill-oriented data
 LessonVideoProcessingJob
 LearningActivityStatement
 ```
+
+یک جلسه (Lesson) با فیلد `content_type` نوع‌بندی می‌شود؛ «جلسه» لزوماً ویدئو
+نیست. سند/PDF و متن درون‌برنامه‌ای (article) شهروند درجه‌یک‌اند، نه پیوست.
+
+| content_type | رسانه/محتوا | تکمیل جلسه |
+|---|---|---|
+| video / audio | `video_file` یا `video_url` یا `embed_url` | درصد تماشا؛ آستانه ۹۰٪ |
+| document | `document_file` (PDF و اِماندِ متنی) | علامت صریح `mark_completed` («خواندم») |
+| article | `article_body` (بدنه درون‌برنامه‌ای) | علامت صریح `mark_completed` |
+
+### 19.1.1 سیاست گواهی (Certificate Policy)
+
+هر آزمون یک کلید `is_required_for_certificate` دارد:
+
+```text
+True  → قبولی، گواهی + مهارت + اعلان صادر می‌کند (رفتار کلاسی)
+False → آزمون «بدون مدرک» است؛ قبولی فقط ثبت‌نام را completed می‌کند
+```
+
+تصمیم «برگزار یا نکردن آزمون» با خودِ وجودِ آزمونِ منتشرشده برای دوره است؛
+تصمیم «مدرک‌دار یا بدون‌مدرک» روی همان آزمون تنظیم می‌شود و در
+`submit_quiz_attempt` اعمال می‌گردد.
 
 ### 19.2 Course Lifecycle
 
@@ -1593,7 +1625,18 @@ GET /api/v1/lms/courses/{slug}/lessons/{lesson_slug}/
 POST /api/v1/lms/lessons/{lesson_id}/progress/
 ```
 
-Progress service باید enrollment و state را enforce کند.
+Progress service باید enrollment و state را enforce کند. بدنهٔ درخواست دو
+سیگنال دارد و «حالت تکمیل» از نوع جلسه مشتق می‌شود (منبع حقیقت یکی است):
+
+```text
+جلسهٔ رسانه‌ای (video/audio):  {"watched_seconds": N, "last_position_seconds": P}
+    → درصد از مدت جلسه؛ تکمیل خودکار در ≥۹۰٪؛ mark_completed ⇒ ۴۰۰
+جلسهٔ دستی (document/article): {"mark_completed": true}
+    → «خواندم»؛ درصد ۰/۱۰۰ دوحالته؛ ثانیه‌های دلخواه به‌عنوان زمان مطالعه ثبت می‌شود
+```
+
+قید publish: هیچ جلسهٔ فعالی بدون محتوای متناسب با نوعش نمی‌تواند منتشر شود
+(`validate_course_publishable`)؛ پیام خطا شماره/عنوان جلسات ناقص را می‌گوید.
 
 ### 19.4 Signed Media / CDN Readiness
 
@@ -1601,6 +1644,7 @@ Media access از endpoint کنترل‌شده می‌آید:
 
 ```text
 GET /api/v1/lms/lessons/{lesson_id}/media/{media_kind}/
+# media_kind ∈ {video, document, article, attachment}
 ```
 
 هدف:
@@ -1610,6 +1654,12 @@ GET /api/v1/lms/lessons/{lesson_id}/media/{media_kind}/
 قابلیت جایگزینی با signed URL/CDN
 audit media access
 ```
+
+برای `document`، لینک امضاشدهٔ `document_file` (عمر ۶۰۰ ثانیه روی استوریج
+خصوصی) برگردانده می‌شود و برای `article`، بدنهٔ `article_body` به‌صورت
+in-line. هر دو از همان گیتِ ثبت‌نام+preview رد می‌شوند.
+`document_file`/`article_body` در `LessonSummarySerializer` منتشر **نمی‌شوند**
+— محتوای جلسه فقط از همین مسیرِ احراز‌شده خوانده می‌شود.
 
 ### 19.5 Video Processing Worker
 
@@ -1648,6 +1698,13 @@ GET  /api/v1/lms/quiz/attempts/{attempt_id}/
 POST /api/v1/lms/quiz/attempts/{attempt_id}/submit/
 GET  /api/v1/lms/certificates/verify/{verification_slug}/
 ```
+
+آزمون برای دوره اختیاری است (ساختار OneToOne؛ نبودِ آزمونِ منتشرشده = دورهٔ
+بدون آزمون). وقتی آزمون ساخته می‌شود، کلید `is_required_for_certificate`
+(پیش‌فرض True) در همان `POST admin/courses/{id}/quiz/` تنظیم می‌شود: با False،
+قبولی گواهی صادر نمی‌کند و فقط ثبت‌نام را completed می‌کند. صدور مدرک در همان
+تراکنشِ submit اتمیک است: PDF، مهارت/نشان، اعلان و تکمیل ثبت‌نام یا با هم
+نشین می‌شوند یا هیچ‌کدام.
 
 ### 19.7 Recommendations
 

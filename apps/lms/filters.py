@@ -17,6 +17,7 @@ class CoursePublicFilter(django_filters.FilterSet):
 
     category = django_filters.CharFilter(field_name="category__slug", lookup_expr="iexact")
     level = django_filters.ChoiceFilter(choices=CourseLevel.choices)
+    is_featured = django_filters.BooleanFilter()
     search = django_filters.CharFilter(method="filter_search")
 
     class Meta:

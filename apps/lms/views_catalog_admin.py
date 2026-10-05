@@ -40,6 +40,7 @@ from apps.lms.serializers import (
     LMSCategorySerializer,
 )
 from apps.lms.services import (
+    CourseInvalidStateError,
     VideoProcessingJobError,
     request_lesson_video_processing,
 )
@@ -283,14 +284,17 @@ class LMSAdminCoursePublishView(APIView):
         operation_id="lms_admin_courses_publish",
         tags=[TAG_LMS_ADMIN],
         request=None,
-        responses={200: COURSE_RESPONSE, 404: LMS_ERROR_RESPONSE},
+        responses={200: COURSE_RESPONSE, 400: LMS_ERROR_RESPONSE, 404: LMS_ERROR_RESPONSE},
     )
     def post(self, request: Request, course_id: int) -> SuccessResponse | ErrorResponse:
         """Publish course."""
         course = selectors.get_admin_course_by_id(course_id)
         if course is None:
             return ErrorResponse(message="کلاس یافت نشد.", status_code=404)
-        course = services.publish_course(course=course)
+        try:
+            course = services.publish_course(course=course)
+        except CourseInvalidStateError as exc:
+            return ErrorResponse(message=str(exc), status_code=status.HTTP_400_BAD_REQUEST)
         log_action_async(
             user_id=request.user.pk,
             action=audit_actions.LMS_COURSE_PUBLISHED,

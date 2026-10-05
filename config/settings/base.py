@@ -694,6 +694,12 @@ SPECTACULAR_SETTINGS = {
         "TabyinMediaTypeEnum": "apps.tabyin.choices.MediaType",
         "AuthGenderEnum": "apps.authentication.choices.Gender",
         "AuthRiskSignalTypeEnum": "apps.authentication.choices.AuthRiskSignalType",
+        # سه مصرفِ موازیِ PrimaryIdentifierKind (primary_identifier در
+        # UserMeSerializer، kind در UserIdentifierSerializer و
+        # identifier_kind در IdentifierMakePrimarySerializer) قبلاً به
+        # یک enum محاسبه می‌شدند و با دوتاشدن، نامِ دوقلو اتفاق می‌برند —
+        # این نگاشت هر سه را به یک enumِ واحدِ معنادار نگه می‌دارد.
+        "PrimaryIdentifierEnum": "apps.authentication.models.PrimaryIdentifierKind",
         "RiskReviewStatusEnum": (
             ("reviewed", "بررسی‌شده"),
             ("dismissed", "ردشده"),
@@ -719,6 +725,7 @@ SPECTACULAR_SETTINGS = {
         "MadadkarRiskStatusEnum": "apps.madadkar.choices.MadadkarRiskStatus",
         "LMSCourseLevelEnum": "apps.lms.choices.CourseLevel",
         "LMSCourseStatusEnum": "apps.lms.choices.CourseStatus",
+        "LMSLessonContentTypeEnum": "apps.lms.choices.LessonContentType",
         "LMSEnrollmentStatusEnum": "apps.lms.choices.EnrollmentStatus",
         "LMSDiscussionStatusEnum": "apps.lms.choices.DiscussionStatus",
         "LMSDiscussionReportStatusEnum": "apps.lms.choices.DiscussionReportStatus",
@@ -773,7 +780,11 @@ _EMAIL_BACKEND = config(
 _EMAIL_SMTP_OPTIONS: dict[str, object] = {}
 if "smtp" in _EMAIL_BACKEND.lower():
     _EMAIL_SMTP_OPTIONS = {
-        "host": config("EMAIL_HOST", default="smtp-relay.brevo.com"),
+        # Gmail SMTP پیش‌فرض است: رایگان (۵۰۰/روز)، بدون تأیید شمارهٔ
+        # موبایل و بدون کارت، و از سرورهای ایران/خارج ایران قابل استفاده.
+        # (پیش‌تر smtp-relay.brevo.com بود که ثبت‌نامش شمارهٔ غیرایرانی می‌خواهد.)
+        # اعتبارنامه = آدرس کامل جیمیل + App Password (نیازمند 2-Step Verification).
+        "host": config("EMAIL_HOST", default="smtp.gmail.com"),
         "port": config("EMAIL_PORT", default=587, cast=int),
         "use_tls": config("EMAIL_USE_TLS", default=True, cast=bool),
         "timeout": config("EMAIL_TIMEOUT", default=15, cast=int),
@@ -805,6 +816,9 @@ KINDNESS_MATCH_NOTIFICATION_THRESHOLD = config(
 
 OTP_PROVIDER = config("OTP_PROVIDER", default="email")
 OTP_EMAIL_PROVIDER = config("OTP_EMAIL_PROVIDER", default="django_email")
+# نام نمایشیِ فرستنده در ایمیل OTP؛ خالی = بدون نام. اگر DEFAULT_FROM_EMAIL
+# خودش به شکل «نام <آدرس>» نوشته شود، همین مقدار نادیده گرفته می‌شود.
+OTP_EMAIL_BRAND_NAME = config("OTP_EMAIL_BRAND_NAME", default="ستاد جنگ")
 OTP_SMS_PROVIDER = config("OTP_SMS_PROVIDER", default="console")
 
 # --- OTP tunables -----------------------------------------------------------
@@ -825,6 +839,28 @@ AUTH_OTP_COOLDOWN_SECONDS = config("AUTH_OTP_COOLDOWN_SECONDS", default=60, cast
 # اختلاف پیش‌فرض‌ها (۵۰۰ در برابر ۱۰۰۰) پیش نیاید.
 AUTH_OTP_GLOBAL_THRESHOLD = config("AUTH_OTP_GLOBAL_THRESHOLD", default=500, cast=int)
 AUTH_OTP_GLOBAL_WINDOW_SECONDS = config("AUTH_OTP_GLOBAL_WINDOW_SECONDS", default=60, cast=int)
+
+# --- IranPayamak (الگوی تأییدشده/Pattern) — برای OTP_SMS_PROVIDER=iranpayamak ---
+# API key راز است: فقط در .env. کد الگوها و شمارهٔ خط، خروجی پنل‌اند و در .env
+# می‌آیند (پیش‌فرض‌های خالی = fail loud در readiness، نه ترافیک نیمه‌کاره).
+SMS_IRANPAYAMAK_API_KEY = config("SMS_IRANPAYAMAK_API_KEY", default="")
+SMS_IRANPAYAMAK_PATTERN_URL = config(
+    "SMS_IRANPAYAMAK_PATTERN_URL",
+    default="https://api.iranpayamak.com/ws/v1/sms/pattern",
+)
+SMS_IRANPAYAMAK_LINE_NUMBER = config("SMS_IRANPAYAMAK_LINE_NUMBER", default="50002178584000")
+SMS_IRANPAYAMAK_NUMBER_FORMAT = config("SMS_IRANPAYAMAK_NUMBER_FORMAT", default="persian")
+SMS_IRANPAYAMAK_TIMEOUT_SECONDS = config("SMS_IRANPAYAMAK_TIMEOUT_SECONDS", default=10, cast=int)
+SMS_IRANPAYAMAK_PATTERN_LOGIN = config("SMS_IRANPAYAMAK_PATTERN_LOGIN", default="")
+SMS_IRANPAYAMAK_PATTERN_SIGNUP = config("SMS_IRANPAYAMAK_PATTERN_SIGNUP", default="")
+SMS_IRANPAYAMAK_PATTERN_PASSWORD_RESET = config(
+    "SMS_IRANPAYAMAK_PATTERN_PASSWORD_RESET",
+    default="",
+)
+SMS_IRANPAYAMAK_PATTERN_IDENTIFIER_ADD = config(
+    "SMS_IRANPAYAMAK_PATTERN_IDENTIFIER_ADD",
+    default="",
+)
 
 SMS_API_URL = config("SMS_API_URL", default="")
 SMS_API_KEY = config("SMS_API_KEY", default="")
@@ -1244,7 +1280,21 @@ MADADKAR_PAYMENT_CALLBACK_BASE_URL = config(
     default="http://127.0.0.1:8000",
 )
 
+# Base URL صفحهٔ نتیجهٔ پرداخت روی **فرانت** (بدون trailing slash).
+#
+# کاربر پس از اتمام کار در صفحهٔ درگاه، ابتدا به endpoint بک‌اند
+# (/api/v1/madadkar/payment/verify/) برمی‌گردد تا تراکنش verify شود؛ سپس
+# view او را با 302 به این مسیر فرانت می‌فرستد:
+#   {MADADKAR_PAYMENT_RESULT_BASE_URL}/madadkar/paydone/?authority=…&result=…
+# بدون این تنظیم، کاربر روی JSON خامِ API بک‌اند فرود می‌آمد.
+MADADKAR_PAYMENT_RESULT_BASE_URL = config(
+    "MADADKAR_PAYMENT_RESULT_BASE_URL",
+    default="http://127.0.0.1:3000",
+)
+
 # مدت زمان معتبر بودن یک تراکنش PENDING (دقیقه) — بعد از این مدت expire می‌شود
+# اندازه استخر اتصال Session مشترک زرین‌پال (keep-alive بین‌درخواستی).
+ZARINPAL_HTTP_POOL_MAXSIZE = config("ZARINPAL_HTTP_POOL_MAXSIZE", default=16, cast=int)
 MADADKAR_PAYMENT_TIMEOUT_MINUTES = config(
     "MADADKAR_PAYMENT_TIMEOUT_MINUTES",
     default=15,
@@ -1256,9 +1306,13 @@ MADADKAR_ZARINPAL_MERCHANT_ID = config(
     "MADADKAR_ZARINPAL_MERCHANT_ID",
     default="",
 )
+# default از DEBUG پیروی می‌کند: در dev/test خودبه‌خود sandbox (که با
+# merchant واقعی کار نمی‌کند و نباید هم بکند)، در production خودبه‌خود
+# واقعی. خطای قبلی: default ثابت True یعنی فراموشیِ تنظیم در سرورِ عملیاتی
+# ترافیک پرداخت را بی‌سروصدا به درگاه sandbox می‌فرستاد.
 MADADKAR_ZARINPAL_SANDBOX = config(
     "MADADKAR_ZARINPAL_SANDBOX",
-    default=True,
+    default=DEBUG,
     cast=bool,
 )
 
