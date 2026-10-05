@@ -9,7 +9,7 @@
 
 ## اپلیکیشن‌ها
 
-مجموع: **13 اپ** · 95 مدل · 61 مایگریشن · 36 ویو · 287 مسیر
+مجموع: **13 اپ** · 95 مدل · 65 مایگریشن · 36 ویو · 290 مسیر
 
 | اپ | مدل | مایگریشن | ویو | مسیر |
 |---|---:|---:|---:|---:|
@@ -19,11 +19,11 @@
 | `command_center` | 0 | 0 | 1 | 1 |
 | `core` | 2 | 3 | 1 | 0 |
 | `kindness_wall` | 12 | 3 | 0 | 34 |
-| `lms` | 18 | 5 | 0 | 51 |
+| `lms` | 18 | 8 | 0 | 54 |
 | `madadkar` | 14 | 9 | 0 | 47 |
 | `notifications` | 4 | 3 | 7 | 7 |
 | `public_reports` | 3 | 2 | 7 | 7 |
-| `r4j` | 15 | 10 | 0 | 36 |
+| `r4j` | 15 | 11 | 0 | 36 |
 | `support_desk` | 19 | 7 | 0 | 54 |
 | `tabyin` | 2 | 5 | 15 | 15 |
 
@@ -108,6 +108,7 @@ setad-jang/
 │   ├── constants.py
 │   ├── deprecation.py
 │   ├── filters.py  # فیلترهای queryset
+│   ├── iranpayamak.py
 │   ├── jwt_auth.py
 │   ├── logging_utils.py
 │   ├── managers.py
@@ -227,6 +228,7 @@ setad-jang/
 │   ├── views_public.py
 │   └── views_user.py
 ├── lms/
+│   ├── management/
 │   ├── migrations/
 │   ├── tests/
 │   ├── __init__.py
@@ -238,6 +240,7 @@ setad-jang/
 │   ├── filters.py  # فیلترهای queryset
 │   ├── managers.py
 │   ├── models.py  # مدل‌های داده
+│   ├── pdf_pages.py
 │   ├── permissions.py  # کنترل دسترسی
 │   ├── selectors.py  # خواندن داده (بدون side effect)
 │   ├── serializers.py  # اعتبارسنجی ورودی/خروجی

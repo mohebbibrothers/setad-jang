@@ -7,7 +7,7 @@ query optimization and visibility rules stay centralized.
 
 from __future__ import annotations
 
-from django.db.models import Count, Prefetch, QuerySet
+from django.db.models import Count, Prefetch, Q, QuerySet, Sum
 
 from apps.lms.choices import CourseLevel, EnrollmentStatus
 from apps.lms.models import (
@@ -43,11 +43,29 @@ def get_admin_category_by_id(category_id: int) -> LMSCategory | None:
 
 
 def get_public_courses() -> QuerySet[Course]:
-    """Return published courses with category and active lessons prefetched."""
+    """Return published courses with category and active lessons prefetched.
+
+    The live lesson aggregates are annotated here so catalog list AND course
+    detail payloads always report the true syllabus size even when the
+    denormalized ``lessons_count`` / ``estimated_duration_seconds`` columns
+    drifted (e.g. a course whose lessons were seeded outside the service
+    layer). Only the active-lesson relation is joined, so there is no
+    cross-product inflation between the two aggregates.
+    """
     return (
         Course.objects.published()
         .with_category()
+        .annotate(
+            live_lessons_count=Count("lessons", filter=Q(lessons__is_active=True), distinct=True),
+            live_lessons_duration_seconds=Sum(
+                "lessons__duration_seconds", filter=Q(lessons__is_active=True)
+            ),
+        )
         .prefetch_related(Prefetch("lessons", queryset=Lesson.objects.active().ordered()))
+        # Explicit ordering: on GROUP BY (annotated) queries the model default
+        # ordering no longer counts as «ordered» for DRF pagination in modern
+        # Django — and deterministic pages need a stable tiebreaker anyway.
+        .order_by("-published_at", "-created_at", "-id")
     )
 
 
@@ -128,25 +146,47 @@ def get_lesson_for_progress(*, lesson_id: int) -> Lesson | None:
 
 
 def get_lesson_questions(*, lesson_id: int) -> QuerySet:
-    """Return visible/flagged questions for a lesson with visible answers prefetched."""
-    from django.db.models import Prefetch
+    """Return visible/flagged questions for a lesson with answers prefetched.
+
+    پرسش/پاسخ‌های «حذف‌شده» فقط وقتی سوار می‌شوند که زیرِشان گفتگوی زنده هست
+    (سنگ‌قبر برای خواناییِ رشته)؛ پنهان‌کردن/فیلترِ سطحِ نمایش در serializer
+    انجام می‌شود و متنِ سنگ‌قبر هرگز به بیرون درز نمی‌کند.
+    """
+    from django.db.models import Prefetch, Q
 
     from apps.lms.choices import DiscussionStatus
     from apps.lms.models import LessonAnswer, LessonQuestion
 
+    answer_qs = LessonAnswer.objects.filter(
+        status__in=[
+            DiscussionStatus.VISIBLE,
+            DiscussionStatus.FLAGGED,
+            DiscussionStatus.DELETED,
+        ]
+    ).select_related("user")
     return (
-        LessonQuestion.objects.filter(
-            lesson_id=lesson_id,
-            status__in=[DiscussionStatus.VISIBLE, DiscussionStatus.FLAGGED],
+        LessonQuestion.objects.filter(lesson_id=lesson_id)
+        .filter(
+            Q(status__in=[DiscussionStatus.VISIBLE, DiscussionStatus.FLAGGED])
+            | Q(
+                status=DiscussionStatus.DELETED,
+                answers__status__in=[DiscussionStatus.VISIBLE, DiscussionStatus.FLAGGED],
+            )
         )
+        .distinct()
         .select_related("user", "lesson", "lesson__course")
         .prefetch_related(
+            Prefetch("answers", queryset=answer_qs),
             Prefetch(
-                "answers",
+                "answers__replies",
                 queryset=LessonAnswer.objects.filter(
-                    status__in=[DiscussionStatus.VISIBLE, DiscussionStatus.FLAGGED],
-                ).select_related("user"),
-            )
+                    status__in=[
+                        DiscussionStatus.VISIBLE,
+                        DiscussionStatus.FLAGGED,
+                        DiscussionStatus.DELETED,
+                    ]
+                ).select_related("user", "reply_to__user"),
+            ),
         )
         .order_by("-is_pinned", "-last_activity_at")
     )
@@ -158,7 +198,11 @@ def get_lesson_question_by_id(*, question_id: int):
 
     return (
         LessonQuestion.objects.select_related("user", "lesson", "lesson__course")
-        .prefetch_related("answers__user")
+        .prefetch_related(
+            "answers__user",
+            "answers__replies__user",
+            "answers__replies__reply_to__user",
+        )
         .filter(pk=question_id)
         .first()
     )

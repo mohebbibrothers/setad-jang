@@ -16,6 +16,10 @@ Zarinpal payment provider.
   به‌عنوان `verified_amount` برمی‌گرداند چون API زرین‌پال در verify مبلغ
   جداگانه‌ای در response استاندارد برنمی‌گرداند و خودش amount ارسالی را
   validate می‌کند.
+- واحد قرارداد داخلی پروژه تومان است ولی واحد وجهی API زرین‌پال ریال.
+  تبدیل ×۱۰ دقیقاً همین‌جا (مرز درگاه) انجام می‌شود؛ service layer هرگز
+  واحد درگاه را نمی‌بینه. (یافتهٔ ممیزی ۱۴۰۴-۰۶-۱۰: پیش از این، مبلغ تومان
+  بدون تبدیل ارسال می‌شد و کاربر یک‌دهم مبلغ واقعی پرداخت می‌کرد.)
 
 Endpointهای production:
 - Request:  https://api.zarinpal.com/pg/v4/payment/request.json
@@ -32,7 +36,7 @@ from __future__ import annotations
 
 import logging
 import threading
-from typing import Any
+from typing import Any, Final
 
 import requests
 from django.conf import settings
@@ -135,6 +139,9 @@ class ZarinpalProvider(AbstractPaymentProvider):
     SUCCESS_CODE = "100"
     ALREADY_VERIFIED_CODE = "101"
 
+    #: ضریب تبدیل واحد داخلی (تومان) به واحد وجهی API زرین‌پال (ریال).
+    RIAL_PER_TOMAN: Final[int] = 10
+
     def __init__(self) -> None:
         """خواندن و validate کردن تنظیمات لازم در زمان ساخت provider."""
         self.merchant_id = getattr(settings, "MADADKAR_ZARINPAL_MERCHANT_ID", "")
@@ -143,6 +150,15 @@ class ZarinpalProvider(AbstractPaymentProvider):
         if not self.merchant_id:
             msg = "ZarinpalProvider نیاز به MADADKAR_ZARINPAL_MERCHANT_ID در settings دارد."
             raise ZarinpalNotConfiguredError(msg)
+
+    @classmethod
+    def _to_rial(cls, amount_toman: int) -> int:
+        """تبدیل مبلغ از واحد داخلی (تومان) به واحد وجهی زرین‌پال (ریال).
+
+        ورودی باید مبلغ صحیح مثبتِ تومان باشد؛ خروجی ریالِ صحیح. اگر روزی
+        واحد داخلی پروژه عوض شد، تنها همین‌جا باید تغییر کند — نه در service.
+        """
+        return int(amount_toman) * cls.RIAL_PER_TOMAN
 
     @property
     def request_url(self) -> str:
@@ -173,7 +189,8 @@ class ZarinpalProvider(AbstractPaymentProvider):
         ارسال درخواست ایجاد تراکنش به زرین‌پال.
 
         Args:
-            amount: مبلغ به تومان، مطابق قرارداد داخلی پروژه.
+            amount: مبلغ به تومان، مطابق قرارداد داخلی پروژه؛ به زرین‌پال
+                با واحد ریال (×۱۰) ارسال می‌شود.
             description: توضیح قابل نمایش در درگاه.
             callback_url: URL بازگشت بعد از پرداخت.
             mobile: شماره موبایل کاربر، در صورت وجود.
@@ -185,7 +202,7 @@ class ZarinpalProvider(AbstractPaymentProvider):
         """
         payload: dict[str, Any] = {
             "merchant_id": self.merchant_id,
-            "amount": amount,
+            "amount": self._to_rial(amount),
             "description": description,
             "callback_url": callback_url,
         }
@@ -259,7 +276,7 @@ class ZarinpalProvider(AbstractPaymentProvider):
         payload = {
             "merchant_id": self.merchant_id,
             "authority": authority,
-            "amount": amount,
+            "amount": self._to_rial(amount),
         }
         response_payload, transport_error = self._post_json(
             url=self.verify_url,

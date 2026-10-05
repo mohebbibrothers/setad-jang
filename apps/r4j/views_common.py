@@ -239,6 +239,26 @@ PUBLIC_LIST_FILTER_PARAMS = [
         enum=["male", "female", "unknown"],
         description="فیلتر بر اساس جنسیت",
     ),
+    OpenApiParameter(
+        name="ordering",
+        type=OpenApiTypes.STR,
+        location=OpenApiParameter.QUERY,
+        enum=[
+            "total_bounty_toman",
+            "-total_bounty_toman",
+            "bounties_count",
+            "-bounties_count",
+            "published_at",
+            "-published_at",
+            "created_at",
+            "-created_at",
+            "first_name",
+            "-first_name",
+            "last_name",
+            "-last_name",
+        ],
+        description="مرتب‌سازی نتایج (پیش‌وند «-» برای نزولی)",
+    ),
 ]
 ADMIN_LIST_FILTER_PARAMS = [
     *PUBLIC_LIST_FILTER_PARAMS,

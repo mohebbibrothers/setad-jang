@@ -3406,6 +3406,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/LMSCourseResponse'
           description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LMSErrorResponse'
+          description: ''
         '404':
           content:
             application/json:
@@ -3913,6 +3919,90 @@ paths:
               schema:
                 $ref: '#/components/schemas/LMSLearningRecommendationOverviewResponse'
           description: ''
+  /api/v1/lms/answers/{answer_id}/:
+    patch:
+      operationId: lms_answers_update
+      description: Edit answer body by its author with an «edited» stamp.
+      parameters:
+      - in: path
+        name: answer_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - آموزش — کاربر
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedLessonAnswerUpdate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedLessonAnswerUpdate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedLessonAnswerUpdate'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LMSLessonAnswerResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LMSErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LMSErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LMSErrorResponse'
+          description: ''
+    delete:
+      operationId: lms_answers_delete
+      description: Delete own answer; tombstones keep a live reply chain readable.
+      parameters:
+      - in: path
+        name: answer_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - آموزش — کاربر
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LMSErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LMSErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LMSErrorResponse'
+          description: ''
   /api/v1/lms/answers/{answer_id}/report/:
     post:
       operationId: lms_answers_report
@@ -4034,6 +4124,43 @@ paths:
     get:
       operationId: lms_public_courses_list
       description: Return paginated public course catalog.
+      parameters:
+      - in: query
+        name: category
+        schema:
+          type: string
+        description: اسلاگِ دسته (iexact روی category__slug)
+      - in: query
+        name: is_featured
+        schema:
+          type: boolean
+        description: true ⇒ فقط دوره‌های ویژه؛ false ⇒ فقط غیرویژه
+      - in: query
+        name: level
+        schema:
+          type: string
+          enum:
+          - advanced
+          - beginner
+          - intermediate
+          - professional
+        description: سطح دوره
+      - in: query
+        name: page
+        schema:
+          type: integer
+        description: شماره صفحه (۱-مبنا؛ خارج از محدوده ⇒ ۴۰۴)
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+        description: اندازه صفحه (پیش‌فرض ۲۰، حداکثر ۱۰۰)
+      - in: query
+        name: search
+        schema:
+          type: string
+        description: جست‌وجوی هوشمند (FTS+trigram) روی عنوان، زیرعنوان، توضیح و نام
+          مدرس
       tags:
       - آموزش — عمومی
       security:
@@ -4290,6 +4417,41 @@ paths:
               schema:
                 $ref: '#/components/schemas/LMSErrorResponse'
           description: ''
+  /api/v1/lms/lessons/{lesson_id}/media/{media_kind}/stream/:
+    get:
+      operationId: lms_user_lessons_media_stream
+      description: Stream lesson media with inline disposition and hardened headers.
+      parameters:
+      - in: path
+        name: lesson_id
+        schema:
+          type: integer
+        required: true
+      - in: path
+        name: media_kind
+        schema:
+          type: string
+        required: true
+      tags:
+      - آموزش — کاربر
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LMSErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LMSErrorResponse'
+          description: ''
   /api/v1/lms/lessons/{lesson_id}/progress/:
     post:
       operationId: lms_user_lessons_progress_update
@@ -4313,7 +4475,6 @@ paths:
           multipart/form-data:
             schema:
               $ref: '#/components/schemas/LessonProgressUpdate'
-        required: true
       security:
       - jwtAuth: []
       responses:
@@ -4537,6 +4698,91 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/LMSSkillListResponse'
+          description: ''
+  /api/v1/lms/questions/{question_id}/:
+    patch:
+      operationId: lms_questions_update
+      description: Edit question title/body by its author with an «edited» stamp.
+      parameters:
+      - in: path
+        name: question_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - آموزش — کاربر
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedLessonQuestionUpdate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedLessonQuestionUpdate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedLessonQuestionUpdate'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LMSLessonQuestionResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LMSErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LMSErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LMSErrorResponse'
+          description: ''
+    delete:
+      operationId: lms_questions_delete
+      description: Delete own question; tombstones keep a thread with live answers
+        readable.
+      parameters:
+      - in: path
+        name: question_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - آموزش — کاربر
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LMSErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LMSErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LMSErrorResponse'
           description: ''
   /api/v1/lms/questions/{question_id}/answers/:
     post:
@@ -6902,47 +7148,36 @@ paths:
     get:
       operationId: madadkar_payment_verify
       description: |-
-        این endpoint توسط درگاه پرداخت بعد از تکمیل تراکنش فراخوانی می‌شود.
+        درگاه پرداخت مرورگر کاربر را بعد از پایان تراکنش به این آدرس می‌فرستد (با `Authority` و `Status` در query — case-insensitive پذیرفته می‌شود).
 
-        ورودی شامل `authority` (و گاهی `status`) است که توسط درگاه به‌صورت query string یا body ارسال می‌گردد.
+        پاسخ همیشه **302** به صفحهٔ نتیجهٔ فرانت است (`{base}/madadkar/paydone/?authority=…&result=success|failed|canceled|pending|error`) تا کاربر هرگز JSON خام نبیند. استثنا: نبودِ کد رهگیری (درخواست نامعتبر) 400 می‌ماند.
 
-        این endpoint **idempotent** است: فراخوانی دوباره با همان authority نتیجه قبلی را برمی‌گرداند بدون تماس مجدد با درگاه.
-      summary: تأیید پرداخت — callback از سمت درگاه
+        مصرف برنامه‌ای (JSON) را از متد POST همین endpoint استفاده کنید.
+
+        این endpoint **idempotent** است.
+      summary: تأیید پرداخت — callback مرورگر از سمت درگاه (302 به فرانت)
       parameters:
       - in: query
         name: authority
         schema:
           type: string
+        description: کد رهگیری (نام‌های Authority/AUTHORITY هم پذیرفته می‌شوند).
         required: true
       - in: query
         name: status
         schema:
           type: string
+        description: وضعیت اولیه درگاه (OK/NOK — قابل اعتماد نیست؛ NOK → آزادسازی
+          فوری).
       tags:
       - مددکار — کاربر
       security:
       - jwtAuth: []
       - {}
       responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MadadkarPaymentVerifyResponse'
-          description: ''
+        '302':
+          description: No response body
         '400':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MadadkarGenericErrorResponse'
-          description: ''
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MadadkarGenericErrorResponse'
-          description: ''
-        '502':
           content:
             application/json:
               schema:
@@ -6951,17 +7186,11 @@ paths:
     post:
       operationId: madadkar_payment_verify_post
       description: |-
-        Callback تأیید پرداخت — GET/POST /api/v1/madadkar/payment/verify/
+        همان منطق GET ولی با پاسخ JSON کامل. صفحهٔ نتیجهٔ فرانت پس از فرود، با همین POST نتیجهٔ قطعی تراکنش را (idempotent) بازیابی می‌کند.
 
-        نکته مهم: این endpoint از سمت **درگاه پرداخت** فراخوانی می‌شود
-        (نه مستقیم از طرف کلاینت ما). در زمان فراخوانی session کاربر
-        معمولاً موجود نیست.
-
-        بنابراین:
-        - permission: AllowAny (verify بر اساس authority انجام می‌شود)
-        - throttle: مخصوص (مبتنی بر IP)
-        - method: هم GET (Zarinpal) و هم POST (سایر درگاه‌ها) پشتیبانی می‌شوند.
-      summary: تأیید پرداخت — POST callback (درگاه‌های POST-based)
+        نام پارامترها case-insensitive است.
+      summary: 'تأیید پرداخت — POST (مصرف برنامه‌ای: صفحهٔ نتیجهٔ فرانت و درگاه‌های
+        POST-based)'
       tags:
       - مددکار — کاربر
       requestBody:
@@ -7887,6 +8116,24 @@ paths:
         schema:
           type: boolean
         description: فیلتر بر اساس انتشار
+      - in: query
+        name: ordering
+        schema:
+          type: string
+          enum:
+          - -bounties_count
+          - -created_at
+          - -first_name
+          - -last_name
+          - -published_at
+          - -total_bounty_toman
+          - bounties_count
+          - created_at
+          - first_name
+          - last_name
+          - published_at
+          - total_bounty_toman
+        description: مرتب‌سازی نتایج (پیش‌وند «-» برای نزولی)
       - in: query
         name: page
         schema:
@@ -9238,6 +9485,24 @@ paths:
           - male
           - unknown
         description: فیلتر بر اساس جنسیت
+      - in: query
+        name: ordering
+        schema:
+          type: string
+          enum:
+          - -bounties_count
+          - -created_at
+          - -first_name
+          - -last_name
+          - -published_at
+          - -total_bounty_toman
+          - bounties_count
+          - created_at
+          - first_name
+          - last_name
+          - published_at
+          - total_bounty_toman
+        description: مرتب‌سازی نتایج (پیش‌وند «-» برای نزولی)
       - in: query
         name: page
         schema:
@@ -15050,7 +15315,12 @@ components:
           type: boolean
     CourseDetail:
       type: object
-      description: Detailed course representation including active lessons.
+      description: |-
+        Detailed course representation including active lessons.
+
+        ``instructor_avatar`` is inherited from the summary serializer (it was
+        promoted to the list payload) — only the heavier, detail-only fields
+        are declared here explicitly.
       properties:
         id:
           type: integer
@@ -15079,6 +15349,12 @@ components:
           type: string
           readOnly: true
           title: نام استاد
+        instructor_avatar:
+          type: string
+          format: uri
+          readOnly: true
+          nullable: true
+          title: تصویر استاد
         level:
           allOf:
           - $ref: '#/components/schemas/LMSCourseLevelEnum'
@@ -15099,9 +15375,11 @@ components:
           title: تصویر کاور
         lessons_count:
           type: integer
+          description: Live count of active lessons; denormalized column only as fallback.
           readOnly: true
         estimated_duration_seconds:
           type: integer
+          description: Live duration sum over active lessons; denormalized fallback.
           readOnly: true
         enrollments_count:
           type: integer
@@ -15120,11 +15398,6 @@ components:
         instructor_bio:
           type: string
           title: معرفی استاد
-        instructor_avatar:
-          type: string
-          format: uri
-          nullable: true
-          title: تصویر استاد
         intro_video_url:
           type: string
           format: uri
@@ -15143,6 +15416,7 @@ components:
       - estimated_duration_seconds
       - graduates_count
       - id
+      - instructor_avatar
       - instructor_name
       - is_featured
       - lessons
@@ -15260,7 +15534,22 @@ components:
       - watched_seconds
     CourseSummary:
       type: object
-      description: Compact course representation for course lists.
+      description: |-
+        Compact course representation for course lists.
+
+        ``instructor_avatar`` is part of the LIST payload too: public surfaces
+        like the homepage education strip and the catalog grid must be able
+        to render the real instructor photo next to ``instructor_name``
+        without an N+1 round-trip to the detail endpoint per card.
+
+        ``lessons_count`` / ``estimated_duration_seconds`` are LIVE reads from
+        source-of-truth lesson rows, never the denormalized columns blindly:
+        the public selector annotates both aggregates, and any other path that
+        prefetches ``lessons`` lets us count/sum the prefetched rows in memory.
+        Only when neither hint exists do we fall back to the stored columns.
+        This is the root fix for «۰ جلسه» chips on courses that clearly have
+        lessons: a stale denormalized counter can never again contradict the
+        actual syllabus the same payload renders.
       properties:
         id:
           type: integer
@@ -15289,6 +15578,12 @@ components:
           type: string
           readOnly: true
           title: نام استاد
+        instructor_avatar:
+          type: string
+          format: uri
+          readOnly: true
+          nullable: true
+          title: تصویر استاد
         level:
           allOf:
           - $ref: '#/components/schemas/LMSCourseLevelEnum'
@@ -15309,9 +15604,11 @@ components:
           title: تصویر کاور
         lessons_count:
           type: integer
+          description: Live count of active lessons; denormalized column only as fallback.
           readOnly: true
         estimated_duration_seconds:
           type: integer
+          description: Live duration sum over active lessons; denormalized fallback.
           readOnly: true
         enrollments_count:
           type: integer
@@ -15331,6 +15628,7 @@ components:
       - estimated_duration_seconds
       - graduates_count
       - id
+      - instructor_avatar
       - instructor_name
       - is_featured
       - lessons_count
@@ -15932,20 +16230,12 @@ components:
           maxLength: 254
       required:
       - identifier
-    IdentifierKindEnum:
-      enum:
-      - email
-      - phone
-      type: string
-      description: |-
-        * `email` - ایمیل
-        * `phone` - شماره موبایل
     IdentifierMakePrimary:
       type: object
       description: Switch primary identifier to an already attached + verified channel.
       properties:
         identifier_kind:
-          $ref: '#/components/schemas/IdentifierKindEnum'
+          $ref: '#/components/schemas/PrimaryIdentifierEnum'
       required:
       - identifier_kind
     KindnessAdminAnalytics:
@@ -17930,6 +18220,18 @@ components:
       required:
       - data
       - message
+    LMSLessonContentTypeEnum:
+      enum:
+      - video
+      - audio
+      - document
+      - article
+      type: string
+      description: |-
+        * `video` - ویدئویی
+        * `audio` - صوتی
+        * `document` - سند/PDF
+        * `article` - متنی
     LMSLessonDeletedResponse:
       type: object
       properties:
@@ -18419,7 +18721,7 @@ components:
       - top_recommendable_courses
     LessonAnswer:
       type: object
-      description: Output serializer for lesson answers.
+      description: Output serializer for lesson answers (with one nested reply level).
       properties:
         id:
           type: integer
@@ -18431,12 +18733,40 @@ components:
           type: string
           description: Return safe display name for answer author.
           readOnly: true
+        parent_id:
+          type: integer
+          nullable: true
+          title: پاسخِ مادر (لنگرِ رشته)
+          readOnly: true
+        reply_to_id:
+          type: integer
+          readOnly: true
+        reply_to_display:
+          type: string
+          nullable: true
+          description: Display name of the author this answer replies to (display-only
+            chain).
+          readOnly: true
+        reply_to_excerpt:
+          type: string
+          nullable: true
+          description: |-
+            گزیده‌ی متنِ پیامی که روی آن رد خورده — برای نقل‌قولِ دقیق زیرِ ردها.
+
+            با حذفِ بدنه‌ی هدف (reply_to SET_NULL) مقدارش None می‌شود و رابط، نقل‌قول
+            را به حالتِ «پیامِ حذف‌شده» دگرگون می‌کند.
+          readOnly: true
         body:
           type: string
+          description: متنِ پاسخ — برای سنگ‌قبرِ حذف‌شده هرگز بدنه‌ی اصلی لو نمی‌رود.
           readOnly: true
         status:
           allOf:
           - $ref: '#/components/schemas/LMSDiscussionStatusEnum'
+          readOnly: true
+        is_deleted:
+          type: boolean
+          description: سنگ‌قبرِ «این پاسخ حذف شد» برای پاسخ‌هایی که رشته‌ی زنده دارند.
           readOnly: true
         is_instructor_answer:
           type: boolean
@@ -18449,27 +18779,50 @@ components:
           format: date-time
           readOnly: true
           title: تاریخ ایجاد
+        edited_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
         updated_at:
           type: string
           format: date-time
           readOnly: true
           title: تاریخ بروزرسانی
+        replies:
+          type: array
+          items: {}
+          description: |-
+            Serialize visible children — depth is capped at one level by design.
+
+            سنگ‌قبرِ حذف‌شده هم وقتی زیرِش ردِ زنده هست می‌آید تا بافتِ گفتگو نپوسد.
+          readOnly: true
       required:
       - body
       - created_at
+      - edited_at
       - id
       - is_accepted
+      - is_deleted
       - is_instructor_answer
+      - parent_id
+      - replies
+      - reply_to_display
+      - reply_to_excerpt
+      - reply_to_id
       - status
       - updated_at
       - user_display
       - user_id
     LessonAnswerCreate:
       type: object
-      description: Input serializer for creating a lesson answer.
+      description: Input serializer for creating a lesson answer (optionally a reply).
       properties:
         body:
           type: string
+        parent_id:
+          type: integer
+          minimum: 1
       required:
       - body
     LessonCreateUpdate:
@@ -18484,6 +18837,16 @@ components:
         order:
           type: integer
           minimum: 1
+        content_type:
+          $ref: '#/components/schemas/LMSLessonContentTypeEnum'
+        document_file:
+          type: string
+          format: uri
+          nullable: true
+        document_title:
+          type: string
+        article_body:
+          type: string
         video_provider:
           type: string
         video_url:
@@ -18517,7 +18880,11 @@ components:
           type: boolean
     LessonMediaAccess:
       type: object
-      description: Signed/CDN-ready lesson media access payload.
+      description: |-
+        Signed/CDN-ready lesson media access payload.
+
+        برای جلسهٔ متنی (article) فیلد `body` محتوای درون‌برنامه‌ای را می‌آورد و
+        `url` تهی است؛ بقیهٔ نوع‌ها آدرس رسانه را.
       properties:
         media_kind:
           type: string
@@ -18534,6 +18901,13 @@ components:
           type: integer
         title:
           type: string
+        body:
+          type: string
+        pages:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
       required:
       - course_id
       - lesson_id
@@ -18565,6 +18939,11 @@ components:
         is_completed:
           type: boolean
           readOnly: true
+        media_opened:
+          type: boolean
+          description: آیا سند/رسانه‌ی جلسه دست‌کم یک‌بار توسط کاربر باز شده؟ (گیتِ
+            دکمه‌ی تکمیل).
+          readOnly: true
         last_position_seconds:
           type: integer
           readOnly: true
@@ -18592,11 +18971,20 @@ components:
       - last_position_seconds
       - last_watched_at
       - lesson
+      - media_opened
       - progress_percent
       - watched_seconds
     LessonProgressUpdate:
       type: object
-      description: Input serializer for lesson progress updates.
+      description: |-
+        Input serializer for lesson progress updates.
+
+        قرارداد دو-حالتی:
+        - جلسات رسانه‌ای: `watched_seconds` (اختیاری در ترکیب با mark_completed نه —
+          این یکی الزامی رفتار می‌کند چون سرویس حالت رسانه فقط با ثانیه جلو می‌رود).
+        - جلسات سند/متنی: `mark_completed=true` یعنی «خواندم/تمام شد».
+        قانون سطح serializer: حداقل یکی از دو سیگنال باید باشد؛ تطبیق «نوع جلسه ×
+        سیگنال» در سرویس انجام می‌شود (serializer به session دسترسی ندارد).
       properties:
         watched_seconds:
           type: integer
@@ -18604,8 +18992,12 @@ components:
         last_position_seconds:
           type: integer
           minimum: 0
-      required:
-      - watched_seconds
+        mark_completed:
+          type: boolean
+          default: false
+        media_opened:
+          type: boolean
+          default: false
     LessonQuestion:
       type: object
       description: Output serializer for lesson questions with nested visible answers.
@@ -18625,13 +19017,19 @@ components:
           readOnly: true
         title:
           type: string
+          description: عنوان — سنگ‌قبرِ حذف‌شده متنِ اصلی را لو نمی‌دهد.
           readOnly: true
         body:
           type: string
+          description: متن — سنگ‌قبرِ حذف‌شده متنِ اصلی را لو نمی‌دهد.
           readOnly: true
         status:
           allOf:
           - $ref: '#/components/schemas/LMSDiscussionStatusEnum'
+          readOnly: true
+        is_deleted:
+          type: boolean
+          description: سنگ‌قبرِ «این پرسش حذف شد» وقتی پاسخ‌های رشته هنوز زنده‌اند.
           readOnly: true
         is_pinned:
           type: boolean
@@ -18648,21 +19046,32 @@ components:
           readOnly: true
         answers:
           type: array
-          items:
-            $ref: '#/components/schemas/LessonAnswer'
+          items: {}
+          description: |-
+            Top-level answers only — replies hang under their root via `replies`.
+
+            سنگ‌قبرِ پاسخِ حذف‌شده فقط وقتی می‌آید که زیرِش ردِ زنده باشد تا شالوده‌ی
+            رشته نپوسد؛ وگرنه پاسخِ حذف‌شده کاملاً ناپدید می‌شود (قاعده‌ی یوتیوب).
           readOnly: true
         created_at:
           type: string
           format: date-time
           readOnly: true
           title: تاریخ ایجاد
+        edited_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
       required:
       - answer_count
       - answers
       - body
       - created_at
+      - edited_at
       - id
       - is_answered
+      - is_deleted
       - is_pinned
       - last_activity_at
       - lesson_id
@@ -18684,7 +19093,13 @@ components:
       - title
     LessonSummary:
       type: object
-      description: Compact lesson representation for course detail pages.
+      description: |-
+        Compact lesson representation for course detail pages.
+
+        نکتهٔ امنیتی: `document_file`/`article_body` عمداً اینجا نیستند — محتوای
+        اصلیِ جلسات سند/متنی فقط از مسیرِ کنترل‌شدهٔ media access (با گیت
+        ثبت‌نام، استثنای preview و ممیزی) سرو می‌شود تا کاتالوگ عمومی، کل جلسه
+        را مجانی لو ندهد.
       properties:
         id:
           type: integer
@@ -18701,6 +19116,14 @@ components:
           readOnly: true
         order:
           type: integer
+          readOnly: true
+        content_type:
+          allOf:
+          - $ref: '#/components/schemas/LMSLessonContentTypeEnum'
+          readOnly: true
+          title: نوع محتوا
+        content_type_display:
+          type: string
           readOnly: true
         video_provider:
           allOf:
@@ -18734,6 +19157,8 @@ components:
       required:
       - attachment_file
       - attachment_title
+      - content_type
+      - content_type_display
       - description
       - duration_seconds
       - embed_url
@@ -21005,6 +21430,12 @@ components:
           minimum: 0
         is_active:
           type: boolean
+    PatchedLessonAnswerUpdate:
+      type: object
+      description: Input serializer for editing an own answer/reply (author/admin).
+      properties:
+        body:
+          type: string
     PatchedLessonCreateUpdate:
       type: object
       description: Input serializer for lesson create/update.
@@ -21017,6 +21448,16 @@ components:
         order:
           type: integer
           minimum: 1
+        content_type:
+          $ref: '#/components/schemas/LMSLessonContentTypeEnum'
+        document_file:
+          type: string
+          format: uri
+          nullable: true
+        document_title:
+          type: string
+        article_body:
+          type: string
         video_provider:
           type: string
         video_url:
@@ -21048,6 +21489,15 @@ components:
           type: boolean
         is_active:
           type: boolean
+    PatchedLessonQuestionUpdate:
+      type: object
+      description: Input serializer for editing an own question (author/admin).
+      properties:
+        title:
+          type: string
+          maxLength: 255
+        body:
+          type: string
     PatchedR4JCriminalUpdate:
       type: object
       description: ورودی ویرایش پروفایل criminal توسط admin.
@@ -21951,6 +22401,14 @@ components:
       - participation
       - payment_status
       - payment_status_display
+    PrimaryIdentifierEnum:
+      enum:
+      - email
+      - phone
+      type: string
+      description: |-
+        * `email` - ایمیل
+        * `phone` - شماره موبایل
     Profile:
       type: object
       description: ProfileSerializer implementation for the authentication application.
@@ -22264,6 +22722,7 @@ components:
           type: boolean
         is_required_for_certificate:
           type: boolean
+          title: الزامی برای صدور گواهی
         published_at:
           type: string
           format: date-time
@@ -28383,6 +28842,29 @@ components:
       required:
       - data
       - message
+    UserIdentifier:
+      type: object
+      description: |-
+        یک شناسه‌ی متصل به حساب (ایمیل یا شماره موبایل) — قراردادِ مصرفِ فرانت.
+
+        بک‌اند فاز H دو کانالِ شناسه روی خودِ User نگه می‌دارد (email و
+        phone_number که هر کدام unique و nullable‌اند) و نه یک مدلِ جدا؛ پس
+        لیستِ شناسه‌ها در محضِ خواندن از همین دو ستون + دو فلگِ تأیید ساخته
+        می‌شود. شناسه‌ی «اصلی» با فلدِ user.primary_identifier تعیین می‌شود.
+      properties:
+        kind:
+          $ref: '#/components/schemas/PrimaryIdentifierEnum'
+        value:
+          type: string
+        is_primary:
+          type: boolean
+        is_verified:
+          type: boolean
+      required:
+      - is_primary
+      - is_verified
+      - kind
+      - value
     UserMe:
       type: object
       description: UserMeSerializer implementation for the authentication application.
@@ -28396,14 +28878,30 @@ components:
           readOnly: true
           nullable: true
           title: ایمیل
+        phone_number:
+          type: string
+          readOnly: true
+          nullable: true
+          title: شماره موبایل
+          description: در فرمت E.164 ذخیره می‌شود (مثلاً +989120000000).
+        primary_identifier:
+          allOf:
+          - $ref: '#/components/schemas/PrimaryIdentifierEnum'
+          readOnly: true
+          title: شناسه اصلی
+          description: |-
+            نوع شناسه‌ای که کاربر در ابتدا با آن ثبت‌نام کرده است.
+
+            * `email` - ایمیل
+            * `phone` - شماره موبایل
         first_name:
           type: string
+          readOnly: true
           title: نام
-          maxLength: 100
         last_name:
           type: string
+          readOnly: true
           title: نام خانوادگی
-          maxLength: 100
         full_name:
           type: string
           readOnly: true
@@ -28416,6 +28914,15 @@ components:
           type: boolean
           readOnly: true
           title: ایمیل تأیید شده
+        is_phone_verified:
+          type: boolean
+          readOnly: true
+          title: شماره موبایل تأیید شده
+        identifiers:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserIdentifier'
+          readOnly: true
         date_joined:
           type: string
           format: date-time
@@ -28428,9 +28935,15 @@ components:
       required:
       - date_joined
       - email
+      - first_name
       - full_name
       - id
+      - identifiers
       - is_email_verified
+      - is_phone_verified
+      - last_name
+      - phone_number
+      - primary_identifier
       - profile
       - role
     UserMeSuccessResponse:

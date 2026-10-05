@@ -5,7 +5,8 @@
 
 from __future__ import annotations
 
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status
 from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
@@ -16,6 +17,7 @@ from apps.core.api_cache import build_cache_variant, cached_public_payload
 from apps.core.pagination import StandardPagination
 from apps.core.responses import ErrorResponse, SuccessResponse
 from apps.lms import selectors
+from apps.lms.choices import CourseLevel
 from apps.lms.filters import (
     CoursePublicFilter,
 )
@@ -140,6 +142,45 @@ class LMSCoursePublicListView(APIView):
     @extend_schema(
         operation_id="lms_public_courses_list",
         tags=[TAG_LMS_PUBLIC],
+        parameters=[
+            OpenApiParameter(
+                name="category",
+                type=OpenApiTypes.STR,
+                location=OpenApiParameter.QUERY,
+                description="اسلاگِ دسته (iexact روی category__slug)",
+            ),
+            OpenApiParameter(
+                name="level",
+                type=OpenApiTypes.STR,
+                location=OpenApiParameter.QUERY,
+                enum=[c.value for c in CourseLevel],
+                description="سطح دوره",
+            ),
+            OpenApiParameter(
+                name="is_featured",
+                type=OpenApiTypes.BOOL,
+                location=OpenApiParameter.QUERY,
+                description="true ⇒ فقط دوره‌های ویژه؛ false ⇒ فقط غیرویژه",
+            ),
+            OpenApiParameter(
+                name="search",
+                type=OpenApiTypes.STR,
+                location=OpenApiParameter.QUERY,
+                description="جست‌وجوی هوشمند (FTS+trigram) روی عنوان، زیرعنوان، توضیح و نام مدرس",
+            ),
+            OpenApiParameter(
+                name="page",
+                type=OpenApiTypes.INT,
+                location=OpenApiParameter.QUERY,
+                description="شماره صفحه (۱-مبنا؛ خارج از محدوده ⇒ ۴۰۴)",
+            ),
+            OpenApiParameter(
+                name="page_size",
+                type=OpenApiTypes.INT,
+                location=OpenApiParameter.QUERY,
+                description="اندازه صفحه (پیش‌فرض ۲۰، حداکثر ۱۰۰)",
+            ),
+        ],
         responses={200: COURSE_LIST_RESPONSE},
     )
     def get(self, request: Request) -> Response:

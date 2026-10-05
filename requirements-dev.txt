@@ -19,3 +19,10 @@ responses==0.25.7
 pip-audit==2.9.0
 bandit==1.9.4
 detect-secrets==1.5.0
+
+# ── Transitive drift pins ──────────────────────────────────
+# filelock (ترانزیتیوِ cachecontrol/pip-audit) و platformdirs (ترانزیتیوِ چند ابزار)
+# بی‌سروصدا ریلیز می‌شوند و همان روز `make lock-check` را در CI قرمز می‌کنند.
+# مثل boto3/pytz در requirements.txt، ترانزیتیوهای موج‌ساز drift پینِ صریح می‌گیرند.
+filelock==4.0.10
+platformdirs==4.12.3

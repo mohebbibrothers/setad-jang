@@ -37,14 +37,17 @@ def send_text_email(
     message: str,
     recipient_list: Sequence[str],
     from_email: str | None = None,
+    html_message: str | None = None,
 ) -> int:
     """
     Send a plain-text email through the default mailer.
 
     Args:
         subject: عنوان ایمیل.
-        message: متن سادهٔ ایمیل.
+        message: متن سادهٔ ایمیل (fallback).
         recipient_list: گیرنده‌ها.
+        html_message: نسخهٔ HTML (multipart/alternative) — اختیاری؛ نداشتن آن
+            رفتار قدیمی را دقیقاً حفظ می‌کند.
         from_email: فرستنده؛ پیش‌فرض ``settings.DEFAULT_FROM_EMAIL``.
 
     Returns:
@@ -60,5 +63,7 @@ def send_text_email(
         from_email=from_email,
         to=list(recipient_list),
     )
+    if html_message:
+        email.attach_alternative(html_message, "text/html")
     mailer = mailers[DEFAULT_MAILER_ALIAS]
     return mailer.send_messages([email])

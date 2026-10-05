@@ -543,6 +543,10 @@ def generate_and_send_otp(
     # 5) کد رسید → حالا کدهای قبلی همان هدف باطل می‌شوند
     _commit_otp_delivery(otp=otp)
 
+    # قرارداد تک‌کانالی (تصمیم محصول ۱۴۰۴-۰۶-۱۶): ارسال دقیقاً روی کانالِ
+    # خودِ شناسه است (ایمیل→ایمیل، شماره→SMS). fan-out دوم کانال به‌عمد وجود
+    # ندارد — هزینهٔ SMS و دوباره‌کاریِ inbox را بالا می‌برد.
+
     logger.info(
         "OTP generated and handed to provider identifier=%s purpose=%s expires_at=%s",
         mask_identifier(identifier_value, identifier_kind=identifier_kind),

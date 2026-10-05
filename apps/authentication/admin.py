@@ -57,7 +57,10 @@ class ProfileInline(admin.StackedInline):
             return "پس از ایجاد پروفایل محاسبه می‌شود."
         missing = obj.get_missing_r4j_fields()
         if not missing:
-            return format_html('<strong style="color: green;">کامل</strong>')
+            # توجه (باگ ۵۰۰ پروداکشن ۱۴۰۴-۰۶-۱۰): از Django 6.0 فراخوانی
+            # format_html بدون هیچ آرگومانی TypeError می‌دهد؛ همین رشتهٔ
+            # ثابت هم باید از مسیر placeholder عبور کند.
+            return format_html('<strong style="color: green;">{}</strong>', "کامل")
         return format_html(
             '<strong style="color: orange;">ناقص</strong> — فیلدهای ناقص: {}',
             ", ".join(missing),

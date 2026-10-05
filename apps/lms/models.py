@@ -25,6 +25,8 @@ from django.utils.text import slugify
 
 from apps.core.models import BaseModel
 from apps.lms.choices import (
+    MANUAL_COMPLETION_TYPES,
+    MEDIA_COMPLETION_TYPES,
     BadgeLevel,
     CertificateStatus,
     CourseLevel,
@@ -33,6 +35,7 @@ from apps.lms.choices import (
     DiscussionStatus,
     EnrollmentStatus,
     LearningStatementVerb,
+    LessonContentType,
     QuizAttemptStatus,
     QuizStatus,
     VideoProcessingStatus,
@@ -41,6 +44,7 @@ from apps.lms.choices import (
 from apps.lms.managers import CourseManager, LessonManager, LMSCategoryManager
 from apps.lms.validators import (
     validate_duration_seconds,
+    validate_lesson_document_file,
     validate_lesson_file_size,
     validate_lesson_video_file_size,
     validate_positive_weight,
@@ -70,6 +74,11 @@ def instructor_avatar_upload_path(instance: Course, filename: str) -> str:
 def lesson_video_upload_path(instance: Lesson, filename: str) -> str:
     """Return upload path for uploaded lesson videos."""
     return f"lms/courses/{instance.course_id}/lessons/{instance.pk or 'new'}/video/{filename}"
+
+
+def lesson_document_upload_path(instance: Lesson, filename: str) -> str:
+    """Return upload path for lesson primary document (PDF/سند جلسه)."""
+    return f"lms/courses/{instance.course_id}/lessons/{instance.pk or 'new'}/document/{filename}"
 
 
 def lesson_attachment_upload_path(instance: Lesson, filename: str) -> str:
@@ -204,13 +213,36 @@ class Course(BaseModel):
 
 
 class Lesson(BaseModel):
-    """A single ordered session inside a course."""
+    """A single ordered session inside a course.
+
+    A lesson is content-typed via `content_type`: video/audio (media-backed,
+    progress driven by watched seconds) or document/article (file/text-backed,
+    completion driven by an explicit «read/done» signal). This replaces the old
+    video-only assumption so admins can run PDF-first or blended courses.
+    """
 
     course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name="lessons")
     title = models.CharField(max_length=255)
     slug = models.SlugField(max_length=300, allow_unicode=True, blank=True)
     description = models.TextField(blank=True)
     order = models.PositiveIntegerField(default=1)
+
+    content_type = models.CharField(
+        max_length=20,
+        choices=LessonContentType.choices,
+        default=LessonContentType.VIDEO,
+        verbose_name="نوع محتوا",
+    )
+
+    document_file = models.FileField(
+        upload_to=lesson_document_upload_path,
+        blank=True,
+        null=True,
+        validators=[validate_lesson_document_file],
+        verbose_name="فایل سند جلسه",
+    )
+    document_title = models.CharField(max_length=255, blank=True, verbose_name="عنوان سند")
+    article_body = models.TextField(blank=True, verbose_name="متن جلسه")
 
     video_provider = models.CharField(
         max_length=20,
@@ -270,6 +302,30 @@ class Lesson(BaseModel):
         if not self.slug:
             self.slug = slugify(self.title, allow_unicode=True)[:300] or f"lesson-{self.order}"
         super().save(*args, **kwargs)
+
+    @property
+    def is_media_type(self) -> bool:
+        """آیا این جلسه رسانه‌محور است (پیشرفت بر پایهٔ ثانیه تماشا)."""
+        return self.content_type in MEDIA_COMPLETION_TYPES
+
+    @property
+    def supports_manual_completion(self) -> bool:
+        """آیا تکمیل این جلسه با علامت صریح «خواندم/تمام شد» انجام می‌شود."""
+        return self.content_type in MANUAL_COMPLETION_TYPES
+
+    def has_required_content(self) -> bool:
+        """اعتبار محتوای جلسه بر اساس نوعش — مبنای publish دوره.
+
+        هر نوع باید «همان چیزی که وعده می‌دهد» را داشته باشد؛ وگرنه جلسه در
+        کاتالوگ منتشرشده باز می‌شود ولی هیچ رسانه/متنی ندارد و کاربر را به
+        بن‌بست می‌فرستد. این متد دقیقاً جلوی انتشارِ ناقص را می‌گیرد.
+        """
+        if self.content_type == LessonContentType.DOCUMENT:
+            return bool(self.document_file)
+        if self.content_type == LessonContentType.ARTICLE:
+            return bool(self.article_body.strip())
+        # video/audio: حداقل یکی از سه منبع رسانه باید پر باشد.
+        return bool(self.video_file or self.video_url or self.embed_url)
 
 
 # ---------------------------------------------------------------------------
@@ -447,6 +503,9 @@ class LessonProgress(BaseModel):
     first_watched_at = models.DateTimeField(null=True, blank=True)
     last_watched_at = models.DateTimeField(null=True, blank=True)
     completed_at = models.DateTimeField(null=True, blank=True)
+    # نخستین زمانی که کاربر سند/رسانه‌ی جلسه را واقعاً «باز» کرد (برای دروازه‌ی
+    # دکمه‌ی تکمیلِ جلسات سندی — «اول ببین، بعد علامت بزن»).
+    media_opened_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         verbose_name = "پیشرفت جلسه"
@@ -480,6 +539,7 @@ class LessonQuestion(BaseModel):
     is_answered = models.BooleanField(default=False)
     answer_count = models.PositiveIntegerField(default=0)
     last_activity_at = models.DateTimeField(default=timezone.now)
+    edited_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         verbose_name = "سؤال جلسه"
@@ -492,13 +552,36 @@ class LessonQuestion(BaseModel):
 
 
 class LessonAnswer(BaseModel):
-    """A threaded answer for a lesson question."""
+    """A threaded answer for a lesson question (one reply level, YouTube-style).
+
+    «parent» لنگرِ ریشه‌ی یک رشته است (فقط برای ردها پر می‌شود؛ پاسخ‌های سطح‌صفر
+    مقدارش None است) و «reply_to» دقیقاً همان پاسخی است که کاربر روی آن رد زده —
+    این دو با هم امکان نمایشِ «در پاسخ به @فلانی» را حتی زیرِ رشته‌های شل می‌دهند.
+    عمقِ تودرتو عمداً یک‌سطحی نگه داشته می‌شود تا گفتگو خوانا بماند.
+    """
 
     question = models.ForeignKey(LessonQuestion, on_delete=models.CASCADE, related_name="answers")
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="lms_answers"
     )
+    parent = models.ForeignKey(
+        "self",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="replies",
+        verbose_name="پاسخِ مادر (لنگرِ رشته)",
+    )
+    reply_to = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="mentioned_by",
+        verbose_name="در پاسخ به",
+    )
     body = models.TextField()
+    edited_at = models.DateTimeField(null=True, blank=True)
     status = models.CharField(
         max_length=20, choices=DiscussionStatus.choices, default=DiscussionStatus.VISIBLE
     )
@@ -509,7 +592,10 @@ class LessonAnswer(BaseModel):
         verbose_name = "پاسخ سؤال"
         verbose_name_plural = "پاسخ‌های سؤالات"
         ordering = ["created_at"]
-        indexes = [models.Index(fields=["question", "status", "created_at"])]
+        indexes = [
+            models.Index(fields=["question", "status", "created_at"]),
+            models.Index(fields=["parent", "status", "created_at"]),
+        ]
 
 
 class LessonDiscussionReport(BaseModel):
@@ -586,7 +672,12 @@ class Quiz(BaseModel):
     shuffle_options = models.BooleanField(default=True)
     show_result_immediately = models.BooleanField(default=True)
     show_correct_answers_after_pass = models.BooleanField(default=True)
-    is_required_for_certificate = models.BooleanField(default=True)
+    # سیاست مدرک: «قبولی این آزمون گواهی صادر کند؟» — True یعنی پذیرنده برای
+    # این دوره آزمونِ گواهی‌محور گذاشته؛ False یعنی آزمون اختیاری/غیرمدرکی است
+    # و قبولی‌اش فقط ثبت‌نام را تکمیل می‌کند. در submit_quiz_attempt اعمال می‌شود.
+    is_required_for_certificate = models.BooleanField(
+        default=True, verbose_name="الزامی برای صدور گواهی"
+    )
     published_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:

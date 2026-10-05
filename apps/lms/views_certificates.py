@@ -17,7 +17,7 @@ from apps.audit_logs.helpers import extract_audit_metadata
 from apps.audit_logs.services import log_action_async
 from apps.core.pagination import StandardPagination
 from apps.core.responses import ErrorResponse, SuccessResponse
-from apps.lms import selectors
+from apps.lms import selectors, services
 from apps.lms.permissions import IsLMSAdminUser
 from apps.lms.serializers import (
     CertificateRevokeSerializer,
@@ -113,6 +113,18 @@ class LMSUserCertificateDetailView(APIView):
             return ErrorResponse(
                 message="مدرکی با این شناسه یافت نشد.", status_code=status.HTTP_404_NOT_FOUND
             )
+        # اگر ساختِ PDF در لحظه‌ی صدور (مثلاً به‌خاطر فونتِ محیط) ناموفق مانده
+        # باشد، همین‌جا on-demand بازسازی می‌شود؛ این تابع هرگز raise نمی‌کند.
+        if not certificate.pdf_file:
+            was_missing = services.ensure_certificate_pdf_ready(certificate=certificate)
+            if was_missing:
+                log_action_async(
+                    user_id=request.user.pk,
+                    action=audit_actions.LMS_CERTIFICATE_PDF_REGENERATED,
+                    resource_type="lms_certificate",
+                    resource_id=str(certificate.pk),
+                    **extract_audit_metadata(request),
+                )
         return SuccessResponse(
             data=CertificateSerializer(certificate, context={"request": request}).data
         )
