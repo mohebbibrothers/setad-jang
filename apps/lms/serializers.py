@@ -2,7 +2,7 @@
 
 from rest_framework import serializers
 
-from apps.lms.choices import DiscussionReportStatus, DiscussionStatus
+from apps.lms.choices import DiscussionReportStatus, DiscussionStatus, LessonContentType
 from apps.lms.models import (
     Certificate,
     Course,
@@ -22,6 +22,7 @@ from apps.lms.models import (
     QuizQuestion,
     QuizUnlock,
 )
+from apps.lms.validators import validate_lesson_document_file
 
 
 class LMSCategorySerializer(serializers.ModelSerializer):
@@ -44,7 +45,15 @@ class LMSCategoryCreateUpdateSerializer(serializers.Serializer):
 
 
 class LessonSummarySerializer(serializers.ModelSerializer):
-    """Compact lesson representation for course detail pages."""
+    """Compact lesson representation for course detail pages.
+
+    نکتهٔ امنیتی: `document_file`/`article_body` عمداً اینجا نیستند — محتوای
+    اصلیِ جلسات سند/متنی فقط از مسیرِ کنترل‌شدهٔ media access (با گیت
+    ثبت‌نام، استثنای preview و ممیزی) سرو می‌شود تا کاتالوگ عمومی، کل جلسه
+    را مجانی لو ندهد.
+    """
+
+    content_type_display = serializers.CharField(source="get_content_type_display", read_only=True)
 
     class Meta:
         model = Lesson
@@ -54,6 +63,8 @@ class LessonSummarySerializer(serializers.ModelSerializer):
             "slug",
             "description",
             "order",
+            "content_type",
+            "content_type_display",
             "video_provider",
             "video_url",
             "embed_url",
@@ -67,15 +78,24 @@ class LessonSummarySerializer(serializers.ModelSerializer):
 
 
 class LessonMediaAccessSerializer(serializers.Serializer):
-    """Signed/CDN-ready lesson media access payload."""
+    """Signed/CDN-ready lesson media access payload.
+
+    برای جلسهٔ متنی (article) فیلد `body` محتوای درون‌برنامه‌ای را می‌آورد و
+    `url` تهی است؛ بقیهٔ نوع‌ها آدرس رسانه را.
+    """
 
     media_kind = serializers.CharField()
     provider = serializers.CharField()
-    url = serializers.CharField()
+    url = serializers.CharField(allow_blank=True)
     expires_in_seconds = serializers.IntegerField(allow_null=True, required=False)
     lesson_id = serializers.IntegerField()
     course_id = serializers.IntegerField()
     title = serializers.CharField(required=False, allow_blank=True)
+    body = serializers.CharField(required=False, allow_blank=True)
+    # فقط برای media_kind=document: صفحاتِ سروررندرشده‌ی سند (PDFium → WebP) با
+    # نشانیِ استریمِ امضاشده‌ی هر برگه؛ [] یعنی رندر ممکن نشد و فرانت به
+    # نمایشگرِ pdf.js برمی‌گردد.
+    pages = serializers.ListField(child=serializers.DictField(), required=False)
 
 
 class LessonCreateUpdateSerializer(serializers.Serializer):
@@ -84,6 +104,10 @@ class LessonCreateUpdateSerializer(serializers.Serializer):
     title = serializers.CharField(max_length=255, required=False)
     description = serializers.CharField(required=False, allow_blank=True)
     order = serializers.IntegerField(required=False, min_value=1)
+    content_type = serializers.ChoiceField(choices=LessonContentType.choices, required=False)
+    document_file = serializers.FileField(required=False, allow_null=True)
+    document_title = serializers.CharField(required=False, allow_blank=True)
+    article_body = serializers.CharField(required=False, allow_blank=True)
     video_provider = serializers.CharField(required=False)
     video_url = serializers.URLField(required=False, allow_blank=True)
     embed_url = serializers.URLField(required=False, allow_blank=True)
@@ -97,11 +121,35 @@ class LessonCreateUpdateSerializer(serializers.Serializer):
     is_preview = serializers.BooleanField(required=False)
     is_active = serializers.BooleanField(required=False)
 
+    def validate_document_file(self, value):
+        """اعتبارسنج صریح فایل سند: مسیر API هیچ full_clean مودلی نمی‌کند،
+        پس اگر اینجا نپرسیم، validator سطح مدل هرگز اجرا نمی‌شود."""
+        if value:
+            validate_lesson_document_file(value)
+        return value
+
 
 class CourseSummarySerializer(serializers.ModelSerializer):
-    """Compact course representation for course lists."""
+    """Compact course representation for course lists.
+
+    ``instructor_avatar`` is part of the LIST payload too: public surfaces
+    like the homepage education strip and the catalog grid must be able
+    to render the real instructor photo next to ``instructor_name``
+    without an N+1 round-trip to the detail endpoint per card.
+
+    ``lessons_count`` / ``estimated_duration_seconds`` are LIVE reads from
+    source-of-truth lesson rows, never the denormalized columns blindly:
+    the public selector annotates both aggregates, and any other path that
+    prefetches ``lessons`` lets us count/sum the prefetched rows in memory.
+    Only when neither hint exists do we fall back to the stored columns.
+    This is the root fix for «۰ جلسه» chips on courses that clearly have
+    lessons: a stale denormalized counter can never again contradict the
+    actual syllabus the same payload renders.
+    """
 
     category = LMSCategorySerializer(read_only=True)
+    lessons_count = serializers.SerializerMethodField()
+    estimated_duration_seconds = serializers.SerializerMethodField()
 
     class Meta:
         model = Course
@@ -113,6 +161,7 @@ class CourseSummarySerializer(serializers.ModelSerializer):
             "subtitle",
             "short_description",
             "instructor_name",
+            "instructor_avatar",
             "level",
             "status",
             "is_featured",
@@ -125,9 +174,40 @@ class CourseSummarySerializer(serializers.ModelSerializer):
         )
         read_only_fields = fields
 
+    def _live_lesson_stats(self, obj: Course) -> tuple[int, int] | None:
+        """Return ``(active_lessons_count, active_duration_seconds)`` when
+        live data is reachable without extra queries, else ``None``."""
+        annotated_count = getattr(obj, "live_lessons_count", None)
+        annotated_duration = getattr(obj, "live_lessons_duration_seconds", None)
+        if annotated_count is not None:
+            # Sum() yields None when the course has no active lessons at all.
+            return int(annotated_count), int(annotated_duration or 0)
+        prefetch_cache = getattr(obj, "_prefetched_objects_cache", None) or {}
+        if "lessons" in prefetch_cache:
+            active_lessons = [lesson for lesson in prefetch_cache["lessons"] if lesson.is_active]
+            return len(active_lessons), sum(
+                lesson.duration_seconds or 0 for lesson in active_lessons
+            )
+        return None
+
+    def get_lessons_count(self, obj: Course) -> int:
+        """Live count of active lessons; denormalized column only as fallback."""
+        stats = self._live_lesson_stats(obj)
+        return stats[0] if stats is not None else obj.lessons_count
+
+    def get_estimated_duration_seconds(self, obj: Course) -> int:
+        """Live duration sum over active lessons; denormalized fallback."""
+        stats = self._live_lesson_stats(obj)
+        return stats[1] if stats is not None else obj.estimated_duration_seconds
+
 
 class CourseDetailSerializer(CourseSummarySerializer):
-    """Detailed course representation including active lessons."""
+    """Detailed course representation including active lessons.
+
+    ``instructor_avatar`` is inherited from the summary serializer (it was
+    promoted to the list payload) — only the heavier, detail-only fields
+    are declared here explicitly.
+    """
 
     lessons = LessonSummarySerializer(many=True, read_only=True)
 
@@ -136,7 +216,6 @@ class CourseDetailSerializer(CourseSummarySerializer):
             *CourseSummarySerializer.Meta.fields,
             "description",
             "instructor_bio",
-            "instructor_avatar",
             "intro_video_url",
             "lessons",
         )
@@ -241,16 +320,41 @@ class LMSUserSkillSerializer(serializers.ModelSerializer):
 
 
 class LessonProgressUpdateSerializer(serializers.Serializer):
-    """Input serializer for lesson progress updates."""
+    """Input serializer for lesson progress updates.
 
-    watched_seconds = serializers.IntegerField(min_value=0)
+    قرارداد دو-حالتی:
+    - جلسات رسانه‌ای: `watched_seconds` (اختیاری در ترکیب با mark_completed نه —
+      این یکی الزامی رفتار می‌کند چون سرویس حالت رسانه فقط با ثانیه جلو می‌رود).
+    - جلسات سند/متنی: `mark_completed=true` یعنی «خواندم/تمام شد».
+    قانون سطح serializer: حداقل یکی از دو سیگنال باید باشد؛ تطبیق «نوع جلسه ×
+    سیگنال» در سرویس انجام می‌شود (serializer به session دسترسی ندارد).
+    """
+
+    watched_seconds = serializers.IntegerField(required=False, min_value=0)
     last_position_seconds = serializers.IntegerField(required=False, min_value=0)
+    mark_completed = serializers.BooleanField(required=False, default=False)
+    # «سند را باز کردم» — سازگاریِ عقب‌رو. منبع‌حقیقتِ تازه خودِ سرور است:
+    # هر بازکردنِ رسانه از مسیرِ media-access مهرِ media_opened_at را می‌زند و
+    # گیتِ تکمیل اول آن مهر را می‌پرسد؛ این flag برای فرانت‌هایی است که هنوز
+    # مسیرِ access را صدا نمی‌زنند (مثلاً رندرِ کاستومِ PDF).
+    media_opened = serializers.BooleanField(required=False, default=False)
+
+    def validate(self, attrs: dict) -> dict:
+        """حداقل یک سیگنالِ معنا‌دار لازم است؛ صفر-صفر بی‌فایده و پر‌هزینه است."""
+        has_watched = attrs.get("watched_seconds") is not None and attrs["watched_seconds"] > 0
+        if not has_watched and not attrs.get("mark_completed") and not attrs.get("media_opened"):
+            raise serializers.ValidationError(
+                "حداقل یکی از watched_seconds یا mark_completed یا media_opened لازم است."
+            )
+        attrs.setdefault("watched_seconds", 0)
+        return attrs
 
 
 class LessonProgressSerializer(serializers.ModelSerializer):
     """Output serializer for lesson progress state."""
 
     lesson = LessonSummarySerializer(read_only=True)
+    media_opened = serializers.SerializerMethodField()
 
     class Meta:
         model = LessonProgress
@@ -261,12 +365,17 @@ class LessonProgressSerializer(serializers.ModelSerializer):
             "duration_seconds_snapshot",
             "progress_percent",
             "is_completed",
+            "media_opened",
             "last_position_seconds",
             "first_watched_at",
             "last_watched_at",
             "completed_at",
         )
         read_only_fields = fields
+
+    def get_media_opened(self, obj) -> bool:
+        """آیا سند/رسانه‌ی جلسه دست‌کم یک‌بار توسط کاربر باز شده؟ (گیتِ دکمه‌ی تکمیل)."""
+        return obj.media_opened_at is not None
 
 
 class EnrollmentDetailSerializer(EnrollmentSerializer):
@@ -279,10 +388,16 @@ class EnrollmentDetailSerializer(EnrollmentSerializer):
 
 
 class LessonAnswerSerializer(serializers.ModelSerializer):
-    """Output serializer for lesson answers."""
+    """Output serializer for lesson answers (with one nested reply level)."""
 
     user_id = serializers.IntegerField(read_only=True)
     user_display = serializers.SerializerMethodField()
+    reply_to_id = serializers.IntegerField(read_only=True)
+    reply_to_display = serializers.SerializerMethodField()
+    reply_to_excerpt = serializers.SerializerMethodField()
+    body = serializers.SerializerMethodField()
+    is_deleted = serializers.SerializerMethodField()
+    replies = serializers.SerializerMethodField()
 
     class Meta:
         model = LessonAnswer
@@ -290,18 +405,79 @@ class LessonAnswerSerializer(serializers.ModelSerializer):
             "id",
             "user_id",
             "user_display",
+            "parent_id",
+            "reply_to_id",
+            "reply_to_display",
+            "reply_to_excerpt",
             "body",
             "status",
+            "is_deleted",
             "is_instructor_answer",
             "is_accepted",
             "created_at",
+            "edited_at",
             "updated_at",
+            "replies",
         )
         read_only_fields = fields
+
+    def get_body(self, obj) -> str:
+        """متنِ پاسخ — برای سنگ‌قبرِ حذف‌شده هرگز بدنه‌ی اصلی لو نمی‌رود."""
+        if obj.status == DiscussionStatus.DELETED:
+            return ""
+        return obj.body
+
+    def get_is_deleted(self, obj) -> bool:
+        """سنگ‌قبرِ «این پاسخ حذف شد» برای پاسخ‌هایی که رشته‌ی زنده دارند."""
+        return obj.status == DiscussionStatus.DELETED
 
     def get_user_display(self, obj) -> str:
         """Return safe display name for answer author."""
         return getattr(obj.user, "full_name", "") or getattr(obj.user, "email", "کاربر")
+
+    def get_reply_to_display(self, obj) -> str | None:
+        """Display name of the author this answer replies to (display-only chain)."""
+        if obj.reply_to_id is None:
+            return None
+        user = obj.reply_to.user
+        return getattr(user, "full_name", "") or getattr(user, "email", "کاربر")
+
+    def get_reply_to_excerpt(self, obj) -> str | None:
+        """گزیده‌ی متنِ پیامی که روی آن رد خورده — برای نقل‌قولِ دقیق زیرِ ردها.
+
+        با حذفِ بدنه‌ی هدف (reply_to SET_NULL) مقدارش None می‌شود و رابط، نقل‌قول
+        را به حالتِ «پیامِ حذف‌شده» دگرگون می‌کند.
+        """
+        if obj.reply_to_id is None or obj.reply_to.status == DiscussionStatus.DELETED:
+            return None
+        body = (obj.reply_to.body or "").strip()
+        if len(body) <= 140:
+            return body
+        return body[:137].rstrip() + "…"
+
+    def get_replies(self, obj) -> list:
+        """Serialize visible children — depth is capped at one level by design.
+
+        سنگ‌قبرِ حذف‌شده هم وقتی زیرِش ردِ زنده هست می‌آید تا بافتِ گفتگو نپوسد.
+        """
+        if self.context.get("depth", 0) >= 1:
+            return []
+
+        children = [
+            child
+            for child in obj.replies.all()
+            if child.status in (DiscussionStatus.VISIBLE, DiscussionStatus.FLAGGED)
+            or (
+                child.status == DiscussionStatus.DELETED
+                and any(
+                    grand.status in (DiscussionStatus.VISIBLE, DiscussionStatus.FLAGGED)
+                    for grand in child.replies.all()
+                )
+            )
+        ]
+        return LessonAnswerSerializer(
+            children, many=True, context={**self.context, "depth": 1}
+        ).data
 
 
 class LessonQuestionSerializer(serializers.ModelSerializer):
@@ -309,7 +485,10 @@ class LessonQuestionSerializer(serializers.ModelSerializer):
 
     user_id = serializers.IntegerField(read_only=True)
     user_display = serializers.SerializerMethodField()
-    answers = LessonAnswerSerializer(many=True, read_only=True)
+    title = serializers.SerializerMethodField()
+    body = serializers.SerializerMethodField()
+    is_deleted = serializers.SerializerMethodField()
+    answers = serializers.SerializerMethodField()
 
     class Meta:
         model = LessonQuestion
@@ -321,18 +500,56 @@ class LessonQuestionSerializer(serializers.ModelSerializer):
             "title",
             "body",
             "status",
+            "is_deleted",
             "is_pinned",
             "is_answered",
             "answer_count",
             "last_activity_at",
             "answers",
             "created_at",
+            "edited_at",
         )
         read_only_fields = fields
 
     def get_user_display(self, obj) -> str:
         """Return safe display name for question author."""
         return getattr(obj.user, "full_name", "") or getattr(obj.user, "email", "کاربر")
+
+    def get_title(self, obj) -> str:
+        """عنوان — سنگ‌قبرِ حذف‌شده متنِ اصلی را لو نمی‌دهد."""
+        if obj.status == DiscussionStatus.DELETED:
+            return ""
+        return obj.title
+
+    def get_body(self, obj) -> str:
+        """متن — سنگ‌قبرِ حذف‌شده متنِ اصلی را لو نمی‌دهد."""
+        if obj.status == DiscussionStatus.DELETED:
+            return ""
+        return obj.body
+
+    def get_is_deleted(self, obj) -> bool:
+        """سنگ‌قبرِ «این پرسش حذف شد» وقتی پاسخ‌های رشته هنوز زنده‌اند."""
+        return obj.status == DiscussionStatus.DELETED
+
+    def get_answers(self, obj) -> list:
+        """Top-level answers only — replies hang under their root via `replies`.
+
+        سنگ‌قبرِ پاسخِ حذف‌شده فقط وقتی می‌آید که زیرِش ردِ زنده باشد تا شالوده‌ی
+        رشته نپوسد؛ وگرنه پاسخِ حذف‌شده کاملاً ناپدید می‌شود (قاعده‌ی یوتیوب).
+        """
+        tops = [
+            answer
+            for answer in obj.answers.all()
+            if answer.parent_id is None
+            and (
+                answer.status in (DiscussionStatus.VISIBLE, DiscussionStatus.FLAGGED)
+                or any(
+                    reply.status in (DiscussionStatus.VISIBLE, DiscussionStatus.FLAGGED)
+                    for reply in answer.replies.all()
+                )
+            )
+        ]
+        return LessonAnswerSerializer(tops, many=True, context=self.context).data
 
 
 class LessonQuestionCreateSerializer(serializers.Serializer):
@@ -357,7 +574,42 @@ class LessonQuestionCreateSerializer(serializers.Serializer):
 
 
 class LessonAnswerCreateSerializer(serializers.Serializer):
-    """Input serializer for creating a lesson answer."""
+    """Input serializer for creating a lesson answer (optionally a reply)."""
+
+    body = serializers.CharField()
+    parent_id = serializers.IntegerField(required=False, min_value=1)
+
+    def validate_body(self, value: str) -> str:
+        """Require meaningful answer body."""
+        value = value.strip()
+        if len(value) < 5:
+            raise serializers.ValidationError("متن پاسخ باید حداقل ۵ کاراکتر باشد.")
+        return value
+
+
+class LessonQuestionUpdateSerializer(serializers.Serializer):
+    """Input serializer for editing an own question (author/admin)."""
+
+    title = serializers.CharField(max_length=255)
+    body = serializers.CharField()
+
+    def validate_title(self, value: str) -> str:
+        """Require meaningful question title."""
+        value = value.strip()
+        if len(value) < 5:
+            raise serializers.ValidationError("عنوان سؤال باید حداقل ۵ کاراکتر باشد.")
+        return value
+
+    def validate_body(self, value: str) -> str:
+        """Require meaningful question body."""
+        value = value.strip()
+        if len(value) < 10:
+            raise serializers.ValidationError("متن سؤال باید حداقل ۱۰ کاراکتر باشد.")
+        return value
+
+
+class LessonAnswerUpdateSerializer(serializers.Serializer):
+    """Input serializer for editing an own answer/reply (author/admin)."""
 
     body = serializers.CharField()
 

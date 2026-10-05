@@ -265,3 +265,192 @@ class TestLMSDiscussionReportsAndModeration:
 
         assert response.status_code == status.HTTP_200_OK
         assert response.data["data"]["count"] == 0
+
+
+class TestLMSLessonAnswerReplies:
+    """ردهای تودرتوی یک‌سطحی (الگوی یوتیوب): parent/reply_to + اعتبارسنجی هدف."""
+
+    def _question(self, lesson, user):
+        return LessonQuestion.objects.create(
+            lesson=lesson, user=user, title="سؤال مهم", body="متن سؤال معتبر برای تست"
+        )
+
+    def _reply(self, user, question, body, parent_id):
+        with patch(_AUDIT_TASK_PATH) as mock_task:
+            mock_task.delay = MagicMock()
+            response = _client_for(user).post(
+                reverse("lms:question-answer-create", kwargs={"question_id": question.pk}),
+                data={"body": body, "parent_id": parent_id},
+                format="json",
+            )
+        return response
+
+    def test_user_can_reply_under_another_users_answer(self) -> None:
+        course = PublishedCourseFactory()
+        lesson = LessonFactory(course=course, order=1)
+        owner = UserFactory()
+        replier = UserFactory()
+        _enroll(owner, course)
+        _enroll(replier, course)
+        question = self._question(lesson, owner)
+        root = LessonAnswer.objects.create(question=question, user=owner, body="پاسخ اولیه")
+
+        response = self._reply(replier, question, "رد من روی پاسخ تو", root.pk)
+
+        assert response.status_code == status.HTTP_201_CREATED
+        payload = response.data["data"]
+        assert payload["parent_id"] == root.pk
+        assert payload["reply_to_display"]
+        reply = LessonAnswer.objects.get(pk=payload["id"])
+        assert reply.parent_id == root.pk
+        assert reply.reply_to_id == root.pk
+
+    def test_question_owner_can_answer_own_question(self) -> None:
+        course = PublishedCourseFactory()
+        lesson = LessonFactory(course=course, order=1)
+        owner = UserFactory()
+        _enroll(owner, course)
+        question = self._question(lesson, owner)
+
+        with patch(_AUDIT_TASK_PATH) as mock_task:
+            mock_task.delay = MagicMock()
+            response = _client_for(owner).post(
+                reverse("lms:question-answer-create", kwargs={"question_id": question.pk}),
+                data={"body": "توضیح تکمیلی از خودِ سؤال‌کننده"},
+                format="json",
+            )
+
+        assert response.status_code == status.HTTP_201_CREATED
+
+    def test_reply_payload_carries_reply_to_id_and_excerpt(self) -> None:
+        """نقل‌قولِ دقیقِ هدفِ رد: reply_to_id + reply_to_excerpt (بریده تا ۱۴۰ نویسه)."""
+        course = PublishedCourseFactory()
+        lesson = LessonFactory(course=course, order=1)
+        owner = UserFactory()
+        replier = UserFactory()
+        _enroll(owner, course)
+        _enroll(replier, course)
+        question = self._question(lesson, owner)
+        long_body = "چون var فقط یک اسکوپ تابعی دارد و این خیلی مهم است " * 9
+        root = LessonAnswer.objects.create(question=question, user=owner, body=long_body)
+
+        response = self._reply(replier, question, "پاسخ دقیق همین بود، ممنون", root.pk)
+
+        assert response.status_code == status.HTTP_201_CREATED
+        payload = response.data["data"]
+        assert payload["reply_to_id"] == root.pk
+        excerpt = payload["reply_to_excerpt"]
+        assert excerpt is not None
+        assert excerpt.endswith("…")
+        body_part = excerpt[:-1]
+        assert 120 <= len(body_part) <= 137
+        assert long_body.startswith(body_part)
+
+        short = LessonAnswer.objects.create(question=question, user=owner, body="کوتاه و شفاف")
+        response2 = self._reply(replier, question, "رد کوتاه هم اوکی است", short.pk)
+        assert response2.status_code == status.HTTP_201_CREATED
+        assert response2.data["data"]["reply_to_excerpt"] == "کوتاه و شفاف"
+
+        listing = _client_for(replier).get(
+            reverse("lms:lesson-question-list-create", kwargs={"lesson_id": lesson.pk})
+        )
+        assert listing.status_code == status.HTTP_200_OK
+        top_answers = listing.data["data"]["results"][0]["answers"]
+        nested = top_answers[0]["replies"][0]
+        assert nested["reply_to_id"] == root.pk
+        assert nested["reply_to_excerpt"].startswith(long_body[:20])
+        # پاسخِ سطح‌صفر هرگز نقل‌قول ندارد
+        assert top_answers[0]["reply_to_id"] is None
+        assert top_answers[0]["reply_to_excerpt"] is None
+
+    def test_reply_to_reply_is_anchored_to_thread_root(self) -> None:
+        course = PublishedCourseFactory()
+        lesson = LessonFactory(course=course, order=1)
+        users = [UserFactory() for _ in range(3)]
+        for u in users:
+            _enroll(u, course)
+        question = self._question(lesson, users[0])
+        root = LessonAnswer.objects.create(question=question, user=users[0], body="پاسخ ریشه")
+        first = self._reply(users[1], question, "رد سطح یک", root.pk)
+        assert first.status_code == status.HTTP_201_CREATED
+        first_id = first.data["data"]["id"]
+
+        second = self._reply(users[2], question, "رد روی رد", first_id)
+
+        assert second.status_code == status.HTTP_201_CREATED
+        payload = second.data["data"]
+        assert payload["parent_id"] == root.pk  # لنگرِ رشته
+        assert payload["reply_to_display"]  # زنجیره‌ی نمایشی حفظ شده
+        reply_obj = LessonAnswer.objects.get(pk=payload["id"])
+        assert reply_obj.parent_id == root.pk
+        assert reply_obj.reply_to_id == first_id
+
+        # خروجی لیست: هر دو رد زیرِ ریشه، نه به‌صورت تخت
+        listing = _client_for(users[0]).get(
+            reverse("lms:lesson-question-list-create", kwargs={"lesson_id": lesson.pk})
+        )
+        answers = listing.data["data"]["results"][0]["answers"]
+        assert [a["id"] for a in answers] == [root.pk]
+        reply_ids = {r["id"] for a in answers for r in a["replies"]}
+        assert reply_ids == {first_id, payload["id"]}
+        second_in_tree = next(r for a in answers for r in a["replies"] if r["id"] == payload["id"])
+        assert second_in_tree["reply_to_display"]
+
+    def test_reply_to_answer_of_another_question_rejected(self) -> None:
+        course = PublishedCourseFactory()
+        lesson = LessonFactory(course=course, order=1)
+        user = UserFactory()
+        _enroll(user, course)
+        q1 = self._question(lesson, user)
+        q2 = self._question(lesson, user)
+        foreign = LessonAnswer.objects.create(question=q2, user=user, body="پاسخ سؤال دیگر")
+
+        response = self._reply(user, q1, "رد به جای اشتباه", foreign.pk)
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_reply_to_hidden_answer_rejected(self) -> None:
+        course = PublishedCourseFactory()
+        lesson = LessonFactory(course=course, order=1)
+        user = UserFactory()
+        _enroll(user, course)
+        question = self._question(lesson, user)
+        root = LessonAnswer.objects.create(question=question, user=user, body="پاسخی که مخفی شد")
+        root.status = DiscussionStatus.HIDDEN
+        root.save(update_fields=["status", "updated_at"])
+
+        response = self._reply(user, question, "رد روی پاسخ مخفی", root.pk)
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_non_enrolled_user_cannot_reply(self) -> None:
+        course = PublishedCourseFactory()
+        lesson = LessonFactory(course=course, order=1)
+        owner = UserFactory()
+        stranger = UserFactory()
+        _enroll(owner, course)
+        _complete_profile(stranger)
+        question = self._question(lesson, owner)
+        root = LessonAnswer.objects.create(question=question, user=owner, body="پاسخ ریشه")
+
+        response = self._reply(stranger, question, "ردِ غریبه", root.pk)
+
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+
+    def test_reply_bumps_answer_count_for_thread_counters(self) -> None:
+        course = PublishedCourseFactory()
+        lesson = LessonFactory(course=course, order=1)
+        owner = UserFactory()
+        replier = UserFactory()
+        _enroll(owner, course)
+        _enroll(replier, course)
+        question = self._question(lesson, owner)
+        root = LessonAnswer.objects.create(question=question, user=owner, body="پاسخ ریشه")
+        question.answer_count = 1
+        question.save(update_fields=["answer_count", "updated_at"])
+
+        response = self._reply(replier, question, "رد تازه", root.pk)
+
+        assert response.status_code == status.HTTP_201_CREATED
+        question.refresh_from_db()
+        assert question.answer_count == 2

@@ -52,16 +52,22 @@ AWS_S3_CUSTOM_DOMAIN=<cdn-domain>
 
 ## 4. Email/SMS/Payment readiness
 
-### Email — Brevo SMTP recommended
+### Email — Gmail SMTP (default; no phone/card, Iran-friendly)
+
+رایگان ۵۰۰/روز. اعتبارنامه: آدرس کامل جیمیل + App Password (نیازمند
+2-Step Verification؛ ساخت از `myaccount.google.com/apppasswords`).
+`DEFAULT_FROM_EMAIL` باید همان جیمیل فرستنده باشد (Gmail From متناقض را override
+می‌کند). برای ESP حرفه‌ای‌تر (Resend/Mailjet) فقط host/user/pass عوض می‌شود؛
+دقت کنید اکثر ESPهای خارجی ثبت‌نام با شمارهٔ موبایل ایران را رد می‌کنند.
 
 ```env
 EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
-EMAIL_HOST=smtp-relay.brevo.com
+EMAIL_HOST=smtp.gmail.com
 EMAIL_PORT=587
 EMAIL_USE_TLS=True
-EMAIL_HOST_USER=<brevo-login>
-EMAIL_HOST_PASSWORD=<brevo-smtp-key>
-DEFAULT_FROM_EMAIL=noreply@your-domain.com
+EMAIL_HOST_USER=<gmail-account>
+EMAIL_HOST_PASSWORD=<app-password-16>
+DEFAULT_FROM_EMAIL=<gmail-account>
 ```
 
 ### SMS — after license

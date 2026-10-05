@@ -34,7 +34,7 @@ class LessonInline(admin.TabularInline):
 
     model = Lesson
     extra = 0
-    fields = ("order", "title", "duration_seconds", "is_preview", "is_active")
+    fields = ("order", "title", "content_type", "duration_seconds", "is_preview", "is_active")
 
 
 @admin.register(LMSCategory)
@@ -84,11 +84,60 @@ class CourseAdmin(admin.ModelAdmin):
 class LessonAdmin(admin.ModelAdmin):
     """Admin management for course lessons."""
 
-    list_display = ("title", "course", "order", "duration_seconds", "is_preview", "is_active")
-    list_filter = ("is_active", "is_preview", "course")
+    list_display = (
+        "title",
+        "course",
+        "content_type",
+        "order",
+        "duration_seconds",
+        "is_preview",
+        "is_active",
+    )
+    list_filter = ("content_type", "is_active", "is_preview", "course")
     search_fields = ("title", "course__title", "description")
     readonly_fields = ("slug", "created_at", "updated_at")
     ordering = ("course", "order")
+    fieldsets = (
+        ("ساختار", {"fields": ("course", "order", "title", "slug", "description", "is_preview")}),
+        (
+            "نوع محتوا",
+            {
+                "fields": (
+                    "content_type",
+                    "document_file",
+                    "document_title",
+                    "article_body",
+                ),
+            },
+        ),
+        (
+            "رسانه (جلسات ویدئویی/صوتی)",
+            {
+                "fields": (
+                    "video_provider",
+                    "video_url",
+                    "embed_url",
+                    "video_file",
+                    "duration_seconds",
+                ),
+                "classes": ("collapse",),
+            },
+        ),
+        (
+            "متن و پیوست",
+            {
+                "fields": (
+                    "transcript",
+                    "summary",
+                    "homework",
+                    "attachment_file",
+                    "attachment_title",
+                ),
+                "classes": ("collapse",),
+            },
+        ),
+        ("انتشار", {"fields": ("published_at", "is_active", "created_at", "updated_at")}),
+    )
 
 
 @admin.register(Enrollment)
@@ -178,6 +227,7 @@ class LessonAnswerAdmin(admin.ModelAdmin):
     )
     list_filter = ("status", "is_instructor_answer", "is_accepted")
     search_fields = ("body", "user__email", "question__title")
+    raw_id_fields = ("parent", "reply_to")
 
 
 @admin.register(LessonDiscussionReport)
@@ -199,7 +249,12 @@ class QuizQuestionInline(admin.TabularInline):
 
 @admin.register(Quiz)
 class QuizAdmin(admin.ModelAdmin):
-    """Admin configuration for course quizzes."""
+    """Admin configuration for course quizzes.
+
+    `is_required_for_certificate` در همین‌جا کلیدِ «قبولی این آزمون گواهی
+    صادر کند یا نه» است؛ روی مدل آزمون (نه دوره) نشسته چون تصمیم به‌ازای هر
+    آزمون گرفته می‌شود و در سرویسِ ثبت نتیجه اعمال می‌گردد.
+    """
 
     list_display = (
         "title",
@@ -208,8 +263,9 @@ class QuizAdmin(admin.ModelAdmin):
         "passing_score",
         "max_attempts",
         "time_limit_minutes",
+        "is_required_for_certificate",
     )
-    list_filter = ("status", "course")
+    list_filter = ("status", "course", "is_required_for_certificate")
     search_fields = ("title", "course__title")
     readonly_fields = ("published_at", "created_at", "updated_at")
     inlines = [QuizQuestionInline]

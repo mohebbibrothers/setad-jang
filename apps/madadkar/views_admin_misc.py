@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import contextlib
 
+from django.http import HttpResponseRedirect
 from drf_spectacular.utils import (
     OpenApiParameter,
     OpenApiTypes,
@@ -100,8 +101,10 @@ from .views_common import (  # noqa: F401 — re-exportِ رایگان برای 
     USER_RECEIPT_LIST_RESPONSE,
     _audit_disbursement_action,
     _build_callback_url,
+    _build_payment_result_url,
     _build_receipt_verification_payload,
     _extract_mobile_email,
+    _normalized_callback_params,
     _parse_int_query_param,
     _serialize_participation_detail,
     logger,
@@ -116,14 +119,30 @@ class MadadkarPaymentVerifyView(APIView):
     """
     Callback تأیید پرداخت — GET/POST /api/v1/madadkar/payment/verify/
 
-    نکته مهم: این endpoint از سمت **درگاه پرداخت** فراخوانی می‌شود
-    (نه مستقیم از طرف کلاینت ما). در زمان فراخوانی session کاربر
-    معمولاً موجود نیست.
+    این endpoint دو مخاطب متفاوت دارد و برای هر کدام رفتار متفاوتی دارد:
 
-    بنابراین:
-    - permission: AllowAny (verify بر اساس authority انجام می‌شود)
-    - throttle: مخصوص (مبتنی بر IP)
-    - method: هم GET (Zarinpal) و هم POST (سایر درگاه‌ها) پشتیبانی می‌شوند.
+    - **GET (مرورگر کاربر، برگشت از صفحهٔ درگاه — مثل Zarinpal):**
+      تراکنش verify (یا در صورت ‎Status=NOK لغو-آزادسازی) می‌شود و کاربر
+      با **302** به صفحهٔ نتیجهٔ فرانت می‌رود تا هرگز JSON خام نبیند:
+        {MADADKAR_PAYMENT_RESULT_BASE_URL}/madadkar/paydone/?authority=…&result=…
+
+    - **POST (مصرف برنامه‌ای — خودِ صفحهٔ نتیجهٔ فرانت و درگاه‌های POST-based):**
+      همان منطق، ولی پاسخ JSON کامل (paid/failed/canceled + جزئیات مشارکت).
+      صفحهٔ فرانت خودِ URL parameters را «منبع حقیقت» حساب نمی‌کند و با
+      همین POST، نتیجهٔ قطعی را (idempotent) بازیابی می‌کند.
+
+    قواعد مشترک:
+    - permission: AllowAny (verify بر اساس authority انجام می‌شود؛ زمان
+      فراخوانیِ درگاه session کاربر معمولاً موجود نیست).
+    - throttle مخصوص (مبتنی بر IP).
+    - نام پارامترها case-insensitive نرمال می‌شود — زرین‌پال v4 با
+      `Authority`/`Status` برمی‌گردد (yafteh ممیزی: بدون نرمال‌سازی، تمام
+      callbackهای واقعی درگاه 400 می‌گرفتند و کاربر فقط JSON خطا می‌دید).
+    - **idempotent**: فراخوانی دوباره با همان authority نتیجه قبلی را
+      برمی‌گرداند بدون تماس مجدد با درگاه.
+    - ‎Status=NOK (لغوی کاربر روی صفحهٔ درگاه) با درگاه تماس نمی‌گیرد؛ مستقیم
+      FAILED+آزادسازی می‌شود — verify API زرین‌پال در این حالت کد ‎-21
+      می‌دهد و مسیر قدیمی به 502 می‌خورد.
     """
 
     permission_classes = [AllowAny]
@@ -132,13 +151,15 @@ class MadadkarPaymentVerifyView(APIView):
     @extend_schema(
         operation_id="madadkar_payment_verify",
         tags=[TAG_MADADKAR_USER],
-        summary="تأیید پرداخت — callback از سمت درگاه",
+        summary="تأیید پرداخت — callback مرورگر از سمت درگاه (302 به فرانت)",
         description=(
-            "این endpoint توسط درگاه پرداخت بعد از تکمیل تراکنش فراخوانی می‌شود.\n\n"
-            "ورودی شامل `authority` (و گاهی `status`) است که توسط درگاه به‌صورت "
-            "query string یا body ارسال می‌گردد.\n\n"
-            "این endpoint **idempotent** است: فراخوانی دوباره با همان authority "
-            "نتیجه قبلی را برمی‌گرداند بدون تماس مجدد با درگاه."
+            "درگاه پرداخت مرورگر کاربر را بعد از پایان تراکنش به این آدرس "
+            "می‌فرستد (با `Authority` و `Status` در query — case-insensitive پذیرفته می‌شود).\n\n"
+            "پاسخ همیشه **302** به صفحهٔ نتیجهٔ فرانت است "
+            "(`{base}/madadkar/paydone/?authority=…&result=success|failed|canceled|pending|error`)"
+            " تا کاربر هرگز JSON خام نبیند. استثنا: نبودِ کد رهگیری (درخواست نامعتبر) 400 می‌ماند.\n\n"
+            "مصرف برنامه‌ای (JSON) را از متد POST همین endpoint استفاده کنید.\n\n"
+            "این endpoint **idempotent** است."
         ),
         parameters=[
             OpenApiParameter(
@@ -146,28 +167,69 @@ class MadadkarPaymentVerifyView(APIView):
                 type=OpenApiTypes.STR,
                 location=OpenApiParameter.QUERY,
                 required=True,
+                description="کد رهگیری (نام‌های Authority/AUTHORITY هم پذیرفته می‌شوند).",
             ),
             OpenApiParameter(
                 name="status",
                 type=OpenApiTypes.STR,
                 location=OpenApiParameter.QUERY,
                 required=False,
+                description="وضعیت اولیه درگاه (OK/NOK — قابل اعتماد نیست؛ NOK → آزادسازی فوری).",
             ),
         ],
         responses={
-            200: PAYMENT_VERIFY_RESPONSE,
+            302: None,
             400: GENERIC_ERROR_RESPONSE,
-            404: GENERIC_ERROR_RESPONSE,
-            502: GENERIC_ERROR_RESPONSE,
         },
     )
-    def get(self, request: Request) -> Response:
-        return self._verify(request, source=request.query_params)
+    def get(self, request: Request):
+        # ── GET = مسیر مرورگر. خروجی نهایی همیشه ریدایرکت به فرانت است.
+        params = _normalized_callback_params(request.query_params)
+        serializer = PaymentVerifyCallbackSerializer(data=params)
+        serializer.is_valid(raise_exception=True)
+        authority = serializer.validated_data["authority"]
+        gateway_status = (serializer.validated_data.get("status") or "").strip().upper()
+
+        def redirect_with(result: str):
+            return HttpResponseRedirect(
+                _build_payment_result_url(authority=authority, result=result),
+            )
+
+        if gateway_status == "NOK":
+            try:
+                payment = services.cancel_pending_payment(authority=authority)
+            except PaymentNotFoundError:
+                return redirect_with("error")
+            self._audit_result(request, payment, authority)
+            if payment.status == PaymentStatus.SUCCESS:
+                # race: ورودی درگاه NOK بود ولی تراکنش قبلاً قطعی verify شده
+                return redirect_with("success")
+            return redirect_with("canceled")
+
+        try:
+            payment = services.verify_payment(authority=authority)
+        except PaymentNotFoundError:
+            return redirect_with("error")
+        except PaymentAmountMismatchError:
+            self._audit_amount_mismatch(request, authority)
+            return redirect_with("error")
+        except PaymentGatewayError:
+            # قطعی نشد — رزرو هنوز برقرار است تا مهاجرتِ ttl آزاد کند؛
+            # صفحهٔ نتیجه با «نامشخص + تلاش مجدد» روبه‌رو می‌شود.
+            return redirect_with("pending")
+
+        self._audit_result(request, payment, authority)
+        return redirect_with("success" if payment.status == PaymentStatus.SUCCESS else "failed")
 
     @extend_schema(
         operation_id="madadkar_payment_verify_post",
         tags=[TAG_MADADKAR_USER],
-        summary="تأیید پرداخت — POST callback (درگاه‌های POST-based)",
+        summary="تأیید پرداخت — POST (مصرف برنامه‌ای: صفحهٔ نتیجهٔ فرانت و درگاه‌های POST-based)",
+        description=(
+            "همان منطق GET ولی با پاسخ JSON کامل. صفحهٔ نتیجهٔ فرانت پس از "
+            "فرود، با همین POST نتیجهٔ قطعی تراکنش را (idempotent) بازیابی می‌کند.\n\n"
+            "نام پارامترها case-insensitive است."
+        ),
         request=PaymentVerifyCallbackSerializer,
         responses={
             200: PAYMENT_VERIFY_RESPONSE,
@@ -177,31 +239,24 @@ class MadadkarPaymentVerifyView(APIView):
         },
     )
     def post(self, request: Request) -> Response:
-        return self._verify(request, source=request.data)
-
-    def _verify(self, request: Request, source) -> Response:
-        """منطق مشترک verify برای هر دو متد GET و POST."""
-        serializer = PaymentVerifyCallbackSerializer(data=source)
+        params = _normalized_callback_params(request.data)
+        serializer = PaymentVerifyCallbackSerializer(data=params)
         serializer.is_valid(raise_exception=True)
         authority = serializer.validated_data["authority"]
+        gateway_status = (serializer.validated_data.get("status") or "").strip().upper()
 
         try:
-            payment = services.verify_payment(authority=authority)
+            if gateway_status == "NOK":
+                payment = services.cancel_pending_payment(authority=authority)
+            else:
+                payment = services.verify_payment(authority=authority)
         except PaymentNotFoundError as exc:
             return ErrorResponse(
                 message=str(exc),
                 status_code=status.HTTP_404_NOT_FOUND,
             )
         except PaymentAmountMismatchError as exc:
-            metadata = extract_audit_metadata(request)
-            log_action(
-                user_id=None,
-                action=audit_actions.MADADKAR_PAYMENT_FAILED,
-                resource_type="madadkar_payment",
-                resource_id=authority,
-                extra_data={"reason": "amount_mismatch"},
-                **metadata,
-            )
+            self._audit_amount_mismatch(request, authority)
             return ErrorResponse(message=str(exc))
         except PaymentGatewayError as exc:
             return ErrorResponse(
@@ -209,9 +264,30 @@ class MadadkarPaymentVerifyView(APIView):
                 status_code=status.HTTP_502_BAD_GATEWAY,
             )
 
-        metadata = extract_audit_metadata(request)
+        self._audit_result(request, payment, authority)
+
+        participation_data = _serialize_participation_detail(payment.participation)
         is_success = payment.status == PaymentStatus.SUCCESS
 
+        result_payload = {
+            "payment_status": payment.status,
+            "payment_status_display": payment.get_status_display(),
+            "participation": participation_data,
+            "is_verified": is_success,
+            "message": (
+                "پرداخت با موفقیت تأیید شد." if is_success else "پرداخت تأیید نشد یا ناموفق بود."
+            ),
+        }
+
+        return SuccessResponse(
+            data=result_payload,
+            message=result_payload["message"],
+        )
+
+    def _audit_result(self, request: Request, payment, authority: str) -> None:
+        """ثبت async رویداد نهایی (SUCCESS/FAILED) — یکجا برای همهٔ شاخه‌ها."""
+        is_success = payment.status == PaymentStatus.SUCCESS
+        metadata = extract_audit_metadata(request)
         log_action_async(
             user_id=payment.user_id,
             action=(
@@ -229,21 +305,16 @@ class MadadkarPaymentVerifyView(APIView):
             **metadata,
         )
 
-        participation_data = _serialize_participation_detail(payment.participation)
-
-        result_payload = {
-            "payment_status": payment.status,
-            "payment_status_display": payment.get_status_display(),
-            "participation": participation_data,
-            "is_verified": is_success,
-            "message": (
-                "پرداخت با موفقیت تأیید شد." if is_success else "پرداخت تأیید نشد یا ناموفق بود."
-            ),
-        }
-
-        return SuccessResponse(
-            data=result_payload,
-            message=result_payload["message"],
+    def _audit_amount_mismatch(self, request: Request, authority: str) -> None:
+        """ثبت sync فاجعهٔ امنیتی — مثل رفتار قبلی، بدون تغییر semantics."""
+        metadata = extract_audit_metadata(request)
+        log_action(
+            user_id=None,
+            action=audit_actions.MADADKAR_PAYMENT_FAILED,
+            resource_type="madadkar_payment",
+            resource_id=authority,
+            extra_data={"reason": "amount_mismatch"},
+            **metadata,
         )
 
 

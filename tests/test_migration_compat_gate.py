@@ -8,9 +8,11 @@
 
 from __future__ import annotations
 
+import importlib.util
 import subprocess
 import sys
 from pathlib import Path
+from types import ModuleType, SimpleNamespace
 
 import pytest
 
@@ -171,3 +173,50 @@ def test_non_migration_changes_are_ignored(tmp_repo: Path) -> None:
     _git(tmp_repo, "commit", "-qm", "code-only")
     result = _run(tmp_repo, base)
     assert result.returncode == 0
+
+
+# ─── رتچت روی مایگریشنِ واقعی ۰۰۰۷ (رگرسیونِ دیپلویِ production) ─────────
+# دیپلویِ ۱۴۰۵/۰۷/۱۰ به‌خاطرِ ایندکسِ بدون CONCURRENTLY در ۰۰۰۷ بلاک شد؛ این
+# تست‌ها همان ریسک را در CI می‌گیرند — خیلی پیش از قدمِ deploy.
+
+THREAD_MIGRATION = (
+    REPO_ROOT
+    / "apps"
+    / "lms"
+    / "migrations"
+    / "0007_lessonanswer_parent_lessonanswer_reply_to_and_more.py"
+)
+
+
+def _load_module(path: Path, name: str) -> ModuleType:
+    spec = importlib.util.spec_from_file_location(name, path)
+    assert spec is not None and spec.loader is not None
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def _gate_module() -> ModuleType:
+    return _load_module(SCRIPT, "migration_compat_mod")
+
+
+def test_real_thread_migration_passes_gate_scan() -> None:
+    """اسکنِ خودِ گیت روی ۰۰۰۷ واقعی نباید پرچمِ قفل/برگشت‌ناپذیری بلند کند."""
+    blocking, irreversible = _gate_module().scan_file(THREAD_MIGRATION)
+    assert not blocking, "ایندکسِ ۰۰۰۷ باید مسیرِ CONCURRENTLY داشته باشد"
+    assert not irreversible
+
+
+def test_real_thread_migration_is_concurrent_and_non_atomic(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """روی Postgres ایندکسِ رشته CONCURRENTLY ساخته شود؛ روی SQLite fallbackِ
+    استاندارد — و چون CONCURRENTLY تراکنش‌پذیر نیست، کل مهاجرت atomic=False."""
+    mod = _load_module(THREAD_MIGRATION, "lms_0007_thread")
+    assert mod.Migration.atomic is False
+
+    monkeypatch.setattr(mod, "connection", SimpleNamespace(vendor="postgresql"))
+    assert type(mod.thread_index_operation()).__name__ == "AddIndexConcurrently"
+
+    monkeypatch.setattr(mod, "connection", SimpleNamespace(vendor="sqlite"))
+    assert type(mod.thread_index_operation()).__name__ == "AddIndex"

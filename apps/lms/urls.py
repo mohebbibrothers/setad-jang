@@ -72,9 +72,24 @@ urlpatterns = [
         name="lesson-media-access",
     ),
     path(
+        "lessons/<int:lesson_id>/media/<str:media_kind>/stream/",
+        views.LMSLessonMediaStreamView.as_view(),
+        name="lesson-media-stream",
+    ),
+    path(
         "lessons/<int:lesson_id>/questions/",
         views.LMSLessonQuestionListCreateView.as_view(),
         name="lesson-question-list-create",
+    ),
+    path(
+        "questions/<int:question_id>/",
+        views.LMSLessonQuestionDetailView.as_view(),
+        name="question-detail",
+    ),
+    path(
+        "answers/<int:answer_id>/",
+        views.LMSLessonAnswerDetailView.as_view(),
+        name="answer-detail",
     ),
     path(
         "questions/<int:question_id>/answers/",

@@ -95,6 +95,10 @@ class AbstractPaymentProvider(ABC):
     - تمام I/O با درگاه باید timeout داشته باشد.
     - exception نباید leak شود — هر خطا را در PaymentRequestResult/PaymentVerifyResult
       با success=False و error_message برگردانید.
+    - واحد همهٔ فیلدهای `amount` در این قرارداد، واحد داخلی پروژه (تومان) است.
+      تبدیل به واحد وجهی هر درگاه (مثلاً ریال در زرین‌پال) مسئولیت خودِ
+      provider است و به service layer نشت نمی‌کند؛ `verified_amount` هم همیشه
+      به تومان برگردد.
     """
 
     #: نام شناسایی provider — در DB در فیلد Payment.gateway_name ذخیره می‌شود.

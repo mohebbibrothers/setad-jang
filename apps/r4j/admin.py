@@ -775,7 +775,17 @@ class R4JReportAttachmentAdmin(HiddenFromAdminIndexMixin, admin.ModelAdmin):
 
 @admin.register(R4JBounty)
 class R4JBountyAdmin(admin.ModelAdmin):
-    """Admin queue for user bounty commitments and cancel requests."""
+    """
+    صفِ تعهدها و درخواست‌های لغو جایزه.
+
+    قراردادِ یکپارچگیِ شمارنده‌ها (root fix باگِ drift صندوق):
+    total_bounty_toman / bounties_count روی R4JCriminal فقط توسط
+    services.*_bounty_* با lock + sync نگه‌داری می‌شوند. ادیتِ مستقیمِ
+    فیلدهای اثرگذار (status/amount/CRUD) در ادمین این sync را دور می‌زد
+    و صندوقِ عمومی برای همیشه نادرست می‌ماند؛ پس همه‌ی آن فیلدها
+    read-only‌اند و تغییرِ وضعیت فقط از مسیرِ auditشده‌ی اکشن‌های زیر
+    انجام می‌شود — همان serviceهایی که API admin هم صدا می‌زند.
+    """
 
     list_display = (
         "id",
@@ -783,6 +793,8 @@ class R4JBountyAdmin(admin.ModelAdmin):
         "user",
         "amount_toman",
         "status",
+        "cancel_requested_at",
+        "canceled_at",
         "created_at",
     )
     list_filter = ("status",)
@@ -793,6 +805,91 @@ class R4JBountyAdmin(admin.ModelAdmin):
         "user__phone_number",
     )
     raw_id_fields = ("criminal", "user")
+    readonly_fields = (
+        "criminal",
+        "user",
+        "amount_toman",
+        "status",
+        "cancel_requested_at",
+        "canceled_at",
+        "created_at",
+        "updated_at",
+    )
+    actions = ("approve_cancel_requests", "reject_cancel_requests")
+
+    def has_add_permission(self, request) -> bool:
+        """تعهد فقط از مسیر API کاربر ساخته می‌شود (اعتبارسنجیِ مبلغ + sync شمارنده)."""
+        return False
+
+    def has_delete_permission(self, request, obj=None) -> bool:
+        """حذفِ تعهد، ردِ حسابرسی و شمارنده‌های صندوق را می‌شکند؛ ممنوع."""
+        return False
+
+    @admin.action(description="تأیید درخواست لغو — خروج از صندوق و sync شمارنده‌ها")
+    def approve_cancel_requests(self, request, queryset) -> None:
+        """تأییدِ bulk درخواست‌های لغو از مسیرِ service + audit — عینِ API admin."""
+        metadata = extract_audit_metadata(request)
+        approved = 0
+        skipped = 0
+        for bounty in queryset.select_related("criminal", "user"):
+            try:
+                updated = services.approve_bounty_cancel(bounty=bounty, admin=request.user)
+            except services.BountyNotInCancelRequested:
+                skipped += 1
+                continue
+            log_action_async(
+                user_id=request.user.pk,
+                action=audit_actions.R4J_BOUNTY_CANCEL_APPROVED,
+                resource_type="r4j_bounty",
+                resource_id=str(updated.pk),
+                **metadata,
+            )
+            approved += 1
+        if approved:
+            self.message_user(
+                request,
+                f"{approved} درخواست لغو تأیید شد؛ صندوقِ پرونده‌ها به‌روزرسانی شد.",
+                level=messages.SUCCESS,
+            )
+        if skipped:
+            self.message_user(
+                request,
+                f"{skipped} تعهد در وضعیت «درخواست لغو» نبود و بدون تغییر ماند.",
+                level=messages.WARNING,
+            )
+
+    @admin.action(description="رد درخواست لغو — بازگشت تعهد به «فعال» + sync شمارنده‌ها")
+    def reject_cancel_requests(self, request, queryset) -> None:
+        """ردِ bulk درخواست‌های لغو از مسیرِ service + audit — عینِ API admin."""
+        metadata = extract_audit_metadata(request)
+        rejected = 0
+        skipped = 0
+        for bounty in queryset.select_related("criminal", "user"):
+            try:
+                updated = services.reject_bounty_cancel(bounty=bounty, admin=request.user)
+            except services.BountyNotInCancelRequested:
+                skipped += 1
+                continue
+            log_action_async(
+                user_id=request.user.pk,
+                action=audit_actions.R4J_BOUNTY_CANCEL_REJECTED,
+                resource_type="r4j_bounty",
+                resource_id=str(updated.pk),
+                **metadata,
+            )
+            rejected += 1
+        if rejected:
+            self.message_user(
+                request,
+                f"{rejected} درخواست لغو رد شد و تعهدها دوباره فعال شدند.",
+                level=messages.SUCCESS,
+            )
+        if skipped:
+            self.message_user(
+                request,
+                f"{skipped} تعهد در وضعیت «درخواست لغو» نبود و بدون تغییر ماند.",
+                level=messages.WARNING,
+            )
 
 
 @admin.register(R4JEvidenceCustodyEvent)

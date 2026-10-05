@@ -36,3 +36,42 @@ def process_lesson_video_job_task(self, *, job_id: int) -> dict[str, Any]:
             fail_lesson_video_job(job=job, error_message=type(exc).__name__)
         raise
     return {"job_id": processed.pk, "status": processed.status, "lesson_id": processed.lesson_id}
+
+
+@shared_task(
+    name="apps.lms.tasks.render_lesson_document_pages_task",
+    bind=True,
+    max_retries=2,
+    default_retry_delay=60,
+)
+def render_lesson_document_pages_task(self, *, lesson_id: int) -> dict[str, Any]:
+    """Pre-render one document lesson's pages (PDFium → WebP) out of request path.
+
+    idempotent: با manifestِ تازه، ensure_document_pages بدونِ رندر برمی‌گردد.
+    شکستِ غیرموقعی (PDF رمزدار/خراب) retry نمی‌خواهد — fallbackِ pdf.js خودش
+    مراقب است؛ فقط خطاهایِ زیرساختی (storage/دیسک) دوباره تلاش می‌کنند.
+    """
+    from apps.lms.models import Lesson
+    from apps.lms.pdf_pages import ensure_document_pages
+    from apps.lms.services import LessonMediaUnavailableError
+
+    lesson = Lesson.objects.filter(pk=lesson_id).first()
+    if lesson is None or not lesson.document_file:
+        return {"lesson_id": lesson_id, "status": "skipped"}
+    try:
+        pages = ensure_document_pages(lesson)
+    except (OSError, LessonMediaUnavailableError) as exc:
+        logger.warning(
+            "LMS document render failed lesson_id=%s error_type=%s",
+            lesson_id,
+            type(exc).__name__,
+        )
+        raise self.retry(exc=exc) from exc
+    except Exception:
+        logger.exception("LMS document render failed lesson_id=%s", lesson_id)
+        return {"lesson_id": lesson_id, "status": "failed"}
+    return {
+        "lesson_id": lesson_id,
+        "status": "rendered" if pages else "unrenderable",
+        "pages": len(pages or []),
+    }

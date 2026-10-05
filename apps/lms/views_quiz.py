@@ -35,6 +35,7 @@ from apps.lms.services import (
     QuizAttemptLockedError,
     QuizAttemptSubmissionError,
     QuizNotAvailableError,
+    QuizNotReadyError,
     QuizValidationError,
 )
 
@@ -100,7 +101,16 @@ class LMSCourseQuizPublicView(APIView):
                 message="برای این کلاس آزمونی منتشر نشده است.",
                 status_code=status.HTTP_404_NOT_FOUND,
             )
-        return SuccessResponse(data=QuizPublicSerializer(quiz).data)
+        payload = dict(QuizPublicSerializer(quiz).data)
+        # وضعیتِ تلاشِ همین کاربر برای صحنه‌ی «تلاش بعدی کی باز می‌شود» — آینه‌ی
+        # دقیقِ سیاستِ start است تا UI هیچ‌وقت با سرور نجنگد.
+        state = services.get_quiz_attempt_state(quiz=quiz, user=request.user)
+        retry_at = state.pop("retry_at")
+        payload["attempt_state"] = {
+            **state,
+            "retry_at": retry_at.isoformat() if retry_at is not None else None,
+        }
+        return SuccessResponse(data=payload)
 
 
 class LMSQuizAttemptStartView(APIView):
@@ -135,7 +145,12 @@ class LMSQuizAttemptStartView(APIView):
             )
         try:
             attempt, created = services.start_quiz_attempt(quiz=quiz, user=request.user)
-        except (QuizNotAvailableError, QuizAttemptLockedError, QuizValidationError) as exc:
+        except (
+            QuizNotAvailableError,
+            QuizAttemptLockedError,
+            QuizNotReadyError,
+            QuizValidationError,
+        ) as exc:
             return ErrorResponse(message=str(exc), status_code=status.HTTP_403_FORBIDDEN)
         action = audit_actions.LMS_QUIZ_ATTEMPT_STARTED
         log_action_async(

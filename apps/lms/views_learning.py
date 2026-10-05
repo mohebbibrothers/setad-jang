@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -33,9 +33,12 @@ from apps.lms.serializers import (
 from apps.lms.services import (
     CourseNotEnrollabeError,
     EnrollmentNotActiveError,
+    LessonCompletionModeError,
     LessonMediaAccessError,
+    LessonMediaEngagementRequiredError,
     LessonMediaUnavailableError,
     LessonNotInEnrollmentCourseError,
+    LessonSequenceLockedError,
     LMSProfileIncompleteError,
 )
 from apps.lms.throttles import (
@@ -218,8 +221,17 @@ class LMSLessonProgressUpdateView(APIView):
                 lesson=lesson,
                 watched_seconds=serializer.validated_data["watched_seconds"],
                 last_position_seconds=serializer.validated_data.get("last_position_seconds"),
+                mark_completed=serializer.validated_data["mark_completed"],
+                media_opened=serializer.validated_data.get("media_opened", False),
             )
-        except (EnrollmentNotActiveError, LessonNotInEnrollmentCourseError) as exc:
+        except LessonSequenceLockedError as exc:
+            return ErrorResponse(message=str(exc), status_code=status.HTTP_403_FORBIDDEN)
+        except (
+            EnrollmentNotActiveError,
+            LessonNotInEnrollmentCourseError,
+            LessonCompletionModeError,
+            LessonMediaEngagementRequiredError,
+        ) as exc:
             return ErrorResponse(message=str(exc), status_code=status.HTTP_400_BAD_REQUEST)
 
         log_action_async(
@@ -325,7 +337,7 @@ class LMSLessonMediaAccessView(APIView):
             payload = services.build_lesson_media_access(
                 lesson=lesson, user=request.user, media_kind=media_kind
             )
-        except LessonMediaAccessError as exc:
+        except (LessonMediaAccessError, LessonSequenceLockedError) as exc:
             return ErrorResponse(message=str(exc), status_code=status.HTTP_403_FORBIDDEN)
         except LessonMediaUnavailableError as exc:
             return ErrorResponse(message=str(exc), status_code=status.HTTP_404_NOT_FOUND)
@@ -338,6 +350,116 @@ class LMSLessonMediaAccessView(APIView):
             **extract_audit_metadata(request),
         )
         return SuccessResponse(data=payload, message="دسترسی رسانه جلسه صادر شد.")
+
+
+class LMSLessonMediaStreamView(APIView):
+    """Stream a lesson's document/video bytes in-site — با دیپازیشنِ inline.
+
+    این مسیر جایگزینِ «لینکِ خامِ دانلود» است: فایل با همان دروازه‌های عضویت و
+    زنجیره از خودِ بک‌اند سرو می‌شود و مرورگر آن را فقط برای نمایشِ درون‌سایتی
+    (نمایشگر PDF، پخش‌کننده‌ی ویدئو) مصرف می‌کند؛ دکمه‌ی دانلود در UI وجود ندارد
+    و Content-Disposition هم inline است نه attachment.
+
+    دو برقرارِ دسترسی:
+      ۱) نشستِ احرازشده (JWT) — برای کلاینت‌های API.
+      ۲) پارامترِ امضای کوتاه‌عمرِ `t` — برای عناصرِ HTML مثل <video> که توانِ
+         فرستادن هدر ندارند؛ امضا انتهای موفقِ دروازه‌های access زده می‌شود.
+    """
+
+    permission_classes = [AllowAny]
+
+    @extend_schema(
+        operation_id="lms_user_lessons_media_stream",
+        tags=[TAG_LMS_USER],
+        responses={
+            200: None,
+            403: LMS_ERROR_RESPONSE,
+            404: LMS_ERROR_RESPONSE,
+        },
+    )
+    def get(self, request: Request, lesson_id: int, media_kind: str):
+        """Stream lesson media with inline disposition and hardened headers."""
+        import mimetypes
+        import os
+
+        from django.http import FileResponse
+
+        token = request.query_params.get("t") or ""
+        # صاحبِ ممیزی: در مسیرِ JWT خودِ نشست؛ در مسیرِ توکنی، کاربرِ درونِ
+        # امضا — تا هر دوِ برقرارِ دسترسی ردپا بگذارند.
+        token_user_id: int | None = None
+        if token:
+            # مسیرِ امضاشده: بدون نشست، ولی فقط با توکنِ تازه و تطابقِ کاملِ جلسه.
+            try:
+                lesson, token_user_id = services.resolve_lesson_media_stream_token(
+                    token=token, media_kind=media_kind
+                )
+            except LessonMediaAccessError as exc:
+                return ErrorResponse(message=str(exc), status_code=status.HTTP_403_FORBIDDEN)
+            except LessonMediaUnavailableError as exc:
+                return ErrorResponse(message=str(exc), status_code=status.HTTP_404_NOT_FOUND)
+            if lesson.pk != lesson_id:
+                return ErrorResponse(
+                    message="نشانیِ استریم برای این رسانه معتبر نیست.",
+                    status_code=status.HTTP_403_FORBIDDEN,
+                )
+
+            try:
+                payload = services.resolve_lesson_media_stream_file(
+                    lesson=lesson, media_kind=media_kind
+                )
+                # بازبینیِ زنده‌ی عضویت «پس از» تعیینِ فایل تا قراردادِ پاسخ
+                # حفظ شود: رسانه‌ی ناموجود ۴۰۴، دسترسی‌ی ساقط‌شده ۴۰۳.
+                services.ensure_lesson_media_stream_membership(lesson=lesson, user_id=token_user_id)
+            except LessonMediaAccessError as exc:
+                return ErrorResponse(message=str(exc), status_code=status.HTTP_403_FORBIDDEN)
+            except LessonMediaUnavailableError as exc:
+                return ErrorResponse(message=str(exc), status_code=status.HTTP_404_NOT_FOUND)
+        else:
+            if not request.user.is_authenticated:
+                return ErrorResponse(
+                    message="برای پخش این رسانه ابتدا وارد حساب شوید.",
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                )
+            lesson = selectors.get_lesson_for_progress(lesson_id=lesson_id)
+            if lesson is None:
+                return ErrorResponse(
+                    message="جلسه یافت نشد.", status_code=status.HTTP_404_NOT_FOUND
+                )
+            try:
+                payload = services.build_lesson_media_stream(
+                    lesson=lesson, user=request.user, media_kind=media_kind
+                )
+            except (LessonMediaAccessError, LessonSequenceLockedError) as exc:
+                return ErrorResponse(message=str(exc), status_code=status.HTTP_403_FORBIDDEN)
+            except LessonMediaUnavailableError as exc:
+                return ErrorResponse(message=str(exc), status_code=status.HTTP_404_NOT_FOUND)
+
+        file_field = payload["file_field"]
+        _, ext = os.path.splitext(file_field.name or "")
+        content_type = mimetypes.guess_type(f"file{ext}")[0] or "application/octet-stream"
+        # توجه: Content-Length را دستی ست نمی‌کنیم تا مکانیزمِ Rangeِ FileResponse
+        # (سی‌کِ ویدئو) سالم بماند؛ روی فایل‌های واقعی دیسک خودکار پر می‌شود.
+        response = FileResponse(
+            file_field.open("rb"),
+            content_type=content_type,
+            filename=f"{payload['base_name']}{ext}",
+            as_attachment=False,
+        )
+        response["X-Content-Type-Options"] = "nosniff"
+        response["Cache-Control"] = "private, must-revalidate"
+        response["Content-Security-Policy"] = "sandbox"
+        audit_user_id = request.user.pk if request.user.is_authenticated else token_user_id
+        if audit_user_id is not None:
+            log_action_async(
+                user_id=audit_user_id,
+                action=audit_actions.LMS_LESSON_MEDIA_STREAMED,
+                resource_type="lms_lesson",
+                resource_id=str(lesson.pk),
+                extra_data={"course_id": lesson.course_id, "media_kind": media_kind},
+                **extract_audit_metadata(request),
+            )
+        return response
 
 
 class LMSAdminLearningActivityStatementListView(APIView):

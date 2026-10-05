@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
+from urllib.parse import parse_qs, urlparse
 
 import pytest
 from django.urls import reverse
@@ -28,7 +29,7 @@ from apps.madadkar.choices import (
     ParticipationStatus,
     PaymentStatus,
 )
-from apps.madadkar.models import Campaign, Participation, Payment
+from apps.madadkar.models import Campaign, Participation, Payment, PaymentEvent
 from apps.madadkar.payment_providers.base import PaymentVerifyResult
 from apps.madadkar.services import (
     PaymentAmountMismatchError,
@@ -51,6 +52,22 @@ pytestmark = pytest.mark.django_db
 
 
 _AUDIT_TASK_PATH = "apps.audit_logs.tasks.create_audit_log_task"
+
+
+def _assert_paydone_redirect(response, *, authority: str, result: str) -> None:
+    """
+    ادعای مشترک contractِ ریدایرکت GET callback:
+    ‏302 به صفحهٔ نتیجهٔ فرانت (/madadkar/paydone/) با authority+result درست.
+    """
+    assert response.status_code == status.HTTP_302_FOUND, f"expected 302: {response!r}"
+    location = response["Location"]
+    parsed = urlparse(location)
+    assert parsed.path == "/madadkar/paydone/"
+    query = parse_qs(parsed.query)
+    assert query.get("authority") == [authority]
+    assert query.get("result") == [result]
+
+
 _VERIFY_URL_NAME = "madadkar:payment-verify"
 
 
@@ -117,9 +134,8 @@ class TestVerifyEndpointGET:
         with patch(_AUDIT_TASK_PATH):
             response = client.get(url, {"authority": payment.authority})
 
-        assert response.status_code == status.HTTP_200_OK
-        assert response.data["data"]["is_verified"] is True
-        assert response.data["data"]["payment_status"] == PaymentStatus.SUCCESS
+        # GET مرورگر → ریدایرکت به صفحهٔ نتیجهٔ فرانت (هرگز JSON خام)
+        _assert_paydone_redirect(response, authority=payment.authority, result="success")
 
         # DB checks
         payment.refresh_from_db()
@@ -188,7 +204,8 @@ class TestVerifyEndpointGET:
         with patch(_AUDIT_TASK_PATH):
             response = client.get(url, {"authority": "non-existent"})
 
-        assert response.status_code == status.HTTP_404_NOT_FOUND
+        # authority ناشناخته هم ریدایرکت می‌شود — مرورگر هرگز JSON خام نمی‌بیند
+        _assert_paydone_redirect(response, authority="non-existent", result="error")
 
     def test_verify_400_when_authority_missing(self):
         client = APIClient()
@@ -254,7 +271,7 @@ class TestVerifyIdempotency:
         # اولین verify
         with patch(_AUDIT_TASK_PATH):
             response_a = client.get(url, {"authority": payment.authority})
-        assert response_a.status_code == status.HTTP_200_OK
+        _assert_paydone_redirect(response_a, authority=payment.authority, result="success")
 
         campaign.refresh_from_db()
         amount_after_first = campaign.purchased_amount
@@ -263,7 +280,7 @@ class TestVerifyIdempotency:
         # دومین verify — همان authority
         with patch(_AUDIT_TASK_PATH):
             response_b = client.get(url, {"authority": payment.authority})
-        assert response_b.status_code == status.HTTP_200_OK
+        _assert_paydone_redirect(response_b, authority=payment.authority, result="success")
 
         # هیچ تغییری ایجاد نشده
         campaign.refresh_from_db()
@@ -342,7 +359,8 @@ class TestVerifyAmountTampering:
         ):
             response = verify_payment_via_api(payment.authority)
 
-        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        # mismatch امنیتی: مرورگر ریدایرکت می‌شود با result=error
+        _assert_paydone_redirect(response, authority=payment.authority, result="error")
 
         payment.refresh_from_db()
         assert payment.status == PaymentStatus.FAILED
@@ -393,6 +411,217 @@ def verify_payment_via_api(authority: str):
 
 
 # ============================================================
+# Callback Contract — نرمال‌سازی case پارامترها (رفتهٔ واقعی زرین‌پال)
+# ============================================================
+
+
+class TestCallbackParamNormalization:
+    """زرین‌پال v4 با Authority/Status (capitalized) برمی‌گردد — قبلاً 400 می‌گرفت."""
+
+    def test_get_capitalized_authority_and_status_ok(self):
+        campaign = PublishedCampaignFactory(total_amount=100_000_000, total_shares=10)
+        user = UserFactory()
+        _participation, payment = _initiate_via_api(
+            campaign=campaign,
+            user=user,
+            share_count=1,
+        )
+
+        client = APIClient()
+        url = reverse(_VERIFY_URL_NAME)
+        with patch(_AUDIT_TASK_PATH):
+            response = client.get(url, {"Authority": payment.authority, "Status": "OK"})
+
+        _assert_paydone_redirect(response, authority=payment.authority, result="success")
+        payment.refresh_from_db()
+        assert payment.status == PaymentStatus.SUCCESS
+
+    def test_post_capitalized_authority(self):
+        campaign = PublishedCampaignFactory()
+        user = UserFactory()
+        _p, payment = _initiate_via_api(campaign=campaign, user=user, share_count=1)
+
+        client = APIClient()
+        url = reverse(_VERIFY_URL_NAME)
+        with patch(_AUDIT_TASK_PATH):
+            response = client.post(
+                url,
+                data={"Authority": payment.authority, "Status": "OK"},
+                format="json",
+            )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["data"]["is_verified"] is True
+
+
+# ============================================================
+# Callback — لغوی کاربر روی صفحهٔ درگاه (Status=NOK)
+# ============================================================
+
+
+class TestCallbackUserCanceled:
+    """Status=NOK باید بدون تماس با provider آزادسازی کند (مسیر قدیمی 502 می‌شد)."""
+
+    def _pending_payment(self, *, share_count=3):
+        campaign = PublishedCampaignFactory(total_amount=100_000_000, total_shares=10)
+        user = UserFactory()
+        participation, payment = _initiate_via_api(
+            campaign=campaign,
+            user=user,
+            share_count=share_count,
+        )
+        campaign.refresh_from_db()
+        assert campaign.purchased_shares == share_count  # رزرو پایه
+        return campaign, participation, payment
+
+    def test_get_nok_cancels_and_releases_shares(self):
+        campaign, participation, payment = self._pending_payment()
+
+        client = APIClient()
+        url = reverse(_VERIFY_URL_NAME)
+        with (
+            patch(
+                "apps.madadkar.payment_providers.sandbox.SandboxProvider.verify_payment"
+            ) as mock_verify,
+            patch(_AUDIT_TASK_PATH),
+        ):
+            response = client.get(url, {"Authority": payment.authority, "Status": "NOK"})
+
+        _assert_paydone_redirect(response, authority=payment.authority, result="canceled")
+
+        # بدون تماس با درگاه لغو ثبت شد
+        mock_verify.assert_not_called()
+
+        payment.refresh_from_db()
+        assert payment.status == PaymentStatus.FAILED
+        assert payment.gateway_status == "NOK"
+        assert payment.verified_at is not None
+
+        participation.refresh_from_db()
+        assert participation.status == ParticipationStatus.FAILED
+
+        # سهم‌ها بلافاصله آزاد شدند تا کاربر بتواند دوباره تلاش کند
+        campaign.refresh_from_db()
+        assert campaign.purchased_shares == 0
+
+    def test_nok_dispatches_failed_audit(self):
+        _campaign, _participation, payment = self._pending_payment(share_count=1)
+
+        client = APIClient()
+        url = reverse(_VERIFY_URL_NAME)
+        with patch(_AUDIT_TASK_PATH) as mock_task:
+            mock_task.delay = MagicMock()
+            client.get(url, {"authority": payment.authority, "status": "NOK"})
+
+        actions_called = [call.kwargs.get("action") for call in mock_task.delay.call_args_list]
+        assert audit_actions.MADADKAR_PAYMENT_FAILED in actions_called
+
+    def test_nok_is_idempotent_no_double_event(self):
+        campaign, _participation, payment = self._pending_payment()
+        base_events = PaymentEvent.objects.filter(payment=payment).count()
+
+        client = APIClient()
+        url = reverse(_VERIFY_URL_NAME)
+        with patch(_AUDIT_TASK_PATH):
+            response_a = client.get(url, {"Authority": payment.authority, "Status": "NOK"})
+            response_b = client.get(url, {"Authority": payment.authority, "Status": "NOK"})
+
+        _assert_paydone_redirect(response_a, authority=payment.authority, result="canceled")
+        _assert_paydone_redirect(response_b, authority=payment.authority, result="canceled")
+
+        # فقط یک رویداد FAILED ثبت شده — آزادسازی دوبل نشده
+        events = PaymentEvent.objects.filter(payment=payment)
+        assert events.count() == base_events + 1
+        campaign.refresh_from_db()
+        assert campaign.purchased_shares == 0
+
+    def test_nok_never_unverifies_a_successful_payment(self):
+        """race: درگاه NOK گفته ولی تراکنش قبلاً verify شده — DB قطعی است."""
+        campaign, participation, payment = self._pending_payment(share_count=2)
+
+        # اول موفق verify می‌کنیم
+        client = APIClient()
+        url = reverse(_VERIFY_URL_NAME)
+        with patch(_AUDIT_TASK_PATH):
+            client.get(url, {"authority": payment.authority})
+
+        payment.refresh_from_db()
+        assert payment.status == PaymentStatus.SUCCESS
+
+        # بعد NOK برمی‌گردد — نباید چیزی برگردد
+        with patch(_AUDIT_TASK_PATH):
+            response = client.get(url, {"Authority": payment.authority, "Status": "NOK"})
+
+        _assert_paydone_redirect(response, authority=payment.authority, result="success")
+
+        payment.refresh_from_db()
+        assert payment.status == PaymentStatus.SUCCESS
+        participation.refresh_from_db()
+        assert participation.status == ParticipationStatus.PAID
+        campaign.refresh_from_db()
+        assert campaign.purchased_shares == 2  # آزاد نشده
+
+    def test_post_nok_cancels_and_returns_json(self):
+        _campaign, participation, payment = self._pending_payment(share_count=1)
+
+        client = APIClient()
+        url = reverse(_VERIFY_URL_NAME)
+        with patch(_AUDIT_TASK_PATH):
+            response = client.post(
+                url,
+                data={"authority": payment.authority, "status": "NOK"},
+                format="json",
+            )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["data"]["is_verified"] is False
+        payment.refresh_from_db()
+        assert payment.status == PaymentStatus.FAILED
+        participation.refresh_from_db()
+        assert participation.status == ParticipationStatus.FAILED
+
+
+# ============================================================
+# Callback — خطای درگاه در لحظهٔ verify (نتیجهٔ نامشخص)
+# ============================================================
+
+
+class TestCallbackGatewayError:
+    """اگر provider در لحظهٔ verify خطا داد: رزرو حفظ می‌شود، کاربر result=pending می‌گیرد."""
+
+    def test_gateway_error_redirects_pending_and_keeps_reservation(self):
+        campaign = PublishedCampaignFactory(total_amount=100_000_000, total_shares=10)
+        user = UserFactory()
+        participation, payment = _initiate_via_api(
+            campaign=campaign,
+            user=user,
+            share_count=2,
+        )
+
+        client = APIClient()
+        url = reverse(_VERIFY_URL_NAME)
+        with (
+            patch(
+                "apps.madadkar.payment_providers.sandbox.SandboxProvider.verify_payment",
+                side_effect=RuntimeError("connection reset"),
+            ),
+            patch(_AUDIT_TASK_PATH),
+        ):
+            response = client.get(url, {"authority": payment.authority})
+
+        _assert_paydone_redirect(response, authority=payment.authority, result="pending")
+
+        payment.refresh_from_db()
+        assert payment.status == PaymentStatus.PENDING
+        participation.refresh_from_db()
+        assert participation.status == ParticipationStatus.PENDING_PAYMENT
+
+        # رزرو حفظ می‌ماند تا کاربر بتواند دوباره verify کند یا ttl آزاد کند
+        campaign.refresh_from_db()
+        assert campaign.purchased_shares == 2
+
+
+# ============================================================
 # Verify Failure → Share Release
 # ============================================================
 
@@ -432,8 +661,7 @@ class TestVerifyFailureReleasesShares:
         ):
             response = verify_payment_via_api(payment.authority)
 
-        assert response.status_code == status.HTTP_200_OK
-        assert response.data["data"]["is_verified"] is False
+        _assert_paydone_redirect(response, authority=payment.authority, result="failed")
 
         # سهم آزاد شد
         campaign.refresh_from_db()

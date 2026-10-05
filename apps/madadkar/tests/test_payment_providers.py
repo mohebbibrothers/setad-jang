@@ -245,6 +245,33 @@ class TestZarinpalProviderRequestPayment:
         assert calls[0]["json"]["metadata"]["mobile"] == "09120000000"
         assert calls[0]["json"]["metadata"]["campaign_id"] == "7"
 
+    def test_request_payment_converts_toman_to_rial_for_gateway(self, settings, monkeypatch):
+        """Regression (ممیزی ۱۴۰۴-۰۶-۱۰): واحد وجهی زرین‌پال ریال است.
+
+        ارسال مستقیم مبلغِ تومان یعنی کاربر یک‌دهم مبلغ واقعی را در درگاه
+        پرداخت می‌کند و verify هم (به‌همان نسبت اشتباه) سبز درمی‌آید. تبدیل
+        باید در مرز provider انجام شود.
+        """
+        settings.MADADKAR_ZARINPAL_MERCHANT_ID = "test-merchant-id"
+        provider = ZarinpalProvider()
+        calls = []
+
+        def fake_post(url, json, timeout):
+            calls.append(json)
+            return _FakeZarinpalResponse(
+                payload={"data": {"code": 100, "authority": "A0000000000001"}, "errors": []}
+            )
+
+        _patch_gateway_post(monkeypatch, fake_post)
+
+        provider.request_payment(
+            amount=12_500,
+            description="کمک",
+            callback_url="https://example.com/callback",
+        )
+
+        assert calls[0]["amount"] == 125_000
+
     def test_request_payment_gateway_error_returns_failure(self, settings, monkeypatch):
         settings.MADADKAR_ZARINPAL_MERCHANT_ID = "test-merchant-id"
         provider = ZarinpalProvider()
@@ -316,6 +343,27 @@ class TestZarinpalProviderVerifyPayment:
         assert result.gateway_status == "100"
         assert calls[0]["json"]["authority"] == "A0000000000001"
         assert calls[0]["timeout"] == provider.VERIFY_TIMEOUT_SECONDS
+
+    def test_verify_payment_converts_toman_to_rial_and_keeps_internal_unit(
+        self, settings, monkeypatch
+    ):
+        """verify هم با ریال صدا می‌شود؛ verified_amount همچنان تومان است."""
+        settings.MADADKAR_ZARINPAL_MERCHANT_ID = "test-merchant-id"
+        provider = ZarinpalProvider()
+        calls = []
+
+        def fake_post(url, json, timeout):
+            calls.append(json)
+            return _FakeZarinpalResponse(
+                payload={"data": {"code": 100, "ref_id": 123}, "errors": []}
+            )
+
+        _patch_gateway_post(monkeypatch, fake_post)
+
+        result = provider.verify_payment(authority="A1", amount=12_500)
+
+        assert calls[0]["amount"] == 125_000
+        assert result.verified_amount == 12_500
 
     def test_verify_payment_code_101_is_idempotent_success(self, settings, monkeypatch):
         settings.MADADKAR_ZARINPAL_MERCHANT_ID = "test-merchant-id"

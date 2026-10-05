@@ -34,8 +34,23 @@ _BG = (251, 252, 250)
 _WHITE = (255, 255, 255)
 
 _A4_LANDSCAPE = (1754, 1240)
-_FONT_REGULAR = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
-_FONT_BOLD = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+# فونتِ گواهی باید در «هر» محیطی (داکرِ مینیمال، لینوکسِ خام، لوکال) کار کند.
+# اولویت با فونتِ باندل‌شده داخل مخزن است (وزیرمتن — OFL) تا خروجی روی همه‌ی
+# سرورها یکسان و فارسی‌خوان باشد؛ مسیرهای سیستمی فقط fallback‌اند و در نبودِ
+# هیچ‌کدام از فونت پیش‌فرض Pillow استفاده می‌شود تا صدور گواهی هرگز نشکند.
+_BUNDLED_FONT_DIR = Path(settings.BASE_DIR) / "static" / "lms" / "certificates" / "fonts"
+_FONT_CANDIDATES_REGULAR = [
+    _BUNDLED_FONT_DIR / "Vazirmatn-Regular.ttf",
+    Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
+    Path("/usr/share/fonts/dejavu/DejaVuSans.ttf"),
+    Path("/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf"),
+]
+_FONT_CANDIDATES_BOLD = [
+    _BUNDLED_FONT_DIR / "Vazirmatn-Bold.ttf",
+    Path("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),
+    Path("/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf"),
+    Path("/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf"),
+]
 _LOGO_PATH = Path(settings.BASE_DIR) / "static" / "lms" / "certificates" / "basat_mardom_logo.jpg"
 
 
@@ -91,9 +106,18 @@ def certificate_is_publicly_valid(certificate: Certificate) -> bool:
     return certificate.status == CertificateStatus.ISSUED and certificate.is_active
 
 
-def _font(size: int, *, bold: bool = False) -> ImageFont.FreeTypeFont:
-    """Load a Persian-capable font."""
-    return ImageFont.truetype(_FONT_BOLD if bold else _FONT_REGULAR, size=size)
+def _font(size: int, *, bold: bool = False):
+    """Load a Persian-capable font; never raise when a path is missing/corrupt."""
+    candidates = _FONT_CANDIDATES_BOLD if bold else _FONT_CANDIDATES_REGULAR
+    for path in candidates:
+        if not path.exists():
+            continue
+        try:
+            return ImageFont.truetype(str(path), size=size)
+        except OSError:
+            continue
+    # آخرین خطِ دفاع: فونتِ پیش‌فرض Pillow (بدون گلیفِ فارسی ولی هرگز کرش نمی‌کند).
+    return ImageFont.load_default()
 
 
 def _draw_background(draw: ImageDraw.ImageDraw, width: int, height: int) -> None:
@@ -124,6 +148,14 @@ def _draw_background(draw: ImageDraw.ImageDraw, width: int, height: int) -> None
 
 def _draw_logo(canvas: Image.Image) -> None:
     """Place the official logo on the certificate if available."""
+    try:
+        _paste_logo(canvas)
+    except OSError:
+        return
+
+
+def _paste_logo(canvas: Image.Image) -> None:
+    """Paste logo bitmap; guarded by _draw_logo so a corrupt file never breaks PDF."""
     if not _LOGO_PATH.exists():
         return
     logo = Image.open(_LOGO_PATH).convert("RGB")
@@ -183,8 +215,13 @@ def _text(
     fill: tuple[int, int, int],
     anchor: str,
 ) -> None:
-    """Draw Persian/RTL text with libraqm when available."""
-    draw.text(xy, text, font=font, fill=fill, anchor=anchor, direction="rtl", language="fa")
+    """Draw Persian/RTL text with libraqm when available; degrade gracefully."""
+    try:
+        draw.text(xy, text, font=font, fill=fill, anchor=anchor, direction="rtl", language="fa")
+    except (ValueError, OSError, KeyError, TypeError):
+        # محیط‌های بدون libraqm یا فونتِ غیرTrueType (fallback نهایی): متن ساده
+        # رسم می‌شود تا ساختِ PDF هرگز نشکند.
+        draw.text(xy, text, font=font, fill=fill, anchor=anchor)
 
 
 def _wrap_rtl(text: str, *, width_chars: int) -> list[str]:
