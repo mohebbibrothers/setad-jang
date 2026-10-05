@@ -208,6 +208,31 @@ def update_course(*, course: Course, **fields: Any) -> Course:
     return course
 
 
+def schedule_document_render(*, lesson: Lesson) -> None:
+    """صف‌گذاریِ بی‌صدایِ پیش‌رندرِ صفحاتِ سند — پس از آپلود/انتشار.
+
+    چرا «بی‌صدا»؟ نبودِ broker (توسعهٔ محلی/CI بدون سلول‌کارگر) نباید ویرایش
+    یا انتشار جلسه را بشکند؛ رندرِ تنبل در اولین باز‌کردنِ رسانه باقی است و
+    اینجا فقط می‌کوشد هزینه را از مسیرِ کاربر به صف ببرد. dispatch به انتهای
+    تراکنش موکول می‌شود تا worker رکوردِ ندیده‌ی commit‌نشده را نخواند.
+    """
+    if lesson.content_type != LessonContentType.DOCUMENT or not lesson.document_file:
+        return
+
+    from apps.lms.tasks import render_lesson_document_pages_task
+
+    def _dispatch() -> None:
+        try:
+            render_lesson_document_pages_task.delay(lesson_id=lesson.pk)
+        except Exception:
+            logger.warning(
+                "lms.docrender: queue unavailable for lesson %s — lazy render remains the fallback",
+                lesson.pk,
+            )
+
+    transaction.on_commit(_dispatch)
+
+
 def validate_course_publishable(*, course: Course) -> None:
     """هر جلسهٔ فعال دوره باید محتوای متناسب با نوعش را داشته باشد.
 
@@ -231,11 +256,20 @@ def validate_course_publishable(*, course: Course) -> None:
 def publish_course(*, course: Course) -> Course:
     """Publish a course and set published_at idempotently."""
     validate_course_publishable(course=course)
-    if course.status != CourseStatus.PUBLISHED:
+    newly_published = course.status != CourseStatus.PUBLISHED
+    if newly_published:
         course.status = CourseStatus.PUBLISHED
         course.published_at = timezone.now()
         course.archived_at = None
         course.save(update_fields=["status", "published_at", "archived_at", "updated_at"])
+    if newly_published:
+        # انتشار = قولِ باز‌شدنِ ویترین؛ رندرِ اسناد به صف می‌رود تا نخستین
+        # دانش‌پذیر پشتِ کانواسِ ۴۰۰برگیِ synchronous بنشیند (بک‌فیلِ کامل:
+        # manage.py render_lesson_documents). بی‌خطر و idempotent.
+        for doc_lesson in course.lessons.filter(
+            is_active=True, content_type=LessonContentType.DOCUMENT
+        ):
+            schedule_document_render(lesson=doc_lesson)
     return course
 
 
@@ -298,6 +332,9 @@ def update_lesson(*, lesson: Lesson, **fields: Any) -> Lesson:
         lesson.save(update_fields=list(set(update_fields)))
         if "duration_seconds" in update_fields or "is_active" in update_fields:
             sync_course_counters(course=lesson.course)
+        if {"document_file", "content_type"} & set(update_fields):
+            # سند تازه/جایگزین یا تغییرِ نوع ⇒ پیش‌رندرِ صفحات در صف (best-effort).
+            schedule_document_render(lesson=lesson)
     return lesson
 
 
@@ -544,6 +581,12 @@ def build_lesson_media_access(*, lesson: Lesson, user: Any, media_kind: str) -> 
     if media_kind == "document" and lesson.content_type == LessonContentType.DOCUMENT:
         if not lesson.document_file:
             raise LessonMediaUnavailableError("فایل سند این جلسه هنوز بارگذاری نشده است.")
+        # مهرِ سمت‌سروریِ «سند باز شد»: همین‌جا — انتهایِ موفقِ دروازه‌ها — ثبت
+        # می‌شود، نه با اِقرارِ فرانت. دروازه‌ی mark_completed از این به بعد برای
+        # هر تماشای واقعی خودکار باز می‌شود و flagِ media_opened فقط سازگاریِ
+        # نسخه‌های قدیمیِ فرانت است. (این helper برای media_kindهای دیگر هم
+        # بی‌ضرر است: فقط جلساتِ سندی را مهر می‌کند.)
+        _stamp_media_opened(enrollment=enrollment, lesson=lesson)
         return {
             "media_kind": "document",
             "provider": "uploaded_file",
@@ -560,6 +603,7 @@ def build_lesson_media_access(*, lesson: Lesson, user: Any, media_kind: str) -> 
     if media_kind == "article" and lesson.content_type == LessonContentType.ARTICLE:
         if not lesson.article_body.strip():
             raise LessonMediaUnavailableError("متن این جلسه هنوز نوشته نشده است.")
+        _stamp_media_opened(enrollment=enrollment, lesson=lesson)
         return {
             "media_kind": "article",
             "provider": "inline",
@@ -603,6 +647,29 @@ def build_lesson_media_stream(*, lesson: Lesson, user: Any, media_kind: str) -> 
     if enrollment is not None:
         ensure_lesson_sequence_open(user=user, lesson=lesson, enrollment=enrollment)
     return resolve_lesson_media_stream_file(lesson=lesson, media_kind=media_kind)
+
+
+def _stamp_media_opened(*, enrollment: Enrollment | None, lesson: Lesson) -> None:
+    """مهرِ «جلسه باز شد» روی رکوردِ پیشرفت — منبع‌حقیقتِ سمت‌سروری.
+
+    بی‌خطر روی مسیرهای بدونِ عضویت (preview) و غیرسندی. get_or_create هم‌زمان
+    با همان الگوی update_lesson_progress است؛ دروازه‌ی mark_completed وجودِ همین
+    مهر را می‌پرسد تا اولویت با واقعیتِ «کاربر رسانه را باز کرد» باشد نه با
+    خوداظهاریِ bodyِ فرانت.
+    """
+    if enrollment is None or not lesson.supports_manual_completion:
+        return
+    progress, _created = LessonProgress.objects.get_or_create(
+        enrollment=enrollment,
+        lesson=lesson,
+        defaults={
+            "duration_seconds_snapshot": lesson.duration_seconds or 0,
+            "first_watched_at": timezone.now(),
+        },
+    )
+    if progress.media_opened_at is None:
+        progress.media_opened_at = timezone.now()
+        progress.save(update_fields=["media_opened_at", "updated_at"])
 
 
 def resolve_lesson_media_stream_file(*, lesson: Lesson, media_kind: str) -> dict[str, Any]:
@@ -691,12 +758,14 @@ def _lesson_document_page_entries(*, lesson: Lesson, user: Any) -> list[dict[str
     ]
 
 
-def resolve_lesson_media_stream_token(*, token: str, media_kind: str) -> Lesson:
+def resolve_lesson_media_stream_token(*, token: str, media_kind: str) -> tuple[Lesson, int | None]:
     """اعتبارسنجیِ امضای استریم و واکشیِ جلسه — بدون نیاز به نشستِ کاربر.
 
     امضا فقط در انتهای موفقِ build_lesson_media_access زده شده (یعنی عضویت و
     زنجیره‌ی تماشا قبلاً گذرانده شده‌اند)؛ این‌جا صرفاً اعتبار/تطابقِ امضا چک
-    می‌شود تا همان فایلِ همان جلسه سرو شود، نه بیشتر.
+    می‌شود تا همان فایلِ همان جلسه سرو شود، نه بیشتر. بازبینیِ «زنده‌بودنِ»
+    عضویت در گامِ بعد (ensure_lesson_media_stream_membership) و پس از تعیینِ
+    فایل انجام می‌شود؛ کاربرِ درونِ امضا هم برای ممیزی به ویو برگردانده می‌شود.
     """
     from django.core import signing
 
@@ -715,7 +784,33 @@ def resolve_lesson_media_stream_token(*, token: str, media_kind: str) -> Lesson:
     lesson = Lesson.objects.filter(pk=data.get("l")).first()
     if lesson is None:
         raise LessonMediaUnavailableError("جلسه‌ی این رسانه دیگر موجود نیست.")
-    return lesson
+    return lesson, data.get("u")
+
+
+def ensure_lesson_media_stream_membership(*, lesson: Lesson, user_id: int | None) -> None:
+    """زنده‌بودنِ دروازه‌ی عضویت در لحظه‌ی استریم — برای مسیرِ توکنی.
+
+    امضا هنگامِ accessِ موفق صادر شده، اما تا ۱۲ ساعت زنده است؛ این گیت
+    «هم‌اکنون» را می‌سنجد تا لغو/آرشیوِ ثبت‌نامِ میانی ⇒ توکن در لحظه بمیرد،
+    نه در پایانِ TTL. عمداً *بعد* از تعیینِ فایل اجرا می‌شود تا قراردادهای
+    پاسخ حفظ شوند: رسانه‌ی ناموجود/خارج‌ازمحدوده ۴۰۴ بماند (اطلاعاتِ ساختاری
+    که افشای عضویت نمی‌کند) و فقط ۴۰۳ مخصوصِ «فایل هست ولی تو دیگر دسترسی
+    نداری» باشد. جلسهٔ preview بی‌عضویت هم مجاز است.
+    """
+    if lesson.is_preview:
+        return
+    ok = (
+        user_id is not None
+        and Enrollment.objects.filter(
+            user_id=user_id,
+            course=lesson.course,
+            status__in=[EnrollmentStatus.ACTIVE, EnrollmentStatus.COMPLETED],
+        ).exists()
+    )
+    if not ok:
+        raise LessonMediaAccessError(
+            "دسترسی این رسانه با تغییرِ وضعیتِ ثبت‌نام بسته شده است؛ صفحه را تازه‌سازی کنید."
+        )
 
 
 # ============================================================
@@ -846,6 +941,8 @@ def update_lesson_progress(
     # قاعده روی سیم (و نه فقط روی دکمه‌ی UI) اعمال می‌شود تا دور زدنی نباشد.
     # چک بدون ساختِ رکورد انجام می‌شود تا در مسیرِ ۴۰۰ ردی رول‌بک‌نشده باقی نماند.
     if mark_completed and locked_lesson.content_type == LessonContentType.DOCUMENT:
+        # مهرِ سمت‌سروری (بازکردنِ رسانه از مسیرِ access) ملاکِ اصلی است؛
+        # flagِ media_opened فقط سازگاریِ عقب‌رو با فرانت‌های قدیمی‌تر است.
         already_opened = LessonProgress.objects.filter(
             enrollment=locked_enrollment,
             lesson=locked_lesson,
@@ -1454,13 +1551,34 @@ def _build_attempt_snapshots(*, quiz) -> tuple[list[int], dict[str, list[int]]]:
     return question_ids, option_order
 
 
+def quiz_lessons_remaining(*, quiz: Any, enrollment: Any) -> int:
+    """تعدادِ جلساتِ فعالِ تکمیل‌نشده‌ی مسیر — مبنای مشترکِ دروازه‌ی آزمون.
+
+    صفر یعنی دروازه باز است. هر دو مصرف‌کننده (start_quiz_attempt و
+    get_quiz_attempt_state) همین یک تابع را صدا می‌زنند تا «آینه» هرگز از
+    رفتارِ واقعیِ POST start جدا نیفتد. ثبت‌نامِ COMPLETED (فارغ‌التحصیل) و
+    دوره‌های بدون‌جلسه معاف‌اند.
+    """
+    if enrollment is None or enrollment.status == EnrollmentStatus.COMPLETED:
+        return 0
+    active_lessons = quiz.course.lessons.filter(is_active=True)
+    if not active_lessons.exists():
+        return 0
+    done_ids = set(
+        enrollment.lesson_progress.filter(is_completed=True).values_list("lesson_id", flat=True)
+    )
+    return active_lessons.exclude(pk__in=done_ids).count()
+
+
 @transaction.atomic
 def get_quiz_attempt_state(*, quiz, user: Any) -> dict[str, Any]:
     """آینه‌ی دقیقِ سیاستِ قفلِ تلاش برای UI — بدون هیچ‌گونه جهش‌زمان.
 
     خروجی برای صحنه‌ی «تلاش بعدی کی باز می‌شود»: تعداد تلاش‌های رفته/مانده،
     لحظه‌ی بازشدن (retry_at) و علتِ قفل. منطق دقیقاً همان شاخه‌های start_quiz_attempt
-    است تا هیچ‌وقت UI چیزی غیر از رفتارِ واقعی POST start نشان ندهد.
+    است تا هیچ‌وقت UI چیزی غیر از رفتارِ واقعی POST start نشان ندهد — از جمله
+    دروازه‌ی آمادگی («همه‌ی جلسات تکمیل شود»): آن هم از همین‌جا با کلید
+    lessons_remaining دیده می‌شود، نه اینکه POST start ناگهان ۴۰۳ بدهد.
     """
     from apps.lms.choices import QuizAttemptStatus
     from apps.lms.models import Enrollment, QuizAttempt
@@ -1490,8 +1608,12 @@ def get_quiz_attempt_state(*, quiz, user: Any) -> dict[str, Any]:
     terminal = attempts.exclude(status=QuizAttemptStatus.IN_PROGRESS)
     retry_at = None
     locked_reason = None
+    lessons_remaining = quiz_lessons_remaining(quiz=quiz, enrollment=enrollment)
     if passed_before:
         locked_reason = "passed"
+    elif live_attempt is None and lessons_remaining:
+        # دروازه‌ی آمادگیِ start؛ resume (تلاشِ زنده) طبقِ start از آن معاف است.
+        locked_reason = "lessons_remaining"
     elif next_attempt_number > allowed_attempts:
         locked_reason = "out_of_attempts"
     else:
@@ -1524,6 +1646,7 @@ def get_quiz_attempt_state(*, quiz, user: Any) -> dict[str, Any]:
         "passed_before": passed_before,
         "retry_at": retry_at,
         "locked_reason": locked_reason,
+        "lessons_remaining": lessons_remaining,
         "can_attempt": can_attempt,
     }
 
@@ -1568,21 +1691,13 @@ def start_quiz_attempt(*, quiz, user: Any):
 
     # دروازه‌ی آمادگی: آزمونِ پایانی «جلسه‌ی آخرِ مسیر» است؛ ساختِ تلاشِ تازه فقط
     # بعد از تکمیلِ همه‌ی جلساتِ فعال. تلاش‌های در‌حال‌انجامِ قبلی (resume) و
-    # ثبت‌نام‌های COMPLETED (فارغ‌التحصیل‌ها) از این دروازه معاف‌اند.
-    if enrollment.status != EnrollmentStatus.COMPLETED:
-        active_lessons = quiz.course.lessons.filter(is_active=True)
-        if active_lessons.exists():
-            done_lesson_ids = set(
-                enrollment.lesson_progress.filter(is_completed=True).values_list(
-                    "lesson_id", flat=True
-                )
-            )
-            remaining = active_lessons.exclude(pk__in=done_lesson_ids).count()
-            if remaining:
-                raise QuizNotReadyError(
-                    "دروازه‌ی آزمون بعد از تماشای همه‌ی جلسات باز می‌شود؛ "
-                    f"هنوز {remaining} جلسه مانده است."
-                )
+    # ثبت‌نام‌های COMPLETED (فارغ‌التحصیل‌ها) از این دروازه معاف‌اند. عددِ مانده
+    # از همان quiz_lessons_remaining می‌آید که آینه‌ی GET quiz هم مصرف می‌کند.
+    remaining = quiz_lessons_remaining(quiz=quiz, enrollment=enrollment)
+    if remaining:
+        raise QuizNotReadyError(
+            f"دروازه‌ی آزمون بعد از تماشای همه‌ی جلسات باز می‌شود؛ هنوز {remaining} جلسه مانده است."
+        )
 
     attempt_number = _next_attempt_number(quiz=quiz, user=user)
     allowed_attempts = quiz.max_attempts + _valid_unlocks_count(quiz=quiz, user=user)

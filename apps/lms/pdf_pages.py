@@ -22,6 +22,7 @@ import contextlib
 import io
 import json
 import logging
+import math
 from typing import Any
 
 from django.core.files.base import ContentFile
@@ -34,7 +35,22 @@ RENDER_SCALE = 2.5
 # سقف‌های امنیتی در برابرِ اسنادِ مهندسی‌شده‌ی حجیم (decompression bomb).
 MAX_PAGES = 400
 MAX_WIDTH_PX = 2400
+#: سقفِ مساحتِ هر برگه (پیکسل). تنها سقفِ پهنا، صفحه‌ی با نسبتِ ابعادیِ
+#: بیمارگونه (مثلاً ۱×۳٬۰۰۰) را بی‌سقفِ ارتفاع ول می‌کرد و کانواسِ
+#: ده‌ها‌مگاپیکسلیِ PDFium «قبل از» هر encode حافظه را می‌بلعد — این عدد
+#: آن بمبِ ارتفاعی را خنثی می‌کند (≈ رندرِ A4 در ۵ برابرِ بزرگنماییِ مجاز).
+MAX_PAGE_PIXELS = 16_000_000
 WEBP_QUALITY = 86
+
+
+def page_render_scale(base_width: float, base_height: float) -> float:
+    """ضریبِ رندرِ ایمن: پهنا سقفِ پیکسل و مساحت سقفِ پیکسل دارد.
+
+    تابعِ مستقل تا قابل‌اثباتِ مستقیم باشد (بدونِ نیاز به PDFِ واقعی در تست).
+    """
+    scale = min(RENDER_SCALE, MAX_WIDTH_PX / base_width)
+    area_scale = math.sqrt(MAX_PAGE_PIXELS / (base_width * base_height))
+    return min(scale, area_scale)
 
 
 def _render_dir(lesson: Any) -> str:
@@ -113,9 +129,10 @@ def _render_and_store(lesson: Any) -> list[dict[str, int]] | None:
             page = pdf[index]
             try:
                 base_width = float(page.get_width())
-                if base_width <= 0:
+                base_height = float(page.get_height())
+                if base_width <= 0 or base_height <= 0:
                     continue
-                scale = min(RENDER_SCALE, MAX_WIDTH_PX / base_width)
+                scale = page_render_scale(base_width, base_height)
                 pil_image = page.render(scale=scale).to_pil().convert("RGB")
                 buf = io.BytesIO()
                 pil_image.save(buf, "WEBP", quality=WEBP_QUALITY, method=4)
