@@ -161,6 +161,79 @@ def test_production_settings_reject_sqlite_without_explicit_escape_hatch() -> No
     assert "SQLite در production" in result.stderr
 
 
+def test_production_settings_mysql_branch_builds_utf8mb4_backend() -> None:
+    """مسیر cPanel/MariaDB: شاخهٔ mysql باید backend درست و امن بسازد.
+
+    چرا import-and-assert و نه `manage.py check`: چکِ CHARSET/Collation
+    خودِ backend مای‌اس‌کیو‌ال در Django به‌جای خواندن settings، به
+    سرورِ واقعی وصل می‌شود (برخلاف PostgreSQL که هیچ system check اتصالی
+    ندارد). نه CI و نه محیط توسعه سرور MySQL در دسترس دارند؛ پس این تست
+    همان چیزی را اثبات می‌کند که «boot» یعنی: import موفق settings
+    (شامل fail-fast و shim درایور) + پیکربندی دقیق backend.
+    """
+    env = _production_env(
+        DATABASE_ENGINE="mysql",
+        MYSQL_NAME="setadjang_test",
+        MYSQL_USER="setadjang_test",
+        MYSQL_PASSWORD="test-mysql-password-not-for-production",
+        MYSQL_HOST="127.0.0.1",
+        MYSQL_PORT="3306",
+    )
+    code = (
+        "from django.conf import settings\n"
+        "db = settings.DATABASES['default']\n"
+        "assert db['ENGINE'] == 'django.db.backends.mysql', db['ENGINE']\n"
+        "assert db['NAME'] == 'setadjang_test'\n"
+        "assert db['HOST'] == '127.0.0.1' and db['PORT'] == '3306'\n"
+        "assert db['OPTIONS']['charset'] == 'utf8mb4'\n"
+        "assert 'STRICT_TRANS_TABLES' in db['OPTIONS']['init_command']\n"
+        "assert db['CONN_HEALTH_CHECKS'] is True\n"
+        "print('mysql-branch-ok')\n"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        cwd=PROJECT_ROOT,
+        env=env,
+        capture_output=True,
+        check=False,
+        text=True,
+        timeout=30,
+    )
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    assert "mysql-branch-ok" in result.stdout
+
+
+def test_production_settings_reject_sample_mysql_password() -> None:
+    """production.py نباید با MYSQL_PASSWORD نمونه یا خالی boot شود."""
+    result = _run_manage_check(
+        _production_env(
+            DATABASE_ENGINE="mysql",
+            MYSQL_NAME="setadjang_test",
+            MYSQL_USER="setadjang_test",
+            MYSQL_PASSWORD="change-me-mysql-password",
+        )
+    )
+
+    assert result.returncode != 0
+    assert "MYSQL_PASSWORD" in result.stderr
+
+
+def test_production_settings_reject_short_mysql_password() -> None:
+    """MYSQL_PASSWORD کوتاه‌تر از ۱۶ کاراکتر در production fail-fast است."""
+    result = _run_manage_check(
+        _production_env(
+            DATABASE_ENGINE="mysql",
+            MYSQL_NAME="setadjang_test",
+            MYSQL_USER="setadjang_test",
+            MYSQL_PASSWORD="short-pass",
+        )
+    )
+
+    assert result.returncode != 0
+    assert "MYSQL_PASSWORD" in result.stderr
+
+
 def _queues_of(service_command: str) -> set[str]:
     """استخراج مجموعهٔ queueهای `-Q` از command یک سرویس celery worker."""
     assert "-Q" in service_command

@@ -44,6 +44,7 @@ opentelemetry-sdk==1.39.1
 pillow==12.3.0
 prometheus-client==0.25.0
 PyJWT==2.15.0
+PyMySQL==1.2.3
 # pypdfium2 (رندرِ سمتِ سرورِ صفحاتِ PDF — موتورِ PDFiumِ کروم: ریشه‌ی رفعِ
 # «متنِ فارسی/لاتینِ به‌هم‌ریخته» در نمایشگرِ سند؛ صفحات به WebP رندر می‌شوند)
 pypdfium2==5.14.0

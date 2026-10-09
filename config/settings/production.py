@@ -102,9 +102,55 @@ elif _DATABASE_ENGINE == "sqlite":
             "ALLOW_SQLITE_IN_PRODUCTION=True را تنظیم کن؛ برای production واقعی "
             "از PostgreSQL استفاده کن.",
         )
+elif _DATABASE_ENGINE == "mysql":
+    # مسیر استقرار روی هاست اشتراکی cPanel (MariaDB/MySQL) — بیرونِ محیطِ
+    # کنترل‌شدهٔ داکر، جایی که PostgreSQL مدرن (۱۳+) در دسترس نیست.
+    # MariaDB/MySQL بک‌اند رسمی Django است و همان سطح fail-fastی را
+    # می‌گیرد که مسیر PostgreSQL دارد.
+    _MYSQL_PASSWORD = config("MYSQL_PASSWORD")
+    if _MYSQL_PASSWORD in {"", "change-me", "change-me-mysql-password"}:
+        raise RuntimeError(
+            "MYSQL_PASSWORD در production نباید خالی یا مقدار نمونه باشد.",
+        )
+
+    if len(_MYSQL_PASSWORD) < 16:
+        raise RuntimeError(
+            "MYSQL_PASSWORD در production باید حداقل 16 کاراکتر باشد.",
+        )
+
+    # درایور: اگر mysqlclient (باینریِ سریع) نصب است همان، وگرنه PyMySQL
+    # (خالص‌پایتون — مناسب هاست‌هایی که کامپایلر ندارند) خود را به‌جای
+    # MySQLdb معرفی می‌کند. PyMySQL>=1.2 خودش version_info سازگار با
+    # mysqlclient جدید را گزارش می‌کند؛ دست‌کاری version_info با گیتِ
+    # «mysqlclient 2.2.1+» در Django 6.1 ناسازگار است و خطا می‌دهد.
+    try:
+        import MySQLdb  # type: ignore[import-not-found]
+    except ImportError:
+        import pymysql  # type: ignore[import-not-found]
+
+        pymysql.install_as_MySQLdb()
+
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.mysql",
+            "NAME": config("MYSQL_NAME"),
+            "USER": config("MYSQL_USER"),
+            "PASSWORD": _MYSQL_PASSWORD,
+            "HOST": config("MYSQL_HOST", default="127.0.0.1"),
+            "PORT": config("MYSQL_PORT", default="3306"),
+            "CONN_MAX_AGE": config("MYSQL_CONN_MAX_AGE", default=60, cast=int),
+            "CONN_HEALTH_CHECKS": True,
+            "OPTIONS": {
+                # utf8mb4 برای فارسی/ایموجی حیاتی است؛ STRICT_TRANS_TABLES
+                # رفتار دیتاتیپ‌ها را به PostgreSQL نزدیک نگه می‌دارد.
+                "charset": "utf8mb4",
+                "init_command": "SET sql_mode='STRICT_TRANS_TABLES'",
+            },
+        },
+    }
 else:
     raise RuntimeError(
-        "DATABASE_ENGINE نامعتبر است. مقدارهای مجاز: postgres, sqlite.",
+        "DATABASE_ENGINE نامعتبر است. مقدارهای مجاز: postgres, sqlite, mysql.",
     )
 
 
