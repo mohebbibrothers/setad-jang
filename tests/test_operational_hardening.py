@@ -204,6 +204,35 @@ def test_production_settings_mysql_branch_builds_utf8mb4_backend() -> None:
     assert "mysql-branch-ok" in result.stdout
 
 
+def test_production_settings_trusted_origins_env_for_proxy_mode() -> None:
+    """CSRF_TRUSTED_ORIGINS باید env-driven باشد (معماری API-پشت-Vercel).
+
+    وقتی مرورگر با besat.me حرف می‌زند و Vercel به origin پراکسی می‌کند،
+    Originِ فرم‌های ادمین با Hostِ origin متفاوت است؛ بدون این متغیر
+    Django فرم‌ها را 403 می‌کند. این تست قفل می‌کند که مقدار از env
+    پارس می‌شود و پیش‌فرض خالی (بدون پروکسی) هم سليم است.
+    """
+    code = (
+        "from django.conf import settings\n"
+        "assert settings.CSRF_TRUSTED_ORIGINS == ['https://besat.example'], (\n"
+        "    settings.CSRF_TRUSTED_ORIGINS\n"
+        ")\n"
+        "print('csrf-trusted-ok')\n"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        cwd=PROJECT_ROOT,
+        env=_production_env(CSRF_TRUSTED_ORIGINS="https://besat.example"),
+        capture_output=True,
+        check=False,
+        text=True,
+        timeout=30,
+    )
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    assert "csrf-trusted-ok" in result.stdout
+
+
 def test_production_settings_reject_sample_mysql_password() -> None:
     """production.py نباید با MYSQL_PASSWORD نمونه یا خالی boot شود."""
     result = _run_manage_check(

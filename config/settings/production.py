@@ -255,6 +255,18 @@ CSRF_COOKIE_SECURE = config("CSRF_COOKIE_SECURE", default=True, cast=bool)
 CSRF_COOKIE_HTTPONLY = True
 CSRF_COOKIE_SAMESITE = "Lax"
 
+# ریشه‌های مورد اعتماد CSRF برای فرم‌ها (ادمین/پنل‌ها) وقتی درخواست از
+# مسیر پروکسیِ سرور-به-سرور می‌آید — مثلاً معماری «API پشت Vercel» که
+# در آن مرورگر با https://besat.me حرف می‌زند و Vercel به origin
+# (api.besat.me) پراکسی می‌کند؛ در آن حالت Origin با Hostِ origin
+# متفاوت است و Django بدون این لیست، فرم‌های ادمین را 403 می‌کند.
+# پیش‌فرضِ خالی یعنی رفتار قبلی بدون تغییر (حالت مستقیم).
+CSRF_TRUSTED_ORIGINS = config(
+    "CSRF_TRUSTED_ORIGINS",
+    default="",
+    cast=lambda v: [s.strip() for s in v.split(",") if s.strip()],
+)
+
 # WhiteNoise serves the collected STATIC_ROOT directory in production/demo.
 WHITENOISE_AUTOREFRESH = config("WHITENOISE_AUTOREFRESH", default=False, cast=bool)
 WHITENOISE_USE_FINDERS = config("WHITENOISE_USE_FINDERS", default=False, cast=bool)
