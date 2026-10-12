@@ -25,7 +25,8 @@ def test_serve_public_media_serves_file_under_public_root(tmp_path: Path) -> Non
         assert isinstance(response, FileResponse)
         assert response.status_code == 200
         assert response["Content-Type"] == "image/png"
-        assert response["Cache-Control"] == "public, max-age=3600"
+        # کشِ بلندمدتِ public (یک هفته) + پنجره‌ی SWR — Core Web Vitals/SEO
+        assert response["Cache-Control"] == "public, max-age=604800, stale-while-revalidate=86400"
     finally:
         response.close()
 

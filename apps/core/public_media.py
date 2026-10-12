@@ -56,6 +56,13 @@ def serve_public_media(request, path: str) -> FileResponse:
     if encoding:
         response["Content-Encoding"] = encoding
 
-    response["Cache-Control"] = "public, max-age=3600"
+    # ─── کشِ لبه و مرورگر ────────────────────────────────────────────
+    # یک هفته + یک‌روزِ stale-while-revalidate: تصاویرِ رسانه (کاور دوره،
+    # عکس پرونده‌ها، فریم‌های رندر PDF) بار دوم به‌بعد از کَشِ مرورگر و
+    # لبه می‌آیند و LCP/Core Web Vitals به‌طور محسوس بهتر می‌شود.
+    # عمداً نیست immutable: چون ممکن است فایلِ هم‌نام (بعد از حذفِ admin)
+    # جایگزین شود؛ SWR پنجره‌ی بهنگام‌سازیِ امن را باز نگه می‌دارد درحالی‌که
+    # بازدیدِ تکراری همچنان صفرِ شبکه است.
+    response["Cache-Control"] = "public, max-age=604800, stale-while-revalidate=86400"
     response["X-Content-Type-Options"] = "nosniff"
     return response
