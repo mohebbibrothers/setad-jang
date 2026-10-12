@@ -154,6 +154,11 @@ def test_verify_payment_concurrent_verify_applies_success_exactly_once() -> None
         status=PaymentStatus.PENDING,
         authority="AUTH-RACE-VERIFY-0001",
     )
+    # sandbox از ۱۴۰۵/۷ درگاه تعاملی است: verify فقط با marker تأییدِ
+    # «کاربر در صفحهٔ درگاه» موفق می‌شود. این تست رقابتِ دو verify روی
+    # تراکنشِ پرداخت‌شده را می‌سنجد، پس تأیید اول همین‌جا ثبت می‌شود
+    # (از همان service واقعی؛ مسیر marker هم در test_payment_flow پوشش دارد).
+    assert madadkar_services.confirm_sandbox_payment(payment=payment) is True
 
     results, errors = _run_in_parallel(
         lambda: madadkar_services.verify_payment(authority=payment.authority),
