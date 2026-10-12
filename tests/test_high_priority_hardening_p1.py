@@ -156,6 +156,11 @@ class TestProductionCacheFailFast:
             "EMAIL_HOST": "localhost",
             "EMAIL_PORT": "1025",
             "EMAIL_USE_TLS": "False",
+            # همین درس برای درگاه پرداخت (۱۴۰۵/۷): production با
+            # provider=sandbox در boot می‌ترکد؛ baseline این تست «production
+            # از نظر cache سالم» است، پس provider واقعی صریح داده می‌شود.
+            "MADADKAR_PAYMENT_PROVIDER": "zarinpal",
+            "MADADKAR_ZARINPAL_MERCHANT_ID": "test-merchant",
         }
         return subprocess.run(
             [sys.executable, "-c", "import django; django.setup()"],

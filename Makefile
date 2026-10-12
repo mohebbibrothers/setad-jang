@@ -11,7 +11,11 @@ SCHEMA_OUTPUT ?= /tmp/setad-jang-schema-check.yaml
 # NOTE (۱۴۰۵): production در برابر backendهای ایمیلِ توسعه fail-fast
 # می‌کند (یافتهٔ P2 ناظر بیرونی)؛ پس deploy-check هم با backend واقعی
 # (smtp) اجرا می‌شود، نه backend کنسول.
+# NOTE (۱۴۰۵/۷): production boot با MADADKAR_PAYMENT_PROVIDER=sandbox
+# عمداً می‌ترکد (پرداخت ساختگی بدون پول واقعی)؛ deploy-check باید یک
+# provider واقعی را مثل محیط production واقعی تنظیم کند.
 PROD_CHECK_ENV := \
+	MADADKAR_PAYMENT_PROVIDER=zarinpal \
 	ALLOWED_HOSTS=example.com \
 	CACHE_BACKEND=redis \
 	CORS_ALLOWED_ORIGINS=https://example.com \

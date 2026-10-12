@@ -75,11 +75,14 @@ def _auth(client: APIClient, user) -> None:
     client.force_authenticate(user=user)
 
 
-def _initiate_via_api(*, campaign, user, share_count) -> tuple[Participation, Payment]:
+def _initiate_via_api(
+    *, campaign, user, share_count, approve: bool = True
+) -> tuple[Participation, Payment]:
     """
     helper برای initiate کردن یک participation کامل با درگاه واقعی (Sandbox).
 
-    این تابع از HTTP layer استفاده می‌کند تا flow کامل (مثل واقعیت) باشد.
+    این تابع از HTTP layer استفاده می‌کند تا flow کامل (مثل واقعیت) باشد —
+    شامل عبور از صفحهٔ تعاملیِ درگاه sandbox وقتی approve=True باشد.
     """
     client = APIClient()
     _auth(client, user)
@@ -103,6 +106,23 @@ def _initiate_via_api(*, campaign, user, share_count) -> tuple[Participation, Pa
         .first()
     )
     payment = participation.payment
+
+    # از ۱۴۰۵/۷ صفحهٔ sandbox یک درگاه *تعاملی* است: تا «تأیید پرداخت»
+    # زده نشود verify موفق نمی‌شود. تست‌های flow پیش‌فرض کاربری را شبیه‌سازی
+    # می‌کنند که در درگاه پرداخت کرده؛ تست‌های خودِ گارد (verify جعلی بدون
+    # تأیید) با approve=False همین helper را صدا می‌زنند.
+    if approve:
+        payment.refresh_from_db()
+        gateway_url = reverse(
+            "madadkar:payment-sandbox-gateway",
+            kwargs={"authority": payment.authority},
+        )
+        gateway_resp = client.get(gateway_url)
+        assert gateway_resp.status_code == status.HTTP_200_OK
+        confirm_resp = client.post(gateway_url, data={"action": "confirm"})
+        assert confirm_resp.status_code == status.HTTP_302_FOUND
+        payment.refresh_from_db()
+        assert payment.gateway_status == "SANDBOX-CONFIRMED"
     return participation, payment
 
 

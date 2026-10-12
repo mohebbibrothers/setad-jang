@@ -9,7 +9,7 @@
 
 ## اپلیکیشن‌ها
 
-مجموع: **13 اپ** · 95 مدل · 65 مایگریشن · 36 ویو · 290 مسیر
+مجموع: **13 اپ** · 95 مدل · 65 مایگریشن · 36 ویو · 291 مسیر
 
 | اپ | مدل | مایگریشن | ویو | مسیر |
 |---|---:|---:|---:|---:|
@@ -20,7 +20,7 @@
 | `core` | 2 | 3 | 1 | 0 |
 | `kindness_wall` | 12 | 3 | 0 | 34 |
 | `lms` | 18 | 8 | 0 | 54 |
-| `madadkar` | 14 | 9 | 0 | 47 |
+| `madadkar` | 14 | 9 | 0 | 48 |
 | `notifications` | 4 | 3 | 7 | 7 |
 | `public_reports` | 3 | 2 | 7 | 7 |
 | `r4j` | 15 | 11 | 0 | 36 |
@@ -291,7 +291,8 @@ setad-jang/
 │   ├── views_admin_recon.py
 │   ├── views_common.py
 │   ├── views_participation.py
-│   └── views_public.py
+│   ├── views_public.py
+│   └── views_sandbox_gateway.py
 ├── notifications/
 │   ├── migrations/
 │   ├── tests/

@@ -132,6 +132,12 @@ def test_madadkar_successful_payment_emits_notification() -> None:
     _participation, payment, _url = initiate_participation(
         campaign=campaign, user=user, share_count=1, callback_url="https://example.com/callback"
     )
+    # از ۱۴۰۵/۷ sandbox یک درگاه تعاملی است: verify فقط پس از تأیید
+    # کاربر در صفحهٔ درگاه موفق می‌شود — اینجا همان کلیک را شبیه‌سازی
+    # می‌کنیم (صفحه و تست‌هایش: apps/madadkar/tests/test_payment_sandbox_gateway.py).
+    from apps.madadkar.services import confirm_sandbox_payment
+
+    assert confirm_sandbox_payment(payment=payment) is True
 
     verify_payment(authority=payment.authority)
 

@@ -28,9 +28,10 @@ from apps.madadkar.payment_providers import (
 
 
 class TestSandboxProviderRequest:
-    """تست‌های SandboxProvider.request_payment"""
+    """تست‌های SandboxProvider.request_payment — درگاه تعاملی sandbox."""
 
-    def test_request_payment_returns_success(self):
+    def test_request_payment_returns_success(self, settings):
+        settings.MADADKAR_PAYMENT_CALLBACK_BASE_URL = "http://gateway.test"
         provider = SandboxProvider()
         result = provider.request_payment(
             amount=50_000_000,
@@ -42,10 +43,31 @@ class TestSandboxProviderRequest:
         assert result.authority
         assert result.authority.startswith("SBX-")
         assert result.gateway_url
-        assert "authority=" in result.gateway_url
         assert result.gateway_status == "100"
 
-    def test_request_payment_includes_authority_in_url(self):
+    def test_gateway_url_is_sandbox_page_not_callback(self, settings):
+        settings.MADADKAR_PAYMENT_CALLBACK_BASE_URL = "http://gateway.test"
+        """باگ رگرسیونی ۱۴۰۵/۷: gateway_url نباید خودِ callback verify باشد.
+
+        اگر verify مستقیم در URL باشد، «ادامه» در فرانت بدون هیچ تعاملی
+        تراکنش را SUCCESS می‌کرد (پرداخت ساختگی). باید به صفحهٔ تعاملی
+        sandbox برود و مبلغ هرگز در query نباشد (منبع حقیقت = DB).
+        """
+        provider = SandboxProvider()
+        result = provider.request_payment(
+            amount=10_000_000,
+            description="تست",
+            callback_url="http://localhost/api/v1/madadkar/payment/verify/",
+        )
+        assert (
+            result.gateway_url
+            == f"http://gateway.test/api/v1/madadkar/payment/sandbox/{result.authority}/"
+        )
+        assert "verify" not in result.gateway_url
+        assert "amount" not in result.gateway_url
+
+    def test_request_payment_includes_authority_in_url(self, settings):
+        settings.MADADKAR_PAYMENT_CALLBACK_BASE_URL = "http://gateway.test"
         provider = SandboxProvider()
         result = provider.request_payment(
             amount=10_000_000,
@@ -54,16 +76,8 @@ class TestSandboxProviderRequest:
         )
         assert result.authority in result.gateway_url
 
-    def test_request_payment_includes_amount_in_url(self):
-        provider = SandboxProvider()
-        result = provider.request_payment(
-            amount=99_000_000,
-            description="تست",
-            callback_url="http://localhost/cb/",
-        )
-        assert "amount=99000000" in result.gateway_url
-
-    def test_request_payment_each_call_returns_unique_authority(self):
+    def test_request_payment_each_call_returns_unique_authority(self, settings):
+        settings.MADADKAR_PAYMENT_CALLBACK_BASE_URL = "http://gateway.test"
         """هر فراخوانی authority جدید تولید می‌کند."""
         provider = SandboxProvider()
         a = provider.request_payment(
@@ -78,7 +92,8 @@ class TestSandboxProviderRequest:
         )
         assert a.authority != b.authority
 
-    def test_request_payment_metadata_stored_in_extra(self):
+    def test_request_payment_metadata_stored_in_extra(self, settings):
+        settings.MADADKAR_PAYMENT_CALLBACK_BASE_URL = "http://gateway.test"
         provider = SandboxProvider()
         result = provider.request_payment(
             amount=1000,
@@ -93,35 +108,86 @@ class TestSandboxProviderRequest:
         assert result.extra["metadata"] == {"campaign_id": "7"}
 
 
+@pytest.mark.django_db
 class TestSandboxProviderVerify:
-    """تست‌های SandboxProvider.verify_payment"""
+    """تست‌های SandboxProvider.verify_payment — gated روی تأیید صفحهٔ درگاه.
 
-    def test_verify_payment_always_returns_success(self):
-        provider = SandboxProvider()
-        result = provider.verify_payment(
-            authority="SBX-test-123",
+    رفتار جدید (رگرسیون باگ «پرداخت بدون پول»): verify بدون اینکه کاربر
+    در صفحهٔ شبیه‌ساز «تأیید پرداخت» را زده باشد (marker روی رکورد)
+    هرگز success نمی‌دهد.
+    """
+
+    def test_verify_without_confirmation_fails(self):
+        """بدون تأیید در صفحهٔ درگاه → success=False (نه success کور!)."""
+        from apps.madadkar.choices import PaymentStatus
+        from apps.madadkar.models import Payment
+        from tests.factories.madadkar import ParticipationFactory
+
+        participation = ParticipationFactory()
+        payment = Payment.objects.create(
+            participation=participation,
+            user=participation.user,
             amount=50_000_000,
+            gateway_name="sandbox",
+            authority="SBX-unconfirmed-1",
+            status=PaymentStatus.PENDING,
         )
+        provider = SandboxProvider()
+        result = provider.verify_payment(authority=payment.authority, amount=payment.amount)
+        assert result.success is False
+        assert "تأیید" in (result.error_message or "")
+
+    def test_verify_unknown_authority_fails(self):
+        """authority ناموجود هم دیگر هرگز success ساختگی نمی‌گیرد."""
+        provider = SandboxProvider()
+        result = provider.verify_payment(authority="SBX-does-not-exist", amount=1)
+        assert result.success is False
+
+    def test_verify_after_confirmation_succeeds_with_recorded_amount(self):
+        """بعد از confirm سمت سرور → success با مبلغِ خودِ رکورد."""
+        from apps.madadkar.choices import PaymentStatus
+        from apps.madadkar.models import Payment
+        from apps.madadkar.services import confirm_sandbox_payment
+        from tests.factories.madadkar import ParticipationFactory
+
+        participation = ParticipationFactory()
+        payment = Payment.objects.create(
+            participation=participation,
+            user=participation.user,
+            amount=123_456_789,
+            gateway_name="sandbox",
+            authority="SBX-confirmed-1",
+            status=PaymentStatus.PENDING,
+        )
+        assert confirm_sandbox_payment(payment=payment) is True
+
+        provider = SandboxProvider()
+        result = provider.verify_payment(authority=payment.authority, amount=payment.amount)
         assert result.success is True
         assert result.already_verified is False
         assert result.ref_id.startswith("SBXREF-")
-        assert result.verified_amount == 50_000_000
+        assert result.verified_amount == 123_456_789
         assert result.gateway_status == "100"
 
-    def test_verify_payment_returns_same_amount(self):
-        """sandbox همیشه amount ورودی را verify می‌کند (anti-tampering pass)."""
-        provider = SandboxProvider()
-        result = provider.verify_payment(
-            authority="any",
-            amount=123_456_789,
-        )
-        assert result.verified_amount == 123_456_789
+    def test_zarinpal_payment_cannot_be_confirmed_via_sandbox_marker(self):
+        """gateway_name غیر sandbox هرگز marker نمی‌گیرد (کارکرد امن service)."""
+        from apps.madadkar.choices import PaymentStatus
+        from apps.madadkar.models import Payment
+        from apps.madadkar.services import confirm_sandbox_payment
+        from tests.factories.madadkar import ParticipationFactory
 
-    def test_verify_payment_ref_id_unique_per_call(self):
-        provider = SandboxProvider()
-        a = provider.verify_payment(authority="x", amount=1)
-        b = provider.verify_payment(authority="x", amount=1)
-        assert a.ref_id != b.ref_id
+        participation = ParticipationFactory()
+        payment = Payment.objects.create(
+            participation=participation,
+            user=participation.user,
+            amount=10_000,
+            gateway_name="zarinpal",
+            authority="ZAR-real-1",
+            status=PaymentStatus.PENDING,
+        )
+        assert confirm_sandbox_payment(payment=payment) is False
+        payment.refresh_from_db()
+        assert payment.gateway_status != "SANDBOX-CONFIRMED"
 
 
 # ============================================================

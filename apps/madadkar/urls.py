@@ -68,6 +68,7 @@ from .views import (
     MadadkarAdminRiskSignalReviewView,
     MadadkarAdminSponsorDetailView,
     MadadkarAdminSponsorListCreateView,
+    MadadkarPaymentSandboxGatewayView,
     MadadkarPaymentVerifyView,
     MadadkarPublicCampaignDetailView,
     MadadkarPublicCampaignListView,
@@ -133,6 +134,13 @@ urlpatterns = [
         "payment/verify/",
         MadadkarPaymentVerifyView.as_view(),
         name="payment-verify",
+    ),
+    # صفحهٔ شبیه‌ساز درگاه sandbox — کاربر قبل از بازگشت به callback باید
+    # «تأیید پرداخت» را اینجا بزند (جلوگیری از پرداخت خودکارِ ساختگی).
+    path(
+        "payment/sandbox/<str:authority>/",
+        MadadkarPaymentSandboxGatewayView.as_view(),
+        name="payment-sandbox-gateway",
     ),
     path(
         "receipts/verify/",

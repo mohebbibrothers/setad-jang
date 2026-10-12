@@ -128,7 +128,7 @@ OpenAPI validation                ✅ Valid schema
 STRUCTURE.md check                ✅ همگام با درخت واقعی مخزن
 compose config (CI)               ✅ interpolate/`:?` زنده در هر push
 nginx config test (CI)            ✅ nginx -t روی deploy/nginx.conf
-pytest + coverage gate            ✅ 2032 passed / 25 skipped (راتچت: جدول با collect سوئیت می‌خواند)
+pytest + coverage gate            ✅ 2052 passed / 25 skipped (راتچت: جدول با collect سوئیت می‌خواند)
 coverage                          ✅ 85.85% >= 82%
 ```
 
@@ -495,8 +495,20 @@ Madadkar از provider contract استفاده می‌کند. تا قبل از �
 
 ```env
 MADADKAR_PAYMENT_PROVIDER=sandbox
-MADADKAR_PAYMENT_CALLBACK_URL=https://example.com/api/v1/madadkar/payment/verify/
+MADADKAR_PAYMENT_CALLBACK_BASE_URL=https://example.com
 ```
+
+**قرارداد sandbox (از ۱۴۰۵/۷):** درگاه sandbox یک صفحهٔ تعاملیِ بک‌اند است —
+`/api/v1/madadkar/payment/sandbox/<authority>/` با دکمه‌های «تأیید پرداخت» و
+«انصراف». تا کاربر تأیید نکند، `verify` موفق نمی‌شود (فراخوانی مستقیم
+callback — بوکمارک/اسکنر/تحریف مبلغ — هرگز پرداخت ساختگی تولید نمی‌کند؛
+تراکنش FAILED و سهم‌ها آزاد می‌شوند). این باگِ واقعیِ گذشته بود:
+`gateway_url` قدیمی خودِ callback بود و پرداخت بدون هیچ تعاملی PAID می‌شد.
+
+**گارد boot در production:** اگر `MADADKAR_PAYMENT_PROVIDER=sandbox` روی
+`config.settings.production` تنظیم شده باشد، سرویس با RuntimeError بالا
+نمی‌آید (نه warning) — پرداخت ساختگی در production فاجعهٔ مالی/حقوقی است.
+روی سرور واقعی `MADADKAR_PAYMENT_PROVIDER=zarinpal` + merchant id الزامی است.
 
 ### 7.7 Media / Object Storage
 
@@ -1374,7 +1386,8 @@ POST /api/v1/madadkar/campaigns/{slug}/participate/
 GET,POST /api/v1/madadkar/payment/verify/
 ```
 
-provider فعلی sandbox/dev-ready است اما workflow برای provider واقعی آماده است.
+provider فعلی sandbox تعاملی است (تأیید صریح در صفحهٔ درگاه — §7.6) و workflow
+برای provider واقعی آماده است؛ production با provider ساختگی اصلاً boot نمی‌شود.
 
 ### 18.4 Refund Workflow
 

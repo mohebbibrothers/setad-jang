@@ -119,22 +119,53 @@ def log_action_async(
     Asynchronous audit log — برای مواردی که latency مهم‌تر از consistency است.
 
     مثال: user login → نباید response را کند کند.
+
+    تضمین مهم: این تابع هرگز نباید request را بشکند. در نسخهٔ قبلی اگر
+    broker (Redis) در دسترس نبود، ``kombu.OperationalError`` مستقیم به
+    view نشت می‌کرد و کل flow کاربری (شروع/ثبت آزمون، login، verify
+    پرداخت و...) با ۵۰۰ می‌ساخت — آن‌هم وقتی که کارِ کسب‌وکار قبلاً با
+    موفقیت commit شده بود. اکنون:
+
+    1. تلاش برای dispatch تسک (مسیر عادی، بدون latency اضافه).
+    2. در صورت هر خطایی (broker down، worker نبودن صف، timeout):
+       نوشتن همزمان رکورد audit در همان request تا هیچ رویدادی گم نشود.
+    3. اگر نوشتنِ sync هم شکست بخورد (مثلاً DB problem) فقط لاگ می‌گیریم؛
+       خطای audit هیچ‌وقت نباید علت ۵۰۰ شدنِ یک درخواست کاربر باشد —
+       برای این مسیر fire-and-forget این trade-off آگاهانه است. مسیر
+       syncِ ``log_action`` (که audit جزو الزاماتش است) همچنان raise
+       می‌کند و تغییر نکرده.
     """
+    kwargs: dict[str, Any] = {
+        "user_id": user_id,
+        "action": action,
+        "resource_type": resource_type,
+        "resource_id": resource_id,
+        "ip_address": ip_address,
+        "request_id": request_id,
+        "user_agent": user_agent,
+        "path": path,
+        "method": method,
+        "changes": changes,
+        "extra_data": extra_data,
+    }
+
     from .tasks import create_audit_log_task
 
-    create_audit_log_task.delay(
-        user_id=user_id,
-        action=action,
-        resource_type=resource_type,
-        resource_id=resource_id,
-        ip_address=ip_address,
-        request_id=request_id,
-        user_agent=user_agent,
-        path=path,
-        method=method,
-        changes=changes,
-        extra_data=extra_data,
-    )
+    try:
+        create_audit_log_task.delay(**kwargs)
+    except Exception:
+        logger.warning(
+            "audit_logs.async: broker unavailable برای «%s» — نوشتن همزمان به‌عنوان fallback",
+            action,
+            exc_info=True,
+        )
+        try:
+            create_audit_log(**kwargs)
+        except Exception:
+            logger.exception(
+                "audit_logs.async: fallback sync هم شکست خورد action=%s",
+                action,
+            )
 
     logger.info(
         "Audit log dispatched async action=%s resource=%s:%s user_id=%s",

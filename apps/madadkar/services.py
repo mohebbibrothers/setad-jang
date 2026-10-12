@@ -1232,6 +1232,43 @@ def verify_payment(*, authority: str) -> Payment:
         return locked_payment
 
 
+def confirm_sandbox_payment(*, payment: Payment) -> bool:
+    """
+    ثبت تأیید کاربر در صفحهٔ شبیه‌ساز درگاه sandbox (marker سمت سرور).
+
+    چرا این شکل: تنها چیزی که در حالت sandbox «پرداخت واقعی» را شبیه‌سازی
+    می‌کند، همین مکر روی رکورد است — verify_payment فقط با آن success
+    می‌دهد. روی رکوردِ Payment ذخیره می‌شود نه cache، چون:
+    - cache LocMem بین gunicorn workerها و api/worker اشتراک ندارد →
+      تأیید در یک process، verify در process دیگر «تأییدنشده» می‌دید؛
+    - DB همان جایی است که خودِ callback هم می‌خواند؛ اتمیک و قابل race-guard.
+
+    گاردها:
+    - فقط PENDING و gateway_name="sandbox" (تراکنش واقعیِ zarinpal نمی‌تواند
+      با این مسیر تأیید ساختگی بگیرد).
+    - select_for_update + double-check → race با NOK/expiry نتیجه را خراب
+      نمی‌کند؛ اگر تراکنش بین‌بین بسته شد، False برمی‌گرداند و کاربر در
+      callback نتیجهٔ واقعی را می‌بیند.
+
+    Returns:
+        True اگر marker نوشته شد؛ False اگر تراکنش دیگر قابل تأیید نبود.
+    """
+    from .payment_providers.sandbox import SANDBOX_CONFIRM_MARKER
+
+    with transaction.atomic():
+        locked = Payment.objects.select_for_update().get(pk=payment.pk)
+        if locked.status != PaymentStatus.PENDING or locked.gateway_name != "sandbox":
+            return False
+        locked.gateway_status = SANDBOX_CONFIRM_MARKER
+        locked.save(update_fields=["gateway_status", "updated_at"])
+    logger.info(
+        "Madadkar sandbox payment confirmed payment_id=%s amount=%s",
+        locked.pk,
+        locked.amount,
+    )
+    return True
+
+
 def cancel_pending_payment(*, authority: str) -> Payment:
     """
     لغوی کاربر روی صفحهٔ درگاه (callback با Status=NOK) — بدون تماس با provider.

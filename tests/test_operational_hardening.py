@@ -43,6 +43,13 @@ def _production_env(**overrides: str) -> dict[str, str]:
             # خودش این کلید را pop می‌کند.
             "DATABASE_ENGINE": "postgres",
             "DEBUG": "False",
+            # همان درسِ EMAIL_BACKEND (۱۴۰۵/۷ برای پرداخت): production با
+            # MADADKAR_PAYMENT_PROVIDER=sandbox در boot می‌ترکد (پرداخت
+            # ساختگی بدون پول واقعی)؛ baselineِ «production معتبر» باید
+            # صریحاً provider واقعی بدهد. خودِ گارد در
+            # apps/madadkar/tests/test_payment_sandbox_gateway.py تست شده.
+            "MADADKAR_PAYMENT_PROVIDER": "zarinpal",
+            "MADADKAR_ZARINPAL_MERCHANT_ID": "production-test-merchant",
             # ایمیل در production باید واقعی باشد؛ بدون این خط، پیش‌فرضِ
             # base.py (ReadableConsoleEmailBackend) fail-fast را فعال می‌کرد
             # و تست‌های boot همیشه قرمز می‌شدند.

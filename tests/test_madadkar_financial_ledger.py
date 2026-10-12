@@ -16,6 +16,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
 
+from apps.madadkar import services
 from apps.madadkar.admin import ParticipationAdmin, PaymentAdmin, PaymentEventAdmin
 from apps.madadkar.choices import PaymentEventKind, PaymentStatus
 from apps.madadkar.models import Participation, Payment, PaymentEvent
@@ -33,8 +34,16 @@ pytestmark = pytest.mark.django_db
 _AUDIT_TASK_PATH = "apps.audit_logs.tasks.create_audit_log_task"
 
 
-def _initiate_via_api(*, campaign, user, share_count: int = 1) -> tuple[Participation, Payment]:
-    """شروع مشارکت از HTTP layer برای تولید PaymentEvent.CREATED واقعی."""
+def _initiate_via_api(
+    *, campaign, user, share_count: int = 1, approve: bool = True
+) -> tuple[Participation, Payment]:
+    """شروع مشارکت از HTTP layer برای تولید PaymentEvent.CREATED واقعی.
+
+    از ۱۴۰۵/۷ پرداخت sandbox فقط بعد از تأیید صریحِ «در صفحهٔ درگاه» verify
+    می‌شود؛ این helper با approve=True همان کلیک را شبیه‌سازی می‌کند
+    (مستقیم از service — صفحهٔ HTML در test_payment_sandbox_gateway.py تست
+    می‌شود).
+    """
     client = APIClient()
     client.force_authenticate(user=user)
 
@@ -47,7 +56,10 @@ def _initiate_via_api(*, campaign, user, share_count: int = 1) -> tuple[Particip
 
     assert response.status_code == status.HTTP_201_CREATED, response.data
     participation = Participation.objects.get(user=user, campaign=campaign)
-    return participation, participation.payment
+    payment = participation.payment
+    if approve:
+        assert services.confirm_sandbox_payment(payment=payment) is True
+    return participation, payment
 
 
 def _event_kinds(payment: Payment) -> list[str]:

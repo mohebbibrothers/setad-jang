@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from django.conf import settings
@@ -10,6 +11,8 @@ from django.db import transaction
 from apps.notifications.choices import NotificationChannel, NotificationPriority
 from apps.notifications.services import create_notification_event, dispatch_event
 from apps.notifications.tasks import dispatch_notification_event_task
+
+logger = logging.getLogger("apps.notifications")
 
 
 def emit_domain_notification(
@@ -37,10 +40,37 @@ def emit_domain_notification(
     )
 
     def _dispatch() -> None:
+        # Attention: این callback داخل transaction.on_commit اجرا می‌شود —
+        # یعنی *بعد از commit شدن موفق* کار کاربر. اگر اینجا exception نشت
+        # کند، کل request با ۵۰۰ به کاربر برمی‌گرد در حالی که همه‌چیز (نمرهٔ
+        # آزمون، گواهی، ...) ذخیره شده است؛ retry کاربر هم معمولاً به
+        # «تلاش قبلاً ثبت شده» می‌خورد و flow قفل می‌شود. این دقیقاً همان
+        # حالتی بود که «با انتخاب گزینه‌های صحیح ارور می‌گرفت» (مسیر pass
+        # تنها مسیری است که notification می‌فرستد). پس اینجا هیچ خطایی
+        # نباید نشت کند:
+        # 1) dispatch معمولی به worker؛
+        # 2) اگر broker down بود → dispatch هم‌زمان (event و deliveries
+        #    از قبل در DB persist شده‌اند، پس چیزی گم نمی‌شود)؛
+        # 3) خطای inline (مثلاً SMTP خراب) → فقط لاگ؛ تحویل‌ها PENDING
+        #    می‌مانند و dispatch_event خودش خطای هر delivery را جدا مدیریت
+        #    می‌کند.
         if getattr(settings, "NOTIFICATIONS_ASYNC_DISPATCH", True):
-            dispatch_notification_event_task.delay(event.pk)
-        else:
+            try:
+                dispatch_notification_event_task.delay(event.pk)
+                return
+            except Exception:
+                logger.warning(
+                    "notifications: broker unavailable for event %s — dispatch inline",
+                    event.pk,
+                    exc_info=True,
+                )
+        try:
             dispatch_event(event=event)
+        except Exception:
+            logger.exception(
+                "notifications: inline dispatch failed for event %s",
+                event.pk,
+            )
 
     transaction.on_commit(_dispatch)
     return event

@@ -5,6 +5,8 @@
 
 from __future__ import annotations
 
+import logging
+
 from django.http import HttpResponse
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
@@ -84,6 +86,8 @@ from .views_common import (  # noqa: F401 — re-exportِ رایگان برای 
     TAG_LMS_USER,
     VIDEO_PROCESSING_JOB_RESPONSE,
 )
+
+logger = logging.getLogger("apps.lms")
 
 
 class LMSAdminCategoryListCreateView(APIView):
@@ -442,7 +446,26 @@ class LMSAdminLessonVideoProcessingView(APIView):
             return ErrorResponse(message=str(exc))
         from apps.lms.tasks import process_lesson_video_job_task
 
-        process_lesson_video_job_task.delay(job_id=job.pk)
+        try:
+            process_lesson_video_job_task.delay(job_id=job.pk)
+        except Exception:
+            # broker down نباید admin را ۵۰۰ بدهد؛ job را صریحاً FAILED می‌کنیم
+            # تا گم نشود و admin با همان دکمهٔ «پردازش» دوباره trigger کند
+            # (مسیر retry روی وضعیت FAILED باز است).
+            logger.warning(
+                "lms.video: queue unavailable for job %s — marking failed",
+                job.pk,
+                exc_info=True,
+            )
+            from apps.lms.services import fail_lesson_video_job
+
+            try:
+                fail_lesson_video_job(
+                    job=job,
+                    error_message="صف پردازش (Celery broker) در دسترس نبود — مجدد تلاش کنید",
+                )
+            except Exception:
+                logger.exception("lms.video: could not mark job %s failed", job.pk)
         log_action_async(
             user_id=request.user.pk,
             action=audit_actions.LMS_VIDEO_PROCESSING_REQUESTED,

@@ -55,6 +55,26 @@ if not ALLOWED_HOSTS:
     )
 
 # ============================================================
+# Payment provider — خط قرمز مالی
+# ============================================================
+#
+# provider جبرانی «sandbox» هیچ پول واقعی را جابه‌جا نمی‌کند و
+# verify_payment آن سمت سرور با یک marker محلی تأیید می‌شود. اگر در
+# production فعال بماند، هر مشارکتی بدون واریز «PAID» می‌خورد و رسید
+# صادر می‌شود — یعنی فاجعهٔ مالی/حقوقی. چون مقدار پیش‌فرضِ
+# MADADKAR_PAYMENT_PROVIDER عمداً "sandbox" است (راحتی dev)، فراموشی
+# تنظیم env در server خیلی محتمل‌تر از آن است که با یک warning قابل
+# قبول باشد؛ پس همان لحظهٔ import (boot) با RuntimeError می‌ترکیم —
+# zarinpal/هر provider واقعی مجاز است.
+if MADADKAR_PAYMENT_PROVIDER.strip().lower() == "sandbox":
+    raise RuntimeError(
+        "MADADKAR_PAYMENT_PROVIDER=sandbox در production مجاز نیست — "
+        "پرداخت sandbox بدون پول واقعی «موفق» می‌شود و رسید صادر می‌کند. "
+        "MADADKAR_PAYMENT_PROVIDER=zarinpal (با merchant id واقعی) را در env "
+        "تنظیم کن. برای اجرای محلی/demo از settings.development استفاده کن.",
+    )
+
+# ============================================================
 # Debug
 # ============================================================
 
