@@ -269,6 +269,7 @@ setad-jang/
 │   ├── choices.py  # مقادیر ثابت و انتخاب‌ها
 │   ├── export.py  # خروجی اکسل
 │   ├── filters.py  # فیلترهای queryset
+│   ├── forms.py
 │   ├── managers.py
 │   ├── models.py  # مدل‌های داده
 │   ├── permissions.py  # کنترل دسترسی

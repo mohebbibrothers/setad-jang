@@ -8,13 +8,16 @@ Django Admin اپ مددکار.
 
 from __future__ import annotations
 
-from django import forms
+import logging
+
+from django import forms as forms_mod
 from django.contrib import admin, messages
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.urls import reverse
 from django.utils.html import format_html
 
 from apps.madadkar import services as madadkar_services
-from apps.madadkar.choices import CampaignStatus
+from apps.madadkar.forms import ExternalFundingAddForm, ExternalFundingInlineForm
 from apps.madadkar.models import (
     Campaign,
     CampaignDisbursement,
@@ -32,6 +35,8 @@ from apps.madadkar.models import (
     PaymentRefund,
     Sponsor,
 )
+
+logger = logging.getLogger("apps.madadkar.admin")
 
 
 class HiddenFromAdminIndexMixin:
@@ -75,6 +80,7 @@ class ExternalFundingInline(admin.TabularInline):
     """
 
     model = ExternalFunding
+    form = ExternalFundingInlineForm
     extra = 0
     fields = (
         "shares",
@@ -90,6 +96,29 @@ class ExternalFundingInline(admin.TabularInline):
     readonly_fields = ("status_badge", "recorded_by", "created_at")
     verbose_name = "تأمین خارج از سایت"
     verbose_name_plural = "تأمین‌های خارج از سایت (پویش آفلاین)"
+
+    def get_formset(self, request, obj=None, **kwargs):
+        """تزریق کمپین والد + راهنمای زنده‌ی سقف روی ردیف‌ها.
+
+        obj همان Campaign است؛ راهنما عین آنچه ادمین لازم دارد می‌گوید:
+        «چقدر می‌توانیم ثبت کنیم؟» — بدون ابهام.
+        """
+        formset = super().get_formset(request, obj, **kwargs)
+        formset.form._campaign = obj
+        if obj is not None:
+            base = formset.form.base_fields["shares"]
+            base.help_text = (
+                f"باقی‌مانده‌ی قابل ثبت: {obj.remaining_shares:,} سهم "
+                "(برای تأمین کامل از بیرون، همین عدد)"
+            )
+            base.widget = forms_mod.NumberInput(
+                attrs={
+                    "min": 1,
+                    "max": obj.remaining_shares,
+                    "placeholder": f"حداکثر {obj.remaining_shares:,}",
+                }
+            )
+        return formset
 
     def has_delete_permission(self, request, obj=None) -> bool:
         return False
@@ -137,7 +166,9 @@ class CampaignAdmin(admin.ModelAdmin):
         "is_visible",
         "progress_display",
         "purchased_shares",
+        "external_funded_shares",
         "total_shares",
+        "offline_funding_link",
         "created_at",
     )
     list_filter = ("status", "is_visible", "has_deadline", "sponsor")
@@ -183,6 +214,12 @@ class CampaignAdmin(admin.ModelAdmin):
                         )
                     except DjangoValidationError as exc:
                         messages.error(request, f"ثبت تأمین خارجی انجام نشد: {exc.message}")
+                    except Exception:
+                        logger.exception("External funding record failed via campaign inline")
+                        messages.error(
+                            request,
+                            "خطای غیرمنتظره هنگام ثبت تأمین خارجی رخ داد؛ جزئیات در لاگ ثبت شد.",
+                        )
                 else:
                     messages.warning(
                         request,
@@ -253,6 +290,17 @@ class CampaignAdmin(admin.ModelAdmin):
             '<strong style="color: {};">{}%</strong>',
             color,
             f"{percent:.1f}",
+        )
+
+    @admin.display(description="تأمین خارجی")
+    def offline_funding_link(self, obj: Campaign) -> str:
+        """دکمه‌ی مستقیم ثبت تأمین خارجی برای همین حرکت (پیش‌انتخاب‌شده)."""
+        url = reverse("admin:madadkar_externalfunding_add") + f"?campaign={obj.pk}"
+        return format_html(
+            '<a class="button" href="{}" '
+            'style="background:#417690;color:#fff;white-space:nowrap;">'
+            "+ ثبت تأمین خارجی</a>",
+            url,
         )
 
 
@@ -789,45 +837,6 @@ class MadadkarFinancialControlSnapshotAdmin(admin.ModelAdmin):
 # ---------------------------------------------------------------------------
 
 
-class ExternalFundingAddForm(forms.ModelForm):
-    """فرم افزودن رکورد تأمین خارجی — اعتبارسنج‌های تجاری پیش از سرویس.
-
-    بررسی‌های سنگین (قفل روی رکورد و سقف دقیق) در خودِ سرویس و زیر
-    تراکنش انجام می‌شود؛ این فرم خطاهای رایج را زود و با پیامِ درجا
-    نمایش می‌دهد تا تجربه‌ی پنل تمیز بماند.
-    """
-
-    class Meta:
-        model = ExternalFunding
-        fields = ("campaign", "shares", "amount", "method", "reference", "funded_at", "note")
-
-    def clean(self):
-        cleaned = super().clean()
-        campaign = cleaned.get("campaign")
-        shares = cleaned.get("shares")
-        amount = cleaned.get("amount")
-
-        if campaign and campaign.status not in (
-            CampaignStatus.DRAFT,
-            CampaignStatus.PUBLISHED,
-        ):
-            self.add_error(
-                "campaign",
-                "ثبت تأمین خارجی فقط برای حرکت‌های پیش‌نویس یا منتشرشده ممکن است.",
-            )
-        if shares is not None and shares < 1:
-            self.add_error("shares", "تعداد سهم باید حداقل ۱ باشد.")
-        elif campaign is not None and shares is not None and shares > campaign.remaining_shares:
-            self.add_error(
-                "shares",
-                f"سقف قابل ثبت {campaign.remaining_shares:,} سهم است "
-                "(باقی‌مانده پس از احتساب رزروهای آنلاین و تأمین‌های خارجی قبلی).",
-            )
-        if amount is not None and amount < 1:
-            self.add_error("amount", "مبلغ دریافتی نمی‌تواند صفر یا منفی باشد.")
-        return cleaned
-
-
 @admin.register(ExternalFunding)
 class ExternalFundingAdmin(admin.ModelAdmin):
     """دفتر حسابرسیِ تأمین‌های خارج از سایت.
@@ -876,17 +885,28 @@ class ExternalFundingAdmin(admin.ModelAdmin):
             kwargs["form"] = self.add_form
         return super().get_form(request, obj, **kwargs)
 
+    def get_changeform_initial_data(self, request):
+        """پیش‌انتخاب حرکت از لینکِ مستقیمِ لیست («+ ثبت تأمین خارجی»)."""
+        initial = super().get_changeform_initial_data(request)
+        if request.GET.get("campaign"):
+            initial["campaign"] = request.GET["campaign"]
+        return initial
+
     def get_readonly_fields(self, request, obj=None):
         if obj is None:
             return ()
         return self._change_readonly
 
     def save_model(self, request, obj, form, change):
-        """افزودن حتماً از سرویس عبور می‌کند تا atom/قفل/sync حفظ شود."""
+        """افزودن حتماً از سرویس عبور می‌کند تا atom/قفل/sync حفظ شود.
+
+        ضد-۵۰۰: هر خطای غیرمنتظره به پیامِ پنل تبدیل می‌شود؛ صفحه‌ی ۵۰۰
+        در این مسیر دیگر وجود نخواهد داشت.
+        """
         if change:
             return  # صفحه‌ی تغییر fully-readonly است؛ کاری نمی‌ماند
         try:
-            madadkar_services.record_external_funding(
+            created = madadkar_services.record_external_funding(
                 campaign=obj.campaign,
                 shares=obj.shares,
                 amount=obj.amount,
@@ -900,13 +920,22 @@ class ExternalFundingAdmin(admin.ModelAdmin):
             # نبریُ race: فرم قبلاً سقف را چک کرده؛ اگر هم‌زمان سهم خورده
             # شده باشد، سرویس این‌جا دقیق جواب می‌دهد.
             messages.error(request, f"ثبت تأمین خارجی انجام نشد: {exc.message}")
+            return
+        except Exception:
+            logger.exception("External funding record failed via admin form")
+            messages.error(
+                request,
+                "خطای غیرمنتظره هنگام ثبت تأمین خارجی رخ داد؛ جزئیات در لاگ ثبت شد.",
+            )
+            return
         else:
+            # pk رکوردِ واقعیِ ساخته‌شده توسط سرویس را به obj می‌چسبانیم تا
+            # LogEntry ادمین به سندِ درست لینک شود.
+            obj.pk = created.pk
             messages.success(
                 request,
-                "تأمین خارجی ثبت شد و شمارنده‌های حرکت فوراً به‌روزرسانی شدند.",
+                f"تأمین خارجی ثبت شد ({created.shares:,} سهم) — شمارنده‌های حرکت فوراً به‌روزرسانی شدند.",
             )
-        # objِ pass‌شده‌ی فرم را ذخیره نمی‌کنیم — رکورد واقعی را سرویس ساخته
-        # است تا مسیر تک‌مسیره و ممیزی‌شده باقی بماند.
 
     @admin.action(description="باطل‌کردن رکوردهای انتخابی (storno)")
     def void_selected(self, request, queryset):

@@ -17,8 +17,8 @@ from django.core.exceptions import ValidationError
 
 from apps.core.models import CacheInvalidationEvent
 from apps.madadkar import services
-from apps.madadkar.admin import ExternalFundingAddForm
 from apps.madadkar.choices import CampaignStatus, ExternalFundingStatus
+from apps.madadkar.forms import ExternalFundingAddForm
 from apps.madadkar.models import ExternalFunding
 from apps.madadkar.serializers import CampaignPublicListSerializer
 from tests.factories.auth import UserFactory
