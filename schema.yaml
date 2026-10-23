@@ -14045,6 +14045,21 @@ components:
         is_fully_funded:
           type: boolean
           readOnly: true
+        funded_shares:
+          type: integer
+          readOnly: true
+        external_funded_shares:
+          type: integer
+          readOnly: true
+          title: سهم‌های تأمین‌شده خارج از سایت
+          description: مجموع سهم‌های ExternalFunding با وضعیت ثبت‌شده — پولی که گروه
+            جهادی خارج از پلتفرم (نقد/کارت‌به‌کارت/…) دریافت کرده. این شمارنده فقط
+            توسط services همگام می‌شود؛ دستی دست نزنید.
+        external_funded_amount:
+          type: integer
+          readOnly: true
+          title: مبلغ تأمین‌شده خارج از سایت (تومان)
+          description: مجموع مبلغ رکوردهای ثبت‌شده‌ی تأمین خارجی (تومان).
         status:
           allOf:
           - $ref: '#/components/schemas/MadadkarCampaignStatusEnum'
@@ -14116,6 +14131,9 @@ components:
       - created_at
       - deadline
       - description
+      - external_funded_amount
+      - external_funded_shares
+      - funded_shares
       - gallery_images
       - has_deadline
       - id
@@ -14200,6 +14218,21 @@ components:
         is_fully_funded:
           type: boolean
           readOnly: true
+        funded_shares:
+          type: integer
+          readOnly: true
+        external_funded_shares:
+          type: integer
+          readOnly: true
+          title: سهم‌های تأمین‌شده خارج از سایت
+          description: مجموع سهم‌های ExternalFunding با وضعیت ثبت‌شده — پولی که گروه
+            جهادی خارج از پلتفرم (نقد/کارت‌به‌کارت/…) دریافت کرده. این شمارنده فقط
+            توسط services همگام می‌شود؛ دستی دست نزنید.
+        external_funded_amount:
+          type: integer
+          readOnly: true
+          title: مبلغ تأمین‌شده خارج از سایت (تومان)
+          description: مجموع مبلغ رکوردهای ثبت‌شده‌ی تأمین خارجی (تومان).
         status:
           allOf:
           - $ref: '#/components/schemas/MadadkarCampaignStatusEnum'
@@ -14262,6 +14295,9 @@ components:
       - cover_image
       - created_at
       - deadline
+      - external_funded_amount
+      - external_funded_shares
+      - funded_shares
       - has_deadline
       - id
       - is_active
@@ -14688,6 +14724,21 @@ components:
         is_fully_funded:
           type: boolean
           readOnly: true
+        funded_shares:
+          type: integer
+          readOnly: true
+        external_funded_shares:
+          type: integer
+          readOnly: true
+          title: سهم‌های تأمین‌شده خارج از سایت
+          description: مجموع سهم‌های ExternalFunding با وضعیت ثبت‌شده — پولی که گروه
+            جهادی خارج از پلتفرم (نقد/کارت‌به‌کارت/…) دریافت کرده. این شمارنده فقط
+            توسط services همگام می‌شود؛ دستی دست نزنید.
+        external_funded_amount:
+          type: integer
+          readOnly: true
+          title: مبلغ تأمین‌شده خارج از سایت (تومان)
+          description: مجموع مبلغ رکوردهای ثبت‌شده‌ی تأمین خارجی (تومان).
         status:
           allOf:
           - $ref: '#/components/schemas/MadadkarCampaignStatusEnum'
@@ -14739,6 +14790,9 @@ components:
       - cover_image
       - deadline
       - description
+      - external_funded_amount
+      - external_funded_shares
+      - funded_shares
       - gallery_images
       - has_deadline
       - id
@@ -14820,6 +14874,21 @@ components:
         is_fully_funded:
           type: boolean
           readOnly: true
+        funded_shares:
+          type: integer
+          readOnly: true
+        external_funded_shares:
+          type: integer
+          readOnly: true
+          title: سهم‌های تأمین‌شده خارج از سایت
+          description: مجموع سهم‌های ExternalFunding با وضعیت ثبت‌شده — پولی که گروه
+            جهادی خارج از پلتفرم (نقد/کارت‌به‌کارت/…) دریافت کرده. این شمارنده فقط
+            توسط services همگام می‌شود؛ دستی دست نزنید.
+        external_funded_amount:
+          type: integer
+          readOnly: true
+          title: مبلغ تأمین‌شده خارج از سایت (تومان)
+          description: مجموع مبلغ رکوردهای ثبت‌شده‌ی تأمین خارجی (تومان).
         status:
           allOf:
           - $ref: '#/components/schemas/MadadkarCampaignStatusEnum'
@@ -14862,6 +14931,9 @@ components:
       - completed_at
       - cover_image
       - deadline
+      - external_funded_amount
+      - external_funded_shares
+      - funded_shares
       - has_deadline
       - id
       - is_fully_funded
