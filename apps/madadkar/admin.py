@@ -856,9 +856,23 @@ class ExternalFundingAdmin(admin.ModelAdmin):
         "recorded_by",
         "created_at",
     )
-    list_filter = ("status", "method", "campaign__sponsor")
+    # چرا date_hierarchy این‌جا ممنوع است؟ (باگ ۵۰۰ پروداکشن — شکارشده با
+    # traceback واقعی): date_hierarchy از Trunc{Year,Day} و در MySQL از
+    # CONVERT_TZ(col, 'UTC', 'Asia/Tehran') استفاده می‌کند. روی MariaDB‌های
+    # هاست اشتراکی که جداول time_zone لود نشده‌اند (کاربر cPanel اجازه‌ی
+    # لودشان را هم ندارد!) CONVERT_TZ مقدار NULL برمی‌گرداند و
+    # convert_trunc_expression جنگو ValueError می‌اندازد → صفحه‌ی چینج‌لیست
+    # ۵۰۰. جایگزینِ امن: DateFieldListFilter که فقط بازه‌های WHERE می‌سازد و
+    # درگیر تبدیلِ مقدار برگشتی نمی‌شود.
+    list_filter = (
+        "status",
+        "method",
+        "campaign__sponsor",
+        ("funded_at", admin.DateFieldListFilter),
+    )
     search_fields = ("campaign__title", "reference", "note")
-    date_hierarchy = "funded_at"
+    # date_hierarchy عمداً وجود ندارد — به کامنت بالای list_filter مراجعه کن
+    # (CONVERT_TZ روی MariaDB بدون جداول tz = صفحه‌ی ۵۰۰).
     ordering = ("-created_at",)
     actions = ("void_selected",)
 

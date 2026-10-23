@@ -241,6 +241,23 @@ def test_changelist_shows_offline_funding_shortcut_button():
     assert f"?campaign={campaign.pk}" in body
 
 
+def test_changelist_never_uses_date_hierarchy_mysql_tz_guard():
+    """گاردِ رگرسیون برای باگ ۵۰۰ پروداکشن.
+
+    date_hierarchy روی MySQL/MariaDB به CONVERT_TZ وابسته است و روی هاست
+    اشتراکیِ بدون جداول time_zone به ValueError («Are time zone definitions
+    ... installed?») و صفحه‌ی ۵۰۰ منجر می‌شود — در ۶.‌این پنل جای آن
+    DateFieldListFilter است (فیلتر WHERE بدون تبدیل مقدار برگشتی).
+    هرگز date_hierarchy را برنگردان.
+    """
+    from apps.madadkar.admin import ExternalFundingAdmin
+
+    assert getattr(ExternalFundingAdmin, "date_hierarchy", None) is None
+
+    filter_keys = [f[0] if isinstance(f, tuple) else f for f in ExternalFundingAdmin.list_filter]
+    assert "funded_at" in filter_keys
+
+
 def test_jalali_to_gregorian_reference_dates():
     assert jalali_to_gregorian(1405, 8, 1) == (2026, 10, 23)
     assert jalali_to_gregorian(1403, 12, 30) == (2025, 3, 20)
