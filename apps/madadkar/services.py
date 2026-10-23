@@ -45,6 +45,8 @@ from django.utils import timezone
 from apps.madadkar.choices import (
     CampaignStatus,
     DisbursementStatus,
+    ExternalFundingMethod,
+    ExternalFundingStatus,
     FinancialAdjustmentStatus,
     FinancialAdjustmentType,
     FinancialControlSeverity,
@@ -65,6 +67,7 @@ from apps.madadkar.models import (
     CampaignFinancialAdjustment,
     CampaignImage,
     DonationReceipt,
+    ExternalFunding,
     MadadkarFinancialControlSnapshot,
     MadadkarRiskSignal,
     Participation,
@@ -271,21 +274,38 @@ def _sync_campaign_counters(*, campaign: Campaign) -> Campaign:
         (aggregates["paid_amount"] or 0) - completed_refunds + adjustment_delta, 0
     )
     campaign.participant_count = aggregates["unique_users"] or 0
+
+    # ترنچِ آفلاین: بازمحاسبه از لجر ExternalFunding (فقط رکوردهای ثبت‌شده؛
+    # VOIDED در سند باقی می‌مانند ولی از شمارنده حذف می‌شوند). همان الگوی
+    # source-of-truth: حتی اگر جایی دستی شمارنده جابه‌جا شود این‌جا خودترمیم است.
+    external = campaign.external_fundings.filter(
+        status=ExternalFundingStatus.RECORDED,
+    ).aggregate(
+        shares=Sum("shares"),
+        amount=Sum("amount"),
+    )
+    campaign.external_funded_shares = external["shares"] or 0
+    campaign.external_funded_amount = external["amount"] or 0
+
     campaign.save(
         update_fields=[
             "purchased_shares",
             "purchased_amount",
             "participant_count",
+            "external_funded_shares",
+            "external_funded_amount",
             "updated_at",
         ],
     )
 
     logger.info(
-        "Madadkar campaign counters synced campaign_id=%s shares=%s amount=%s users=%s",
+        "Madadkar campaign counters synced campaign_id=%s shares=%s amount=%s users=%s ext_shares=%s ext_amount=%s",
         campaign.pk,
         campaign.purchased_shares,
         campaign.purchased_amount,
         campaign.participant_count,
+        campaign.external_funded_shares,
+        campaign.external_funded_amount,
     )
     return campaign
 
@@ -662,6 +682,117 @@ def auto_complete_campaign_if_fully_funded(*, campaign: Campaign) -> Campaign:
             campaign.pk,
         )
     return campaign
+
+
+@transaction.atomic
+def record_external_funding(
+    *,
+    campaign: Campaign,
+    shares: int,
+    amount: int | None = None,
+    method: str = ExternalFundingMethod.CARD_TRANSFER,
+    reference: str = "",
+    note: str = "",
+    funded_at: Any = None,
+    recorded_by: Any = None,
+) -> ExternalFunding:
+    """ثبت تأمین سهم‌ها خارج از پلتفرم (پویش آفلاین) برای یک حرکت.
+
+    چرایی: گروه‌های جهادی بخشی از سهم‌ها را خارج از درگاه (نقد/کارت‌به‌کارت/
+    چک/محل داخلی) جمع می‌کنند و باید روی سایت دیده شود — بدون بر هم خوردن
+    تراز مالیِ درگاه. پولِ این‌جا هرگز وارد گردشِ Payment نمی‌شود؛ فقط
+    ترنچِ آفلاینِ کمپین را پر می‌کند.
+
+    ضمانت‌ها:
+    - اتمیک + قفل روی حرکت → بدون race با خرید آنلاین.
+    - سقف: مجموع (رزرو/فروش آنلاین + ثبت‌شده‌ی خارجی) هرگز از کل سهم‌ها
+      رد نمی‌شود → oversellِ ترکیبی ناممکن.
+    - share_price/amount به‌صورت snapshot منجمد می‌شوند.
+    - پس از sync، اگر حرکت پر شد، همان تکمیلِ خودکارِ آنلاین اجرا می‌شود.
+    - saveِ کمپین، زنجیره‌ی invalidateِ کش عمومی را (از طریق سیگنال
+      ثبت‌شده‌ی Campaign) شلیک می‌کند → سایت فوراً عدد جدید را نشان می‌دهد.
+    """
+    if campaign.status not in (CampaignStatus.DRAFT, CampaignStatus.PUBLISHED):
+        raise DjangoValidationError(
+            "ثبت تأمین خارجی فقط برای حرکت‌های پیش‌نویس یا منتشرشده ممکن است."
+        )
+    if shares < 1:
+        raise DjangoValidationError("تعداد سهم باید حداقل ۱ باشد.")
+    if amount is not None and amount < 1:
+        raise DjangoValidationError("مبلغ دریافتی نمی‌تواند صفر یا منفی باشد.")
+
+    locked_campaign = Campaign.objects.select_for_update().get(pk=campaign.pk)
+    if shares > locked_campaign.remaining_shares:
+        raise DjangoValidationError(
+            "سقف سهم قابل ثبت از بیرون "
+            f"{format(locked_campaign.remaining_shares, ',')} است "
+            "(باقی‌مانده پس از احتساب رزروهای آنلاین و تأمین‌های خارجی قبلی)."
+        )
+
+    snapshot_price = locked_campaign.share_price
+    funding = ExternalFunding(
+        campaign=locked_campaign,
+        shares=shares,
+        amount=amount if amount is not None else shares * snapshot_price,
+        share_price_snapshot=snapshot_price,
+        method=method,
+        reference=(reference or "")[:120],
+        note=note or "",
+        funded_at=funded_at or timezone.now(),
+        recorded_by=recorded_by,
+    )
+    funding.full_clean()
+    funding.save()
+
+    _sync_campaign_counters(campaign=locked_campaign)
+    auto_complete_campaign_if_fully_funded(campaign=locked_campaign)
+
+    logger.info(
+        "Madadkar external funding recorded funding_id=%s campaign_id=%s shares=%s amount=%s method=%s",
+        funding.pk,
+        locked_campaign.pk,
+        funding.shares,
+        funding.amount,
+        funding.method,
+    )
+    return funding
+
+
+@transaction.atomic
+def void_external_funding(
+    *,
+    funding: ExternalFunding,
+    reason: str = "",
+) -> ExternalFunding:
+    """ابطال (storno) رکورد تأمین خارجی — حذف فیزیکی هرگز مجاز نیست.
+
+    ممیزیِ مالی به سندِ باقی‌مانده نیاز دارد؛ با VOIDED شدن، شمارنده‌ها از
+    منبعِ حقیقت بازمحاسبه می‌شوند و عدد سایت خودش را اصلاح می‌کند.
+    نکته‌ی چرخه‌ی عمر: اگر حرکت قبلاً با همین تأمین تکمیلِ خودکار شده
+    باشد، وضعیتش خودکار برنمی‌گردد — تصمیمِ بازگشایی با ادمین است
+    (جابه‌جایی status در پنل)؛ این عمدی است تا بازگشاییِ مالی پنهانی نشود.
+    """
+    locked = (
+        ExternalFunding.objects.select_for_update().select_related("campaign").get(pk=funding.pk)
+    )
+    if locked.status == ExternalFundingStatus.VOIDED:
+        raise DjangoValidationError("این رکورد تأمین خارجی قبلاً باطل شده است.")
+
+    campaign = Campaign.objects.select_for_update().get(pk=locked.campaign_id)
+    locked.status = ExternalFundingStatus.VOIDED
+    locked.void_reason = (reason or "")[:2000]
+    locked.voided_at = timezone.now()
+    locked.save(update_fields=["status", "void_reason", "voided_at", "updated_at"])
+
+    _sync_campaign_counters(campaign=campaign)
+
+    logger.info(
+        "Madadkar external funding voided funding_id=%s campaign_id=%s shares=%s",
+        locked.pk,
+        campaign.pk,
+        locked.shares,
+    )
+    return locked
 
 
 @transaction.atomic

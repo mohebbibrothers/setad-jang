@@ -172,6 +172,7 @@ class CampaignPublicListSerializer(serializers.ModelSerializer):
     remaining_shares = serializers.IntegerField(read_only=True)
     progress_percent = serializers.FloatField(read_only=True)
     is_fully_funded = serializers.BooleanField(read_only=True)
+    funded_shares = serializers.IntegerField(read_only=True)
     status_display = serializers.CharField(
         source="get_status_display",
         read_only=True,
@@ -194,6 +195,9 @@ class CampaignPublicListSerializer(serializers.ModelSerializer):
             "remaining_shares",
             "progress_percent",
             "is_fully_funded",
+            "funded_shares",
+            "external_funded_shares",
+            "external_funded_amount",
             "status",
             "status_display",
             "has_deadline",
@@ -235,6 +239,7 @@ class CampaignAdminListSerializer(serializers.ModelSerializer):
     remaining_shares = serializers.IntegerField(read_only=True)
     progress_percent = serializers.FloatField(read_only=True)
     is_fully_funded = serializers.BooleanField(read_only=True)
+    funded_shares = serializers.IntegerField(read_only=True)
     status_display = serializers.CharField(
         source="get_status_display",
         read_only=True,
@@ -257,6 +262,9 @@ class CampaignAdminListSerializer(serializers.ModelSerializer):
             "remaining_shares",
             "progress_percent",
             "is_fully_funded",
+            "funded_shares",
+            "external_funded_shares",
+            "external_funded_amount",
             "status",
             "status_display",
             "is_visible",

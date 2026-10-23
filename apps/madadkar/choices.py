@@ -52,6 +52,23 @@ class ReconciliationItemStatus(models.TextChoices):
     DUPLICATE_PROVIDER_REF = "duplicate_provider_ref", "شناسه تکراری در گزارش درگاه"
 
 
+class ExternalFundingStatus(models.TextChoices):
+    """وضعیت رکورد تأمین خارج از سایت (پویش آفلاین)."""
+
+    RECORDED = "recorded", "ثبت‌شده"
+    VOIDED = "voided", "باطل‌شده"
+
+
+class ExternalFundingMethod(models.TextChoices):
+    """روش دریافت مبلغِ تأمین خارج از سایت."""
+
+    CASH = "cash", "نقدی / حضوری"
+    CARD_TRANSFER = "card_transfer", "کارت‌به‌کارت"
+    CHEQUE = "cheque", "چک"
+    INTERNAL = "internal", "از محل داخلی گروه جهادی"
+    OTHER = "other", "سایر"
+
+
 class PaymentEventKind(models.TextChoices):
     """نوع رویداد ledger پرداخت مددکار."""
 

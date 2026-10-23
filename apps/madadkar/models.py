@@ -23,6 +23,7 @@ import json
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
+from django.core.validators import MinValueValidator
 from django.db import models
 from django.utils.text import slugify
 
@@ -30,6 +31,8 @@ from apps.core.models import BaseModel
 from apps.madadkar.choices import (
     CampaignStatus,
     DisbursementStatus,
+    ExternalFundingMethod,
+    ExternalFundingStatus,
     FinancialAdjustmentStatus,
     FinancialAdjustmentType,
     FinancialControlSeverity,
@@ -220,6 +223,20 @@ class Campaign(BaseModel):
         default=0,
         verbose_name="تعداد مشارکت‌کنندگان یکتا",
     )
+    external_funded_shares = models.PositiveIntegerField(
+        default=0,
+        verbose_name="سهم‌های تأمین‌شده خارج از سایت",
+        help_text=(
+            "مجموع سهم‌های ExternalFunding با وضعیت ثبت‌شده — پولی که "
+            "گروه جهادی خارج از پلتفرم (نقد/کارت‌به‌کارت/…) دریافت کرده. "
+            "این شمارنده فقط توسط services همگام می‌شود؛ دستی دست نزنید."
+        ),
+    )
+    external_funded_amount = models.PositiveBigIntegerField(
+        default=0,
+        verbose_name="مبلغ تأمین‌شده خارج از سایت (تومان)",
+        help_text="مجموع مبلغ رکوردهای ثبت‌شده‌ی تأمین خارجی (تومان).",
+    )
 
     # ── Lifecycle
     status = models.CharField(
@@ -367,26 +384,133 @@ class Campaign(BaseModel):
     # ── Computed properties ────────────────────────────────────────────
 
     @property
+    def funded_shares(self) -> int:
+        """مجموع سهم‌های تأمین‌شده (آنلاینِ رزرو/فروخته‌شده + خارج از سایت)."""
+        return self.purchased_shares + self.external_funded_shares
+
+    @property
     def remaining_shares(self) -> int:
-        """تعداد سهم باقی‌مانده برای فروش."""
-        return max(self.total_shares - self.purchased_shares, 0)
+        """تعداد سهم باقی‌مانده برای فروش — سهم‌های آفلاین هم رزرو‌اند."""
+        return max(self.total_shares - self.funded_shares, 0)
 
     @property
     def progress_percent(self) -> float:
-        """درصد پیشرفت فروش (یک رقم اعشار)."""
+        """درصد پیشرفت تأمین (آنلاین + آفلاین) — یک رقم اعشار."""
         if self.total_shares <= 0:
             return 0.0
-        return round((self.purchased_shares / self.total_shares) * 100, 1)
+        return round((self.funded_shares / self.total_shares) * 100, 1)
 
     @property
     def is_fully_funded(self) -> bool:
-        """آیا تمام سهم‌ها رزرو/فروخته شده‌اند؟"""
-        return self.purchased_shares >= self.total_shares
+        """آیا تمام سهم‌ها (آنلاین یا آفلاین) رزرو/فروخته شده‌اند؟"""
+        return self.funded_shares >= self.total_shares
 
 
 # ---------------------------------------------------------------------------
-# CampaignImage (گالری تصاویر اضافی)
+# ExternalFunding (تأمین سهم‌ها خارج از پلتفرم — پویش آفلاین)
 # ---------------------------------------------------------------------------
+
+
+class ExternalFunding(BaseModel):
+    """رکورد حسابرسی‌پذیرِ «تأمین سهم‌ها خارج از سایت» برای یک حرکت.
+
+    چرا مدلِ جدا، نه فیلدِ دستی روی Campaign؟
+        هر ریالی که خارج از درگاه می‌آید (نقدِ حضوری، کارت‌به‌کارت، چک، محل
+        داخلی گروه جهادی) باید مثل هر جریانِ مالیِ دیگر **ریشه و ردّپا**
+        داشته باشد: چه کسی ثبت کرد، چه زمانی دریافت شده، چه روشی، چه
+        شماره‌ی پیگیری‌ای، و اگر باطل شد چرا و کی. با لجرِ جداگانه:
+        - شمارنده‌های Campaign همیشه از منبعِ حقیقت بازمحاسبه می‌شوند
+          (همان الگوی _sync_campaign_counters) — بدون drift.
+        - حذفِ فیزیکی ممنوع است؛ ابطال (void) ممیزی را حفظ می‌کند.
+        - گزارش‌گیری/تطبیقِ مالیِ آتی بدون بازنویسی ممکن می‌شود.
+
+    چرخه‌ی عمر:
+        record → RECORDED (در funded_shares/progress لحاظ می‌شود)
+        void   → VOIDED   (از شمارنده‌ها خارج، سند باقی می‌ماند)
+    """
+
+    campaign = models.ForeignKey(
+        Campaign,
+        on_delete=models.CASCADE,
+        related_name="external_fundings",
+        verbose_name="حرکت",
+    )
+    status = models.CharField(
+        max_length=12,
+        choices=ExternalFundingStatus.choices,
+        default=ExternalFundingStatus.RECORDED,
+        db_index=True,
+        verbose_name="وضعیت",
+    )
+    shares = models.PositiveIntegerField(
+        validators=[MinValueValidator(1)],
+        verbose_name="تعداد سهم",
+        help_text="سهم‌هایی که گروه جهادی خارج از سایت تأمین کرده است.",
+    )
+    amount = models.PositiveBigIntegerField(
+        blank=True,
+        null=True,
+        verbose_name="مبلغ دریافتی (تومان)",
+        help_text=(
+            "اگر خالی بماند، به‌صورت خودکار shares × قیمت سهم در لحظه‌ی "
+            "ثبت محاسبه و منجمد می‌شود (snapshot در برابر تغییر قیمتِ آتی)."
+        ),
+    )
+    share_price_snapshot = models.PositiveBigIntegerField(
+        blank=True,
+        null=True,
+        verbose_name="قیمت سهم در لحظه‌ی ثبت (تومان)",
+    )
+    method = models.CharField(
+        max_length=20,
+        choices=ExternalFundingMethod.choices,
+        default=ExternalFundingMethod.CARD_TRANSFER,
+        verbose_name="روش دریافت",
+    )
+    reference = models.CharField(
+        max_length=120,
+        blank=True,
+        verbose_name="شماره پیگیری / فیش",
+    )
+    note = models.TextField(
+        blank=True,
+        verbose_name="یادداشت داخلی",
+    )
+    funded_at = models.DateTimeField(
+        verbose_name="تاریخ دریافت خارج از سایت",
+        help_text="زمان واقعی دریافت مبلغ (می‌تواند گذشته باشد).",
+    )
+    recorded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+        verbose_name="ثبت‌کننده",
+    )
+    void_reason = models.TextField(blank=True, verbose_name="دلیل ابطال")
+    voided_at = models.DateTimeField(null=True, blank=True, verbose_name="زمان ابطال")
+
+    class Meta:
+        verbose_name = "تأمین خارج از سایت"
+        verbose_name_plural = "تأمین‌های خارج از سایت"
+        ordering = ("-created_at",)
+        indexes = [
+            models.Index(
+                fields=["campaign", "status"],
+                name="madadkar_extfund_camp_status",
+            ),
+        ]
+
+    def __str__(self) -> str:  # pragma: no cover - نمایشی
+        return f"{self.campaign_id} +{self.shares} سهم ({self.get_status_display()})"
+
+    def clean(self) -> None:
+        super().clean()
+        if self.pk is None and self.status == ExternalFundingStatus.VOIDED:
+            raise ValidationError(
+                "رکورد جدید نمی‌تواند از ابتدا باطل باشد؛ ثبت کنید و سپس ابطال نمایید."
+            )
 
 
 class CampaignImage(BaseModel):
