@@ -24,5 +24,5 @@ detect-secrets==1.5.0
 # filelock (ترانزیتیوِ cachecontrol/pip-audit) و platformdirs (ترانزیتیوِ چند ابزار)
 # بی‌سروصدا ریلیز می‌شوند و همان روز `make lock-check` را در CI قرمز می‌کنند.
 # مثل boto3/pytz در requirements.txt، ترانزیتیوهای موج‌ساز drift پینِ صریح می‌گیرند.
-filelock==4.0.10
+filelock==4.2.1
 platformdirs==4.12.3
