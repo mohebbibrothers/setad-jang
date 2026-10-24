@@ -1222,6 +1222,11 @@ class CampaignTransparencySerializer(serializers.Serializer):
     completed_refund_amount = serializers.IntegerField(read_only=True)
     applied_adjustment_delta = serializers.IntegerField(read_only=True)
     net_raised_amount = serializers.IntegerField(read_only=True)
+    # ترنچِ آفلاین — از مختلط‌نشدن با گردشِ درگاه جدا نگه داشته شده است
+    external_funded_shares = serializers.IntegerField(read_only=True)
+    external_funded_amount = serializers.IntegerField(read_only=True)
+    external_funding_count = serializers.IntegerField(read_only=True)
+    total_funded_amount = serializers.IntegerField(read_only=True)
     paid_disbursement_amount = serializers.IntegerField(read_only=True)
     committed_disbursement_amount = serializers.IntegerField(read_only=True)
     remaining_disbursable_amount = serializers.IntegerField(read_only=True)
@@ -1230,6 +1235,7 @@ class CampaignTransparencySerializer(serializers.Serializer):
     completed_refund_count = serializers.IntegerField(read_only=True)
     paid_disbursement_count = serializers.IntegerField(read_only=True)
     net_progress_percent = serializers.FloatField(read_only=True)
+    total_progress_percent = serializers.FloatField(read_only=True)
     public_note = serializers.CharField(read_only=True)
 
 

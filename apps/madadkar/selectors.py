@@ -14,12 +14,25 @@ Selectors اپ مددکار — read-only query functions.
 
 from __future__ import annotations
 
-from django.db.models import Count, Prefetch, QuerySet, Sum
+from django.db.models import (
+    Case,
+    Count,
+    F,
+    FloatField,
+    IntegerField,
+    Prefetch,
+    QuerySet,
+    Sum,
+    Value,
+    When,
+)
+from django.db.models.functions import Cast
 from django.utils import timezone
 
 from apps.madadkar.choices import (
     CampaignStatus,
     DisbursementStatus,
+    ExternalFundingStatus,
     FinancialAdjustmentStatus,
     MadadkarRiskStatus,
     ParticipationStatus,
@@ -32,6 +45,7 @@ from apps.madadkar.models import (
     CampaignFinancialAdjustment,
     CampaignImage,
     DonationReceipt,
+    ExternalFunding,
     MadadkarFinancialControlSnapshot,
     MadadkarRiskSignal,
     Participation,
@@ -104,11 +118,38 @@ def get_public_campaigns_queryset() -> QuerySet[Campaign]:
     لیست حرکت‌های قابل نمایش عمومی.
 
     شامل: is_active=True + is_visible=True + status در [PUBLISHED, COMPLETED, CLOSED].
+
+    مرتب‌سازی «توزیعِ عادلانه‌ی تأمین» (fair-share):
+      ایده این است که گروه‌های جهادی به جدول نگاه می‌کنند و نیازمندترین حرکت
+      را اول می‌بینند — نه اینکه یک حرکتِ داغ جلوی بقیه بخورد و همه زنده
+      بمانند. پس:
+        رتبه ۱: حرکت‌های منتشرشده‌ی در‌حال‌جمع‌آوری — به صعودیِ درصد تأمین
+                (کمترین نرخ اول). دترمینیستیک: انتشارِ تازه‌تر در برابریِ نرخ جلوتر.
+        رتبه ۲: منتشرشده‌ای که ۱۰۰٪ تأمین شده ولی هنوز بسته/کامل نشده.
+        رتبه ۳: تکمیل‌شده‌/بسته‌شده‌ها — در انتهای جدول، دور از دعوتِ فعال.
     """
+    funded_expr = Cast(
+        F("purchased_shares") + F("external_funded_shares"),
+        output_field=FloatField(),
+    )
+    ratio = Case(
+        When(total_shares__lte=0, then=Value(1.0)),
+        default=funded_expr / Cast(F("total_shares"), output_field=FloatField()),
+        output_field=FloatField(),
+    )
     return (
         Campaign.visible.select_related("sponsor")
         .prefetch_related(_gallery_prefetch())
-        .order_by("-published_at", "-created_at")
+        .annotate(_fair_ratio=ratio)
+        .annotate(
+            _fair_rank=Case(
+                When(status__in=(CampaignStatus.COMPLETED, CampaignStatus.CLOSED), then=Value(3)),
+                When(_fair_ratio__gte=1.0, then=Value(2)),
+                default=Value(1),
+                output_field=IntegerField(),
+            )
+        )
+        .order_by("_fair_rank", "_fair_ratio", "-published_at", "-created_at")
     )
 
 
@@ -928,6 +969,18 @@ def get_public_campaign_transparency(*, campaign: Campaign) -> dict:
         or 0
     )
     receipt_count = DonationReceipt.objects.filter(campaign=campaign).count()
+
+    # ترنچِ آفلاین (پویش آفلاین): پولی که گروه جهادی خارج از درگاه دریافت کرده.
+    # قانونِ ممیزی: این مبلغ هرگز داخل net_raised/جذبِ ناخالص مخلوط نمی‌شود
+    # (آن‌ها خالصِ گردشِ درگاه‌اند)؛ جدا و شفاف گزارش می‌شود و فقط در
+    # «جمعِ کلِ تأمین» و «درصدِ کل» با درگاه جمع می‌خورد تا عددِ دفتر با
+    # نوارِ پیشرفتِ عمومی (که آفلاین را هم می‌شمارد) هم‌سو بماند.
+    external = ExternalFunding.objects.filter(
+        campaign=campaign, status=ExternalFundingStatus.RECORDED
+    ).aggregate(shares=Sum("shares"), amount=Sum("amount"))
+    external_shares = external["shares"] or 0
+    external_amount = external["amount"] or 0
+    total_funded_amount = net_raised + external_amount
     return {
         "campaign_id": campaign.pk,
         "campaign_title": campaign.title,
@@ -939,6 +992,12 @@ def get_public_campaign_transparency(*, campaign: Campaign) -> dict:
         "completed_refund_amount": refund_amount,
         "applied_adjustment_delta": adjustment_delta,
         "net_raised_amount": net_raised,
+        "external_funded_shares": external_shares,
+        "external_funded_amount": external_amount,
+        "external_funding_count": ExternalFunding.objects.filter(
+            campaign=campaign, status=ExternalFundingStatus.RECORDED
+        ).count(),
+        "total_funded_amount": total_funded_amount,
         "paid_disbursement_amount": paid_disbursements,
         "committed_disbursement_amount": committed_disbursements,
         "remaining_disbursable_amount": max(net_raised - committed_disbursements, 0),
@@ -947,6 +1006,9 @@ def get_public_campaign_transparency(*, campaign: Campaign) -> dict:
         "completed_refund_count": refunds.count(),
         "paid_disbursement_count": disbursements.filter(status=DisbursementStatus.PAID).count(),
         "net_progress_percent": round((net_raised / campaign.total_amount) * 100, 2)
+        if campaign.total_amount
+        else 0,
+        "total_progress_percent": round((total_funded_amount / campaign.total_amount) * 100, 2)
         if campaign.total_amount
         else 0,
         "public_note": "این گزارش عمومی، بدون نمایش اطلاعات خصوصی مشارکت‌کنندگان تولید شده است.",

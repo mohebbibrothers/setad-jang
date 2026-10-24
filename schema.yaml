@@ -14986,6 +14986,18 @@ components:
         net_raised_amount:
           type: integer
           readOnly: true
+        external_funded_shares:
+          type: integer
+          readOnly: true
+        external_funded_amount:
+          type: integer
+          readOnly: true
+        external_funding_count:
+          type: integer
+          readOnly: true
+        total_funded_amount:
+          type: integer
+          readOnly: true
         paid_disbursement_amount:
           type: integer
           readOnly: true
@@ -15011,6 +15023,10 @@ components:
           type: number
           format: double
           readOnly: true
+        total_progress_percent:
+          type: number
+          format: double
+          readOnly: true
         public_note:
           type: string
           readOnly: true
@@ -15022,6 +15038,9 @@ components:
       - committed_disbursement_amount
       - completed_refund_amount
       - completed_refund_count
+      - external_funded_amount
+      - external_funded_shares
+      - external_funding_count
       - generated_at
       - gross_raised_amount
       - net_progress_percent
@@ -15034,6 +15053,8 @@ components:
       - sponsor_name
       - successful_payment_count
       - target_amount
+      - total_funded_amount
+      - total_progress_percent
     Certificate:
       type: object
       description: User/admin certificate representation.
