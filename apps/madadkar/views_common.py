@@ -295,12 +295,6 @@ PUBLIC_CAMPAIGN_FILTER_PARAMS = [
         location=OpenApiParameter.QUERY,
         description="جستجو در عنوان و توضیحات",
     ),
-    OpenApiParameter(
-        name="ordering",
-        type=OpenApiTypes.STR,
-        location=OpenApiParameter.QUERY,
-        description="ترتیب: published_at, created_at, progress, deadline (با - برای descending)",
-    ),
 ]
 ADMIN_CAMPAIGN_FILTER_PARAMS = [
     *LIST_PAGINATION_PARAMS,

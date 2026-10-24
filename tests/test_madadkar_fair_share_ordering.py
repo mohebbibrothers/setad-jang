@@ -35,9 +35,9 @@ def _set_funded(campaign, shares: int) -> None:
     campaign.save(update_fields=["purchased_shares"])
 
 
-def _public_list_titles() -> list[str]:
+def _public_list_titles(query: str = "") -> list[str]:
     client = APIClient()
-    response = client.get(reverse("madadkar:public-campaign-list"))
+    response = client.get(reverse("madadkar:public-campaign-list") + query)
     assert response.status_code == status.HTTP_200_OK
     payload = response.json()
     data = payload.get("data", payload) if isinstance(payload, dict) else payload
@@ -172,3 +172,51 @@ def test_division_guard_branch_is_present_in_ordering_sql() -> None:
     PublishedCampaignFactory(title="سالم", total_shares=1000)
     titles = _public_list_titles()
     assert titles == ["سالم"]
+
+
+# ---------------------------------------------------------------------------
+# صیانتِ قرارداد: پارامتر ordering در endpoint عمومی اثری ندارد
+# ---------------------------------------------------------------------------
+# ریشه‌ی باگِ گزارش‌شده‌ی مشتری: فرانت `?ordering=-published_at` می‌فرستاد و
+# OrderingFilterِ قدیمیِ CampaignPublicFilter ترتیبِ fair-share را دور می‌زد.
+# حالا فیلتر عمومی عمداً ordering ندارد؛ این تست‌ها صیانت‌اند که هرگز برنگردد.
+
+
+def _build_prod_incident_trio() -> None:
+    """بازسازی دقیق سناریویی که مشتری روی سایت دید:
+
+    قدیمی‌ترین منتشرشده ۰٪ → میانی ۱۰۰٪ (rank 2) → تازه‌ترین ۵۰٪.
+    با ordering=-published_atِ قدیمی، ترتیب C,B,A می‌شد؛ با fair-share باید
+    A,C,B باشد — حتی اگر کلاینت همان پارامترِ مرده را بفرستد.
+    """
+    now = timezone.now()
+    oldest = PublishedCampaignFactory(
+        title="صفرِ قدیمی", total_shares=1000, published_at=now - timedelta(days=3)
+    )
+    middle = PublishedCampaignFactory(
+        title="پُرِ میانی", total_shares=1000, published_at=now - timedelta(days=2)
+    )
+    newest = PublishedCampaignFactory(
+        title="نیمه‌ی تازه", total_shares=1000, published_at=now - timedelta(days=1)
+    )
+    _set_funded(middle, 1000)
+    _set_funded(newest, 500)
+    _set_funded(oldest, 0)
+
+
+def test_public_api_ignores_legacy_ordering_param_and_keeps_fair_share() -> None:
+    _build_prod_incident_trio()
+
+    titles = _public_list_titles("?ordering=-published_at")
+
+    # fair-share: ۰٪ → ۵۰٪ → (rank 2) ۱۰۰٪ — نه ترتیبِ published_at
+    assert titles == ["صفرِ قدیمی", "نیمه‌ی تازه", "پُرِ میانی"]
+
+
+def test_public_api_unknown_ordering_param_is_ignored_not_error() -> None:
+    """مقادیر نامعتبر ordering دیگر 400 نمی‌دهند؛ بی‌اثر می‌شوند (anti-fragile)."""
+    _build_prod_incident_trio()
+
+    titles = _public_list_titles("?ordering=banana")
+
+    assert titles == ["صفرِ قدیمی", "نیمه‌ی تازه", "پُرِ میانی"]

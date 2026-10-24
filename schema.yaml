@@ -6824,12 +6824,6 @@ paths:
           type: boolean
         description: فیلتر بر اساس تکمیل ۱۰۰٪ سهم‌ها
       - in: query
-        name: ordering
-        schema:
-          type: string
-        description: 'ترتیب: published_at, created_at, progress, deadline (با - برای
-          descending)'
-      - in: query
         name: page
         schema:
           type: integer

@@ -9,7 +9,10 @@ Filters اپ مددکار — django-filter filtersets.
 اصول:
 - فیلترهای عمومی نباید اطلاعات حساس را افشا کنند (مثلاً status=DRAFT).
 - فیلترهای ادمین کامل و قابل ترکیب.
-- ordering با چند گزینه معتبر.
+- endpoint عمومی آگاهانه هیچ پارامتر ordering ندارد: ترتیبِ canonicalِ
+  صفحه، مرتب‌سازی «سهمِ عادلانه» (fair-share) در selector است تا هیچ
+  کلاینتی نتواند با یک کوئری‌پارامتر آن را بشکند. ordering فقط برای
+  فیلترهای ادمین معتبر است.
 """
 
 from __future__ import annotations
@@ -42,6 +45,12 @@ class CampaignPublicFilter(filters.FilterSet):
 
     فقط فیلترهای امن — هیچ راهی برای دیدن DRAFT یا is_visible=False نیست
     (در selector فیلتر شده‌اند).
+
+    عمداً OrderingFilter ندارد: ترتیبِ عمومیِ حرکت‌ها یک قراردادِ محصولی است
+    («سهمِ عادلانه» — نیازمندترین اول، تأمین‌شده‌ها در انتها) و در
+    `selectors.get_public_campaigns_queryset` پین شده است. اگر روزی به
+    نسخه‌بندیِ ترتیب نیاز شد، باید آگاهانه به API اضافه شود — نه این‌که هر
+    کلاینتی با `?ordering=` آن را دور بزند.
     """
 
     sponsor = filters.NumberFilter(field_name="sponsor_id")
@@ -50,15 +59,6 @@ class CampaignPublicFilter(filters.FilterSet):
     has_deadline = filters.BooleanFilter()
     is_fully_funded = filters.BooleanFilter(method="filter_is_fully_funded")
     search = filters.CharFilter(method="filter_search")
-
-    ordering = filters.OrderingFilter(
-        fields=(
-            ("published_at", "published_at"),
-            ("created_at", "created_at"),
-            ("progress_percent_calc", "progress"),
-            ("deadline", "deadline"),
-        ),
-    )
 
     class Meta:
         model = Campaign
