@@ -215,7 +215,7 @@ Public Reports attachments
 R4J report/criminal evidence attachments
 Madadkar campaign images
 LMS media
-Kindness Wall images
+Kindness Wall listing images
 Support ticket attachments
 ```
 
@@ -302,15 +302,22 @@ POST /api/v1/lms/lessons/{lesson_id}/progress/
 GET /api/v1/lms/me/recommendations/
 ```
 
-### Kindness Wall
+### Kindness Wall (v2 — تختهٔ نیاز)
 
 ```text
-GET /api/v1/kindness-wall/listings/
-GET /api/v1/kindness-wall/listings/{slug}/
-GET,POST /api/v1/kindness-wall/me/listings/
-POST /api/v1/kindness-wall/me/listings/{listing_id}/submit/
-POST /api/v1/kindness-wall/listings/{slug}/reveal-contact/
+GET /api/v1/kindness-wall/categories/
+GET /api/v1/kindness-wall/listings/            filters: category/city/province/urgent/search/ordering
+GET /api/v1/kindness-wall/listings/{slug}/     contact_channels[] فقط در همین پاسخ
+GET /api/v1/kindness-wall/stories/
+GET /api/v1/kindness-wall/stats/
+POST /api/v1/kindness-wall/listings/{slug}/offer/      upsert (auth)
+DELETE /api/v1/kindness-wall/offers/{offer_id}/withdraw/
+GET /api/v1/kindness-wall/my-offers/
 ```
+
+مفاهیم listingِ کاربر («me/listings»، reveal-contact، match) در v2 حذف شده‌اند؛
+ساخت محتوا فقط در پنل ادمین (`/api/v1/kindness-wall/admin/...` یا Django Admin)
+انجام می‌شود و تماس بین کاربران بیرون از اپ و از راه‌های درج‌شدهٔ آگهی است.
 
 ### Tabyin
 

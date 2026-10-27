@@ -110,15 +110,10 @@ MODEL_VERBOSE_NAMES: dict[tuple[str, str], tuple[str, str]] = {
     ("tabyin", "tabyincontent"): ("محتوای تبیین", "محتواهای تبیین"),
     ("tabyin", "tabyinusersubmission"): ("ارسال کاربر تبیین", "ارسال‌های کاربران تبیین"),
     ("tabyin", "tabyinattachment"): ("پیوست تبیین", "پیوست‌های تبیین"),
-    # Kindness wall
+    # Kindness wall — نسخهٔ ۲ (تختهٔ نیاز ادمین‌محور)
     ("kindness_wall", "kindnesscategory"): (
         "دسته‌بندی دیوار مهربانی",
         "دسته‌بندی‌های دیوار مهربانی",
-    ),
-    ("kindness_wall", "kindnesstag"): ("تگ دیوار مهربانی", "تگ‌های دیوار مهربانی"),
-    ("kindness_wall", "kindnesskeywordalias"): (
-        "هم‌معنی جستجوی دیوار مهربانی",
-        "هم‌معنی‌های جستجوی دیوار مهربانی",
     ),
     ("kindness_wall", "kindnesslisting"): (
         "آگهی دیوار مهربانی",
@@ -126,35 +121,11 @@ MODEL_VERBOSE_NAMES: dict[tuple[str, str], tuple[str, str]] = {
     ),
     ("kindness_wall", "kindnesslistingimage"): (
         "تصویر آگهی دیوار مهربانی",
-        "تصاویر آگهی دیوار مهربانی",
+        "تصاویر آگهی‌های دیوار مهربانی",
     ),
-    ("kindness_wall", "kindnesslistingtag"): (
-        "تگ آگهی دیوار مهربانی",
-        "تگ‌های آگهی دیوار مهربانی",
-    ),
-    ("kindness_wall", "kindnessmatch"): (
-        "تطبیق آگهی دیوار مهربانی",
-        "تطبیق‌های آگهی دیوار مهربانی",
-    ),
-    ("kindness_wall", "kindnesscontactreveal"): (
-        "نمایش اطلاعات تماس دیوار مهربانی",
-        "نمایش‌های اطلاعات تماس دیوار مهربانی",
-    ),
-    ("kindness_wall", "kindnesslistingreport"): (
-        "گزارش آگهی دیوار مهربانی",
-        "گزارش‌های آگهی دیوار مهربانی",
-    ),
-    ("kindness_wall", "kindnessbookmark"): (
-        "نشانک دیوار مهربانی",
-        "نشانک‌های دیوار مهربانی",
-    ),
-    ("kindness_wall", "kindnessrisksignal"): (
-        "سیگنال ریسک دیوار مهربانی",
-        "سیگنال‌های ریسک دیوار مهربانی",
-    ),
-    ("kindness_wall", "kindnessduplicatecandidate"): (
-        "مورد تکراری احتمالی دیوار مهربانی",
-        "موارد تکراری احتمالی دیوار مهربانی",
+    ("kindness_wall", "kindnessoffer"): (
+        "اعلام آمادگی دیوار مهربانی",
+        "اعلام‌های آمادگی دیوار مهربانی",
     ),
     # LMS
     ("lms", "lmscategory"): ("دسته‌بندی آموزش", "دسته‌بندی‌های آموزش"),

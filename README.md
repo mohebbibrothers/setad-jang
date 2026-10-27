@@ -73,7 +73,7 @@ Tabyin Content Sync
 R4J Criminal Profiles + Evidence + Investigation Cases
 Madadkar Financial Crowdfunding
 LMS Learning Platform
-Kindness Wall Matching Platform
+Kindness Wall — تختهٔ نیاز (Kindness Wall)
 Support Desk Ticketing
 Notifications
 Activity Timeline
@@ -128,7 +128,7 @@ OpenAPI validation                ✅ Valid schema
 STRUCTURE.md check                ✅ همگام با درخت واقعی مخزن
 compose config (CI)               ✅ interpolate/`:?` زنده در هر push
 nginx config test (CI)            ✅ nginx -t روی deploy/nginx.conf
-pytest + coverage gate            ✅ 2094 passed / 25 skipped (راتچت: جدول با collect سوئیت می‌خواند)
+pytest + coverage gate            ✅ 2146 passed / 25 skipped (راتچت: جدول با collect سوئیت می‌خواند)
 coverage                          ✅ 85.85% >= 82%
 ```
 
@@ -841,7 +841,7 @@ GET /api/v1/activity/admin/
 در LMS ثبت‌نام می‌کند
 در Madadkar مشارکت می‌کند
 ticket می‌سازد
-در Kindness Wall listing ثبت می‌کند
+روی آگهی Kindness Wall اعلام آمادگی می‌کند
 ```
 
 می‌توان این رویدادها را در timeline او نمایش داد.
@@ -863,7 +863,7 @@ R4J reports/evidence/bounties
 Madadkar finance
 Support queue
 LMS activity
-Kindness Wall moderation
+Kindness Wall board/offers
 Tabyin sync
 provider readiness
 ```
@@ -1777,92 +1777,110 @@ PATCH /api/v1/lms/admin/discussion-reports/{report_id}/review/
 
 ## 20. Kindness Wall — Divar-e Mehrabani
 
-اپ `kindness_wall` برای نیاز/کمک، matching، moderation و risk controls است.
+اپ `kindness_wall` در نسخهٔ ۲ یک **تختهٔ شفاف نیاز** است: ادمین دسته‌بندی‌ها
+(مثل «لوازم آشپزخانه»، «لباس و پوشاک») و آگهیِ نیازها را می‌سازد؛ کاربران
+عمومی آگهی‌ها را می‌بینند/جست‌وجو می‌کنند و برای همان وسیله مستقیماً از راه
+ارتباطیِ **درج‌شده در خود آگهی** با صاحب آگهی تماس می‌گیرند. هیچ تراکنش،
+مچینگ یا مدیریت رابطه‌ای در این سیاست نیست — پل ارتباطی، خودِ آگهی است.
 
 ### 20.1 مفاهیم اصلی
 
 ```text
-Category
-Listing
-Bookmark
-Match
-ContactReveal
-Report
-DuplicateReview
-Geo/Risk signals
+KindnessCategory     دسته‌بندی (ادمین‌ساز، slug فارسی، ایموجی، ترتیب)
+KindnessListing      آگهی نیاز با چرخهٔ draft → published → fulfilled/expired/archived
+KindnessListingImage تصاویر (تا MAX_IMAGES_PER_LISTING؛ کاور خودکار)
+KindnessOffer        «می‌تونم کمک کنم» — سیگنال اختیاری کاربر (upsert/پس‌گرفتن)
 ```
 
-### 20.2 Listing Lifecycle
+هر آگهی باید **حداقل یک** و می‌تواند **تا هر شش** راه تماس داشته باشد:
+تلفن، بله، ایتا، تلگرام، روبیکا، اینستاگرام. مقادیر هنگام ذخیره نرمال
+می‌شوند (۰۰۹۸/+۹۸ → ۰؛ حذف @، دامنه و query از آیدی‌ها) و بدون حداقل یک
+کانال معتبر، انتشار در model.clean، سرویس publish و فرم ادمین قفل است.
 
-کاربر listing می‌سازد:
+### 20.2 چرخهٔ حیات و TTL
 
 ```text
-GET,POST /api/v1/kindness-wall/me/listings/
-GET,PATCH,DELETE /api/v1/kindness-wall/me/listings/{listing_id}/
-POST /api/v1/kindness-wall/me/listings/{listing_id}/submit/
-POST /api/v1/kindness-wall/me/listings/{listing_id}/close/
-POST /api/v1/kindness-wall/me/listings/{listing_id}/renew/
+draft ──publish──▶ published ──(expire_due_listings / beat)──▶ expired
+   ▲                   │  └──────────fulfill──────────▶ fulfilled (بایگانی داستان‌ها)
+   └──revert───────────┘                 └──archive──▶ archived
 ```
 
-ادمین moderate می‌کند:
+عمر آگهی از `KINDNESS_LISTING_TTL_DAYS` (پیش‌فرض ۴۵) می‌آید؛ تمدید، همان
+بازه را از همان لحظه اضافه می‌کند و `renew_count` را بالا می‌برد. تسک
+`apps.kindness_wall.tasks.expire_old_listings_task` (beat + route در settings)
+روزانه آگهی‌های گذشته را منقضی می‌کند و بعد کش عمومی دامنه را صریحاً invalid
+می‌کند (bulk update سیگنال نمی‌فرستد).
+
+### 20.3 API عمومی
 
 ```text
-GET /api/v1/kindness-wall/admin/listings/
-GET /api/v1/kindness-wall/admin/listings/{listing_id}/
-POST /api/v1/kindness-wall/admin/listings/{listing_id}/approve/
-POST /api/v1/kindness-wall/admin/listings/{listing_id}/reject/
-POST /api/v1/kindness-wall/admin/listings/{listing_id}/suspend/
-POST /api/v1/kindness-wall/admin/listings/{listing_id}/restore/
+GET /api/v1/kindness-wall/categories/          دسته‌ها + شمارندهٔ آگهی جاری
+GET /api/v1/kindness-wall/listings/            تختهٔ عمومی (فیلتر/جستجو/صفحه‌بندی)
+GET /api/v1/kindness-wall/listings/{slug}/     جزئیات + راه‌های تماس آگهی
+GET /api/v1/kindness-wall/stories/             برطرف‌شده‌ها (بدون تماس)
+GET /api/v1/kindness-wall/stats/               شمارنده‌های اثر
 ```
 
-عمومی:
+پارامترهای فهرست: `category` (slug)، `province`، `city`، `urgent=true`،
+`search` (FTS/trgm روی PG؛ icontains در fallback) و `ordering` با مقادیر
+`fresh|popular|urgent|expiring` (ورودی نامعتبر بی‌اثر). **کارت‌های فهرست هیچ
+فیلد تماسی ندارند**؛ تماس فقط در جزئیات و از `contact_channels[]` با
+`kind/label/value/link` (مثل `tel:+98912…`، `https://eitaa.com/…`) می‌آید.
+پاسخ‌ها از کش SWR دامنهٔ `kindness` سرو می‌شوند.
+
+### 20.4 API کاربر (اعلام آمادگی)
 
 ```text
-GET /api/v1/kindness-wall/listings/
-GET /api/v1/kindness-wall/listings/{slug}/
+POST   /api/v1/kindness-wall/listings/{slug}/offer/    ثبت/به‌روزرسانی (upsert، throttle: kindness_offer_create)
+DELETE /api/v1/kindness-wall/offers/{offer_id}/withdraw/  پس‌گرفتن تا پیش از بررسی ادمین
+GET    /api/v1/kindness-wall/my-offers/                اعلام‌های خودم + نتیجهٔ بررسی
 ```
 
-### 20.3 Matching
+اعلام آمادگی جایگزین تماس نیست و **هیچ اعلان درون‌اپی تولید نمی‌کند**؛ فقط
+روی آگهی جاریِ دیوار قابل ثبت است، به‌ازای هر کاربر یک رکورد، و پس از
+بررسیِ ادمین قفل می‌شود.
 
-Matching برای اتصال نیاز و کمک است:
+### 20.5 API ادمین (ساخت محتوا از همین‌جا یا Django Admin)
 
 ```text
-GET /api/v1/kindness-wall/listings/{slug}/matches/
-GET /api/v1/kindness-wall/me/matches/
-POST /api/v1/kindness-wall/me/matches/{match_id}/contacted/
-POST /api/v1/kindness-wall/me/matches/{match_id}/dismiss/
+GET,POST    /api/v1/kindness-wall/admin/categories/
+PATCH,DELETE /api/v1/kindness-wall/admin/categories/{id}/        (DELETE = غیرفعال‌سازی با نگهبان «دیوار خالی نشود»)
+GET,POST    /api/v1/kindness-wall/admin/listings/
+GET,PATCH   /api/v1/kindness-wall/admin/listings/{id}/
+POST        /api/v1/kindness-wall/admin/listings/{id}/{action}/  action ∈ publish|renew|fulfill|archive|draft|feature
+GET         /api/v1/kindness-wall/admin/offers/
+POST        /api/v1/kindness-wall/admin/offers/{id}/review/      status ∈ contacted|declined
+GET         /api/v1/kindness-wall/admin/export/listings/         (xlsx، فیلترپذیر)
+GET         /api/v1/kindness-wall/admin/export/offers/
 ```
 
-منطق matching می‌تواند بر اساس category، location، type، freshness و risk score باشد.
+ساخت آگهی از REST همیشه `draft` می‌سازد؛ انتشار با اکشن و پس از بررسی
+«حداقل یک راه تماس» انجام می‌شود (خطای انتشار → 409). هر اکشن با
+`log_action_async` در audit ثبت می‌شود (actionهای `KINDNESS_*` در
+`apps/audit_logs/actions.py`).
 
-### 20.4 Contact Reveal
+### 20.6 Django Admin
 
-برای حفظ privacy، اطلاعات تماس مستقیم از ابتدا public نیست:
+`KindnessCategoryAdmin` (فعال/غیرفعال گروهی)، `KindnessListingAdmin`
+(fieldsets فارسی، inline تصاویر با سقف، پیل‌های رنگی وضعیت/فوریت، اکشن‌های
+انتشار/تمدید/برطرف/بایگانی/پیش‌نویس + خروجی اکسل)، `KindnessOfferAdmin`
+(تریاج با mark_contacted/mark_declined، حذف سراسری خاموش) و
+`KindnessListingImageAdmin` (پنهان از ایندکس). اعلان، bookmark، ریسک‌سیگنال
+و مچینگ — همگی از v1 — در v2 وجود ندارند.
 
-```text
-POST /api/v1/kindness-wall/listings/{slug}/reveal-contact/
-GET  /api/v1/kindness-wall/admin/contact-reveals/
-```
+### 20.7 جستجو و ایندکس‌ها
 
-### 20.5 Duplicate / Report Review
+`search_document` (عنوان+شرح+صاحب+جغرا+دسته) هنگام save ساخته می‌شود و با
+`apply_smart_search` (وزن‌های title=A/description=B/document=C + trigram روی
+title, description) کوئری می‌شود. ایندکس‌های GIN با مهاجرت
+`0005_search_indexes_v2` ساخته/بازسازی می‌شوند و تطبیق‌شان با کوئری توسط
+`tests/test_search_indexes_postgres.py` (EXPLAIN) قفل است.
 
-```text
-POST /api/v1/kindness-wall/listings/{slug}/report/
-GET  /api/v1/kindness-wall/admin/reports/
-POST /api/v1/kindness-wall/admin/reports/{report_id}/review/
-GET  /api/v1/kindness-wall/admin/duplicates/
-POST /api/v1/kindness-wall/admin/duplicates/{duplicate_id}/review/
-```
+### 20.8 نگهداشت و استقرار
 
-### 20.6 Export / Analytics
-
-```text
-GET /api/v1/kindness-wall/admin/analytics/
-GET /api/v1/kindness-wall/admin/listings/export/
-GET /api/v1/kindness-wall/admin/reports/export/
-```
-
----
+مهاجرت `0004_v2_rebuild` جدول‌های v1 را **آگاهانه DROP** می‌کند (سیاست جدید
+سازگاری دادهٔ v1 را ندارد) — اجرای آن روی پروداکشن فقط بعد از بکاپ کامل.
+تست‌ها: `tests/test_kindness_wall_{foundation,services,api,admin,hardening}.py`.
 
 ## 21. Support Desk
 
@@ -2338,7 +2356,7 @@ apps/audit_logs                   → audit/forensics
 apps/r4j                          → reward for justice criminal profiles/reports/bounties/evidence
 apps/madadkar                     → charitable finance platform
 apps/lms                          → learning platform
-apps/kindness_wall                → kindness listings/matching
+apps/kindness_wall                → kindness wall v2: categories/listings/offers
 apps/support_desk                 → ticketing/SLA/KB/smart replies
 apps/notifications                → notification engine
 apps/activity                     → user/admin activity timeline

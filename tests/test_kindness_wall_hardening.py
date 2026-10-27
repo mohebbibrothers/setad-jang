@@ -1,196 +1,217 @@
-"""Kindness Wall Phase 5 final polish, edge-case, and performance contracts.
+"""گیت‌های معماری/سیاست دیوار مهربانی v2 — ممیزی منبع (source-level).
 
-این تست‌ها guard نهایی اپ دیوار مهربانی هستند:
-- serializerهای پرترافیک بعد از selector مناسب نباید N+1 query تولید کنند.
-- privacy boundary نمایش شماره تماس باید سخت‌گیرانه بماند.
-- workflowهای مالک مثل بستن آگهی و bookmark dashboard باید کامل باشند.
-- edge-caseهای tree/category و location payload باید regression نشوند.
+این تست‌ها جلوی رگرسیون ساختاری را می‌گیرند: بازگشت fan-out اعلان، ورود
+نویسنده از API عمومی، افشای تماس در فهرست، taskِ stub، یا حذف audit.
 """
 
 from __future__ import annotations
 
-from decimal import Decimal
+import re
+from pathlib import Path
 
-import pytest
-from django.db import connection
-from django.test.utils import CaptureQueriesContext
-from django.urls import reverse
-from rest_framework import status
-from rest_framework.test import APIClient
-
-from apps.kindness_wall import selectors
-from apps.kindness_wall.choices import ListingStatus, ListingType
-from apps.kindness_wall.models import KindnessBookmark, KindnessContactReveal, KindnessMatch
-from apps.kindness_wall.serializers import (
-    KindnessAdminMatchSerializer,
-    KindnessBookmarkSerializer,
-    KindnessListingListSerializer,
-)
-from tests.factories import AdminUserFactory
-from tests.factories.kindness_wall import (
-    KindnessCategoryFactory,
-    KindnessUserFactory,
-    PublishedNeedListingFactory,
-    PublishedOfferListingFactory,
-)
-
-pytestmark = pytest.mark.django_db
+REPO_ROOT = Path(__file__).resolve().parent.parent
+APP = REPO_ROOT / "apps" / "kindness_wall"
+SOURCE_APPS = REPO_ROOT / "apps"
 
 
-def _client_for(user) -> APIClient:
-    """Return authenticated API client."""
-    client = APIClient()
-    client.force_authenticate(user=user)
-    return client
+def _read(relpath: str) -> str:
+    """خواندن متن یک فایل منبع اپ (نسبی به ریشهٔ ریپو)."""
+    return (REPO_ROOT / relpath).read_text(encoding="utf-8")
 
 
-class TestKindnessQueryPerformanceContracts:
-    """N+1 regression tests for Kindness Wall selectors/serializers."""
-
-    def test_public_listing_card_serializer_does_not_query_after_public_selector(self) -> None:
-        category = KindnessCategoryFactory(title="کارآفرینی")
-        PublishedNeedListingFactory(category=category, title="کمک برای ساخت رزومه")
-        PublishedOfferListingFactory(category=category, title="مشاوره شغلی رایگان")
-
-        listings = list(selectors.get_public_listings())
-
-        with CaptureQueriesContext(connection) as captured:
-            data = KindnessListingListSerializer(listings, many=True).data
-
-        assert len(data) == 2
-        assert len(captured) == 0
-
-    def test_user_bookmark_serializer_does_not_query_after_bookmark_selector(self) -> None:
-        user = KindnessUserFactory()
-        listing = PublishedOfferListingFactory(title="کمک آموزشی رایگان")
-        KindnessBookmark.objects.create(user=user, listing=listing)
-
-        bookmarks = list(selectors.get_user_bookmarks(user_id=user.pk))
-
-        with CaptureQueriesContext(connection) as captured:
-            data = KindnessBookmarkSerializer(bookmarks, many=True).data
-
-        assert len(data) == 1
-        assert data[0]["listing"]["id"] == listing.pk
-        assert len(captured) == 0
-
-    def test_admin_match_serializer_does_not_query_after_admin_match_selector(self) -> None:
-        category = KindnessCategoryFactory(title="مهارت")
-        source = PublishedNeedListingFactory(category=category, title="نیاز به مربی پایتون")
-        target = PublishedOfferListingFactory(category=category, title="آموزش پایتون رایگان")
-        KindnessMatch.objects.create(source_listing=source, target_listing=target, score=88)
-
-        matches = list(selectors.get_admin_matches())
-
-        with CaptureQueriesContext(connection) as captured:
-            data = KindnessAdminMatchSerializer(matches, many=True).data
-
-        assert len(data) == 1
-        assert data[0]["source_listing"]["id"] == source.pk
-        assert data[0]["target_listing"]["id"] == target.pk
-        assert len(captured) == 0
+def _app_source(name: str) -> str:
+    """متن یک ماژول اپ دیوار مهربانی."""
+    return _read(f"apps/kindness_wall/{name}")
 
 
-class TestKindnessFinalPrivacyAndWorkflowContracts:
-    """Final user-facing workflow and privacy guards."""
-
-    def test_listing_owner_cannot_use_reveal_contact_to_inflate_contact_metrics(self) -> None:
-        listing = PublishedNeedListingFactory(contact_phone_snapshot="+989120000000")
-
-        response = _client_for(listing.owner).post(
-            reverse("kindness_wall:listing-reveal-contact", kwargs={"slug": listing.slug})
-        )
-
-        assert response.status_code == status.HTTP_403_FORBIDDEN
-        assert KindnessContactReveal.objects.count() == 0
-
-    def test_authenticated_non_owner_can_still_reveal_contact(self) -> None:
-        listing = PublishedNeedListingFactory(contact_phone_snapshot="+989120000001")
-        viewer = KindnessUserFactory()
-
-        response = _client_for(viewer).post(
-            reverse("kindness_wall:listing-reveal-contact", kwargs={"slug": listing.slug})
-        )
-
-        assert response.status_code == status.HTTP_200_OK
-        assert response.data["data"]["phone_number"] == "+989120000001"
-        assert KindnessContactReveal.objects.filter(listing=listing, viewer=viewer).exists()
-
-    def test_owner_can_close_published_listing_without_soft_deleting_it(self) -> None:
-        listing = PublishedOfferListingFactory()
-
-        response = _client_for(listing.owner).post(
-            reverse("kindness_wall:user-listing-close", kwargs={"listing_id": listing.pk})
-        )
-
-        assert response.status_code == status.HTTP_200_OK
-        listing.refresh_from_db()
-        assert listing.status == ListingStatus.CLOSED
-        assert listing.is_active is True
-
-    def test_user_bookmark_dashboard_returns_saved_listing_cards(self) -> None:
-        user = KindnessUserFactory()
-        listing = PublishedOfferListingFactory(title="کمک به طراحی سایت")
-        KindnessBookmark.objects.create(user=user, listing=listing)
-
-        response = _client_for(user).get(reverse("kindness_wall:user-bookmark-list"))
-
-        assert response.status_code == status.HTTP_200_OK
-        results = response.data["data"]["results"]
-        assert len(results) == 1
-        assert results[0]["listing"]["id"] == listing.pk
-        assert "contact_phone_snapshot" not in results[0]["listing"]
+def test_every_kindness_view_is_guarded() -> None:
+    """هر view ادمین باید permission صریح داشته باشد؛ هیچ view عمومی نوشتن باز ندارد."""
+    for fname in ("views.py", "views_admin.py"):
+        src = _app_source(fname)
+        for block in re.findall(r"class Kindness\w+\(APIView\):(.*?)(?=\nclass |\Z)", src, re.S):
+            assert "permission_classes" in block, f"{fname}: class بدون permission_classes"
 
 
-class TestKindnessFinalEdgeCases:
-    """Final edge cases for professional completeness."""
+def test_no_notifications_fanout_returns() -> None:
+    """v2 اعلان درون‌اپی ندارد؛ import/call notify در services/views ممنوع."""
+    for fname in ("services.py", "views.py", "views_admin.py", "signals.py"):
+        src = _app_source(fname)
+        assert "notify_kindness" not in src, f"اعلان بازیگشت در {fname}"
 
-    def test_create_listing_accepts_precise_location_and_returns_it_to_owner_only(self) -> None:
-        user = KindnessUserFactory()
-        category = KindnessCategoryFactory(title="حمل‌ونقل")
 
-        response = _client_for(user).post(
-            reverse("kindness_wall:user-listing-list-create"),
-            data={
-                "listing_type": ListingType.NEED_HELP,
-                "category_id": category.pk,
-                "title": "نیاز به کمک حمل وسایل",
-                "description": "برای جابه‌جایی وسایل خیریه نیاز به کمک دارم",
-                "latitude": "35.700000",
-                "longitude": "51.400000",
-            },
-            format="json",
-        )
+def test_offer_is_the_only_user_write_path() -> None:
+    """کاربر فقط offer می‌سازد؛ هیچ مسیر create برای listing/report/bookmark نیست."""
+    src = _app_source("views.py")
+    assert "def post" in src  # offer-create
+    for forbidden in ("KindnessListingCreateView", "ReportCreateView", "BookmarkView"):
+        assert forbidden not in src, f"مسیر نوشتن کاربری قدیمی {forbidden} برگشته"
+    urls = _app_source("urls.py")
+    assert "reveal" not in urls.lower()
+    assert "bookmark" not in urls.lower()
+    assert "report/" not in urls.lower()
 
-        assert response.status_code == status.HTTP_201_CREATED
-        assert Decimal(response.data["data"]["latitude"]) == Decimal("35.700000")
-        assert Decimal(response.data["data"]["longitude"]) == Decimal("51.400000")
 
-    def test_admin_cannot_deactivate_category_with_published_listing(self) -> None:
-        category = KindnessCategoryFactory(title="دسته فعال")
-        PublishedNeedListingFactory(category=category)
+def test_contact_never_in_list_payload() -> None:
+    """سریالایزر فهرست نباید هیچ فیلد contact_ را داشته باشد."""
+    src = _app_source("serializers.py")
+    list_class = re.search(
+        r"class KindnessListingListSerializer\(.*?\n(.*?)\nclass ", src, re.S
+    ).group(1)
+    assert "contact_phone" not in list_class
+    assert "channel_payload" not in list_class
 
-        response = _client_for(AdminUserFactory()).delete(
-            reverse("kindness_wall:admin-category-detail", kwargs={"category_id": category.pk})
-        )
 
-        assert response.status_code == status.HTTP_400_BAD_REQUEST
-        category.refresh_from_db()
-        assert category.is_active is True
+def test_admin_model_registration_complete() -> None:
+    """چهار مدل = چهار ModelAdmin ثبت‌شده (و images پنهان از ایندکس)."""
+    admin_src = _app_source("admin.py")
+    for model in (
+        "KindnessCategory",
+        "KindnessListing",
+        "KindnessOffer",
+        "KindnessListingImage",
+    ):
+        assert f"@admin.register({model})" in admin_src, f"{model} ثبت نشده"
+    assert "HiddenFromAdminIndexMixin" in admin_src
 
-    def test_public_listing_detail_never_exposes_exact_coordinates_or_raw_phone(self) -> None:
-        listing = PublishedNeedListingFactory(
-            latitude=Decimal("35.700000"),
-            longitude=Decimal("51.400000"),
-            contact_phone_snapshot="+989120000002",
-        )
 
-        response = APIClient().get(
-            reverse("kindness_wall:listing-detail", kwargs={"slug": listing.slug})
-        )
+def test_listing_admin_wires_all_lifecycle_actions() -> None:
+    """اکشن‌های چرخه حیات کامل باید در ListingAdmin باشند."""
+    admin_src = _app_source("admin.py")
+    for action in (
+        "publish_listings",
+        "renew_listings",
+        "fulfill_listings",
+        "archive_listings",
+        "export_listings_xlsx",
+    ):
+        assert action in admin_src, f"اکشن {action} گم شده"
 
-        assert response.status_code == status.HTTP_200_OK
-        payload = response.data["data"]
-        assert "contact_phone_snapshot" not in payload
-        assert "latitude" not in payload
-        assert "longitude" not in payload
+
+def test_images_inline_caps_and_orders() -> None:
+    """inline تصاویر باید max_num از ثابت choices بخورد (نه عدد جادویی)."""
+    admin_src = _app_source("admin.py")
+    assert "max_num = MAX_IMAGES_PER_LISTING" in admin_src
+
+
+def test_export_uses_streaming_workbook_only() -> None:
+    """export نباید openpyxl Workbook را مستقیم import/سازد؛ باید stream کند."""
+    src = _app_source("export.py")
+    assert "Workbook()" not in src, "Workbook مستقیم یعنی بار کامل حافظه"
+    assert "StreamingExcelSheet" in src
+
+
+def test_cache_invalidation_registered() -> None:
+    """signals باید register_public_cache_invalidation را با models کامل صدا بزند."""
+    src = _app_source("signals.py")
+    assert "register_public_cache_invalidation" in src
+    assert "KindnessOffer" in src  # شمارندهٔ offer روی کش فهرست اثر دارد
+
+
+def test_apps_ready_imports_signals() -> None:
+    """signals باید در ready() import شود وگرنه invalidation هرگز وصل نمی‌شود."""
+    src = _app_source("apps.py")
+    assert "def ready" in src
+    assert re.search(r"def ready\(self\).*?import signals", src, re.S), (
+        "signals در ready import نشده"
+    )
+
+
+def test_throttle_scope_declared_and_used() -> None:
+    """اسکوپ offer_create هم در throttle class و هم در view استفاده شده."""
+    th = _app_source("throttles.py")
+    views = _app_source("views.py")
+    assert 'scope = "kindness_offer_create"' in th
+    assert "KindnessOfferCreateThrottle" in views
+
+
+def test_search_fts_migration_present() -> None:
+    """ایندکس‌های v2 باید با همان نام‌های قرارداد ساخته شوند (نگهبان تست PG)."""
+    src = _read("apps/kindness_wall/migrations/0005_search_indexes_v2.py")
+    assert "kindness_wall_kindnesslisting_search_fts_idx" in src
+    assert 'connection.vendor != "postgresql"' in src
+
+
+def test_legacy_shims_kept_for_old_migrations() -> None:
+    """توابع upload/validator قدیمی باید بمانند وگرنه import مهاجرت ۰۰۰ می‌شکند."""
+    models_src = _app_source("models.py")
+    validators_src = _app_source("validators.py")
+    assert "def category_cover_upload_path" in models_src
+    assert "def listing_image_upload_path" in models_src
+    assert "def validate_match_score" in validators_src
+
+
+def test_rebuild_drops_every_v1_model() -> None:
+    """مهاجرت بازسازی باید هر ۱۲ مدل v1 را حذف کند تا جدولی یتیم نماند."""
+    src = _read("apps/kindness_wall/migrations/0004_v2_rebuild.py")
+    for name in (
+        "KindnessTag",
+        "KindnessKeywordAlias",
+        "KindnessContactReveal",
+        "KindnessBookmark",
+        "KindnessListingReport",
+        "KindnessMatch",
+        "KindnessListingTag",
+        "KindnessListingImage",
+        "KindnessRiskSignal",
+        "KindnessDuplicateCandidate",
+        "KindnessListing",
+        "KindnessCategory",
+    ):
+        assert f"name='{name}'," in src, f"حذف {name} از مهاجرت جا افتاده"
+    # مدل‌های تازهٔ v2 هم باید ساخته شوند
+    for name in ("KindnessCategory", "KindnessListing", "KindnessListingImage", "KindnessOffer"):
+        assert f"CreateModel(\n            name='{name}'" in src
+
+
+def test_command_center_counts_only_public_board() -> None:
+    """خلاصهٔ command_center نباید به مدل‌های حذف‌شدهٔ v1 اشاره کند."""
+    src = _read("apps/command_center/selectors.py")
+    for gone in ("KindnessContactReveal", "KindnessRiskSignal", "KindnessMatch"):
+        assert gone not in src
+
+
+def test_admin_i18n_labels_persian_only() -> None:
+    """برچسب‌های ادمین نباید واژهٔ انگلیسی Kindness داشته باشند و باید ۴ مدل باشند."""
+    src = _read("apps/core/admin_i18n.py")
+    block = src[src.index("# Kindness wall") : src.index("# LMS")]
+    assert "Kindness" not in re.sub(r"#[^\n]*", "", block), "برچسب انگلیسی در رجیستری مانده"
+    for model in ("kindnesscategory", "kindnesslisting", "kindnesslistingimage", "kindnessoffer"):
+        assert f'"{model}"' in block, f"برچسب {model} نیست"
+    # هیچ مدل v1 نباید در رجیستری بماند
+    for gone in ("kindnesstag", "kindnessmatch", "kindnessbookmark", "kindnessrisksignal"):
+        assert gone not in src
+
+
+def test_audit_actions_cover_lifecycle() -> None:
+    """اکشن‌های audit جدید باید در registry تعریف و در admin استفاده شده باشند."""
+    actions = _read("apps/audit_logs/actions.py")
+    for const in (
+        "KINDNESS_LISTING_PUBLISHED",
+        "KINDNESS_LISTING_FULFILLED",
+        "KINDNESS_LISTING_RENEWED",
+        "KINDNESS_OFFER_REVIEWED",
+        "KINDNESS_LISTINGS_EXPORTED",
+    ):
+        assert const in actions, f"اکشن {const} تعریف نشده"
+    admin_src = _app_source("admin.py")
+    for const in ("KINDNESS_LISTING_CREATED", "KINDNESS_CATEGORY_UPDATED"):
+        assert const in admin_src
+
+
+def test_no_orphan_kindness_models_referenced_elsewhere() -> None:
+    """هیچ اپ/تستی نباید هنوز مدل‌های حذف‌شدهٔ kindness را import کند."""
+    gone = re.compile(
+        r"from apps\.kindness_wall\.models import .*(?:"
+        r"KindnessContactReveal|KindnessMatch|KindnessBookmark|KindnessRiskSignal"
+        r"|KindnessDuplicateCandidate|KindnessListingTag|KindnessListingReport|KindnessTag"
+        r"|KindnessKeywordAlias)"
+    )
+    offenders: list[str] = []
+    for path in sorted((SOURCE_APPS.parent / "apps").rglob("*.py")) + sorted(
+        (SOURCE_APPS.parent / "tests").rglob("*.py")
+    ):
+        if "/migrations/" in path.as_posix() or "__pycache__" in path.as_posix():
+            continue
+        if gone.search(path.read_text(encoding="utf-8")):
+            offenders.append(path.as_posix())
+    assert offenders == [], "ارجاع به مدل حذف‌شده:\n" + "\n".join(offenders)

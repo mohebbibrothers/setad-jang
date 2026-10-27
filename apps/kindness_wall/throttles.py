@@ -15,19 +15,7 @@ class KindnessBrowseUserThrottle(UserRateThrottle):
     scope = "kindness_browse_user"
 
 
-class KindnessListingCreateThrottle(UserRateThrottle):
-    """Listing creation throttle."""
+class KindnessOfferCreateThrottle(UserRateThrottle):
+    """Throttle for submitting a readiness offer (per hour)."""
 
-    scope = "kindness_listing_create"
-
-
-class KindnessContactRevealThrottle(UserRateThrottle):
-    """Contact reveal throttle."""
-
-    scope = "kindness_contact_reveal"
-
-
-class KindnessReportThrottle(UserRateThrottle):
-    """Listing report throttle."""
-
-    scope = "kindness_report"
+    scope = "kindness_offer_create"

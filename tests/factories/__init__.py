@@ -20,6 +20,13 @@ from .audit_logs import AuditLogFactory
 # ── Authentication ──────────────────────────────────────────
 from .auth import AdminUserFactory, UserFactory
 
+# ── Kindness Wall (Divar-e Mehrabani) ───────────────────────
+from .kindness_wall import (
+    KindnessCategoryFactory,
+    KindnessListingFactory,
+    PublishedNeedListingFactory,
+)
+
 # ── LMS (Learning Management System) ────────────────────────
 from .lms import (
     ArticleLessonFactory,
@@ -102,8 +109,6 @@ __all__ = [
     "FailedPaymentFactory",
     "KindnessCategoryFactory",
     "KindnessListingFactory",
-    "KindnessTagFactory",
-    "KindnessUserFactory",
     "LMSCategoryFactory",
     "LMSUserSkillFactory",
     "LessonFactory",
@@ -114,7 +119,6 @@ __all__ = [
     "PublishedCampaignFactory",
     "PublishedCourseFactory",
     "PublishedNeedListingFactory",
-    "PublishedOfferListingFactory",
     "PublishedQuizFactory",
     "QuizAttemptFactory",
     "QuizFactory",

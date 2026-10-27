@@ -188,33 +188,3 @@ def notify_lms_certificate_issued(*, certificate) -> None:
             "certificate_code": certificate.certificate_code,
         },
     )
-
-
-def notify_kindness_contact_revealed(*, reveal) -> None:
-    """Notify listing owner when their contact phone is revealed."""
-    emit_domain_notification(
-        event_type="kindness.contact_revealed",
-        recipient=reveal.listing_owner,
-        actor=reveal.viewer,
-        aggregate_type="kindness_listing",
-        aggregate_id=str(reveal.listing_id),
-        payload={"title": "شماره تماس آگهی شما مشاهده شد", "listing_title": reveal.listing.title},
-    )
-
-
-def notify_kindness_high_match(*, source_listing, match) -> None:
-    """Notify listing owner when a high-score match is generated."""
-    if match.score < getattr(settings, "KINDNESS_MATCH_NOTIFICATION_THRESHOLD", 80):
-        return
-    emit_domain_notification(
-        event_type="kindness.high_match",
-        recipient=source_listing.owner,
-        actor=source_listing.owner,
-        aggregate_type="kindness_match",
-        aggregate_id=str(match.pk),
-        payload={
-            "title": "پیشنهاد تطبیق جدید",
-            "listing_title": source_listing.title,
-            "score": match.score,
-        },
-    )

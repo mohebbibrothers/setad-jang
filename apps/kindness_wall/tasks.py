@@ -1,4 +1,4 @@
-"""Celery tasks for Kindness Wall maintenance."""
+"""Celery tasks نگهداشت دیوار مهربانی."""
 
 from __future__ import annotations
 
@@ -16,23 +16,22 @@ logger = logging.getLogger("apps.kindness_wall")
     ignore_result=True,
 )
 def expire_old_listings_task() -> int:
-    """Expire published listings whose ``expires_at`` has passed.
+    """منقضی‌کردن دسته‌ای آگهی‌هایی که ``expires_at`` آن‌ها گذشته است.
 
-    این تسک قبلاً یک stub بود که فقط ``None`` برمی‌گرداند، و در ضمن نه در
-    routing تنظیمات بود و نه در beat و نه هیچ‌جای کد صدا زده می‌شد. یعنی
-    سه لایه سکوت روی هم: کد مرده‌ای که هیچ‌کس متوجه مرده بودنش نمی‌شد.
-
-    پیامد واقعی‌اش این بود که **هیچ آگهی دیوار مهربانی هرگز منقضی نمی‌شد**.
-    فیلد ``expires_at`` پر می‌شد، سرویس ``expire_due_listings`` هم کامل
-    پیاده‌سازی شده بود، ولی چیزی صدایش نمی‌زد؛ پس آگهی‌ها برای همیشه در
-    وضعیت PUBLISHED می‌ماندند و در فهرست عمومی نمایش داده می‌شدند.
+    دیوار مهربانی بدون این تسک به تابلوی آگهی‌های مرده تبدیل می‌شود؛ برای
+    همین در beat تنظیمات روزانه اجرا می‌شود. چون به‌جای save حلقه‌ای از
+    bulk ``update`` استفاده می‌شود (سیگنال post_save نمی‌فرستد)، انتهای
+    این تابع کش عمومی دامنه صریحاً invalid می‌شود تا تخته با واقعیت بسازد.
 
     Returns:
-        تعداد آگهی‌هایی که در این اجرا منقضی شدند.
+        تعداد آگهی‌های منقضی‌شده در این اجرا.
     """
+    from apps.core.cache_invalidation import invalidate_public_domain
+
     from .services import expire_due_listings
 
     expired_count = expire_due_listings()
     if expired_count:
+        invalidate_public_domain("kindness")
         logger.info("Kindness wall listings expired count=%d", expired_count)
     return expired_count

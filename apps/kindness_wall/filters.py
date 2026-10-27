@@ -1,34 +1,57 @@
-"""django-filter filtersets for Kindness Wall."""
+"""django-filter filtersetهای دیوار مهربانی.
+
+قرارداد سراسری جستجو حفظ شده: فیلتر عمومی ``KindnessListingPublicFilter`` با
+پارامتر ``search`` روی کوئری‌ست ورودی ``apply_smart_search`` می‌زند (FTS/trgm
+روی PostgreSQL و icontains در fallback) — همان چیزی که تست‌های shared جستجو
+از همهٔ اپ‌ها انتظار دارند.
+"""
+
+from __future__ import annotations
 
 import django_filters
-from django.db.models import Q
 
 from apps.core.search import SearchField, apply_smart_search
-from apps.kindness_wall.choices import DuplicateStatus, ListingType, MatchStatus, ReportStatus
-from apps.kindness_wall.models import (
-    KindnessContactReveal,
-    KindnessDuplicateCandidate,
-    KindnessListing,
-    KindnessListingReport,
-    KindnessMatch,
-)
+from apps.kindness_wall.choices import ListingStatus, OfferStatus, Urgency
+from apps.kindness_wall.models import KindnessListing, KindnessOffer
+
+#: mapping ورودی کاربر → tuples کامل ترتیب (کلید دوم برای پایداری pageها).
+_ORDERING_CHOICES: dict[str, tuple[str, ...]] = {
+    "fresh": ("-published_at", "-created_at"),
+    "popular": ("-view_count", "-published_at"),
+    "urgent": ("urgency", "-published_at"),
+    "expiring": ("expires_at", "-published_at"),
+}
 
 
 class KindnessListingPublicFilter(django_filters.FilterSet):
-    """Public listing filters."""
+    """فیلترهای تختهٔ عمومی: دسته، جغرا، فوریت، ordering و جستجو."""
 
-    listing_type = django_filters.ChoiceFilter(choices=ListingType.choices)
     category = django_filters.CharFilter(field_name="category__slug", lookup_expr="exact")
     province = django_filters.CharFilter(field_name="province", lookup_expr="iexact")
     city = django_filters.CharFilter(field_name="city", lookup_expr="iexact")
+    urgent = django_filters.BooleanFilter(method="filter_urgent")
+    ordering = django_filters.CharFilter(method="filter_ordering")
     search = django_filters.CharFilter(method="filter_search")
 
     class Meta:
         model = KindnessListing
         fields: list[str] = []
 
+    def filter_urgent(self, queryset, name, value):
+        """فیلتر «فقط فوری‌ها»."""
+        if not value:
+            return queryset
+        return queryset.filter(urgency=Urgency.URGENT)
+
+    def filter_ordering(self, queryset, name, value):
+        """ترتیب از لیست مجاز؛ ورودی نامعتبر بی‌اثر (بدون خطای ۴۰۰)."""
+        mapping = _ORDERING_CHOICES.get((value or "").strip())
+        if mapping is None:
+            return queryset
+        return queryset.order_by(*mapping)
+
     def filter_search(self, queryset, name, value):
-        """Search listings with PostgreSQL FTS/trigram and SQLite fallback."""
+        """جستجوی هوشمند روی عنوان/شرح/سندِ ارجعی + fallback ایندکس‌محور."""
         return apply_smart_search(
             queryset,
             search_term=value,
@@ -42,68 +65,18 @@ class KindnessListingPublicFilter(django_filters.FilterSet):
 
 
 class KindnessListingAdminFilter(KindnessListingPublicFilter):
-    """Admin listing filters including workflow status."""
+    """فیلترهای ادمین: به‌علاوهٔ وضعیت چرخهٔ حیات."""
 
-    status = django_filters.CharFilter(field_name="status", lookup_expr="exact")
-    owner_id = django_filters.NumberFilter(field_name="owner_id")
+    status = django_filters.ChoiceFilter(choices=ListingStatus.choices)
 
 
-class KindnessReportAdminFilter(django_filters.FilterSet):
-    """Admin filters for listing reports."""
+class KindnessOfferAdminFilter(django_filters.FilterSet):
+    """فیلترهای صف بررسی اعلام‌های آمادگی."""
 
-    status = django_filters.ChoiceFilter(choices=ReportStatus.choices)
-    reason = django_filters.CharFilter(field_name="reason", lookup_expr="exact")
+    status = django_filters.ChoiceFilter(choices=OfferStatus.choices)
     listing_id = django_filters.NumberFilter(field_name="listing_id")
-    reported_by_id = django_filters.NumberFilter(field_name="reported_by_id")
+    user_id = django_filters.NumberFilter(field_name="user_id")
 
     class Meta:
-        model = KindnessListingReport
-        fields: list[str] = []
-
-
-class KindnessMatchAdminFilter(django_filters.FilterSet):
-    """Admin filters for materialized matches."""
-
-    status = django_filters.ChoiceFilter(choices=MatchStatus.choices)
-    source_listing_id = django_filters.NumberFilter(field_name="source_listing_id")
-    target_listing_id = django_filters.NumberFilter(field_name="target_listing_id")
-    category = django_filters.CharFilter(method="filter_category")
-    min_score = django_filters.NumberFilter(field_name="score", lookup_expr="gte")
-    max_score = django_filters.NumberFilter(field_name="score", lookup_expr="lte")
-
-    class Meta:
-        model = KindnessMatch
-        fields: list[str] = []
-
-    def filter_category(self, queryset, name, value):
-        """Filter matches where either side belongs to a category slug."""
-        return queryset.filter(
-            Q(source_listing__category__slug=value) | Q(target_listing__category__slug=value)
-        )
-
-
-class KindnessContactRevealAdminFilter(django_filters.FilterSet):
-    """Admin filters for contact reveal audit rows."""
-
-    listing_id = django_filters.NumberFilter(field_name="listing_id")
-    viewer_id = django_filters.NumberFilter(field_name="viewer_id")
-    owner_id = django_filters.NumberFilter(field_name="listing_owner_id")
-    created_after = django_filters.IsoDateTimeFilter(field_name="created_at", lookup_expr="gte")
-    created_before = django_filters.IsoDateTimeFilter(field_name="created_at", lookup_expr="lte")
-
-    class Meta:
-        model = KindnessContactReveal
-        fields: list[str] = []
-
-
-class KindnessDuplicateCandidateAdminFilter(django_filters.FilterSet):
-    """Admin filters for likely duplicate candidates."""
-
-    status = django_filters.ChoiceFilter(choices=DuplicateStatus.choices)
-    listing_id = django_filters.NumberFilter(field_name="listing_id")
-    candidate_listing_id = django_filters.NumberFilter(field_name="candidate_listing_id")
-    min_score = django_filters.NumberFilter(field_name="score", lookup_expr="gte")
-
-    class Meta:
-        model = KindnessDuplicateCandidate
+        model = KindnessOffer
         fields: list[str] = []

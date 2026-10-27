@@ -9,7 +9,7 @@
 
 ## اپلیکیشن‌ها
 
-مجموع: **13 اپ** · 96 مدل · 66 مایگریشن · 36 ویو · 291 مسیر
+مجموع: **13 اپ** · 88 مدل · 68 مایگریشن · 44 ویو · 274 مسیر
 
 | اپ | مدل | مایگریشن | ویو | مسیر |
 |---|---:|---:|---:|---:|
@@ -18,7 +18,7 @@
 | `authentication` | 4 | 9 | 0 | 30 |
 | `command_center` | 0 | 0 | 1 | 1 |
 | `core` | 2 | 3 | 1 | 0 |
-| `kindness_wall` | 12 | 3 | 0 | 34 |
+| `kindness_wall` | 4 | 5 | 8 | 17 |
 | `lms` | 18 | 8 | 0 | 54 |
 | `madadkar` | 15 | 10 | 0 | 48 |
 | `notifications` | 4 | 3 | 7 | 7 |
@@ -210,7 +210,6 @@ setad-jang/
 │   ├── export.py  # خروجی اکسل
 │   ├── filters.py  # فیلترهای queryset
 │   ├── managers.py
-│   ├── matching.py
 │   ├── models.py  # مدل‌های داده
 │   ├── permissions.py  # کنترل دسترسی
 │   ├── selectors.py  # خواندن داده (بدون side effect)
@@ -223,10 +222,7 @@ setad-jang/
 │   ├── validators.py
 │   ├── views.py  # لایهٔ HTTP
 │   ├── views_admin.py
-│   ├── views_common.py
-│   ├── views_engagement.py
-│   ├── views_public.py
-│   └── views_user.py
+│   └── views_common.py
 ├── lms/
 │   ├── management/
 │   ├── migrations/

@@ -1,15 +1,15 @@
-"""Permissions for Kindness Wall."""
+"""Permissionهای مشترک API دیوار مهربانی."""
 
 from rest_framework.permissions import BasePermission
 
 
 class IsKindnessAdminUser(BasePermission):
-    """Allow staff/superuser/admin-role users."""
+    """اجازهٔ دسترسی پنل ادمین: staff/superuser/نقش admin."""
 
     message = "برای مدیریت دیوار مهربانی باید دسترسی ادمین داشته باشید."
 
     def has_permission(self, request, view) -> bool:
-        """Check admin permission."""
+        """بررسی سه‌شاخهٔ دسترسی ادمین (سازگار با مدل نقش پروژه)."""
         user = request.user
         return bool(
             user

@@ -1,150 +1,85 @@
-"""URL routing for Kindness Wall."""
+"""URL routing دیوار مهربانی — namespace: kindness_wall.
+
+عمومی: categories/listings/stories/stats؛ کاربر: اعلام آمادگی (upsert/پس‌گرفتن/فهرست من)؛
+ادمین: CRUD دسته/آگهی + اکشن‌های چرخه حیات + تریاج اعلام + خروجی اکسل.
+ساختار صریح و کم‌عمق نگه داشته شده تا فرانت بدون حدس مسیر کار کند.
+"""
 
 from django.urls import path
 
-from apps.kindness_wall import views
+from apps.kindness_wall import views, views_admin
 
 app_name = "kindness_wall"
 
 urlpatterns = [
-    path("categories/", views.KindnessCategoryPublicListView.as_view(), name="category-list"),
+    # ── عمومی ──────────────────────────────────────────────
+    path(
+        "categories/",
+        views.KindnessCategoryPublicListView.as_view(),
+        name="category-list",
+    ),
     path("listings/", views.KindnessListingPublicListView.as_view(), name="listing-list"),
     path(
         "listings/<str:slug>/",
         views.KindnessListingPublicDetailView.as_view(),
         name="listing-detail",
     ),
+    path("stories/", views.KindnessStoryPublicListView.as_view(), name="story-list"),
+    path("stats/", views.KindnessBoardStatsView.as_view(), name="stats"),
+    # ── کاربر ──────────────────────────────────────────────
     path(
-        "listings/<str:slug>/matches/",
-        views.KindnessListingPublicMatchesView.as_view(),
-        name="listing-matches",
+        "listings/<str:slug>/offer/",
+        views.KindnessOfferCreateView.as_view(),
+        name="offer-create",
     ),
     path(
-        "listings/<str:slug>/reveal-contact/",
-        views.KindnessContactRevealView.as_view(),
-        name="listing-reveal-contact",
+        "offers/<int:offer_id>/withdraw/",
+        views.KindnessOfferWithdrawView.as_view(),
+        name="offer-withdraw",
     ),
-    path(
-        "listings/<str:slug>/report/",
-        views.KindnessListingReportCreateView.as_view(),
-        name="listing-report",
-    ),
-    path(
-        "listings/<str:slug>/bookmark/",
-        views.KindnessBookmarkView.as_view(),
-        name="listing-bookmark",
-    ),
-    path(
-        "me/listings/",
-        views.KindnessUserListingListCreateView.as_view(),
-        name="user-listing-list-create",
-    ),
-    path(
-        "me/listings/<int:listing_id>/",
-        views.KindnessUserListingDetailView.as_view(),
-        name="user-listing-detail",
-    ),
-    path(
-        "me/listings/<int:listing_id>/submit/",
-        views.KindnessUserListingSubmitView.as_view(),
-        name="user-listing-submit",
-    ),
-    path(
-        "me/listings/<int:listing_id>/renew/",
-        views.KindnessUserListingRenewView.as_view(),
-        name="user-listing-renew",
-    ),
-    path(
-        "me/listings/<int:listing_id>/close/",
-        views.KindnessUserListingCloseView.as_view(),
-        name="user-listing-close",
-    ),
-    path("me/bookmarks/", views.KindnessUserBookmarkListView.as_view(), name="user-bookmark-list"),
-    path("me/matches/", views.KindnessUserMatchListView.as_view(), name="user-match-list"),
-    path(
-        "me/matches/<int:match_id>/dismiss/",
-        views.KindnessMatchDismissView.as_view(),
-        name="user-match-dismiss",
-    ),
-    path(
-        "me/matches/<int:match_id>/contacted/",
-        views.KindnessMatchContactedView.as_view(),
-        name="user-match-contacted",
-    ),
+    path("my-offers/", views.KindnessMyOffersView.as_view(), name="my-offers"),
+    # ── ادمین ──────────────────────────────────────────────
     path(
         "admin/categories/",
-        views.KindnessAdminCategoryListCreateView.as_view(),
-        name="admin-category-list-create",
+        views_admin.KindnessAdminCategoryListView.as_view(),
+        name="admin-category-list",
     ),
     path(
         "admin/categories/<int:category_id>/",
-        views.KindnessAdminCategoryDetailView.as_view(),
+        views_admin.KindnessAdminCategoryDetailView.as_view(),
         name="admin-category-detail",
     ),
     path(
-        "admin/listings/", views.KindnessAdminListingListView.as_view(), name="admin-listing-list"
-    ),
-    path(
-        "admin/listings/export/",
-        views.KindnessAdminListingExportView.as_view(),
-        name="admin-listing-export",
+        "admin/listings/",
+        views_admin.KindnessAdminListingListView.as_view(),
+        name="admin-listing-list",
     ),
     path(
         "admin/listings/<int:listing_id>/",
-        views.KindnessAdminListingDetailView.as_view(),
+        views_admin.KindnessAdminListingDetailView.as_view(),
         name="admin-listing-detail",
     ),
     path(
-        "admin/listings/<int:listing_id>/approve/",
-        views.KindnessAdminListingApproveView.as_view(),
-        name="admin-listing-approve",
+        "admin/listings/<int:listing_id>/<str:action>/",
+        views_admin.KindnessAdminListingActionView.as_view(),
+        name="admin-listing-action",
     ),
     path(
-        "admin/listings/<int:listing_id>/reject/",
-        views.KindnessAdminListingRejectView.as_view(),
-        name="admin-listing-reject",
+        "admin/offers/", views_admin.KindnessAdminOfferListView.as_view(), name="admin-offer-list"
     ),
     path(
-        "admin/listings/<int:listing_id>/suspend/",
-        views.KindnessAdminListingSuspendView.as_view(),
-        name="admin-listing-suspend",
+        "admin/offers/<int:offer_id>/review/",
+        views_admin.KindnessAdminOfferReviewView.as_view(),
+        name="admin-offer-review",
     ),
     path(
-        "admin/listings/<int:listing_id>/restore/",
-        views.KindnessAdminListingRestoreView.as_view(),
-        name="admin-listing-restore",
-    ),
-    path("admin/reports/", views.KindnessAdminReportListView.as_view(), name="admin-report-list"),
-    path(
-        "admin/reports/export/",
-        views.KindnessAdminReportExportView.as_view(),
-        name="admin-report-export",
+        "admin/export/listings/",
+        views_admin.KindnessAdminListingsExportView.as_view(),
+        name="admin-export-listings",
     ),
     path(
-        "admin/reports/<int:report_id>/review/",
-        views.KindnessAdminReportReviewView.as_view(),
-        name="admin-report-review",
+        "admin/export/offers/",
+        views_admin.KindnessAdminOffersExportView.as_view(),
+        name="admin-export-offers",
     ),
-    path("admin/matches/", views.KindnessAdminMatchListView.as_view(), name="admin-match-list"),
-    path(
-        "admin/matches/<int:match_id>/",
-        views.KindnessAdminMatchDetailView.as_view(),
-        name="admin-match-detail",
-    ),
-    path(
-        "admin/contact-reveals/",
-        views.KindnessAdminContactRevealListView.as_view(),
-        name="admin-contact-reveal-list",
-    ),
-    path(
-        "admin/duplicates/",
-        views.KindnessAdminDuplicateCandidateListView.as_view(),
-        name="admin-duplicate-list",
-    ),
-    path(
-        "admin/duplicates/<int:duplicate_id>/review/",
-        views.KindnessAdminDuplicateCandidateReviewView.as_view(),
-        name="admin-duplicate-review",
-    ),
-    path("admin/analytics/", views.KindnessAdminAnalyticsView.as_view(), name="admin-analytics"),
 ]

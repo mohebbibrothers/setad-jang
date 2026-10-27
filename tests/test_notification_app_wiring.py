@@ -5,16 +5,13 @@ from __future__ import annotations
 import pytest
 from django.test import override_settings
 
-from apps.kindness_wall.models import KindnessContactReveal, KindnessMatch
-from apps.kindness_wall.services import regenerate_matches_for_listing, reveal_contact
 from apps.lms.services import create_skill_for_certificate
 from apps.madadkar.services import initiate_participation, verify_payment
-from apps.notifications.models import NotificationDelivery, NotificationEvent, NotificationTemplate
+from apps.notifications.models import NotificationDelivery, NotificationEvent
 from apps.support_desk.services import add_admin_reply, resolve_ticket
 from apps.tabyin.choices import ContentOrigin, SubmissionStatus
 from apps.tabyin.services import approve_user_submission, reject_user_submission
 from tests.factories import AdminUserFactory, UserFactory
-from tests.factories.kindness_wall import PublishedNeedListingFactory, PublishedOfferListingFactory
 from tests.factories.lms import CertificateFactory
 from tests.factories.madadkar import PublishedCampaignFactory
 from tests.factories.support_desk import SupportTicketFactory
@@ -97,29 +94,23 @@ def test_lms_certificate_issued_emits_notification_only_for_new_skill() -> None:
     )
 
 
-@override_settings(NOTIFICATIONS_ASYNC_DISPATCH=False)
-def test_kindness_contact_reveal_and_high_match_emit_notifications() -> None:
-    """Kindness Wall important events should notify listing owner."""
-    source = PublishedNeedListingFactory(title="نیاز به برنامه نویس پایتون")
-    target = PublishedOfferListingFactory(
-        category=source.category, title="آموزش برنامه نویسی پایتون"
-    )
-    viewer = UserFactory()
+def test_kindness_v2_emits_no_notifications_at_all() -> None:
+    """سیاست v2 دیوار مهربانی: هیچ رویدادی (ثبت آگهی/اعلام آمادگی) اعلان تولید نمی‌کند.
 
-    reveal = reveal_contact(listing=source, viewer=viewer)
-    KindnessMatch.objects.create(source_listing=source, target_listing=target, score=95)
-    regenerate_matches_for_listing(listing=source)
+    تماس‌ها خارج از اپ انجام می‌شود، پس اعلان درون‌اپی معنا ندارد — و این تست
+    همان «نبود» را قفل می‌کند تا کسی دوباره fan-out نسازد.
+    """
+    from apps.kindness_wall import services
+    from apps.kindness_wall.models import KindnessOffer
+    from tests.factories.kindness_wall import PublishedNeedListingFactory
 
-    assert KindnessContactReveal.objects.filter(pk=reveal.pk).exists()
-    assert NotificationEvent.objects.filter(
-        event_type="kindness.contact_revealed", deliveries__recipient=source.owner
-    ).exists()
-    assert NotificationEvent.objects.filter(
-        event_type="kindness.high_match", deliveries__recipient=source.owner
-    ).exists()
-    assert NotificationTemplate.objects.filter(
-        code="kindness.high_match", channel="in_app"
-    ).exists()
+    listing = PublishedNeedListingFactory(title="بافتنی برای کودکان بی‌سرپرست")
+    helper = UserFactory()
+
+    offer, created = services.submit_offer(listing=listing, user=helper, message="من دارم")
+    assert created is True
+    assert KindnessOffer.objects.filter(pk=offer.pk).exists()
+    assert not NotificationEvent.objects.filter(event_type__startswith="kindness.").exists()
 
 
 @override_settings(NOTIFICATIONS_ASYNC_DISPATCH=False)

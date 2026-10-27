@@ -7,8 +7,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from apps.kindness_wall.choices import ListingStatus
-from apps.kindness_wall.models import KindnessListingReport
+from apps.kindness_wall.models import KindnessOffer
 from apps.madadkar.choices import PaymentStatus
 from apps.madadkar.models import Payment
 from apps.notifications.services import create_notification_event
@@ -18,7 +17,7 @@ from apps.tabyin.models import TabyinContent
 from tests.factories import AdminUserFactory, UserFactory
 from tests.factories.kindness_wall import (
     KindnessCategoryFactory,
-    KindnessUserFactory,
+    KindnessListingFactory,
     PublishedNeedListingFactory,
 )
 from tests.factories.lms import CertificateFactory, EnrollmentFactory, PublishedCourseFactory
@@ -50,12 +49,10 @@ def test_command_center_returns_cross_app_operational_summary() -> None:
     support_ticket.save(update_fields=["sla_breached_at", "updated_at"])
 
     category = KindnessCategoryFactory()
-    listing = PublishedNeedListingFactory(category=category)
-    listing.status = ListingStatus.PENDING_REVIEW
-    listing.save(update_fields=["status", "updated_at"])
-    KindnessListingReport.objects.create(
-        listing=listing, reported_by=KindnessUserFactory(), reason="other"
-    )
+    listing = PublishedNeedListingFactory(category=category, urgency="urgent")
+    KindnessListingFactory(category=category)  # پیش‌نویس در صف ادمین
+    helper = UserFactory()
+    KindnessOffer.objects.create(listing=listing, user=helper, message="یک عدد دارم")
 
     TabyinContent.objects.create(
         external_id="command-center-submission",
@@ -94,8 +91,10 @@ def test_command_center_returns_cross_app_operational_summary() -> None:
     data = response.data["data"]
     assert data["support"]["open_tickets"] >= 1
     assert data["support"]["sla_breached_tickets"] >= 1
-    assert data["kindness_wall"]["pending_listings"] >= 1
-    assert data["kindness_wall"]["pending_reports"] >= 1
+    assert data["kindness_wall"]["published_listings"] >= 1
+    assert data["kindness_wall"]["urgent_listings"] >= 1
+    assert data["kindness_wall"]["draft_listings"] >= 1
+    assert data["kindness_wall"]["open_offers"] >= 1
     assert data["tabyin"]["pending_user_submissions"] >= 1
     assert data["r4j"]["published_criminals"] >= 1
     assert data["madadkar"]["published_campaigns"] >= 1

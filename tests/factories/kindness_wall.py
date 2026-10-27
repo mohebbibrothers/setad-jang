@@ -1,18 +1,24 @@
-"""Factories for Kindness Wall tests."""
+"""Factories برای تست‌های دیوار مهربانی (v2 — تختهٔ نیاز ادمین‌محور).
+
+سیاست جدید، آگهی را ادمین می‌سازد؛ پس کارخانه‌ها هم ادمین‌محورند:
+کاربرِ آگهی (owner) و تگ و تطبیق حذف، در مقابل کانال‌های تماس واقعیِ
+پرشدنی و انتشارِ آمادهٔ نمایش روی تخته اضافه شده است.
+"""
 
 from __future__ import annotations
 
+from datetime import timedelta
+
 import factory
+from django.utils import timezone
 from factory.django import DjangoModelFactory
 
-from apps.authentication.choices import Gender
-from apps.kindness_wall.choices import ListingStatus, ListingType
-from apps.kindness_wall.models import KindnessCategory, KindnessListing, KindnessTag
-from tests.factories.auth import UserFactory
+from apps.kindness_wall.choices import ListingStatus, Urgency
+from apps.kindness_wall.models import KindnessCategory, KindnessListing
 
 
 class KindnessCategoryFactory(DjangoModelFactory):
-    """Factory for Kindness Wall tree categories."""
+    """دستهٔ فعال؛ slug از عنوان و به دست خودِ model ساخته می‌شود (تستِ مسیر واقعی)."""
 
     class Meta:
         model = KindnessCategory
@@ -20,67 +26,47 @@ class KindnessCategoryFactory(DjangoModelFactory):
     title = factory.Sequence(lambda n: f"دسته مهربانی {n}")
     description = "توضیحات دسته"
     order = factory.Sequence(lambda n: n)
-
-
-class KindnessUserFactory(UserFactory):
-    """Factory for users eligible to create listings."""
-
-    first_name = "علی"
-    last_name = "محمدی"
-    phone_number = factory.Sequence(lambda n: f"+98912000{n:04d}")
-    is_phone_verified = True
-
-    @factory.post_generation
-    def complete_profile(obj, create: bool, extracted, **kwargs) -> None:
-        """Complete profile fields required by Kindness Wall."""
-        if not create:
-            return
-        obj.profile.national_code = "0123456789"
-        obj.profile.gender = Gender.MALE
-        obj.profile.province = "تهران"
-        obj.profile.city = "تهران"
-        obj.profile.save(update_fields=["national_code", "gender", "province", "city"])
+    is_active = True
 
 
 class KindnessListingFactory(DjangoModelFactory):
-    """Factory for Kindness Wall listings."""
+    """آگهی آمادهٔ انتشار با یک راه تماس معتبر (پیش‌فرض: پیش‌نویس امن).
+
+    پیش‌فرض روی ``draft`` است تا هر تستی که انتظار دیدنِ آگهی روی تخته را
+    دارد صریحاً از PublishedNeedListingFactory یا status=PUBLISHED استفاده کند
+    — خوانا و ضدتصادف؛ انتشار هم قاعدهٔ «حداقل یک راه تماس» را پاس می‌کند.
+    """
 
     class Meta:
         model = KindnessListing
 
-    owner = factory.SubFactory(KindnessUserFactory)
-    listing_type = ListingType.NEED_HELP
     category = factory.SubFactory(KindnessCategoryFactory)
     title = factory.Sequence(lambda n: f"آگهی مهربانی {n}")
-    description = "توضیح کامل آگهی برای کمک‌رسانی و ارتباط انسانی"
+    description = "توضیح کامل آگهی برای کمک‌رسانی و ارتباط انسانی با صاحب نیاز"
+    quantity = 1
+    unit = "عدد"
+    urgency = Urgency.NORMAL
+    status = ListingStatus.DRAFT
     province = "تهران"
     city = "تهران"
-    contact_phone_snapshot = factory.SelfAttribute("owner.phone_number")
-    owner_full_name_snapshot = "علی محمدی"
-    owner_gender_snapshot = Gender.MALE
-    owner_province_snapshot = "تهران"
-    owner_city_snapshot = "تهران"
-    status = ListingStatus.DRAFT
+    contact_phone = "09121234567"
+    is_active = True
 
 
 class PublishedNeedListingFactory(KindnessListingFactory):
-    """Published need-help listing."""
+    """آگهی جاری روی تخته (منتشرشده، با انقضای آینده و یک کانال تماس).
 
-    listing_type = ListingType.NEED_HELP
+    ستون فقرات تست‌های عمومی/جستجو: هر کوئری‌ستِ «تخته» باید این ردیف را
+    ببیند و تست‌های انقضا روی همین ردیفِ backdate شده اجرا می‌شوند.
+    """
+
     status = ListingStatus.PUBLISHED
+    published_at = factory.LazyFunction(timezone.now)
+    expires_at = factory.LazyFunction(lambda: timezone.now() + timedelta(days=30))
 
 
-class PublishedOfferListingFactory(KindnessListingFactory):
-    """Published offer-help listing."""
-
-    listing_type = ListingType.OFFER_HELP
-    status = ListingStatus.PUBLISHED
-
-
-class KindnessTagFactory(DjangoModelFactory):
-    """Factory for global tags."""
-
-    class Meta:
-        model = KindnessTag
-
-    name = factory.Sequence(lambda n: f"tag-{n}")
+__all__ = [
+    "KindnessCategoryFactory",
+    "KindnessListingFactory",
+    "PublishedNeedListingFactory",
+]

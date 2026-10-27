@@ -1,188 +1,257 @@
-"""
-Kindness Wall Phase 1 foundation tests.
+"""تست‌های بنیادی مدل‌های دیوار مهربانی v2 — کانال‌ها، slug، کاور، سند جستجو.
 
-These tests verify the full-pro domain foundation: tree categories, profile
-requirements, listing workflow, Persian matching, materialized matches, duplicate
-detection, and public serializers hiding phone numbers.
+این فایل «قرارداد داده» را قفل می‌کند: همان چیزی که سیاست جدید رویش سوار است
+(هر آگهی حداقل یک راه تماس؛ نرمال‌سازی خودکار؛ کاورِ همیشه‌موجود).
 """
 
 from __future__ import annotations
 
 import pytest
-from django.db import IntegrityError, transaction
+from django.core.exceptions import ValidationError
+from django.core.files.uploadedfile import SimpleUploadedFile
 
-from apps.kindness_wall.choices import ListingStatus, ListingType
-from apps.kindness_wall.matching import calculate_match_score, normalize_text, tokenize
-from apps.kindness_wall.models import KindnessCategory, KindnessMatch
-from apps.kindness_wall.serializers import (
-    KindnessListingDetailSerializer,
-    KindnessListingListSerializer,
+from apps.kindness_wall.choices import (
+    DEFAULT_LISTING_TTL_DAYS,
+    ListingStatus,
+    OfferStatus,
+    Urgency,
 )
-from apps.kindness_wall.services import (
-    KindnessProfileIncompleteError,
-    approve_listing,
-    create_listing,
-    detect_duplicate_candidates,
-    submit_listing_for_review,
+from apps.kindness_wall.models import (
+    KindnessCategory,
+    KindnessListing,
+    KindnessListingImage,
+    KindnessOffer,
+    listing_image_upload_path,
 )
-from tests.factories import UserFactory
+from apps.kindness_wall.validators import (
+    normalize_contact_handle,
+    normalize_contact_phone,
+    validate_channel_value,
+)
 from tests.factories.kindness_wall import (
     KindnessCategoryFactory,
     KindnessListingFactory,
-    KindnessUserFactory,
-    PublishedOfferListingFactory,
+    PublishedNeedListingFactory,
 )
 
 pytestmark = pytest.mark.django_db
 
 
-class TestKindnessCategoryTree:
-    """Tree category contracts."""
+class TestChannelsContract:
+    """رجیستری کانال‌ها و قاعدهٔ «حداقل یکی، حداکثر همه»."""
 
-    def test_category_generates_slug_path_and_depth(self) -> None:
-        root = KindnessCategoryFactory(title="مشاغل")
-        child = KindnessCategoryFactory(title="برنامه‌نویسی", parent=root)
+    def test_registry_covers_all_six_required_channels(self) -> None:
+        """هر شش کانالی که سیاست نام می‌برد باید فیلد مدل واقعی داشته باشد."""
+        fields = [field for field, *_ in KindnessListing.channel_fields()]
+        assert fields == [
+            "contact_phone",
+            "contact_bale",
+            "contact_eitaa",
+            "contact_telegram",
+            "contact_rubika",
+            "contact_instagram",
+        ]
+        for field in fields:
+            assert KindnessListing._meta.get_field(field) is not None
 
-        assert root.path == f"/{root.slug}/"
-        assert root.depth == 0
-        assert child.depth == 1
-        assert child.path == f"{root.path}{child.slug}/"
+    def test_phone_normalizes_persian_digits_and_intl_prefix(self) -> None:
+        """۰۹۱۲... / +۹۸ / ۰۰۹۸ هر سه به فرمت داخلی واحد تبدیل می‌شوند."""
+        assert normalize_contact_phone("۰۹۱۲۱۲۳۴۵۶۷") == "09121234567"
+        assert normalize_contact_phone("+989121234567") == "09121234567"
+        assert normalize_contact_phone("۰۰۹۸ ۹۱۲ ۱۲۳ ۴۵۶۷") == "09121234567"
 
-    def test_category_title_unique_per_parent(self) -> None:
-        root = KindnessCategoryFactory(title="لوازم")
-        KindnessCategoryFactory(title="آشپزخانه", parent=root)
+    def test_handle_normalization_strips_at_domain_and_query(self) -> None:
+        """آیدی با @، دامنه یا query هم به خامِ معتبر نرمال می‌شود."""
+        assert normalize_contact_handle("@user.name") == "user.name"
+        assert normalize_contact_handle("https://t.me/janani/").lower() == "janani"
+        assert normalize_contact_handle("https://instagram.com/a.b?igsh=xyz") == "a.b"
 
-        with pytest.raises(IntegrityError), transaction.atomic():
-            KindnessCategory.objects.create(title="آشپزخانه", parent=root)
+    def test_invalid_channel_values_rejected(self) -> None:
+        """شکل نامعتبر (کوتاه/شروع‌نابدی‌) باید رد شود."""
+        with pytest.raises(ValidationError):
+            validate_channel_value(kind="phone", value="12345")
+        with pytest.raises(ValidationError):
+            validate_channel_value(kind="telegram", value="a")
 
-
-class TestKindnessListingFoundation:
-    """Listing creation and workflow contracts."""
-
-    def test_listing_requires_complete_identity_profile(self) -> None:
-        user = UserFactory(first_name="", last_name="")
+    def test_publish_without_any_contact_is_blocked_by_clean(self) -> None:
+        """قاعده طلایی: بدون راه تماس، حتی اعتبارسنجی مدل هم منتشر نمی‌کند."""
         category = KindnessCategoryFactory()
-
-        with pytest.raises(KindnessProfileIncompleteError):
-            create_listing(
-                owner=user,
-                listing_type=ListingType.NEED_HELP,
-                category=category,
-                title="نیاز به کمک",
-                description="توضیح کامل نیاز به کمک",
-            )
-
-    def test_create_listing_snapshots_owner_and_extracts_tags(self) -> None:
-        user = KindnessUserFactory(first_name="علی", last_name="رضایی")
-        category = KindnessCategoryFactory(title="مشاغل")
-
-        listing = create_listing(
-            owner=user,
-            listing_type=ListingType.NEED_HELP,
+        listing = KindnessListing.objects.create(
             category=category,
-            title="برنامه نویس فول استک لازم دارم",
-            description="برای سایت خیریه دنبال طراح سایت و توسعه دهنده هستم",
-        )
-
-        assert listing.status == ListingStatus.DRAFT
-        assert listing.owner_full_name_snapshot == "علی رضایی"
-        assert listing.contact_phone_snapshot == user.phone_number
-        assert listing.owner_province_snapshot == "تهران"
-        assert listing.listing_tags.count() > 0
-
-    def test_submit_and_approve_listing_publishes_and_generates_matches(self) -> None:
-        category = KindnessCategoryFactory(title="مشاغل")
-        need_owner = KindnessUserFactory()
-        offer = PublishedOfferListingFactory(
-            category=category,
-            title="طراح سایت فول استک هستم",
-            description="برنامه نویس و طراح سایت فول استک برای کمک داوطلبانه",
-        )
-        need = create_listing(
-            owner=need_owner,
-            listing_type=ListingType.NEED_HELP,
-            category=category,
-            title="برنامه نویس فول استک نیاز دارم",
-            description="دنبال طراح سایت برای پروژه خیریه هستم",
-        )
-        submit_listing_for_review(listing=need, user=need_owner)
-
-        approve_listing(listing=need, admin=KindnessUserFactory())
-
-        need.refresh_from_db()
-        assert need.status == ListingStatus.PUBLISHED
-        match = KindnessMatch.objects.get(source_listing=need, target_listing=offer)
-        assert match.score >= 40
-        assert "same_category" in match.reason_codes
-
-
-class TestKindnessMatchingEngine:
-    """Persian matching engine contracts."""
-
-    def test_normalize_and_tokenize_expand_persian_synonyms(self) -> None:
-        assert normalize_text("برنامه‌ نویسِ فول-استک") == "برنامه نویس فول استک"
-        tokens = tokenize("دنبال برنامه نویس فول استک سایت هستم")
-
-        assert "developer" in tokens
-        assert "fullstack" in tokens
-
-    def test_match_score_prefers_opposite_type_same_category_and_city(self) -> None:
-        category = KindnessCategoryFactory(title="مشاغل")
-        need = KindnessListingFactory(
-            listing_type=ListingType.NEED_HELP,
-            category=category,
-            title="برنامه نویس فول استک نیاز دارم",
-            description="برای سایت مردم نیاز به توسعه دهنده دارم",
+            title="یک نیاز بدون راه تماس",
+            description="توضیح کافی بیش از بیست نویسه برای این آگهی تستی",
             status=ListingStatus.PUBLISHED,
         )
-        offer = KindnessListingFactory(
-            listing_type=ListingType.OFFER_HELP,
-            category=category,
-            title="طراح سایت فول استک هستم",
-            description="برنامه نویس داوطلب برای طراحی سایت",
-            status=ListingStatus.PUBLISHED,
-        )
+        listing.contact_phone = ""
+        with pytest.raises(ValidationError) as exc_info:
+            listing.clean()
+        assert "status" in exc_info.value.message_dict
 
-        result = calculate_match_score(source=need, target=offer)
+    def test_draft_may_have_no_contacts(self) -> None:
+        """پیش‌نویس آزاد است؛ قاعدهٔ تماس فقط از لحظه انتشار به بعد."""
+        listing = KindnessListingFactory(status=ListingStatus.DRAFT, contact_phone="")
+        listing.clean()  # نباید خطا بدهد
 
-        assert result.score >= 60
-        assert result.breakdown["type_complementarity"] == 30
-        assert result.breakdown["category_similarity"] == 25
-        assert "تطابق" in result.explanation
-
-    def test_duplicate_detection_records_candidate(self) -> None:
-        owner = KindnessUserFactory()
-        category = KindnessCategoryFactory(title="مشاغل")
-        existing = KindnessListingFactory(
-            owner=owner,
-            category=category,
-            listing_type=ListingType.NEED_HELP,
-            title="برنامه نویس فول استک نیاز دارم",
-            description="برای سایت خیریه برنامه نویس فول استک نیاز دارم",
-        )
+    def test_saved_values_are_normalized_end_to_end(self) -> None:
+        """نرمال‌سازی در save واقعی model اتفاق می‌افتد (نه فقط در سریالایزر)."""
         listing = KindnessListingFactory(
-            owner=owner,
-            category=category,
-            listing_type=ListingType.NEED_HELP,
-            title="برنامه نویس فول استک نیاز دارم",
-            description="برای سایت خیریه برنامه نویس فول استک نیاز دارم",
+            contact_telegram="https://t.me/Mehrban/", contact_phone="+۹۸۹۱۲۱۱۱۲۲۳۳"
         )
+        listing.refresh_from_db()
+        assert listing.contact_phone == "09121112233"
+        assert listing.contact_telegram == "Mehrban"
 
-        duplicates = detect_duplicate_candidates(listing=listing, threshold=20)
+    def test_channel_payload_only_contains_filled_and_links(self) -> None:
+        """payload عمومی: فقط کانال پرشده + لینک قابل‌کلیک درست."""
+        listing = KindnessListingFactory(
+            contact_phone="۰۹۱۲۱۲۳۴۵۶۷", contact_eitaa="@eitaa_id", contact_bale=""
+        )
+        payload = listing.channel_payload()
+        kinds = {item["kind"] for item in payload}
+        assert kinds == {"phone", "eitaa"}
+        phone = next(item for item in payload if item["kind"] == "phone")
+        assert phone["link"] == "tel:+989121234567"
+        eitaa = next(item for item in payload if item["kind"] == "eitaa")
+        assert eitaa["link"] == "https://eitaa.com/eitaa_id"
 
-        assert duplicates
-        assert duplicates[0].candidate_listing_id == existing.pk
+
+class TestSlugAndSearchDocument:
+    def test_persian_title_generates_unicode_slug(self) -> None:
+        listing = PublishedNeedListingFactory(title="کمک به سیل‌زدگان آمل")
+        assert listing.slug == "کمک-به-سیلزدگان-آمل"
+
+    def test_duplicate_titles_get_suffixed_slugs(self) -> None:
+        first = PublishedNeedListingFactory(title="عنوان مشترک تست")
+        second = PublishedNeedListingFactory(title="عنوان مشترک تست")
+        assert first.slug != second.slug
+        assert second.slug.startswith("عنوان-مشترک-تست")
+
+    def test_category_slug_from_title(self) -> None:
+        category = KindnessCategory(title="لوازم آشپزخانه")
+        category.full_clean(exclude=["slug"])
+        category.save()
+        assert category.slug == "لوازم-آشپزخانه"
+
+    def test_search_document_built_from_all_context(self) -> None:
+        listing = PublishedNeedListingFactory(
+            title="پتو", city="شوش", category=KindnessCategoryFactory(title="پوشاک")
+        )
+        assert "پتو" in listing.search_document
+        assert "شوش" in listing.search_document
+        assert "پوشاک" in listing.search_document
 
 
-class TestKindnessPublicSerializers:
-    """Public serializer privacy contracts."""
+class TestVisibilityAndCounters:
+    def test_board_queryset_respects_status_and_expiry(self) -> None:
+        from datetime import timedelta
 
-    def test_public_list_and_detail_do_not_expose_phone_number(self) -> None:
-        listing = PublishedOfferListingFactory(contact_phone_snapshot="+989120000000")
+        from django.utils import timezone
 
-        list_payload = KindnessListingListSerializer(listing).data
-        detail_payload = KindnessListingDetailSerializer(listing).data
+        live = PublishedNeedListingFactory()
+        expired = PublishedNeedListingFactory(expires_at=timezone.now() - timedelta(days=1))
+        draft = KindnessListingFactory()
+        slugs = {row.slug for row in KindnessListing.objects.published()}
+        assert live.slug in slugs
+        assert expired.slug not in slugs
+        assert draft.slug not in slugs
+        assert not expired.is_public
 
-        assert "contact_phone_snapshot" not in list_payload
-        assert "contact_phone_snapshot" not in detail_payload
-        assert detail_payload["contact_available"] is True
+    def test_is_featured_pins_before_published_at(self) -> None:
+        """ترتیب پیش‌فرض تخته: ویژه‌ها بالا، سپس تازه‌ترین‌ها."""
+        plain = PublishedNeedListingFactory()
+        special = PublishedNeedListingFactory(is_featured=True)
+        # plain قدیمی‌تر از special است؛ با این حال ویژه باید اول بیاید
+        assert not plain.is_featured
+        assert special.is_featured
+        slugs = [row.slug for row in KindnessListing.objects.published()]
+        assert slugs.index(special.slug) < slugs.index(plain.slug)
+
+    def test_days_left_semantics(self) -> None:
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        listing = KindnessListingFactory()
+        assert listing.days_left is None
+        KindnessListing.all_objects.filter(pk=listing.pk).update(
+            expires_at=timezone.now() + timedelta(days=5)
+        )
+        listing.refresh_from_db()
+        assert listing.days_left == 4 or listing.days_left == 5  # لبهٔ کسر روز
+
+    def test_urgency_choices_present(self) -> None:
+        assert [value for value, _label in Urgency.choices] == ["normal", "urgent"]
+        assert [value for value, _label in ListingStatus.choices] == [
+            "draft",
+            "published",
+            "fulfilled",
+            "expired",
+            "archived",
+        ]
+        assert OfferStatus.NEW == "new"
+
+    def test_ttl_default_constant_aligned_with_settings(self) -> None:
+        from django.conf import settings
+
+        assert settings.KINDNESS_LISTING_TTL_DAYS == DEFAULT_LISTING_TTL_DAYS
+
+
+class TestListingImages:
+    """کاور خودکار — بدون ستون denormalize و سازگار با MySQL."""
+
+    def _image(self, listing, name: str = "a.png") -> KindnessListingImage:
+        file_obj = SimpleUploadedFile(
+            name, b"\x89PNG\r\n\x1a\n" + b"0" * 64, content_type="image/png"
+        )
+        return KindnessListingImage.objects.create(listing=listing, image=file_obj)
+
+    def test_first_image_becomes_cover_automatically(self) -> None:
+        listing = PublishedNeedListingFactory()
+        first = self._image(listing)
+        second = self._image(listing, name="b.png")
+        first.refresh_from_db()
+        assert first.is_cover is True
+        assert second.is_cover is False
+
+    def test_explicit_cover_demotes_others(self) -> None:
+        listing = PublishedNeedListingFactory()
+        first = self._image(listing)
+        second = self._image(listing, name="b.png")
+        second.is_cover = True
+        second.save(update_fields=["is_cover"])
+        first.refresh_from_db()
+        second.refresh_from_db()
+        assert second.is_cover is True
+        assert first.is_cover is False
+
+    def test_cover_deletion_promotes_successor(self) -> None:
+        listing = PublishedNeedListingFactory()
+        first = self._image(listing)
+        second = self._image(listing, name="b.png")
+        first.delete()
+        second.refresh_from_db()
+        assert second.is_cover is True
+
+    def test_upload_path_layout(self) -> None:
+        listing = PublishedNeedListingFactory()
+        image = KindnessListingImage(listing=listing)
+        path = listing_image_upload_path(image, "photo.png")
+        assert path == f"kindness_wall/listings/{listing.pk}/images/photo.png"
+
+    def test_max_images_constant_defined(self) -> None:
+        from apps.kindness_wall.choices import MAX_IMAGES_PER_LISTING
+
+        assert MAX_IMAGES_PER_LISTING >= 6
+
+
+class TestOfferUniqueness:
+    def test_one_offer_per_user_per_listing_at_db_level(self) -> None:
+        from django.db import IntegrityError, transaction
+
+        from tests.factories import UserFactory
+
+        listing = PublishedNeedListingFactory()
+        user = UserFactory()
+        KindnessOffer.objects.create(listing=listing, user=user)
+        with pytest.raises(IntegrityError), transaction.atomic():
+            KindnessOffer.objects.create(listing=listing, user=user)

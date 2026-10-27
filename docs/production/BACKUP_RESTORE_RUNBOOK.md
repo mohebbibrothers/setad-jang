@@ -71,7 +71,7 @@ login
 public reports
 madadkar payment history
 lms certificate verification
-kindness contact reveal audit
+kindness wall tables (v1 — تنها نسخه پیش از DROP مهاجرت 0004؛ بکاپ‌گیری قبل از ارتقا الزامی است)
 support ticket history
 ```
 

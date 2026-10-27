@@ -1,104 +1,75 @@
-"""Enumeration choices for Kindness Wall domain."""
+"""Enum‌ها و ثبات‌های سیاست‌محورِ «دیوار مهربانی» (نسخه ۲).
+
+سیاست نسخه ۲: تنها *ادمین* نویسندهٔ محتواست — دسته‌بندی‌ها و آگهی‌های
+«نیاز» را او می‌سازد؛ کاربران عمومی فقط می‌بینند، جست‌وجو می‌کنند و از
+راه‌های ارتباطیِ *در همان آگهی* با صاحب نیاز تماس می‌گیرند. به همین دلیل
+هیچ مسیر نگاشتِ محتوا برای کاربر عادی وجود ندارد و مجموعهٔ enum‌ها به
+حداقلِ معنادار رسیده است.
+"""
+
+from __future__ import annotations
 
 from django.db import models
 
 
-class ListingType(models.TextChoices):
-    """The two fixed kinds of listings in Kindness Wall."""
-
-    NEED_HELP = "need_help", "نیاز به کمک دارم"
-    OFFER_HELP = "offer_help", "می‌خواهم کمک کنم"
-
-
 class ListingStatus(models.TextChoices):
-    """Lifecycle state for a Kindness Wall listing."""
+    """چرخهٔ حیات یک آگهی نیاز در دیوار."""
 
     DRAFT = "draft", "پیش‌نویس"
-    PENDING_REVIEW = "pending_review", "در انتظار بررسی"
-    PUBLISHED = "published", "منتشرشده"
-    REJECTED = "rejected", "ردشده"
-    NEEDS_EDIT = "needs_edit", "نیازمند ویرایش"
-    SUSPENDED = "suspended", "تعلیق‌شده"
-    CLOSED = "closed", "بسته‌شده"
+    PUBLISHED = "published", "جاری روی دیوار"
+    FULFILLED = "fulfilled", "برطرف‌شده"
     EXPIRED = "expired", "منقضی‌شده"
-    DELETED = "deleted", "حذف‌شده"
+    ARCHIVED = "archived", "بایگانی‌شده"
+
+    @classmethod
+    def board_statuses(cls) -> tuple[str, ...]:
+        """وضعیت‌هایی که روی تختهٔ عمومی دیده می‌شوند."""
+        return (cls.PUBLISHED,)
 
 
-class ListingImageKind(models.TextChoices):
-    """Image role in listing gallery."""
+class Urgency(models.TextChoices):
+    """اولویتِ نیاز؛ روی چیدمان تخته و برچسب کارت اثر می‌گذارد."""
 
-    COVER = "cover", "کاور"
-    GALLERY = "gallery", "گالری"
-
-
-class TagSource(models.TextChoices):
-    """Source of a listing tag."""
-
-    MANUAL = "manual", "دستی"
-    AUTO_TITLE = "auto_title", "استخراج از عنوان"
-    AUTO_DESCRIPTION = "auto_description", "استخراج از توضیحات"
-    ADMIN = "admin", "ادمین"
+    NORMAL = "normal", "عادی"
+    URGENT = "urgent", "فوری"
 
 
-class MatchStatus(models.TextChoices):
-    """Lifecycle of a generated match."""
+class OfferStatus(models.TextChoices):
+    """وضعیت اعلام آمادگیِ کاربر برای کمک در یک آگهی."""
 
-    ACTIVE = "active", "فعال"
-    DISMISSED = "dismissed", "نادیده‌گرفته‌شده"
-    CONTACTED = "contacted", "تماس گرفته‌شده"
-    STALE = "stale", "قدیمی"
-    EXPIRED = "expired", "منقضی‌شده"
+    NEW = "new", "جدید"
+    CONTACTED = "contacted", "تماس گرفته شد"
+    DECLINED = "declined", "رد شد"
 
 
-class ReportReason(models.TextChoices):
-    """Reason for reporting a listing."""
+class ContactChannelKind(models.TextChoices):
+    """نوعِ راه ارتباطی قابل قبول برای هر آگهی."""
 
-    SPAM = "spam", "اسپم"
-    FRAUD = "fraud", "مشکوک به سوءاستفاده"
-    WRONG_CATEGORY = "wrong_category", "دسته‌بندی اشتباه"
-    INAPPROPRIATE = "inappropriate", "محتوای نامناسب"
-    DUPLICATE = "duplicate", "تکراری"
-    EXPIRED = "expired", "منقضی‌شده"
-    CONTACT_INVALID = "contact_invalid", "شماره تماس نامعتبر"
-    OTHER = "other", "سایر"
+    PHONE = "phone", "شماره تماس"
+    BALE = "bale", "بله"
+    EITAA = "eitaa", "ایتا"
+    TELEGRAM = "telegram", "تلگرام"
+    RUBIKA = "rubika", "روبیکا"
+    INSTAGRAM = "instagram", "اینستاگرام"
 
 
-class ReportStatus(models.TextChoices):
-    """Review state for listing reports."""
+#: نگاشت یکتای «نام فیلد روی مدل → (کد کانال، برچسب فارسی، لینک وب)».
+#: همهٔ لایه‌ها (سریالایزر، اکسل، فرم ادمین، export) از همین یک جدول
+#: خوانده می‌شوند؛ افزودن کانال جدید = یک سطر اینجا + یک فیلد روی مدل.
+#: ``url_prefix`` برای کانال‌هایی است که لینک عمومیِ معتبر دارند؛ ``bale``
+#: عمداً خالی است چون دامنهٔ لینک پروفایلِ عمومیِ رسمیِ مستقری ندارد و
+#: مقدار خام همان آیدی به کاربر نشان داده می‌شود.
+CONTACT_CHANNEL_REGISTRY: tuple[tuple[str, str, str, str], ...] = (
+    ("contact_phone", "phone", "شماره تماس", "tel:"),
+    ("contact_bale", "bale", "آیدی بله", ""),
+    ("contact_eitaa", "eitaa", "آیدی ایتا", "https://eitaa.com/"),
+    ("contact_telegram", "telegram", "آیدی تلگرام", "https://t.me/"),
+    ("contact_rubika", "rubika", "آیدی روبیکا", "https://rubika.ir/"),
+    ("contact_instagram", "instagram", "آیدی اینستاگرام", "https://instagram.com/"),
+)
 
-    PENDING = "pending", "در انتظار بررسی"
-    REVIEWED = "reviewed", "بررسی‌شده"
-    REJECTED = "rejected", "رد گزارش"
+#: تنظیمات کشِ تخته — TTL پیش‌فرض هر آگهی پس از انتشار (روز).
+DEFAULT_LISTING_TTL_DAYS = 45
 
-
-class DuplicateStatus(models.TextChoices):
-    """Review state for duplicate candidates."""
-
-    ACTIVE = "active", "فعال"
-    DISMISSED = "dismissed", "نادیده‌گرفته‌شده"
-    CONFIRMED = "confirmed", "تأیید تکراری بودن"
-
-
-class RiskSignalType(models.TextChoices):
-    """Safety/risk signals detected in Kindness Wall."""
-
-    CONTACT_REVEAL_VELOCITY = "contact_reveal_velocity", "نمایش سریع شماره تماس"
-    LISTING_CONTACT_SPIKE = "listing_contact_spike", "افزایش غیرعادی نمایش شماره آگهی"
-    DUPLICATE_ABUSE = "duplicate_abuse", "الگوی تکرار مشکوک"
-
-
-class RiskSeverity(models.TextChoices):
-    """Risk signal severity."""
-
-    LOW = "low", "کم"
-    MEDIUM = "medium", "متوسط"
-    HIGH = "high", "زیاد"
-    CRITICAL = "critical", "بحرانی"
-
-
-class RiskStatus(models.TextChoices):
-    """Risk signal review status."""
-
-    OPEN = "open", "باز"
-    REVIEWED = "reviewed", "بررسی‌شده"
-    DISMISSED = "dismissed", "ردشده"
+#: سقف تصاویر هر آگهی (سنگینی مدیا روی هاست اشتراکی + سرعت صفحه).
+MAX_IMAGES_PER_LISTING = 8

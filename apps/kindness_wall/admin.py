@@ -1,210 +1,484 @@
-"""Django admin for Kindness Wall."""
+"""Django Admin دیوار مهربانی (v2) — اتاق فرمان ادمین.
 
-from django.contrib import admin
+چهار ModelAdmin: دسته، آگهی (با inline تصاویر و اکشن‌های چرخه حیات + خروجی
+اکسل)، تصویر (پنهان از ایندکس، لینک مستقیم/عیب‌یابی)، اعلام آمادگی (تریاج).
+اکشن‌ها مستقیماً از services می‌گذرند تا اعتبار سیاست یکجا اعمال شود و
+audit هم ثبت گردد.
+"""
 
+from __future__ import annotations
+
+from django.contrib import admin, messages
+from django.db.models import Q
+from django.http import HttpResponse
+from django.template.defaultfilters import truncatechars
+from django.utils import timezone
+from django.utils.html import format_html
+
+from apps.audit_logs.services import log_action_async
+from apps.kindness_wall import services
+from apps.kindness_wall.choices import MAX_IMAGES_PER_LISTING, ListingStatus, OfferStatus, Urgency
+from apps.kindness_wall.export import (
+    build_kindness_export_filename,
+    build_listings_workbook,
+)
 from apps.kindness_wall.models import (
-    KindnessBookmark,
     KindnessCategory,
-    KindnessContactReveal,
-    KindnessDuplicateCandidate,
-    KindnessKeywordAlias,
     KindnessListing,
     KindnessListingImage,
-    KindnessListingReport,
-    KindnessListingTag,
-    KindnessMatch,
-    KindnessRiskSignal,
-    KindnessTag,
+    KindnessOffer,
 )
 
 
-class KindnessListingImageInline(admin.TabularInline):
-    """Inline listing images."""
+class HiddenFromAdminIndexMixin:
+    """مدل ثبت‌شده می‌ماند ولی در فهرست ایندکس ادمین دیده نمی‌شود."""
 
-    model = KindnessListingImage
-    extra = 0
-    fields = ("image", "caption", "is_cover", "order", "is_active")
+    def get_model_perms(self, request) -> dict[str, bool]:
+        """بدون perms یعنی حذف از ایندکس — الگوی مشترک r4j/tabyin."""
+        return {}
 
 
-class KindnessListingTagInline(admin.TabularInline):
-    """Inline listing tags."""
+_STATUS_COLORS = {
+    ListingStatus.DRAFT: "#8a8a8a",
+    ListingStatus.PUBLISHED: "#1a7f37",
+    ListingStatus.FULFILLED: "#7A277A",
+    ListingStatus.EXPIRED: "#c2410c",
+    ListingStatus.ARCHIVED: "#475569",
+}
 
-    model = KindnessListingTag
-    extra = 0
-    raw_id_fields = ("tag",)
+_OFFER_COLORS = {
+    OfferStatus.NEW: "#b45309",
+    OfferStatus.CONTACTED: "#1d4ed8",
+    OfferStatus.DECLINED: "#991b1b",
+}
+
+
+def _badge(text: str, color: str) -> object:
+    """پیل رنگی خوانات در list_display (سبک ادمین احراز هویت)."""
+    return format_html('<strong style="color: {};">{}</strong>', color, text)
 
 
 @admin.register(KindnessCategory)
 class KindnessCategoryAdmin(admin.ModelAdmin):
-    """Admin tree category management."""
+    """taxonomy دیوار: ساخت/ویرایش دسته‌ها توسط ادمین."""
 
-    list_display = ("title", "parent", "depth", "order", "is_active", "published_listings_count")
-    list_filter = ("is_active", "depth", "parent")
-    search_fields = ("title", "slug", "path", "description")
-    readonly_fields = (
-        "slug",
-        "path",
-        "depth",
-        "listings_count",
-        "published_listings_count",
-        "created_at",
-        "updated_at",
-    )
-    ordering = ("depth", "order", "title")
+    list_display = ("title", "icon", "order", "open_count", "active_flag", "updated_at")
+    list_editable = ("order",)
+    search_fields = ("title", "slug", "description")
+    ordering = ("order", "title")
+    readonly_fields = ("slug", "created_at", "updated_at")
+    actions = ("activate_categories", "deactivate_categories")
+
+    @admin.display(description="آگهی جاری")
+    def open_count(self, obj: KindnessCategory) -> object:
+        """شمار زندهٔ آگهی‌های جاری این دسته روی تخته."""
+        count = obj.open_listings().count()
+        color = "#1a7f37" if count else "#8a8a8a"
+        return format_html("<strong style='color: {};'>{}</strong>", color, count)
+
+    @admin.display(description="فعال", boolean=True)
+    def active_flag(self, obj: KindnessCategory) -> bool:
+        """is_active با عنوان فارسی در سرتیر."""
+        return obj.is_active
+
+    @admin.action(description="فعال‌سازی دسته‌های انتخاب‌شده")
+    def activate_categories(self, request, queryset) -> None:
+        """فعال‌سازی گروهی (بدون نگهبان؛ بازکردن همیشه امن است)."""
+        updated = queryset.update(is_active=True, updated_at=timezone.now())
+        messages.success(request, f"{updated} دسته فعال شد.")
+
+    @admin.action(description="غیرفعال‌سازی دسته‌های انتخاب‌شده")
+    def deactivate_categories(self, request, queryset) -> None:
+        """غیرفعال‌سازی گروهی با نگهبان «آگهی جاری نداشته باشد»."""
+        blocked = 0
+        done = 0
+        for category in queryset:
+            try:
+                services.set_category_active(category=category, active=False)
+                done += 1
+            except services.KindnessCategoryGuardError:
+                blocked += 1
+        if done:
+            messages.success(request, f"{done} دسته غیرفعال شد.")
+        if blocked:
+            messages.warning(
+                request,
+                f"{blocked} دسته آگهی جاری دارد و غیرفعال نشد؛ ابتدا تکلیف آگهی‌ها را روشن کنید.",
+            )
+
+    def save_model(self, request, obj, form, change) -> None:
+        """ثبت audit برای ساخت/ویرایش دسته."""
+        super().save_model(request, obj, form, change)
+        log_action_async(
+            user_id=request.user.pk,
+            action="KINDNESS_CATEGORY_UPDATED" if change else "KINDNESS_CATEGORY_CREATED",
+            resource_type="kindness_category",
+            resource_id=str(obj.pk),
+            changes={"title": obj.title},
+        )
+
+
+class KindnessListingImageInline(admin.TabularInline):
+    """تصاویر آگهی داخل فرم؛ کاور خودکار با منطق model."""
+
+    model = KindnessListingImage
+    extra = 0
+    max_num = MAX_IMAGES_PER_LISTING
+    fields = ("image", "alt_text", "is_cover", "order")
 
 
 @admin.register(KindnessListing)
 class KindnessListingAdmin(admin.ModelAdmin):
-    """Admin moderation for kindness listings."""
+    """آلات اصلی مدیریت دیوار: ویرایش آگهی + چرخه حیات + خروجی."""
 
     list_display = (
-        "title",
-        "listing_type",
+        "title_short",
         "category",
-        "owner",
-        "status",
-        "province",
+        "status_badge",
+        "urgency_flag",
+        "featured_star",
         "city",
-        "published_at",
-        "expires_at",
+        "expires_display",
+        "view_count",
+        "offer_count_badge",
     )
-    list_filter = ("listing_type", "status", "category", "province", "city")
-    search_fields = ("title", "description", "owner__email", "contact_phone_snapshot")
+    list_filter = ("status", "urgency", "category", "is_featured", "is_active")
+    search_fields = (
+        "title",
+        "description",
+        "contact_phone",
+        "contact_telegram",
+        "beneficiary_name",
+    )
+    ordering = ("-created_at",)
+    autocomplete_fields = ("category",)
     readonly_fields = (
         "slug",
-        "owner_full_name_snapshot",
-        "contact_phone_snapshot",
-        "owner_avatar_snapshot",
         "view_count",
-        "contact_reveal_count",
-        "bookmark_count",
-        "report_count",
-        "match_generation_version",
-        "last_matched_at",
-        "search_document",
+        "renew_count",
+        "published_at",
+        "fulfilled_at",
+        "fulfillment_note",
+        "created_by",
         "created_at",
         "updated_at",
+        "contact_channels_readonly",
     )
-    raw_id_fields = ("owner", "reviewed_by", "category")
-    inlines = [KindnessListingImageInline, KindnessListingTagInline]
-    ordering = ("-created_at",)
-
-
-@admin.register(KindnessTag)
-class KindnessTagAdmin(admin.ModelAdmin):
-    """Admin for normalized tag dictionary."""
-
-    list_display = ("name", "normalized_name", "usage_count", "is_active")
-    search_fields = ("name", "normalized_name")
-    readonly_fields = ("slug", "normalized_name", "usage_count", "created_at", "updated_at")
-
-
-@admin.register(KindnessKeywordAlias)
-class KindnessKeywordAliasAdmin(admin.ModelAdmin):
-    """Admin for synonym dictionary used by matching."""
-
-    list_display = ("keyword", "alias", "is_active")
-    search_fields = ("keyword", "alias", "normalized_keyword", "normalized_alias")
-    readonly_fields = ("normalized_keyword", "normalized_alias", "created_at", "updated_at")
-
-
-@admin.register(KindnessMatch)
-class KindnessMatchAdmin(admin.ModelAdmin):
-    """Read-focused admin for generated matches."""
-
-    list_display = (
-        "source_listing",
-        "target_listing",
-        "score",
-        "status",
-        "algorithm_version",
-        "generated_at",
+    inlines = [KindnessListingImageInline]
+    actions = (
+        "publish_listings",
+        "renew_listings",
+        "fulfill_listings",
+        "archive_listings",
+        "revert_to_draft",
+        "export_listings_xlsx",
     )
-    list_filter = ("status", "algorithm_version")
-    search_fields = ("source_listing__title", "target_listing__title", "explanation")
-    readonly_fields = [field.name for field in KindnessMatch._meta.fields]
-    raw_id_fields = ("source_listing", "target_listing", "dismissed_by")
-
-    def has_add_permission(self, request) -> bool:
-        """Matches are generated by the matching engine."""
-        return False
-
-    def has_change_permission(self, request, obj=None) -> bool:
-        """Match mutation should go through services."""
-        return False
-
-    def has_delete_permission(self, request, obj=None) -> bool:
-        """Match evidence should be preserved."""
-        return False
-
-
-@admin.register(KindnessContactReveal)
-class KindnessContactRevealAdmin(admin.ModelAdmin):
-    """Read-only admin for contact reveal audit records."""
-
-    list_display = (
-        "listing",
-        "viewer",
-        "listing_owner",
-        "phone_snapshot",
-        "ip_address",
-        "created_at",
+    fieldsets = (
+        (
+            "محتوا",
+            {
+                "fields": (
+                    "category",
+                    "title",
+                    "description",
+                    "quantity",
+                    "unit",
+                    "urgency",
+                    "is_featured",
+                )
+            },
+        ),
+        (
+            "صاحب نیاز و جغرا",
+            {
+                "fields": ("beneficiary_name", "province", "city"),
+                "classes": ("collapse",),
+            },
+        ),
+        (
+            "راه‌های تماس (حداقل یکی برای انتشار — همه می‌توانند پر شوند)",
+            {
+                "description": (
+                    "این کانال‌ها دقیقاً در همان آگهی به کاربر نمایش داده می‌شوند و تماس "
+                    "خارج از اپ انجام می‌شود. مقادیر خودکار نرمال می‌شوند (۰۹۸→۰، حذف @ و دامنه)."
+                ),
+                "fields": (
+                    "contact_phone",
+                    "contact_bale",
+                    "contact_eitaa",
+                    "contact_telegram",
+                    "contact_rubika",
+                    "contact_instagram",
+                    "contact_note",
+                ),
+            },
+        ),
+        (
+            "وضعیت و چرخه حیات",
+            {
+                "fields": (
+                    "status",
+                    "published_at",
+                    "expires_at",
+                    "renew_count",
+                    "contact_channels_readonly",
+                ),
+            },
+        ),
+        (
+            "برطرف‌شدن (روایت بایگانی)",
+            {
+                "fields": ("fulfilled_at", "fulfillment_note"),
+                "classes": ("collapse",),
+            },
+        ),
+        (
+            "داده‌های سیستمی",
+            {
+                "fields": ("slug", "view_count", "created_by", "created_at", "updated_at"),
+                "classes": ("collapse",),
+            },
+        ),
     )
-    list_filter = ("created_at", "ip_address")
-    search_fields = ("listing__title", "viewer__email", "listing_owner__email", "phone_snapshot")
-    readonly_fields = [field.name for field in KindnessContactReveal._meta.fields]
 
-    def has_add_permission(self, request) -> bool:
-        """Contact reveal records are service-created."""
-        return False
+    @admin.display(description="عنوان")
+    def title_short(self, obj: KindnessListing) -> str:
+        """عنوان بریده‌شده برای خوانایی فهرست."""
+        return truncatechars(obj.title, 60)
 
-    def has_change_permission(self, request, obj=None) -> bool:
-        """Contact reveal records are immutable from admin."""
-        return False
+    @admin.display(description="وضعیت")
+    def status_badge(self, obj: KindnessListing) -> object:
+        """پیل رنگی وضعیت (سبز=جاری، بنفش=برطرف، ...)."""
+        return _badge(obj.get_status_display(), _STATUS_COLORS.get(obj.status, "#333"))
 
-    def has_delete_permission(self, request, obj=None) -> bool:
-        """Contact reveal records should not be deleted."""
-        return False
+    @admin.display(description="فوریت", ordering="urgency")
+    def urgency_flag(self, obj: KindnessListing) -> object:
+        """🔔 برای فوری؛ خالی برای عادی."""
+        if obj.urgency == Urgency.URGENT:
+            return format_html("🔔 <strong>{}</strong>", "فوری")
+        return "—"
+
+    @admin.display(description="ویژه", ordering="is_featured")
+    def featured_star(self, obj: KindnessListing) -> str:
+        """⭐ برای آگهی تثبیت‌شده بالای دیوار."""
+        return "⭐" if obj.is_featured else ""
+
+    @admin.display(description="انقضا", ordering="expires_at")
+    def expires_display(self, obj: KindnessListing) -> object:
+        """انقضا با هشدار رنگی نزدیک-به-مرگ."""
+        if obj.expires_at is None:
+            return "بدون انقضا"
+        days = obj.days_left
+        if days is None:
+            return "—"
+        color = "#c2410c" if days <= 7 else "#374151"
+        return format_html(
+            "<span style='color: {};'>{} — {} روز مانده</span>",
+            color,
+            timezone.localtime(obj.expires_at).strftime("%Y-%m-%d"),
+            days,
+        )
+
+    @admin.display(description="اعلام‌ها", ordering="view_count")
+    def offer_count_badge(self, obj: KindnessListing) -> object:
+        """شمار اعلام‌های باز روی همان آگهی (دعوت به تریاج)."""
+        total = obj.offers.filter(status=OfferStatus.NEW).count()
+        if not total:
+            return "۰"
+        return format_html("<strong style='color: #b45309;'>{} باز</strong>", total)
+
+    @admin.display(description="کانال‌های فعال")
+    def contact_channels_readonly(self, obj: KindnessListing) -> str:
+        """نمایش خلاصه کانال‌های پرشده در فرم (read-only؛ ویرایش از فیلدها)."""
+        if obj.pk is None:
+            return "پس از ذخیره آگهی محاسبه می‌شود."
+        payload = obj.channel_payload()
+        if not payload:
+            return "هنوز هیچ راه تماسی پر نشده — انتشار مسدود است."
+        return "، ".join(f"{item['label']}: {item['value']}" for item in payload)
+
+    def get_queryset(self, request):
+        """پیش‌فرض: تازه‌ترین‌ها؛ select_related برای حذف N+1 شمارش اعلام."""
+        return super().get_queryset(request).select_related("category")
+
+    def save_model(self, request, obj, form, change) -> None:
+        """ذخیره با ثبت creator (برای ممیزی) و audit."""
+        if not change:
+            obj.created_by = request.user
+        super().save_model(request, obj, form, change)
+        log_action_async(
+            user_id=request.user.pk,
+            action="KINDNESS_LISTING_UPDATED" if change else "KINDNESS_LISTING_CREATED",
+            resource_type="kindness_listing",
+            resource_id=str(obj.pk),
+            changes={"title": obj.title, "status": obj.status},
+        )
+
+    def _run_service(
+        self, request, queryset, service_name: str, audit_action: str, *, ok_verb: str
+    ) -> None:
+        """اجرای گروهی یک سرویس وضعیت روی selection با گزارش موفق/ناموفق."""
+        fn = getattr(services, service_name)
+        done, failed = 0, 0
+        for listing in queryset:
+            try:
+                fn(listing=listing)
+                done += 1
+                log_action_async(
+                    user_id=request.user.pk,
+                    action=audit_action,
+                    resource_type="kindness_listing",
+                    resource_id=str(listing.pk),
+                    changes={"status": listing.status},
+                )
+            except services.KindnessWallServiceError as exc:
+                failed += 1
+                messages.error(request, f"«{listing.title}»: {exc}")
+        if done:
+            messages.success(
+                request, f"{done} آگهی {ok_verb} شد." + (f" ({failed} خطا)" if failed else "")
+            )
+        elif failed:
+            messages.warning(request, "هیچ آگهی تغییر نکرد؛ پیام‌های خطا را ببینید.")
+
+    @admin.action(description="انتشار روی دیوار (بررسی حداقل یک راه تماس)")
+    def publish_listings(self, request, queryset) -> None:
+        """انتشار گروهی از مسیر publish_listing (قاعدهٔ تماس اینجا قفل است)."""
+        self._run_service(
+            request, queryset, "publish_listing", "KINDNESS_LISTING_PUBLISHED", ok_verb="منتشر"
+        )
+
+    @admin.action(description="تمدید مهلت آگهی‌های انتخاب‌شده")
+    def renew_listings(self, request, queryset) -> None:
+        """تمدید گروهی (بازنشانی expires_at از امروز + شمارنده renew)."""
+        self._run_service(
+            request, queryset, "renew_listing", "KINDNESS_LISTING_RENEWED", ok_verb="تمدید"
+        )
+
+    @admin.action(description="برطرف شد (ثبت روایت در بایگانی)")
+    def fulfill_listings(self, request, queryset) -> None:
+        """برطرف‌سازی گروهی بدون روایت؛ برای روایت، ویرایش تکی را ببینید."""
+        self._run_service(
+            request,
+            queryset,
+            "fulfill_listing",
+            "KINDNESS_LISTING_FULFILLED",
+            ok_verb="برطرف‌شده ثبت",
+        )
+
+    @admin.action(description="بایگانی آگهی‌های انتخاب‌شده")
+    def archive_listings(self, request, queryset) -> None:
+        """بایگانی گروهی (حذف فیزیکی نمی‌شود؛ لینک‌ها سالم می‌مانند)."""
+        self._run_service(
+            request, queryset, "archive_listing", "KINDNESS_LISTING_ARCHIVED", ok_verb="بایگانی"
+        )
+
+    @admin.action(description="بازگرداندن به پیش‌نویس")
+    def revert_to_draft(self, request, queryset) -> None:
+        """هر وضعیتی → draft (برای ویرایش مجدد پیش از انتشار)."""
+        self._run_service(
+            request,
+            queryset,
+            "revert_to_draft",
+            "KINDNESS_LISTING_REVERTED_TO_DRAFT",
+            ok_verb="به پیش‌نویس بازگشت",
+        )
+
+    @admin.action(description="خروجی اکسل از انتخاب (یا کل فیلترشده)")
+    def export_listings_xlsx(self, request, queryset) -> object:
+        """ساخت شیت از queryset فیلترشدهٔ ادمین و ارسال به‌عنوان دانلود."""
+        workbook = build_listings_workbook(
+            listings=queryset.order_by("-created_at").iterator(chunk_size=1000)
+        )
+        log_action_async(
+            user_id=request.user.pk,
+            action="KINDNESS_LISTINGS_EXPORTED",
+            resource_type="kindness_listing",
+            changes={"row_count": queryset.count()},
+        )
+        response = HttpResponse(
+            workbook.getvalue(),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        filename = build_kindness_export_filename(export_type="listings")
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        workbook.close()
+        return response
 
 
-@admin.register(KindnessListingReport)
-class KindnessListingReportAdmin(admin.ModelAdmin):
-    """Admin report review queue."""
+@admin.register(KindnessOffer)
+class KindnessOfferAdmin(admin.ModelAdmin):
+    """تریاج اعلام‌های آمادگی: وضعیت، یادداشت، خروجی."""
 
-    list_display = ("listing", "reported_by", "reason", "status", "created_at", "reviewed_at")
-    list_filter = ("status", "reason")
-    search_fields = ("listing__title", "reported_by__email", "description")
-    raw_id_fields = ("listing", "reported_by", "reviewed_by")
-
-
-@admin.register(KindnessBookmark)
-class KindnessBookmarkAdmin(admin.ModelAdmin):
-    """Read-only bookmark admin."""
-
-    list_display = ("user", "listing", "created_at")
-    search_fields = ("user__email", "listing__title")
-    readonly_fields = [field.name for field in KindnessBookmark._meta.fields]
-
-
-@admin.register(KindnessDuplicateCandidate)
-class KindnessDuplicateCandidateAdmin(admin.ModelAdmin):
-    """Admin duplicate candidate review."""
-
-    list_display = ("listing", "candidate_listing", "score", "status", "created_at")
+    list_display = ("user", "listing", "status_badge", "created_at", "handled_display")
     list_filter = ("status",)
-    search_fields = ("listing__title", "candidate_listing__title", "reason")
+    search_fields = ("listing__title", "user__username", "user__email", "message")
+    autocomplete_fields = ("listing",)
+    date_hierarchy = "created_at"
+    readonly_fields = ("listing", "user", "message", "created_at", "handled_by", "handled_at")
+    actions = ("mark_contacted", "mark_declined")
+    list_select_related = ("listing", "user", "handled_by")
+
+    @admin.display(description="وضعیت پیگیری")
+    def status_badge(self, obj: KindnessOffer) -> object:
+        """پیل وضعیت اعلام آمادگی."""
+        return _badge(obj.get_status_display(), _OFFER_COLORS.get(obj.status, "#333"))
+
+    @admin.display(description="بررسی")
+    def handled_display(self, obj: KindnessOffer) -> str:
+        """خلاصه «چه کسی کی» در فهرست."""
+        if obj.handled_at is None:
+            return "در انتظار"
+        return f"{getattr(obj.handled_by, 'full_name', None) or obj.handled_by} · {timezone.localtime(obj.handled_at):%Y-%m-%d}"
+
+    def get_actions(self, request):
+        """حذف گروهی خاموش — سوابق پیگیری نباید پاک شوند؛ «رد شد» بزنید."""
+        actions = super().get_actions(request)
+        actions.pop("delete_selected", None)
+        return actions
+
+    def has_delete_permission(self, request, obj=None) -> bool:
+        """حذف تکی هم ممنوع (انضباط دادهٔ سابقهٔ تریاج)."""
+        return False
+
+    def _review(self, request, queryset, status: str) -> None:
+        """ثبت گروهی نتیجهٔ بررسی با audit."""
+        done = 0
+        for offer in queryset:
+            try:
+                services.review_offer(offer=offer, admin=request.user, status=status)
+            except services.KindnessWallServiceError:
+                continue
+            done += 1
+            log_action_async(
+                user_id=request.user.pk,
+                action="KINDNESS_OFFER_REVIEWED",
+                resource_type="kindness_offer",
+                resource_id=str(offer.pk),
+                changes={"status": status},
+            )
+        messages.success(request, f"{done} اعلام آمادگی ثبت نتیجه شد.")
+
+    @admin.action(description="علامت‌گذاری: تماس گرفته شد")
+    def mark_contacted(self, request, queryset) -> None:
+        """پیگیری موفق: با داوطلب تماس گرفته/استفاده شد."""
+        self._review(
+            request, queryset.filter(~Q(status=OfferStatus.CONTACTED)), OfferStatus.CONTACTED
+        )
+
+    @admin.action(description="علامت‌گذاری: رد شد")
+    def mark_declined(self, request, queryset) -> None:
+        """نیاز پر شد یا داوطلب مناسب نبود."""
+        self._review(
+            request, queryset.filter(~Q(status=OfferStatus.DECLINED)), OfferStatus.DECLINED
+        )
 
 
-admin.site.register(KindnessListingImage)
-admin.site.register(KindnessListingTag)
+@admin.register(KindnessListingImage)
+class KindnessListingImageAdmin(HiddenFromAdminIndexMixin, admin.ModelAdmin):
+    """مدیریت مستقیم تصاویر (عیب‌یابی/جابه‌جایی کاور) — لینکی از ایندکس نیست."""
 
-
-@admin.register(KindnessRiskSignal)
-class KindnessRiskSignalAdmin(admin.ModelAdmin):
-    """Admin review queue for Kindness Wall risk signals."""
-
-    list_display = ("signal_type", "severity", "status", "user", "listing", "created_at")
-    list_filter = ("signal_type", "severity", "status")
-    search_fields = ("description", "user__email", "listing__title")
-    raw_id_fields = ("user", "listing", "reviewed_by")
-    readonly_fields = ("created_at", "updated_at")
+    list_display = ("listing", "image", "is_cover", "order", "created_at")
+    list_filter = ("is_cover",)
+    search_fields = ("listing__title",)
+    autocomplete_fields = ("listing",)

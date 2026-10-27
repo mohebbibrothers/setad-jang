@@ -1804,25 +1804,10 @@ paths:
               schema:
                 $ref: '#/components/schemas/ReadinessHealth'
           description: ''
-  /api/v1/kindness-wall/admin/analytics/:
-    get:
-      operationId: kindness_wall_admin_analytics_retrieve
-      description: Return analytics summary.
-      tags:
-      - kindness-wall
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/KindnessAdminAnalytics'
-          description: ''
   /api/v1/kindness-wall/admin/categories/:
     get:
       operationId: kindness_admin_categories_list
-      description: Return all active/inactive categories for tree management.
+      description: دسته‌های فعال با شمارندهٔ آگهی (ویرایش‌شده‌ها بی‌صدا از فهرست می‌روند).
       tags:
       - دیوار مهربانی — مدیریت
       security:
@@ -1836,20 +1821,20 @@ paths:
           description: ''
     post:
       operationId: kindness_admin_categories_create
-      description: Create a tree category via service layer.
+      description: ساخت دسته؛ slug از عنوان ساخته می‌شود (منطق model).
       tags:
       - دیوار مهربانی — مدیریت
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/KindnessAdminCategoryInput'
+              $ref: '#/components/schemas/KindnessCategoryInput'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/KindnessAdminCategoryInput'
+              $ref: '#/components/schemas/KindnessCategoryInput'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/KindnessAdminCategoryInput'
+              $ref: '#/components/schemas/KindnessCategoryInput'
         required: true
       security:
       - jwtAuth: []
@@ -1858,38 +1843,12 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/KindnessAdminCategoryResponse'
-          description: ''
-        '400':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/KindnessWallErrorResponse'
+                $ref: '#/components/schemas/KindnessCategoryListResponse'
           description: ''
   /api/v1/kindness-wall/admin/categories/{category_id}/:
-    get:
-      operationId: kindness_wall_admin_categories_retrieve
-      description: Return one category for admin editing.
-      parameters:
-      - in: path
-        name: category_id
-        schema:
-          type: integer
-        required: true
-      tags:
-      - kindness-wall
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/KindnessCategory'
-          description: ''
     patch:
-      operationId: kindness_wall_admin_categories_partial_update
-      description: Update category metadata/tree location.
+      operationId: kindness_admin_categories_update
+      description: ویرایش فیلدهای قابل‌ویرایش دسته.
       parameters:
       - in: path
         name: category_id
@@ -1897,18 +1856,18 @@ paths:
           type: integer
         required: true
       tags:
-      - kindness-wall
+      - دیوار مهربانی — مدیریت
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/PatchedKindnessCategory'
+              $ref: '#/components/schemas/PatchedKindnessCategoryInput'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/PatchedKindnessCategory'
+              $ref: '#/components/schemas/PatchedKindnessCategoryInput'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/PatchedKindnessCategory'
+              $ref: '#/components/schemas/PatchedKindnessCategoryInput'
       security:
       - jwtAuth: []
       responses:
@@ -1916,11 +1875,11 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/KindnessCategory'
+                $ref: '#/components/schemas/KindnessCategoryListResponse'
           description: ''
     delete:
-      operationId: kindness_wall_admin_categories_destroy
-      description: Soft-delete/deactivate category with hierarchy safety checks.
+      operationId: kindness_admin_categories_deactivate
+      description: غیرفعال‌سازی (soft) — نگهبان «دیوار خالی نشود» در services.
       parameters:
       - in: path
         name: category_id
@@ -1928,17 +1887,6 @@ paths:
           type: integer
         required: true
       tags:
-      - kindness-wall
-      security:
-      - jwtAuth: []
-      responses:
-        '204':
-          description: No response body
-  /api/v1/kindness-wall/admin/contact-reveals/:
-    get:
-      operationId: kindness_admin_contact_reveals_list
-      description: Return paginated contact reveal records.
-      tags:
       - دیوار مهربانی — مدیریت
       security:
       - jwtAuth: []
@@ -1947,66 +1895,40 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/KindnessAdminContactRevealListResponse'
+                $ref: '#/components/schemas/KindnessCategoryListResponse'
           description: ''
-  /api/v1/kindness-wall/admin/duplicates/:
-    get:
-      operationId: kindness_admin_duplicates_list
-      description: Return duplicate candidates generated by the matching engine.
-      tags:
-      - دیوار مهربانی — مدیریت
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/KindnessAdminDuplicateListResponse'
-          description: ''
-  /api/v1/kindness-wall/admin/duplicates/{duplicate_id}/review/:
-    post:
-      operationId: kindness_admin_duplicates_review
-      description: Confirm or dismiss a likely duplicate candidate.
-      parameters:
-      - in: path
-        name: duplicate_id
-        schema:
-          type: integer
-        required: true
-      tags:
-      - دیوار مهربانی — مدیریت
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/KindnessDuplicateReview'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/KindnessDuplicateReview'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/KindnessDuplicateReview'
-        required: true
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/KindnessAdminDuplicateReviewResponse'
-          description: ''
-        '404':
+        '409':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/KindnessWallErrorResponse'
           description: ''
+  /api/v1/kindness-wall/admin/export/listings/:
+    get:
+      operationId: kindness_admin_listings_export
+      description: استریم شیت؛ برای دیوارهای بزرگ رم نمی‌کند.
+      tags:
+      - دیوار مهربانی — مدیریت
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/kindness-wall/admin/export/offers/:
+    get:
+      operationId: kindness_admin_offers_export
+      description: استریم شیت تریاج.
+      tags:
+      - دیوار مهربانی — مدیریت
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
   /api/v1/kindness-wall/admin/listings/:
     get:
       operationId: kindness_admin_listings_list
-      description: Return admin listing list.
+      description: جستجو/فیلتر روی همهٔ دیوار، نه فقط بخش عمومی.
       tags:
       - دیوار مهربانی — مدیریت
       security:
@@ -2018,10 +1940,36 @@ paths:
               schema:
                 $ref: '#/components/schemas/KindnessAdminListingListResponse'
           description: ''
+    post:
+      operationId: kindness_admin_listings_create
+      description: ساخت آگهی جدید در وضعیت پیش‌نویس (انتشار اکشن جدا است).
+      tags:
+      - دیوار مهربانی — مدیریت
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KindnessListingInput'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/KindnessListingInput'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/KindnessListingInput'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KindnessAdminListingDetailResponse'
+          description: ''
   /api/v1/kindness-wall/admin/listings/{listing_id}/:
     get:
       operationId: kindness_admin_listings_retrieve
-      description: Return one listing for admin.
+      description: جزئیات ادمین با شمارنده‌ها.
       parameters:
       - in: path
         name: listing_id
@@ -2037,7 +1985,118 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/KindnessUserListingDetailResponse'
+                $ref: '#/components/schemas/KindnessAdminListingDetailResponse'
+          description: ''
+    patch:
+      operationId: kindness_admin_listings_update
+      description: ویرایش محتوا/کانال‌ها؛ تغییر slug انجام نمی‌شود (لینک‌ها نمی‌شکنند).
+      parameters:
+      - in: path
+        name: listing_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - دیوار مهربانی — مدیریت
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedKindnessListingInput'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedKindnessListingInput'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedKindnessListingInput'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KindnessAdminListingDetailResponse'
+          description: ''
+  /api/v1/kindness-wall/admin/listings/{listing_id}/{action}/:
+    post:
+      operationId: kindness_admin_listings_action
+      description: اجرای اکشن استاندارد روی آگهی.
+      parameters:
+      - in: path
+        name: action
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: listing_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - دیوار مهربانی — مدیریت
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KindnessAdminListingDetailResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KindnessWallErrorResponse'
+          description: ''
+  /api/v1/kindness-wall/admin/offers/:
+    get:
+      operationId: kindness_admin_offers_list
+      description: اعلام‌ها با فیلتر وضعیت/آگهی/کاربر.
+      tags:
+      - دیوار مهربانی — مدیریت
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KindnessAdminOfferListResponse'
+          description: ''
+  /api/v1/kindness-wall/admin/offers/{offer_id}/review/:
+    post:
+      operationId: kindness_admin_offers_review
+      description: بررسی نهایی؛ داوطلب نتیجه را در «اعلام‌های من» می‌بیند.
+      parameters:
+      - in: path
+        name: offer_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - دیوار مهربانی — مدیریت
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KindnessOfferReviewInput'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/KindnessOfferReviewInput'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/KindnessOfferReviewInput'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KindnessAdminOfferListResponse'
           description: ''
         '404':
           content:
@@ -2045,249 +2104,10 @@ paths:
               schema:
                 $ref: '#/components/schemas/KindnessWallErrorResponse'
           description: ''
-  /api/v1/kindness-wall/admin/listings/{listing_id}/approve/:
-    post:
-      operationId: kindness_wall_admin_listings_approve_create
-      description: Approve listing.
-      parameters:
-      - in: path
-        name: listing_id
-        schema:
-          type: integer
-        required: true
-      tags:
-      - kindness-wall
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/KindnessUserListingDetail'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/KindnessUserListingDetail'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/KindnessUserListingDetail'
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/KindnessUserListingDetail'
-          description: ''
-  /api/v1/kindness-wall/admin/listings/{listing_id}/reject/:
-    post:
-      operationId: kindness_wall_admin_listings_reject_create
-      description: Reject listing.
-      parameters:
-      - in: path
-        name: listing_id
-        schema:
-          type: integer
-        required: true
-      tags:
-      - kindness-wall
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/KindnessUserListingDetail'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/KindnessUserListingDetail'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/KindnessUserListingDetail'
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/KindnessUserListingDetail'
-          description: ''
-  /api/v1/kindness-wall/admin/listings/{listing_id}/restore/:
-    post:
-      operationId: kindness_wall_admin_listings_restore_create
-      description: Restore listing.
-      parameters:
-      - in: path
-        name: listing_id
-        schema:
-          type: integer
-        required: true
-      tags:
-      - kindness-wall
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/KindnessUserListingDetail'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/KindnessUserListingDetail'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/KindnessUserListingDetail'
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/KindnessUserListingDetail'
-          description: ''
-  /api/v1/kindness-wall/admin/listings/{listing_id}/suspend/:
-    post:
-      operationId: kindness_wall_admin_listings_suspend_create
-      description: Suspend listing.
-      parameters:
-      - in: path
-        name: listing_id
-        schema:
-          type: integer
-        required: true
-      tags:
-      - kindness-wall
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/KindnessUserListingDetail'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/KindnessUserListingDetail'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/KindnessUserListingDetail'
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/KindnessUserListingDetail'
-          description: ''
-  /api/v1/kindness-wall/admin/listings/export/:
-    get:
-      operationId: kindness_admin_listings_export
-      description: Export filtered listings as an RTL Excel workbook.
-      tags:
-      - دیوار مهربانی — مدیریت
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          description: No response body
-  /api/v1/kindness-wall/admin/matches/:
-    get:
-      operationId: kindness_admin_matches_list
-      description: Return all matches with professional moderation filters.
-      tags:
-      - دیوار مهربانی — مدیریت
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/KindnessAdminMatchListResponse'
-          description: ''
-  /api/v1/kindness-wall/admin/matches/{match_id}/:
-    get:
-      operationId: kindness_admin_matches_retrieve
-      description: Return one match with source/target listing context.
-      parameters:
-      - in: path
-        name: match_id
-        schema:
-          type: integer
-        required: true
-      tags:
-      - دیوار مهربانی — مدیریت
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/KindnessAdminMatchDetailResponse'
-          description: ''
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/KindnessWallErrorResponse'
-          description: ''
-  /api/v1/kindness-wall/admin/reports/:
-    get:
-      operationId: kindness_wall_admin_reports_retrieve
-      description: Return listing reports.
-      tags:
-      - kindness-wall
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/KindnessListingReport'
-          description: ''
-  /api/v1/kindness-wall/admin/reports/{report_id}/review/:
-    post:
-      operationId: kindness_wall_admin_reports_review_create
-      description: Review report and optionally suspend listing.
-      parameters:
-      - in: path
-        name: report_id
-        schema:
-          type: integer
-        required: true
-      tags:
-      - kindness-wall
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/KindnessListingReport'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/KindnessListingReport'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/KindnessListingReport'
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/KindnessListingReport'
-          description: ''
-  /api/v1/kindness-wall/admin/reports/export/:
-    get:
-      operationId: kindness_admin_reports_export
-      description: Export filtered reports as an RTL Excel workbook.
-      tags:
-      - دیوار مهربانی — مدیریت
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          description: No response body
   /api/v1/kindness-wall/categories/:
     get:
       operationId: kindness_categories_list
-      description: Return active categories.
+      description: فهرست دسته‌ها (کش عمومی؛ با هر ویرایش ادمین invalid می‌شود).
       tags:
       - دیوار مهربانی — عمومی
       security:
@@ -2303,7 +2123,7 @@ paths:
   /api/v1/kindness-wall/listings/:
     get:
       operationId: kindness_listings_list
-      description: Return filtered published listings without phone numbers.
+      description: فهرست صفحه‌بندی‌شده بدون هیچ راه تماس (کارت‌ها تماس‌محور نیستند).
       tags:
       - دیوار مهربانی — عمومی
       security:
@@ -2319,7 +2139,7 @@ paths:
   /api/v1/kindness-wall/listings/{slug}/:
     get:
       operationId: kindness_listings_retrieve
-      description: Return one published listing and increment view counter.
+      description: یک آگهی جاری + شمارش بازدید + وضعیت اعلام آمادگیِ کاربر جاری.
       parameters:
       - in: path
         name: slug
@@ -2344,10 +2164,10 @@ paths:
               schema:
                 $ref: '#/components/schemas/KindnessWallErrorResponse'
           description: ''
-  /api/v1/kindness-wall/listings/{slug}/bookmark/:
+  /api/v1/kindness-wall/listings/{slug}/offer/:
     post:
-      operationId: kindness_wall_listings_bookmark_create
-      description: Bookmark listing.
+      operationId: kindness_offer_create
+      description: 'upsert: ثبت اولین اعلام یا ویرایش پیام تا پیش از بررسی ادمین.'
       parameters:
       - in: path
         name: slug
@@ -2355,19 +2175,45 @@ paths:
           type: string
         required: true
       tags:
-      - kindness-wall
+      - دیوار مهربانی — کاربر
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/KindnessListingDetail'
+              $ref: '#/components/schemas/KindnessOfferInput'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/KindnessListingDetail'
+              $ref: '#/components/schemas/KindnessOfferInput'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/KindnessListingDetail'
-        required: true
+              $ref: '#/components/schemas/KindnessOfferInput'
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KindnessOfferResponse'
+          description: ''
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KindnessOfferResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KindnessWallErrorResponse'
+          description: ''
+  /api/v1/kindness-wall/my-offers/:
+    get:
+      operationId: kindness_my_offers
+      description: صفحه‌بندی استاندارد روی کوئری‌ست selectors.
+      tags:
+      - دیوار مهربانی — کاربر
       security:
       - jwtAuth: []
       responses:
@@ -2375,34 +2221,39 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/KindnessListingDetail'
+                $ref: '#/components/schemas/KindnessMyOfferListResponse'
           description: ''
+  /api/v1/kindness-wall/offers/{offer_id}/withdraw/:
     delete:
-      operationId: kindness_wall_listings_bookmark_destroy
-      description: Remove bookmark.
+      operationId: kindness_offer_withdraw
+      description: حذف رکورد اعلام (soft حذف نیست؛ رکورد تریاج‌نشده ارزش نگهداری ندارد).
       parameters:
       - in: path
-        name: slug
+        name: offer_id
         schema:
-          type: string
+          type: integer
         required: true
       tags:
-      - kindness-wall
+      - دیوار مهربانی — کاربر
       security:
       - jwtAuth: []
       responses:
-        '204':
-          description: No response body
-  /api/v1/kindness-wall/listings/{slug}/matches/:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KindnessEmptyResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KindnessWallErrorResponse'
+          description: ''
+  /api/v1/kindness-wall/stats/:
     get:
-      operationId: kindness_listings_matches
-      description: Return active matches for a public listing.
-      parameters:
-      - in: path
-        name: slug
-        schema:
-          type: string
-        required: true
+      operationId: kindness_stats
+      description: آمار عمومی دیوار (کش همان namespace فهرست، کلید stats).
       tags:
       - دیوار مهربانی — عمومی
       security:
@@ -2413,402 +2264,23 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/KindnessMatchListResponse'
+                $ref: '#/components/schemas/KindnessBoardStatsResponse'
           description: ''
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/KindnessWallErrorResponse'
-          description: ''
-  /api/v1/kindness-wall/listings/{slug}/report/:
-    post:
-      operationId: kindness_listings_report
-      description: Create a report for a listing.
-      parameters:
-      - in: path
-        name: slug
-        schema:
-          type: string
-        required: true
-      tags:
-      - دیوار مهربانی — کاربر
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/KindnessListingReportCreate'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/KindnessListingReportCreate'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/KindnessListingReportCreate'
-        required: true
-      security:
-      - jwtAuth: []
-      responses:
-        '201':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/KindnessListingReportResponse'
-          description: ''
-        '403':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/KindnessWallErrorResponse'
-          description: ''
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/KindnessWallErrorResponse'
-          description: ''
-  /api/v1/kindness-wall/listings/{slug}/reveal-contact/:
-    post:
-      operationId: kindness_listings_reveal_contact
-      description: Reveal phone and record contact reveal audit row.
-      parameters:
-      - in: path
-        name: slug
-        schema:
-          type: string
-        required: true
-      tags:
-      - دیوار مهربانی — کاربر
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/KindnessContactRevealResponse'
-          description: ''
-        '403':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/KindnessWallErrorResponse'
-          description: ''
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/KindnessWallErrorResponse'
-          description: ''
-  /api/v1/kindness-wall/me/bookmarks/:
+  /api/v1/kindness-wall/stories/:
     get:
-      operationId: kindness_user_bookmarks_list
-      description: Return bookmarked published listings for current user.
+      operationId: kindness_stories_list
+      description: فهرست نیازهای برطرف‌شده (بدون راه تماس، بدون نام صاحب آگهی).
       tags:
-      - دیوار مهربانی — کاربر
+      - دیوار مهربانی — عمومی
       security:
       - jwtAuth: []
+      - {}
       responses:
         '200':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/KindnessUserBookmarkListResponse'
-          description: ''
-  /api/v1/kindness-wall/me/listings/:
-    get:
-      operationId: kindness_user_listings_list
-      description: Return listings owned by current user.
-      tags:
-      - دیوار مهربانی — کاربر
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/KindnessUserListingListResponse'
-          description: ''
-    post:
-      operationId: kindness_user_listings_create
-      description: Create a draft listing for current user.
-      tags:
-      - دیوار مهربانی — کاربر
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/KindnessListingCreateUpdate'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/KindnessListingCreateUpdate'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/KindnessListingCreateUpdate'
-      security:
-      - jwtAuth: []
-      responses:
-        '201':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/KindnessUserListingDetailResponse'
-          description: ''
-        '400':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/KindnessWallErrorResponse'
-          description: ''
-        '403':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/KindnessWallErrorResponse'
-          description: ''
-  /api/v1/kindness-wall/me/listings/{listing_id}/:
-    get:
-      operationId: kindness_wall_me_listings_retrieve
-      description: Return own listing detail.
-      parameters:
-      - in: path
-        name: listing_id
-        schema:
-          type: integer
-        required: true
-      tags:
-      - kindness-wall
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/KindnessUserListingDetail'
-          description: ''
-    patch:
-      operationId: kindness_wall_me_listings_partial_update
-      description: Update own listing.
-      parameters:
-      - in: path
-        name: listing_id
-        schema:
-          type: integer
-        required: true
-      tags:
-      - kindness-wall
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PatchedKindnessUserListingDetail'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/PatchedKindnessUserListingDetail'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/PatchedKindnessUserListingDetail'
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/KindnessUserListingDetail'
-          description: ''
-    delete:
-      operationId: kindness_wall_me_listings_destroy
-      description: Soft-delete own listing.
-      parameters:
-      - in: path
-        name: listing_id
-        schema:
-          type: integer
-        required: true
-      tags:
-      - kindness-wall
-      security:
-      - jwtAuth: []
-      responses:
-        '204':
-          description: No response body
-  /api/v1/kindness-wall/me/listings/{listing_id}/close/:
-    post:
-      operationId: kindness_user_listings_close
-      description: Close a listing by its owner.
-      parameters:
-      - in: path
-        name: listing_id
-        schema:
-          type: integer
-        required: true
-      tags:
-      - دیوار مهربانی — کاربر
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/KindnessUserListingDetailResponse'
-          description: ''
-        '403':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/KindnessWallErrorResponse'
-          description: ''
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/KindnessWallErrorResponse'
-          description: ''
-  /api/v1/kindness-wall/me/listings/{listing_id}/renew/:
-    post:
-      operationId: kindness_wall_me_listings_renew_create
-      description: Renew listing expiration.
-      parameters:
-      - in: path
-        name: listing_id
-        schema:
-          type: integer
-        required: true
-      tags:
-      - kindness-wall
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/KindnessUserListingDetail'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/KindnessUserListingDetail'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/KindnessUserListingDetail'
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/KindnessUserListingDetail'
-          description: ''
-  /api/v1/kindness-wall/me/listings/{listing_id}/submit/:
-    post:
-      operationId: kindness_wall_me_listings_submit_create
-      description: Submit listing for review.
-      parameters:
-      - in: path
-        name: listing_id
-        schema:
-          type: integer
-        required: true
-      tags:
-      - kindness-wall
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/KindnessUserListingDetail'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/KindnessUserListingDetail'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/KindnessUserListingDetail'
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/KindnessUserListingDetail'
-          description: ''
-  /api/v1/kindness-wall/me/matches/:
-    get:
-      operationId: kindness_wall_me_matches_retrieve
-      description: Return active matches for user's listings.
-      tags:
-      - kindness-wall
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/KindnessMatch'
-          description: ''
-  /api/v1/kindness-wall/me/matches/{match_id}/contacted/:
-    post:
-      operationId: kindness_wall_me_matches_contacted_create
-      description: Mark a match as contacted.
-      parameters:
-      - in: path
-        name: match_id
-        schema:
-          type: integer
-        required: true
-      tags:
-      - kindness-wall
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/KindnessMatch'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/KindnessMatch'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/KindnessMatch'
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/KindnessMatch'
-          description: ''
-  /api/v1/kindness-wall/me/matches/{match_id}/dismiss/:
-    post:
-      operationId: kindness_wall_me_matches_dismiss_create
-      description: Dismiss a match owned by user's source listing.
-      parameters:
-      - in: path
-        name: match_id
-        schema:
-          type: integer
-        required: true
-      tags:
-      - kindness-wall
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/KindnessMatch'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/KindnessMatch'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/KindnessMatch'
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/KindnessMatch'
+                $ref: '#/components/schemas/KindnessStoryListResponse'
           description: ''
   /api/v1/lms/admin/activity-statements/:
     get:
@@ -16325,261 +15797,190 @@ components:
           $ref: '#/components/schemas/PrimaryIdentifierEnum'
       required:
       - identifier_kind
-    KindnessAdminAnalytics:
+    KindnessAdminListing:
       type: object
-      description: Admin analytics summary serializer.
-      properties:
-        total_listings:
-          type: integer
-        pending_listings:
-          type: integer
-        published_listings:
-          type: integer
-        need_help_listings:
-          type: integer
-        offer_help_listings:
-          type: integer
-        contact_reveals:
-          type: integer
-        active_matches:
-          type: integer
-        pending_reports:
-          type: integer
-        duplicate_candidates:
-          type: integer
-        status_distribution:
-          type: array
-          items:
-            type: object
-            additionalProperties: {}
-        type_distribution:
-          type: array
-          items:
-            type: object
-            additionalProperties: {}
-        province_distribution:
-          type: array
-          items:
-            type: object
-            additionalProperties: {}
-        city_distribution:
-          type: array
-          items:
-            type: object
-            additionalProperties: {}
-        category_distribution:
-          type: array
-          items:
-            type: object
-            additionalProperties: {}
-        top_viewed_listings:
-          type: array
-          items:
-            type: object
-            additionalProperties: {}
-        top_revealed_listings:
-          type: array
-          items:
-            type: object
-            additionalProperties: {}
-        match_effectiveness:
-          type: object
-          additionalProperties: {}
-        report_distribution:
-          type: array
-          items:
-            type: object
-            additionalProperties: {}
-        generated_at:
-          type: string
-          format: date-time
-      required:
-      - active_matches
-      - category_distribution
-      - city_distribution
-      - contact_reveals
-      - duplicate_candidates
-      - generated_at
-      - match_effectiveness
-      - need_help_listings
-      - offer_help_listings
-      - pending_listings
-      - pending_reports
-      - province_distribution
-      - published_listings
-      - report_distribution
-      - status_distribution
-      - top_revealed_listings
-      - top_viewed_listings
-      - total_listings
-      - type_distribution
-    KindnessAdminCategoryInput:
-      type: object
-      description: Admin input serializer for creating/updating tree categories.
-      properties:
-        parent_id:
-          type: integer
-          nullable: true
-        title:
-          type: string
-          maxLength: 180
-        description:
-          type: string
-          default: ''
-        icon:
-          type: string
-          default: ''
-          maxLength: 80
-        order:
-          type: integer
-          minimum: 0
-        is_active:
-          type: boolean
-      required:
-      - title
-    KindnessAdminCategoryResponse:
-      type: object
-      properties:
-        success:
-          type: boolean
-          default: true
-        status_code:
-          type: integer
-          default: 200
-        message:
-          type: string
-        data:
-          $ref: '#/components/schemas/KindnessCategory'
-      required:
-      - data
-      - message
-    KindnessAdminContactReveal:
-      type: object
-      description: Admin audit serializer for contact reveal rows.
+      description: 'نمای کامل ادمین: همهٔ فیلدهای عمومی + چرخهٔ حیات و شمارنده‌ها.'
       properties:
         id:
           type: integer
           readOnly: true
-        listing_id:
+        slug:
+          type: string
+          readOnly: true
+          title: اسلاگ
+          pattern: ^[-\w]+$
+        title:
+          type: string
+          readOnly: true
+          title: عنوان
+        excerpt:
+          type: string
+          description: چکیدهٔ توضیحات برای کارت.
+          readOnly: true
+        category:
+          allOf:
+          - $ref: '#/components/schemas/KindnessCategory'
+          readOnly: true
+        urgency:
+          allOf:
+          - $ref: '#/components/schemas/KindnessListingUrgencyEnum'
+          readOnly: true
+          title: فوریت
+        urgency_display:
+          type: string
+          readOnly: true
+        is_featured:
+          type: boolean
+          readOnly: true
+          title: ویژه (ثبیت بالای دیوار)
+        quantity:
           type: integer
           readOnly: true
-        listing_title:
+          title: تعداد/مقدار
+        unit:
           type: string
           readOnly: true
-        viewer_id:
+          title: واحد
+        province:
+          type: string
+          readOnly: true
+          title: استان
+        city:
+          type: string
+          readOnly: true
+          title: شهر
+        view_count:
           type: integer
           readOnly: true
-        viewer_full_name:
-          type: string
-          description: Return viewer display name.
-          readOnly: true
-        listing_owner_id:
+          title: بازدید
+        open_offers_count:
           type: integer
           readOnly: true
-        owner_full_name:
+        cover_url:
           type: string
-          description: Return listing owner display name.
+          nullable: true
+          description: URL کاور از مجموعهٔ prefetch‌شده (بدون کوئری اضافه).
           readOnly: true
-        phone_snapshot:
-          type: string
+        days_left:
+          type: integer
           readOnly: true
-        ip_address:
+        published_at:
           type: string
+          format: date-time
           readOnly: true
           nullable: true
-        request_id:
+          title: منتشر شده در
+        description:
           type: string
           readOnly: true
+          title: شرح نیاز
+          description: چه چیزی، برای چه منظوری و در چه حد و مقداری لازم است.
+        beneficiary_name:
+          type: string
+          readOnly: true
+          title: نام/لقب صاحب نیاز
+          description: می‌تواند محرمانه باشد؛ مثل «خانواده‌ای در شوش».
+        contact_note:
+          type: string
+          readOnly: true
+          title: یادداشت هماهنگی
+          description: 'مثلاً: «تماس ۱۰ تا ۲۰»، «پیامکی بهتر است».'
+        expires_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+          title: انقضا
+        images:
+          type: array
+          items:
+            $ref: '#/components/schemas/KindnessListingImage'
+          readOnly: true
+        contact_channels:
+          type: array
+          items:
+            type: object
+            additionalProperties:
+              type: string
+          description: 'کانال‌های پرشده — همان چیزی که سیاست می‌گوید: «درج‌شده در
+            آگهی».'
+          readOnly: true
+        my_offer_status:
+          type: string
+          nullable: true
+          description: وضعیت اعلام آمادگیِ کاربر جاری (None = هنوز ثبت نکرده).
+          readOnly: true
+        can_offer:
+          type: boolean
+          description: دکمهٔ «می‌تونم کمک کنم» فقط برای کاربر واردشده فعال است.
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/KindnessListingStatusEnum'
+          readOnly: true
+          title: وضعیت
+        status_display:
+          type: string
+          readOnly: true
+        renew_count:
+          type: integer
+          readOnly: true
+          title: بار تمدید
+        fulfilled_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+          title: برطرف‌شده در
+        fulfillment_note:
+          type: string
+          readOnly: true
+          title: روایت برطرف‌شدن
+          description: یک خط صادقانه برای بایگانی «داستان‌های مهربانی».
         created_at:
           type: string
           format: date-time
           readOnly: true
           title: تاریخ ایجاد
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: تاریخ بروزرسانی
       required:
+      - beneficiary_name
+      - can_offer
+      - category
+      - city
+      - contact_channels
+      - contact_note
+      - cover_url
       - created_at
+      - days_left
+      - description
+      - excerpt
+      - expires_at
+      - fulfilled_at
+      - fulfillment_note
       - id
-      - ip_address
-      - listing_id
-      - listing_owner_id
-      - listing_title
-      - owner_full_name
-      - phone_snapshot
-      - request_id
-      - viewer_full_name
-      - viewer_id
-    KindnessAdminContactRevealListResponse:
-      type: object
-      properties:
-        data:
-          $ref: '#/components/schemas/KindnessAdminContactRevealListResponseData'
-        success:
-          type: boolean
-          default: true
-        status_code:
-          type: integer
-          default: 200
-        message:
-          type: string
-      required:
-      - data
-      - message
-    KindnessAdminContactRevealListResponseData:
-      type: object
-      properties:
-        count:
-          type: integer
-        next:
-          type: string
-          format: uri
-          nullable: true
-        previous:
-          type: string
-          format: uri
-          nullable: true
-        results:
-          type: array
-          items:
-            $ref: '#/components/schemas/KindnessAdminContactReveal'
-      required:
-      - count
-      - results
-    KindnessAdminDuplicateListResponse:
-      type: object
-      properties:
-        data:
-          $ref: '#/components/schemas/KindnessAdminDuplicateListResponseData'
-        success:
-          type: boolean
-          default: true
-        status_code:
-          type: integer
-          default: 200
-        message:
-          type: string
-      required:
-      - data
-      - message
-    KindnessAdminDuplicateListResponseData:
-      type: object
-      properties:
-        count:
-          type: integer
-        next:
-          type: string
-          format: uri
-          nullable: true
-        previous:
-          type: string
-          format: uri
-          nullable: true
-        results:
-          type: array
-          items:
-            $ref: '#/components/schemas/KindnessDuplicateCandidate'
-      required:
-      - count
-      - results
-    KindnessAdminDuplicateReviewResponse:
+      - images
+      - is_featured
+      - my_offer_status
+      - open_offers_count
+      - province
+      - published_at
+      - quantity
+      - renew_count
+      - slug
+      - status
+      - status_display
+      - title
+      - unit
+      - updated_at
+      - urgency
+      - urgency_display
+      - view_count
+    KindnessAdminListingDetailResponse:
       type: object
       properties:
         success:
@@ -16591,7 +15992,7 @@ components:
         message:
           type: string
         data:
-          $ref: '#/components/schemas/KindnessDuplicateCandidate'
+          $ref: '#/components/schemas/KindnessAdminListing'
       required:
       - data
       - message
@@ -16627,107 +16028,75 @@ components:
         results:
           type: array
           items:
-            $ref: '#/components/schemas/KindnessUserListingDetail'
+            $ref: '#/components/schemas/KindnessAdminListing'
       required:
       - count
       - results
-    KindnessAdminMatch:
+    KindnessAdminOffer:
       type: object
-      description: Admin serializer exposing both sides of a generated match.
+      description: نمای ادمین از اعلام آمادگی با شناسهٔ آگهی و نام داوطلب.
       properties:
         id:
           type: integer
           readOnly: true
-        source_listing:
-          allOf:
-          - $ref: '#/components/schemas/KindnessListingList'
-          readOnly: true
-        target_listing:
-          allOf:
-          - $ref: '#/components/schemas/KindnessListingList'
-          readOnly: true
-        score:
-          type: integer
-          readOnly: true
-        score_breakdown:
-          readOnly: true
-        reason_codes:
-          readOnly: true
-        explanation:
+        listing_slug:
           type: string
           readOnly: true
+        listing_title:
+          type: string
+          readOnly: true
+        message:
+          type: string
+          readOnly: true
+          title: پیام داوطلب
+          description: اختیاری — مثلاً «یک پتوی نو در منزل دارم».
         status:
           allOf:
-          - $ref: '#/components/schemas/KindnessMatchStatusEnum'
+          - $ref: '#/components/schemas/KindnessOfferStatusEnum'
           readOnly: true
-        algorithm_version:
-          type: integer
-          readOnly: true
-        generated_at:
+          title: وضعیت پیگیری
+        status_display:
           type: string
-          format: date-time
           readOnly: true
-        dismissed_by_id:
-          type: integer
-          nullable: true
-          readOnly: true
-        dismissed_at:
+        admin_note:
           type: string
-          format: date-time
           readOnly: true
-          nullable: true
-        contacted_at:
-          type: string
-          format: date-time
-          readOnly: true
-          nullable: true
+          title: یادداشت ادمین
         created_at:
           type: string
           format: date-time
           readOnly: true
           title: تاریخ ایجاد
-        updated_at:
+        handled_at:
           type: string
           format: date-time
           readOnly: true
-          title: تاریخ بروزرسانی
+          nullable: true
+          title: بررسی در
+        listing_id:
+          type: integer
+          readOnly: true
+        user_label:
+          type: string
+          description: نمایش انسانی داوطلب (نام کامل؛ مدل کاربر پروژه username ندارد).
+          readOnly: true
       required:
-      - algorithm_version
-      - contacted_at
+      - admin_note
       - created_at
-      - dismissed_at
-      - dismissed_by_id
-      - explanation
-      - generated_at
+      - handled_at
       - id
-      - reason_codes
-      - score
-      - score_breakdown
-      - source_listing
+      - listing_id
+      - listing_slug
+      - listing_title
+      - message
       - status
-      - target_listing
-      - updated_at
-    KindnessAdminMatchDetailResponse:
-      type: object
-      properties:
-        success:
-          type: boolean
-          default: true
-        status_code:
-          type: integer
-          default: 200
-        message:
-          type: string
-        data:
-          $ref: '#/components/schemas/KindnessAdminMatch'
-      required:
-      - data
-      - message
-    KindnessAdminMatchListResponse:
+      - status_display
+      - user_label
+    KindnessAdminOfferListResponse:
       type: object
       properties:
         data:
-          $ref: '#/components/schemas/KindnessAdminMatchListResponseData'
+          $ref: '#/components/schemas/KindnessAdminOfferListResponseData'
         success:
           type: boolean
           default: true
@@ -16739,7 +16108,7 @@ components:
       required:
       - data
       - message
-    KindnessAdminMatchListResponseData:
+    KindnessAdminOfferListResponseData:
       type: object
       properties:
         count:
@@ -16755,41 +16124,55 @@ components:
         results:
           type: array
           items:
-            $ref: '#/components/schemas/KindnessAdminMatch'
+            $ref: '#/components/schemas/KindnessAdminOffer'
       required:
       - count
       - results
-    KindnessBookmark:
+    KindnessBoardStats:
       type: object
-      description: User bookmark serializer with optimized listing card.
+      description: اسکیمای شمارنده‌های عمومی دیوار.
       properties:
-        id:
+        open_listings:
           type: integer
-          readOnly: true
-        listing:
-          allOf:
-          - $ref: '#/components/schemas/KindnessListingList'
-          readOnly: true
-        created_at:
-          type: string
-          format: date-time
-          readOnly: true
-          title: تاریخ ایجاد
+        urgent_listings:
+          type: integer
+        fulfilled_total:
+          type: integer
+        fulfilled_30d:
+          type: integer
+        volunteers_total:
+          type: integer
+        active_categories:
+          type: integer
       required:
-      - created_at
-      - id
-      - listing
+      - active_categories
+      - fulfilled_30d
+      - fulfilled_total
+      - open_listings
+      - urgent_listings
+      - volunteers_total
+    KindnessBoardStatsResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          default: true
+        status_code:
+          type: integer
+          default: 200
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/KindnessBoardStats'
+      required:
+      - data
+      - message
     KindnessCategory:
       type: object
-      description: Category tree row serializer.
+      description: دسته با شمارندهٔ زندهٔ آگهی‌های جاری.
       properties:
         id:
           type: integer
-          readOnly: true
-        parent_id:
-          type: integer
-          nullable: true
-          title: دسته والد
           readOnly: true
         title:
           type: string
@@ -16798,53 +16181,58 @@ components:
         slug:
           type: string
           readOnly: true
+          title: اسلاگ
           pattern: ^[-\w]+$
         description:
           type: string
           readOnly: true
-          title: توضیحات
+          title: توضیح دسته
         icon:
           type: string
           readOnly: true
-          title: آیکن
-        cover_image:
-          type: string
-          format: uri
-          readOnly: true
-          nullable: true
-          title: تصویر کاور
-        path:
-          type: string
-          readOnly: true
-        depth:
-          type: integer
-          readOnly: true
+          title: آیکون (ایموجی)
+          description: "یک ایموجی مثل \U0001F373 یا \U0001F9E5 برای نمایش روی کارت
+            دسته."
         order:
           type: integer
           readOnly: true
-        is_active:
-          type: boolean
-          readOnly: true
-          title: فعال
-        listings_count:
+          title: ترتیب نمایش
+        open_listings_count:
           type: integer
-          readOnly: true
-        published_listings_count:
-          type: integer
+          description: از annotation سلکتور خوانده می‌شود؛ بدون آن صفر امن است.
           readOnly: true
       required:
-      - cover_image
-      - depth
       - description
       - icon
       - id
-      - is_active
-      - listings_count
+      - open_listings_count
       - order
-      - parent_id
-      - path
-      - published_listings_count
       - slug
+      - title
+    KindnessCategoryInput:
+      type: object
+      description: ورودی ساخت/ویرایش دسته توسط ادمین.
+      properties:
+        title:
+          type: string
+          title: عنوان دسته
+          maxLength: 160
+        description:
+          type: string
+          title: توضیح دسته
+        icon:
+          type: string
+          title: آیکون (ایموجی)
+          description: "یک ایموجی مثل \U0001F373 یا \U0001F9E5 برای نمایش روی کارت
+            دسته."
+          maxLength: 8
+        order:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          title: ترتیب نمایش
+      required:
       - title
     KindnessCategoryListResponse:
       type: object
@@ -16864,21 +16252,7 @@ components:
       required:
       - data
       - message
-    KindnessContactReveal:
-      type: object
-      description: Response serializer for contact reveal endpoint.
-      properties:
-        phone_number:
-          type: string
-        listing_id:
-          type: integer
-        owner_full_name:
-          type: string
-      required:
-      - listing_id
-      - owner_full_name
-      - phone_number
-    KindnessContactRevealResponse:
+    KindnessEmptyResponse:
       type: object
       properties:
         success:
@@ -16890,104 +16264,13 @@ components:
         message:
           type: string
         data:
-          $ref: '#/components/schemas/KindnessContactReveal'
+          nullable: true
       required:
-      - data
       - message
-    KindnessDuplicateCandidate:
-      type: object
-      description: Admin serializer for likely duplicate listings.
-      properties:
-        id:
-          type: integer
-          readOnly: true
-        listing:
-          allOf:
-          - $ref: '#/components/schemas/KindnessListingList'
-          readOnly: true
-        candidate_listing:
-          allOf:
-          - $ref: '#/components/schemas/KindnessListingList'
-          readOnly: true
-        score:
-          type: integer
-          readOnly: true
-        reason:
-          type: string
-          readOnly: true
-        status:
-          allOf:
-          - $ref: '#/components/schemas/SupportDuplicateReviewStatusEnum'
-          readOnly: true
-        created_at:
-          type: string
-          format: date-time
-          readOnly: true
-          title: تاریخ ایجاد
-        updated_at:
-          type: string
-          format: date-time
-          readOnly: true
-          title: تاریخ بروزرسانی
-      required:
-      - candidate_listing
-      - created_at
-      - id
-      - listing
-      - reason
-      - score
-      - status
-      - updated_at
-    KindnessDuplicateReview:
-      type: object
-      description: Input serializer for duplicate candidate review.
-      properties:
-        status:
-          type: string
-        reason:
-          type: string
-          default: ''
-      required:
-      - status
-    KindnessListingCreateUpdate:
-      type: object
-      description: Input serializer for user listing create/update.
-      properties:
-        listing_type:
-          $ref: '#/components/schemas/ListingTypeEnum'
-        category_id:
-          type: integer
-        title:
-          type: string
-          maxLength: 260
-        description:
-          type: string
-        province:
-          type: string
-          maxLength: 100
-        city:
-          type: string
-          maxLength: 100
-        district:
-          type: string
-          maxLength: 120
-        address_hint:
-          type: string
-          maxLength: 260
-        latitude:
-          type: string
-          format: decimal
-          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
-          nullable: true
-        longitude:
-          type: string
-          format: decimal
-          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
-          nullable: true
     KindnessListingDetail:
       type: object
-      description: Public detail serializer with contact availability but without
-        raw phone.
+      description: 'جزئیات عمومی آگهی: شرح کامل + راه‌های تماس + وضعیت اعلام آمادگیِ
+        کاربر.'
       properties:
         id:
           type: integer
@@ -16995,82 +16278,138 @@ components:
         slug:
           type: string
           readOnly: true
+          title: اسلاگ
           pattern: ^[-\w]+$
-        listing_type:
-          allOf:
-          - $ref: '#/components/schemas/ListingTypeEnum'
+        title:
+          type: string
+          readOnly: true
+          title: عنوان
+        excerpt:
+          type: string
+          description: چکیدهٔ توضیحات برای کارت.
           readOnly: true
         category:
           allOf:
           - $ref: '#/components/schemas/KindnessCategory'
           readOnly: true
-        title:
+        urgency:
+          allOf:
+          - $ref: '#/components/schemas/KindnessListingUrgencyEnum'
+          readOnly: true
+          title: فوریت
+        urgency_display:
           type: string
           readOnly: true
+        is_featured:
+          type: boolean
+          readOnly: true
+          title: ویژه (ثبیت بالای دیوار)
+        quantity:
+          type: integer
+          readOnly: true
+          title: تعداد/مقدار
+        unit:
+          type: string
+          readOnly: true
+          title: واحد
         province:
           type: string
           readOnly: true
+          title: استان
         city:
           type: string
           readOnly: true
-        district:
-          type: string
+          title: شهر
+        view_count:
+          type: integer
           readOnly: true
-        owner_full_name_snapshot:
-          type: string
+          title: بازدید
+        open_offers_count:
+          type: integer
           readOnly: true
-        owner_avatar_snapshot:
+        cover_url:
           type: string
+          nullable: true
+          description: URL کاور از مجموعهٔ prefetch‌شده (بدون کوئری اضافه).
+          readOnly: true
+        days_left:
+          type: integer
           readOnly: true
         published_at:
           type: string
           format: date-time
           readOnly: true
           nullable: true
+          title: منتشر شده در
+        description:
+          type: string
+          readOnly: true
+          title: شرح نیاز
+          description: چه چیزی، برای چه منظوری و در چه حد و مقداری لازم است.
+        beneficiary_name:
+          type: string
+          readOnly: true
+          title: نام/لقب صاحب نیاز
+          description: می‌تواند محرمانه باشد؛ مثل «خانواده‌ای در شوش».
+        contact_note:
+          type: string
+          readOnly: true
+          title: یادداشت هماهنگی
+          description: 'مثلاً: «تماس ۱۰ تا ۲۰»، «پیامکی بهتر است».'
         expires_at:
           type: string
           format: date-time
           readOnly: true
           nullable: true
-        view_count:
-          type: integer
-          readOnly: true
-        cover_image:
-          type: string
-          nullable: true
-          description: Return cover image URL if available.
-          readOnly: true
-        description:
-          type: string
-        address_hint:
-          type: string
-          maxLength: 260
+          title: انقضا
         images:
           type: array
           items:
             $ref: '#/components/schemas/KindnessListingImage'
           readOnly: true
-        contact_available:
+        contact_channels:
+          type: array
+          items:
+            type: object
+            additionalProperties:
+              type: string
+          description: 'کانال‌های پرشده — همان چیزی که سیاست می‌گوید: «درج‌شده در
+            آگهی».'
+          readOnly: true
+        my_offer_status:
+          type: string
+          nullable: true
+          description: وضعیت اعلام آمادگیِ کاربر جاری (None = هنوز ثبت نکرده).
+          readOnly: true
+        can_offer:
           type: boolean
-          description: Return whether contact can be revealed via dedicated endpoint.
+          description: دکمهٔ «می‌تونم کمک کنم» فقط برای کاربر واردشده فعال است.
           readOnly: true
       required:
+      - beneficiary_name
+      - can_offer
       - category
       - city
-      - contact_available
-      - cover_image
+      - contact_channels
+      - contact_note
+      - cover_url
+      - days_left
       - description
-      - district
+      - excerpt
       - expires_at
       - id
       - images
-      - listing_type
-      - owner_avatar_snapshot
-      - owner_full_name_snapshot
+      - is_featured
+      - my_offer_status
+      - open_offers_count
       - province
       - published_at
+      - quantity
       - slug
       - title
+      - unit
+      - urgency
+      - urgency_display
       - view_count
     KindnessListingDetailResponse:
       type: object
@@ -17090,7 +16429,7 @@ components:
       - message
     KindnessListingImage:
       type: object
-      description: Listing image serializer.
+      description: تصویر آگهی.
       properties:
         id:
           type: integer
@@ -17099,36 +16438,108 @@ components:
           type: string
           format: uri
           readOnly: true
-        caption:
-          type: string
-          readOnly: true
+          title: فایل تصویر
         alt_text:
           type: string
           readOnly: true
+          title: متن جایگزین
         is_cover:
           type: boolean
           readOnly: true
+          title: کاور
         order:
           type: integer
           readOnly: true
-        width:
-          type: integer
-          readOnly: true
-        height:
-          type: integer
-          readOnly: true
+          title: ترتیب
       required:
       - alt_text
-      - caption
-      - height
       - id
       - image
       - is_cover
       - order
-      - width
+    KindnessListingInput:
+      type: object
+      description: ساخت/ویرایش کامل آگهی توسط ادمین (REST). وضعیت‌ها فقط از اکشن‌ها.
+      properties:
+        category:
+          type: integer
+          title: دسته
+        title:
+          type: string
+          title: عنوان
+          maxLength: 240
+        description:
+          type: string
+          title: شرح نیاز
+          description: چه چیزی، برای چه منظوری و در چه حد و مقداری لازم است.
+        quantity:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 1
+          format: int64
+          title: تعداد/مقدار
+        unit:
+          type: string
+          title: واحد
+          maxLength: 20
+        urgency:
+          allOf:
+          - $ref: '#/components/schemas/KindnessListingUrgencyEnum'
+          title: فوریت
+        beneficiary_name:
+          type: string
+          title: نام/لقب صاحب نیاز
+          description: می‌تواند محرمانه باشد؛ مثل «خانواده‌ای در شوش».
+          maxLength: 120
+        province:
+          type: string
+          title: استان
+          maxLength: 60
+        city:
+          type: string
+          title: شهر
+          maxLength: 60
+        contact_note:
+          type: string
+          title: یادداشت هماهنگی
+          description: 'مثلاً: «تماس ۱۰ تا ۲۰»، «پیامکی بهتر است».'
+          maxLength: 240
+        contact_phone:
+          type: string
+          title: شماره تماس
+          maxLength: 30
+        contact_bale:
+          type: string
+          title: آیدی بله
+          maxLength: 64
+        contact_eitaa:
+          type: string
+          title: آیدی ایتا
+          maxLength: 64
+        contact_telegram:
+          type: string
+          title: آیدی تلگرام
+          maxLength: 64
+        contact_rubika:
+          type: string
+          title: آیدی روبیکا
+          maxLength: 64
+        contact_instagram:
+          type: string
+          title: آیدی اینستاگرام
+          maxLength: 64
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+          title: انقضا
+      required:
+      - category
+      - description
+      - title
     KindnessListingList:
       type: object
-      description: Public listing card serializer; never exposes contact phone.
+      description: کارت آگهی روی دیوار — بدون هیچ اطلاعات تماس (ضد اسکرپینگ).
       properties:
         id:
           type: integer
@@ -17136,65 +16547,86 @@ components:
         slug:
           type: string
           readOnly: true
+          title: اسلاگ
           pattern: ^[-\w]+$
-        listing_type:
-          allOf:
-          - $ref: '#/components/schemas/ListingTypeEnum'
+        title:
+          type: string
+          readOnly: true
+          title: عنوان
+        excerpt:
+          type: string
+          description: چکیدهٔ توضیحات برای کارت.
           readOnly: true
         category:
           allOf:
           - $ref: '#/components/schemas/KindnessCategory'
           readOnly: true
-        title:
+        urgency:
+          allOf:
+          - $ref: '#/components/schemas/KindnessListingUrgencyEnum'
+          readOnly: true
+          title: فوریت
+        urgency_display:
           type: string
           readOnly: true
+        is_featured:
+          type: boolean
+          readOnly: true
+          title: ویژه (ثبیت بالای دیوار)
+        quantity:
+          type: integer
+          readOnly: true
+          title: تعداد/مقدار
+        unit:
+          type: string
+          readOnly: true
+          title: واحد
         province:
           type: string
           readOnly: true
+          title: استان
         city:
           type: string
           readOnly: true
-        district:
-          type: string
+          title: شهر
+        view_count:
+          type: integer
           readOnly: true
-        owner_full_name_snapshot:
-          type: string
+          title: بازدید
+        open_offers_count:
+          type: integer
           readOnly: true
-        owner_avatar_snapshot:
+        cover_url:
           type: string
+          nullable: true
+          description: URL کاور از مجموعهٔ prefetch‌شده (بدون کوئری اضافه).
+          readOnly: true
+        days_left:
+          type: integer
           readOnly: true
         published_at:
           type: string
           format: date-time
           readOnly: true
           nullable: true
-        expires_at:
-          type: string
-          format: date-time
-          readOnly: true
-          nullable: true
-        view_count:
-          type: integer
-          readOnly: true
-        cover_image:
-          type: string
-          nullable: true
-          description: Return cover image URL if available.
-          readOnly: true
+          title: منتشر شده در
       required:
       - category
       - city
-      - cover_image
-      - district
-      - expires_at
+      - cover_url
+      - days_left
+      - excerpt
       - id
-      - listing_type
-      - owner_avatar_snapshot
-      - owner_full_name_snapshot
+      - is_featured
+      - open_offers_count
       - province
       - published_at
+      - quantity
       - slug
       - title
+      - unit
+      - urgency
+      - urgency_display
       - view_count
     KindnessListingListResponse:
       type: object
@@ -17232,132 +16664,125 @@ components:
       required:
       - count
       - results
-    KindnessListingReport:
+    KindnessListingStatusEnum:
+      enum:
+      - draft
+      - published
+      - fulfilled
+      - expired
+      - archived
+      type: string
+      description: |-
+        * `draft` - پیش‌نویس
+        * `published` - جاری روی دیوار
+        * `fulfilled` - برطرف‌شده
+        * `expired` - منقضی‌شده
+        * `archived` - بایگانی‌شده
+    KindnessListingUrgencyEnum:
+      enum:
+      - normal
+      - urgent
+      type: string
+      description: |-
+        * `normal` - عادی
+        * `urgent` - فوری
+    KindnessMyOfferListResponse:
       type: object
-      description: Report output serializer.
+      properties:
+        data:
+          $ref: '#/components/schemas/KindnessMyOfferListResponseData'
+        success:
+          type: boolean
+          default: true
+        status_code:
+          type: integer
+          default: 200
+        message:
+          type: string
+      required:
+      - data
+      - message
+    KindnessMyOfferListResponseData:
+      type: object
+      properties:
+        count:
+          type: integer
+        next:
+          type: string
+          format: uri
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/KindnessOffer'
+      required:
+      - count
+      - results
+    KindnessOffer:
+      type: object
+      description: اعلام آمادگی (نمای کاربر از خودِ رکوردها).
       properties:
         id:
           type: integer
           readOnly: true
-        listing_id:
-          type: integer
+        listing_slug:
+          type: string
           readOnly: true
         listing_title:
           type: string
           readOnly: true
-        reported_by_id:
-          type: integer
-          readOnly: true
-        reason:
-          allOf:
-          - $ref: '#/components/schemas/KindnessReportReasonEnum'
-          readOnly: true
-        description:
+        message:
           type: string
           readOnly: true
+          title: پیام داوطلب
+          description: اختیاری — مثلاً «یک پتوی نو در منزل دارم».
         status:
           allOf:
-          - $ref: '#/components/schemas/LMSDiscussionReportStatusEnum'
+          - $ref: '#/components/schemas/KindnessOfferStatusEnum'
           readOnly: true
-        reviewed_by_id:
-          type: integer
-          nullable: true
-          readOnly: true
-        reviewed_at:
+          title: وضعیت پیگیری
+        status_display:
           type: string
-          format: date-time
           readOnly: true
-          nullable: true
         admin_note:
           type: string
           readOnly: true
+          title: یادداشت ادمین
         created_at:
           type: string
           format: date-time
           readOnly: true
           title: تاریخ ایجاد
-      required:
-      - admin_note
-      - created_at
-      - description
-      - id
-      - listing_id
-      - listing_title
-      - reason
-      - reported_by_id
-      - reviewed_at
-      - reviewed_by_id
-      - status
-    KindnessListingReportCreate:
-      type: object
-      description: Input serializer for reporting a listing.
-      properties:
-        reason:
-          $ref: '#/components/schemas/KindnessReportReasonEnum'
-        description:
-          type: string
-          default: ''
-      required:
-      - reason
-    KindnessListingReportResponse:
-      type: object
-      properties:
-        success:
-          type: boolean
-          default: true
-        status_code:
-          type: integer
-          default: 200
-        message:
-          type: string
-        data:
-          $ref: '#/components/schemas/KindnessListingReport'
-      required:
-      - data
-      - message
-    KindnessMatch:
-      type: object
-      description: Serializer for smart match results.
-      properties:
-        id:
-          type: integer
-          readOnly: true
-        target_listing:
-          allOf:
-          - $ref: '#/components/schemas/KindnessListingList'
-          readOnly: true
-        score:
-          type: integer
-          readOnly: true
-        score_breakdown:
-          readOnly: true
-        reason_codes:
-          readOnly: true
-        explanation:
-          type: string
-          readOnly: true
-        status:
-          allOf:
-          - $ref: '#/components/schemas/KindnessMatchStatusEnum'
-          readOnly: true
-        generated_at:
+        handled_at:
           type: string
           format: date-time
           readOnly: true
+          nullable: true
+          title: بررسی در
       required:
-      - explanation
-      - generated_at
+      - admin_note
+      - created_at
+      - handled_at
       - id
-      - reason_codes
-      - score
-      - score_breakdown
+      - listing_slug
+      - listing_title
+      - message
       - status
-      - target_listing
-    KindnessMatchListResponse:
+      - status_display
+    KindnessOfferInput:
+      type: object
+      description: ورودی اعلام آمادگی.
+      properties:
+        message:
+          type: string
+          maxLength: 500
+    KindnessOfferResponse:
       type: object
       properties:
-        data:
-          $ref: '#/components/schemas/KindnessMatchListResponseData'
         success:
           type: boolean
           default: true
@@ -17366,297 +16791,100 @@ components:
           default: 200
         message:
           type: string
+        data:
+          $ref: '#/components/schemas/KindnessOffer'
       required:
       - data
       - message
-    KindnessMatchListResponseData:
+    KindnessOfferReviewInput:
       type: object
+      description: ورودی بررسی ادمین روی اعلام آمادگی.
       properties:
-        count:
-          type: integer
-        next:
+        status:
+          $ref: '#/components/schemas/KindnessOfferReviewInputStatusEnum'
+        note:
           type: string
-          format: uri
-          nullable: true
-        previous:
-          type: string
-          format: uri
-          nullable: true
-        results:
-          type: array
-          items:
-            $ref: '#/components/schemas/KindnessMatch'
+          maxLength: 240
       required:
-      - count
-      - results
-    KindnessMatchStatusEnum:
+      - status
+    KindnessOfferReviewInputStatusEnum:
       enum:
-      - active
-      - dismissed
       - contacted
-      - stale
-      - expired
+      - declined
       type: string
       description: |-
-        * `active` - فعال
-        * `dismissed` - نادیده‌گرفته‌شده
-        * `contacted` - تماس گرفته‌شده
-        * `stale` - قدیمی
-        * `expired` - منقضی‌شده
-    KindnessReportReasonEnum:
+        * `contacted` - contacted
+        * `declined` - declined
+    KindnessOfferStatusEnum:
       enum:
-      - spam
-      - fraud
-      - wrong_category
-      - inappropriate
-      - duplicate
-      - expired
-      - contact_invalid
-      - other
+      - new
+      - contacted
+      - declined
       type: string
       description: |-
-        * `spam` - اسپم
-        * `fraud` - مشکوک به سوءاستفاده
-        * `wrong_category` - دسته‌بندی اشتباه
-        * `inappropriate` - محتوای نامناسب
-        * `duplicate` - تکراری
-        * `expired` - منقضی‌شده
-        * `contact_invalid` - شماره تماس نامعتبر
-        * `other` - سایر
-    KindnessUserBookmarkListResponse:
+        * `new` - جدید
+        * `contacted` - تماس گرفته شد
+        * `declined` - رد شد
+    KindnessStory:
       type: object
+      description: ردیف بایگانی «داستان‌های مهربانی» — بدون تماس، فقط روایت شفاف.
       properties:
-        data:
-          $ref: '#/components/schemas/KindnessUserBookmarkListResponseData'
-        success:
-          type: boolean
-          default: true
-        status_code:
-          type: integer
-          default: 200
-        message:
-          type: string
-      required:
-      - data
-      - message
-    KindnessUserBookmarkListResponseData:
-      type: object
-      properties:
-        count:
-          type: integer
-        next:
-          type: string
-          format: uri
-          nullable: true
-        previous:
-          type: string
-          format: uri
-          nullable: true
-        results:
-          type: array
-          items:
-            $ref: '#/components/schemas/KindnessBookmark'
-      required:
-      - count
-      - results
-    KindnessUserListingDetail:
-      type: object
-      description: Owner/admin listing serializer with workflow metadata and contact
-        snapshot.
-      properties:
-        id:
-          type: integer
-          readOnly: true
         slug:
           type: string
           readOnly: true
+          title: اسلاگ
           pattern: ^[-\w]+$
-        listing_type:
-          allOf:
-          - $ref: '#/components/schemas/ListingTypeEnum'
+        title:
+          type: string
           readOnly: true
+          title: عنوان
         category:
           allOf:
           - $ref: '#/components/schemas/KindnessCategory'
           readOnly: true
-        title:
+        quantity:
+          type: integer
+          readOnly: true
+          title: تعداد/مقدار
+        unit:
           type: string
           readOnly: true
-        province:
-          type: string
-          readOnly: true
+          title: واحد
         city:
           type: string
           readOnly: true
-        district:
-          type: string
-          readOnly: true
-        owner_full_name_snapshot:
-          type: string
-          readOnly: true
-        owner_avatar_snapshot:
-          type: string
-          readOnly: true
-        published_at:
+          title: شهر
+        fulfilled_at:
           type: string
           format: date-time
           readOnly: true
           nullable: true
-        expires_at:
+          title: برطرف‌شده در
+        fulfillment_note:
           type: string
-          format: date-time
           readOnly: true
-          nullable: true
-        view_count:
-          type: integer
-          readOnly: true
-        cover_image:
+          title: روایت برطرف‌شدن
+          description: یک خط صادقانه برای بایگانی «داستان‌های مهربانی».
+        cover_url:
           type: string
           nullable: true
-          description: Return cover image URL if available.
+          description: URL کاور استوری از تصاویر prefetch‌شده.
           readOnly: true
-        description:
-          type: string
-          readOnly: true
-        address_hint:
-          type: string
-          readOnly: true
-        images:
-          type: array
-          items:
-            $ref: '#/components/schemas/KindnessListingImage'
-          readOnly: true
-        contact_available:
-          type: boolean
-          description: Return whether contact can be revealed via dedicated endpoint.
-          readOnly: true
-        status:
-          allOf:
-          - $ref: '#/components/schemas/KindnessUserListingDetailStatusEnum'
-          readOnly: true
-        contact_phone_snapshot:
-          type: string
-          readOnly: true
-        admin_note:
-          type: string
-          readOnly: true
-        rejection_reason:
-          type: string
-          readOnly: true
-        suspension_reason:
-          type: string
-          readOnly: true
-        contact_reveal_count:
-          type: integer
-          readOnly: true
-        bookmark_count:
-          type: integer
-          readOnly: true
-        report_count:
-          type: integer
-          readOnly: true
-        last_matched_at:
-          type: string
-          format: date-time
-          readOnly: true
-          nullable: true
-        latitude:
-          type: string
-          format: decimal
-          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
-          readOnly: true
-          nullable: true
-        longitude:
-          type: string
-          format: decimal
-          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
-          readOnly: true
-          nullable: true
-        created_at:
-          type: string
-          format: date-time
-          readOnly: true
-          title: تاریخ ایجاد
-        updated_at:
-          type: string
-          format: date-time
-          readOnly: true
-          title: تاریخ بروزرسانی
       required:
-      - address_hint
-      - admin_note
-      - bookmark_count
       - category
       - city
-      - contact_available
-      - contact_phone_snapshot
-      - contact_reveal_count
-      - cover_image
-      - created_at
-      - description
-      - district
-      - expires_at
-      - id
-      - images
-      - last_matched_at
-      - latitude
-      - listing_type
-      - longitude
-      - owner_avatar_snapshot
-      - owner_full_name_snapshot
-      - province
-      - published_at
-      - rejection_reason
-      - report_count
+      - cover_url
+      - fulfilled_at
+      - fulfillment_note
+      - quantity
       - slug
-      - status
-      - suspension_reason
       - title
-      - updated_at
-      - view_count
-    KindnessUserListingDetailResponse:
-      type: object
-      properties:
-        success:
-          type: boolean
-          default: true
-        status_code:
-          type: integer
-          default: 200
-        message:
-          type: string
-        data:
-          $ref: '#/components/schemas/KindnessUserListingDetail'
-      required:
-      - data
-      - message
-    KindnessUserListingDetailStatusEnum:
-      enum:
-      - draft
-      - pending_review
-      - published
-      - rejected
-      - needs_edit
-      - suspended
-      - closed
-      - expired
-      - deleted
-      type: string
-      description: |-
-        * `draft` - پیش‌نویس
-        * `pending_review` - در انتظار بررسی
-        * `published` - منتشرشده
-        * `rejected` - ردشده
-        * `needs_edit` - نیازمند ویرایش
-        * `suspended` - تعلیق‌شده
-        * `closed` - بسته‌شده
-        * `expired` - منقضی‌شده
-        * `deleted` - حذف‌شده
-    KindnessUserListingListResponse:
+      - unit
+    KindnessStoryListResponse:
       type: object
       properties:
         data:
-          $ref: '#/components/schemas/KindnessUserListingListResponseData'
+          $ref: '#/components/schemas/KindnessStoryListResponseData'
         success:
           type: boolean
           default: true
@@ -17668,7 +16896,7 @@ components:
       required:
       - data
       - message
-    KindnessUserListingListResponseData:
+    KindnessStoryListResponseData:
       type: object
       properties:
         count:
@@ -17684,7 +16912,7 @@ components:
         results:
           type: array
           items:
-            $ref: '#/components/schemas/KindnessUserListingDetail'
+            $ref: '#/components/schemas/KindnessStory'
       required:
       - count
       - results
@@ -19341,14 +18569,6 @@ components:
       - status_display
       - thumbnail_url
       - updated_at
-    ListingTypeEnum:
-      enum:
-      - need_help
-      - offer_help
-      type: string
-      description: |-
-        * `need_help` - نیاز به کمک دارم
-        * `offer_help` - می‌خواهم کمک کنم
     Login:
       type: object
       description: LoginSerializer implementation for the authentication application.
@@ -21324,182 +20544,105 @@ components:
       properties:
         status:
           $ref: '#/components/schemas/LMSDiscussionReportStatusEnum'
-    PatchedKindnessCategory:
+    PatchedKindnessCategoryInput:
       type: object
-      description: Category tree row serializer.
+      description: ورودی ساخت/ویرایش دسته توسط ادمین.
       properties:
-        id:
-          type: integer
-          readOnly: true
-        parent_id:
-          type: integer
-          nullable: true
-          title: دسته والد
-          readOnly: true
         title:
           type: string
-          readOnly: true
           title: عنوان دسته
-        slug:
-          type: string
-          readOnly: true
-          pattern: ^[-\w]+$
+          maxLength: 160
         description:
           type: string
-          readOnly: true
-          title: توضیحات
+          title: توضیح دسته
         icon:
           type: string
-          readOnly: true
-          title: آیکن
-        cover_image:
-          type: string
-          format: uri
-          readOnly: true
-          nullable: true
-          title: تصویر کاور
-        path:
-          type: string
-          readOnly: true
-        depth:
-          type: integer
-          readOnly: true
+          title: آیکون (ایموجی)
+          description: "یک ایموجی مثل \U0001F373 یا \U0001F9E5 برای نمایش روی کارت
+            دسته."
+          maxLength: 8
         order:
           type: integer
-          readOnly: true
-        is_active:
-          type: boolean
-          readOnly: true
-          title: فعال
-        listings_count:
-          type: integer
-          readOnly: true
-        published_listings_count:
-          type: integer
-          readOnly: true
-    PatchedKindnessUserListingDetail:
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          title: ترتیب نمایش
+    PatchedKindnessListingInput:
       type: object
-      description: Owner/admin listing serializer with workflow metadata and contact
-        snapshot.
+      description: ساخت/ویرایش کامل آگهی توسط ادمین (REST). وضعیت‌ها فقط از اکشن‌ها.
       properties:
-        id:
-          type: integer
-          readOnly: true
-        slug:
-          type: string
-          readOnly: true
-          pattern: ^[-\w]+$
-        listing_type:
-          allOf:
-          - $ref: '#/components/schemas/ListingTypeEnum'
-          readOnly: true
         category:
-          allOf:
-          - $ref: '#/components/schemas/KindnessCategory'
-          readOnly: true
+          type: integer
+          title: دسته
         title:
           type: string
-          readOnly: true
+          title: عنوان
+          maxLength: 240
+        description:
+          type: string
+          title: شرح نیاز
+          description: چه چیزی، برای چه منظوری و در چه حد و مقداری لازم است.
+        quantity:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 1
+          format: int64
+          title: تعداد/مقدار
+        unit:
+          type: string
+          title: واحد
+          maxLength: 20
+        urgency:
+          allOf:
+          - $ref: '#/components/schemas/KindnessListingUrgencyEnum'
+          title: فوریت
+        beneficiary_name:
+          type: string
+          title: نام/لقب صاحب نیاز
+          description: می‌تواند محرمانه باشد؛ مثل «خانواده‌ای در شوش».
+          maxLength: 120
         province:
           type: string
-          readOnly: true
+          title: استان
+          maxLength: 60
         city:
           type: string
-          readOnly: true
-        district:
+          title: شهر
+          maxLength: 60
+        contact_note:
           type: string
-          readOnly: true
-        owner_full_name_snapshot:
+          title: یادداشت هماهنگی
+          description: 'مثلاً: «تماس ۱۰ تا ۲۰»، «پیامکی بهتر است».'
+          maxLength: 240
+        contact_phone:
           type: string
-          readOnly: true
-        owner_avatar_snapshot:
+          title: شماره تماس
+          maxLength: 30
+        contact_bale:
           type: string
-          readOnly: true
-        published_at:
+          title: آیدی بله
+          maxLength: 64
+        contact_eitaa:
           type: string
-          format: date-time
-          readOnly: true
-          nullable: true
+          title: آیدی ایتا
+          maxLength: 64
+        contact_telegram:
+          type: string
+          title: آیدی تلگرام
+          maxLength: 64
+        contact_rubika:
+          type: string
+          title: آیدی روبیکا
+          maxLength: 64
+        contact_instagram:
+          type: string
+          title: آیدی اینستاگرام
+          maxLength: 64
         expires_at:
           type: string
           format: date-time
-          readOnly: true
           nullable: true
-        view_count:
-          type: integer
-          readOnly: true
-        cover_image:
-          type: string
-          nullable: true
-          description: Return cover image URL if available.
-          readOnly: true
-        description:
-          type: string
-          readOnly: true
-        address_hint:
-          type: string
-          readOnly: true
-        images:
-          type: array
-          items:
-            $ref: '#/components/schemas/KindnessListingImage'
-          readOnly: true
-        contact_available:
-          type: boolean
-          description: Return whether contact can be revealed via dedicated endpoint.
-          readOnly: true
-        status:
-          allOf:
-          - $ref: '#/components/schemas/KindnessUserListingDetailStatusEnum'
-          readOnly: true
-        contact_phone_snapshot:
-          type: string
-          readOnly: true
-        admin_note:
-          type: string
-          readOnly: true
-        rejection_reason:
-          type: string
-          readOnly: true
-        suspension_reason:
-          type: string
-          readOnly: true
-        contact_reveal_count:
-          type: integer
-          readOnly: true
-        bookmark_count:
-          type: integer
-          readOnly: true
-        report_count:
-          type: integer
-          readOnly: true
-        last_matched_at:
-          type: string
-          format: date-time
-          readOnly: true
-          nullable: true
-        latitude:
-          type: string
-          format: decimal
-          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
-          readOnly: true
-          nullable: true
-        longitude:
-          type: string
-          format: decimal
-          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
-          readOnly: true
-          nullable: true
-        created_at:
-          type: string
-          format: date-time
-          readOnly: true
-          title: تاریخ ایجاد
-        updated_at:
-          type: string
-          format: date-time
-          readOnly: true
-          title: تاریخ بروزرسانی
+          title: انقضا
     PatchedLMSCategoryCreateUpdate:
       type: object
       description: Input serializer for category create/update.

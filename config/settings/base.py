@@ -421,9 +421,8 @@ REST_FRAMEWORK = {
         # ── Kindness Wall — Divar-e Mehrabani ─────────
         "kindness_browse_anon": "60/min",
         "kindness_browse_user": "120/min",
-        "kindness_listing_create": "10/hour",
-        "kindness_contact_reveal": "20/hour",
-        "kindness_report": "10/hour",
+        # ثبت اعلام آمادگی: نوشتاریِ کم‌تعداد روی آگهی دیگران؛ سقف ساعتی.
+        "kindness_offer_create": "20/hour",
         # ── Support Desk — Ticketing ───────────────────────
         "support_ticket_create": "5/hour",
         "support_ticket_message": "30/hour",
@@ -735,8 +734,9 @@ SPECTACULAR_SETTINGS = {
         "LMSVideoProviderEnum": "apps.lms.choices.VideoProvider",
         "LMSVideoProcessingStatusEnum": "apps.lms.choices.VideoProcessingStatus",
         "LMSLearningStatementVerbEnum": "apps.lms.choices.LearningStatementVerb",
-        "KindnessMatchStatusEnum": "apps.kindness_wall.choices.MatchStatus",
-        "KindnessReportReasonEnum": "apps.kindness_wall.choices.ReportReason",
+        "KindnessListingStatusEnum": "apps.kindness_wall.choices.ListingStatus",
+        "KindnessListingUrgencyEnum": "apps.kindness_wall.choices.Urgency",
+        "KindnessOfferStatusEnum": "apps.kindness_wall.choices.OfferStatus",
         "SupportTicketStatusEnum": "apps.support_desk.choices.TicketStatus",
         "SupportTicketPriorityEnum": "apps.support_desk.choices.TicketPriority",
         "SupportTicketSeverityEnum": "apps.support_desk.choices.TicketSeverity",
@@ -810,9 +810,10 @@ DEFAULT_FROM_EMAIL = config(
 NOTIFICATIONS_ASYNC_DISPATCH = config("NOTIFICATIONS_ASYNC_DISPATCH", default=True, cast=bool)
 NOTIFICATIONS_EMAIL_ENABLED = config("NOTIFICATIONS_EMAIL_ENABLED", default=False, cast=bool)
 NOTIFICATIONS_SMS_ENABLED = config("NOTIFICATIONS_SMS_ENABLED", default=False, cast=bool)
-KINDNESS_MATCH_NOTIFICATION_THRESHOLD = config(
-    "KINDNESS_MATCH_NOTIFICATION_THRESHOLD", default=80, cast=int
-)
+# عمر مفید آگهی دیوار مهربانی (روز): پس از انتشار، آگهی همین‌قدر روی تخته
+# می‌ماند و بعد با تسک beat منقضی می‌شود؛ تمدید، همین بازه را از تازه‌ترین
+# لحظه اضافه می‌کند. (ثابت پیش‌فرض در apps.kindness_wall.choices است.)
+KINDNESS_LISTING_TTL_DAYS = config("KINDNESS_LISTING_TTL_DAYS", default=45, cast=int)
 
 OTP_PROVIDER = config("OTP_PROVIDER", default="email")
 OTP_EMAIL_PROVIDER = config("OTP_EMAIL_PROVIDER", default="django_email")

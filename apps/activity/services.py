@@ -17,8 +17,6 @@ _EVENT_VERB_MAP = {
     "tabyin.submission_rejected": ActivityVerb.REJECTED,
     "madadkar.payment_success": ActivityVerb.PAID,
     "lms.certificate_issued": ActivityVerb.ISSUED,
-    "kindness.contact_revealed": ActivityVerb.REVEALED,
-    "kindness.high_match": ActivityVerb.MATCHED,
 }
 
 

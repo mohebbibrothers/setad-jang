@@ -105,7 +105,7 @@ Auth signup/login OTP flow
 Tabyin public content list
 Madadkar public campaigns
 LMS public courses
-Kindness Wall public listings
+Kindness Wall public board (categories/listings/stories/stats) — کش SWR دامنه kindness
 Support Desk authenticated ticket creation
 Admin dashboard access
 ```

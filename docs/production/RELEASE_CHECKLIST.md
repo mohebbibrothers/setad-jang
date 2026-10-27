@@ -51,7 +51,7 @@ Audit logs: admin log list
 R4J: public criminal list + user report
 Madadkar: campaign list + sandbox payment flow
 LMS: course list + enrollment + certificate verify
-Kindness Wall: listings + reveal contact auth boundary
+Kindness Wall v2: board listings + offer upsert auth; contacts only in detail payload
 Support Desk: create/submit/reply ticket
 ```
 

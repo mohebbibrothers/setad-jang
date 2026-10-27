@@ -1,279 +1,248 @@
-"""
-Kindness Wall Phase 2 service workflow tests.
+"""تست‌های لایهٔ سرویس دیوار مهربانی — چرخهٔ حیات، TTL، نگهبان‌ها، upsert اعلام.
 
-این تست‌ها full service layer دیوار مهربانی را پوشش می‌دهند: update/resubmit،
-admin moderation، reveal-contact فقط برای کاربر لاگین‌شده، bookmark/report،
-match actions، expiration/renewal، duplicate review و analytics primitives.
+هر قاعدهٔ سیاست‌گذاری v2 باید همین‌جا آزمون مستقل داشته باشد؛ اگر تستی از
+این فایل حذف می‌شود، یعنی آن قاعده عمداً از سیاست بیرون رفته است.
 """
 
 from __future__ import annotations
 
+from datetime import timedelta
+
 import pytest
+from django.test import override_settings
 from django.utils import timezone
 
-from apps.kindness_wall.choices import (
-    DuplicateStatus,
-    ListingStatus,
-    MatchStatus,
-    ReportReason,
-    ReportStatus,
-)
-from apps.kindness_wall.models import (
-    KindnessBookmark,
-    KindnessContactReveal,
-    KindnessMatch,
-)
-from apps.kindness_wall.services import (
-    KindnessPermissionError,
-    approve_listing,
-    close_listing,
-    create_bookmark,
-    create_listing,
-    delete_bookmark,
-    dismiss_match,
-    expire_due_listings,
-    get_admin_analytics_summary,
-    mark_match_contacted,
-    reject_listing,
-    renew_listing,
-    report_listing,
-    restore_suspended_listing,
-    reveal_contact,
-    review_duplicate_candidate,
-    review_listing_report,
-    submit_listing_for_review,
-    suspend_listing,
-    update_listing,
-)
+from apps.kindness_wall import services
+from apps.kindness_wall.choices import ListingStatus, OfferStatus
+from apps.kindness_wall.models import KindnessListing
+from tests.factories import UserFactory
 from tests.factories.kindness_wall import (
     KindnessCategoryFactory,
     KindnessListingFactory,
-    KindnessUserFactory,
     PublishedNeedListingFactory,
-    PublishedOfferListingFactory,
 )
 
 pytestmark = pytest.mark.django_db
 
 
-def _approved_listing(*, owner=None, category=None, **kwargs):
-    """Create a published listing through service workflow."""
-    owner = owner or KindnessUserFactory()
-    category = category or KindnessCategoryFactory()
-    listing = create_listing(owner=owner, category=category, **kwargs)
-    submit_listing_for_review(listing=listing, user=owner)
-    approve_listing(listing=listing, admin=KindnessUserFactory())
-    listing.refresh_from_db()
-    return listing
-
-
-class TestKindnessListingOwnerWorkflow:
-    """Owner update/close/delete/renew behavior."""
-
-    def test_sensitive_update_moves_published_listing_back_to_pending_review(self) -> None:
-        listing = _approved_listing(
-            listing_type="need_help",
-            title="برنامه نویس نیاز دارم",
-            description="برای سایت خیریه دنبال کمک هستم",
-        )
-
-        updated = update_listing(
-            listing=listing, user=listing.owner, title="برنامه نویس فول استک نیاز دارم"
-        )
-
-        assert updated.status == ListingStatus.PENDING_REVIEW
-        assert updated.published_at is None
-        assert updated.listing_tags.count() > 0
-
-    def test_non_owner_cannot_update_or_close_listing(self) -> None:
-        listing = _approved_listing(
-            listing_type="offer_help",
-            title="طراح سایت هستم",
-            description="برای کارهای خیریه کمک می‌کنم",
-        )
-        other = KindnessUserFactory()
-
-        with pytest.raises(KindnessPermissionError):
-            update_listing(listing=listing, user=other, title="تغییر غیرمجاز")
-
-        with pytest.raises(KindnessPermissionError):
-            close_listing(listing=listing, user=other)
-
-    def test_owner_can_close_and_renew_listing_for_review(self) -> None:
-        listing = _approved_listing(
-            listing_type="need_help",
-            title="نیاز به وسیله",
-            description="توضیح آگهی",
-        )
-
-        close_listing(listing=listing, user=listing.owner)
+class TestPublishGuard:
+    def test_publish_requires_at_least_one_channel(self) -> None:
+        listing = KindnessListingFactory(status=ListingStatus.DRAFT, contact_phone="")
+        with pytest.raises(services.KindnessWallServiceError, match="حداقل یکی"):
+            services.publish_listing(listing=listing)
         listing.refresh_from_db()
-        assert listing.status == ListingStatus.CLOSED
+        assert listing.status == ListingStatus.DRAFT
 
-        renew_listing(listing=listing, user=listing.owner)
-        listing.refresh_from_db()
-        assert listing.status == ListingStatus.PENDING_REVIEW
+    def test_publish_sets_expiry_from_ttl_setting(self) -> None:
+        with override_settings(KINDNESS_LISTING_TTL_DAYS=7):
+            listing = KindnessListingFactory()
+            services.publish_listing(listing=listing)
+        assert listing.status == ListingStatus.PUBLISHED
+        assert listing.expires_at is not None
+        window = listing.expires_at - timezone.now()
+        assert 6 * 24 * 3600 < window.total_seconds() <= 7 * 24 * 3600 + 1
+
+    def test_publish_keeps_manual_expiry(self) -> None:
+        manual = timezone.now() + timedelta(days=365)
+        listing = KindnessListingFactory(expires_at=manual)
+        services.publish_listing(listing=listing)
+        assert listing.expires_at == manual
+
+    def test_publish_rejects_incomplete_content(self) -> None:
+        listing = KindnessListingFactory(title="", description="کوتاه")
+        with pytest.raises(services.KindnessWallServiceError, match="کامل نیستند"):
+            services.publish_listing(listing=listing)
+
+    def test_publish_resumes_expired_listing(self) -> None:
+        """انتشار مجدد آگهی منقضی: وضعیت برمی‌گردد و مهلت از تازه ساخته می‌شود."""
+        listing = PublishedNeedListingFactory()
+        KindnessListing.all_objects.filter(pk=listing.pk).update(
+            status=ListingStatus.EXPIRED, expires_at=timezone.now() - timedelta(days=2)
+        )
+        services.publish_listing(listing=listing)
+        assert listing.status == ListingStatus.PUBLISHED
         assert listing.expires_at > timezone.now()
 
 
-class TestKindnessAdminModerationWorkflow:
-    """Admin listing review/suspend/restore behavior."""
-
-    def test_admin_can_suspend_and_restore_published_listing(self) -> None:
-        listing = _approved_listing(
-            listing_type="offer_help",
-            title="کمک برنامه نویسی",
-            description="کمک داوطلبانه برای طراحی سایت",
-        )
-        admin = KindnessUserFactory()
-
-        suspend_listing(listing=listing, admin=admin, reason="گزارش تخلف")
+class TestRenewFulfillArchive:
+    def test_renew_extends_from_now_not_from_old_expiry(self) -> None:
+        past_expiry = timezone.now() - timedelta(days=3)
+        listing = PublishedNeedListingFactory(expires_at=past_expiry)
         listing.refresh_from_db()
-        assert listing.status == ListingStatus.SUSPENDED
-        assert listing.suspension_reason == "گزارش تخلف"
-
-        restore_suspended_listing(listing=listing, admin=admin)
-        listing.refresh_from_db()
+        with override_settings(KINDNESS_LISTING_TTL_DAYS=45):
+            services.renew_listing(listing=listing)
         assert listing.status == ListingStatus.PUBLISHED
-        assert listing.suspension_reason == ""
+        assert listing.renew_count == 1
+        assert listing.expires_at > timezone.now() + timedelta(days=44)
 
-    def test_reject_listing_can_mark_needs_edit(self) -> None:
-        listing = KindnessListingFactory(status=ListingStatus.PENDING_REVIEW)
-        admin = KindnessUserFactory()
-
-        reject_listing(listing=listing, admin=admin, reason="توضیحات ناقص", needs_edit=True)
-        listing.refresh_from_db()
-
-        assert listing.status == ListingStatus.NEEDS_EDIT
-        assert listing.rejection_reason == "توضیحات ناقص"
-
-
-class TestKindnessContactBookmarkReport:
-    """Contact reveal, bookmark, report, and analytics behavior."""
-
-    def test_reveal_contact_requires_authenticated_user_and_records_audit_row(self) -> None:
-        listing = PublishedOfferListingFactory(contact_phone_snapshot="+989120000000")
-        viewer = KindnessUserFactory()
-
-        reveal = reveal_contact(
-            listing=listing,
-            viewer=viewer,
-            ip_address="203.0.113.1",
-            user_agent="pytest-agent",
-            request_id="req-kindness-1",
-        )
-
-        assert reveal.phone_snapshot == "+989120000000"
-        assert reveal.viewer_id == viewer.pk
-        listing.refresh_from_db()
-        assert listing.contact_reveal_count == 1
-        assert KindnessContactReveal.objects.count() == 1
-
-    def test_anonymous_cannot_reveal_contact(self) -> None:
+    def test_renew_counts_and_resumes_expired(self) -> None:
         listing = PublishedNeedListingFactory()
-        anonymous = type("Anon", (), {"is_authenticated": False})()
-
-        with pytest.raises(KindnessPermissionError):
-            reveal_contact(listing=listing, viewer=anonymous)
-
-    def test_bookmark_is_idempotent_and_deletable(self) -> None:
-        listing = PublishedOfferListingFactory()
-        user = KindnessUserFactory()
-
-        first = create_bookmark(listing=listing, user=user)
-        second = create_bookmark(listing=listing, user=user)
-
-        assert first.pk == second.pk
-        assert KindnessBookmark.objects.count() == 1
+        KindnessListing.all_objects.filter(pk=listing.pk).update(
+            status=ListingStatus.EXPIRED, expires_at=timezone.now() - timedelta(hours=1)
+        )
         listing.refresh_from_db()
-        assert listing.bookmark_count == 1
+        services.renew_listing(listing=listing)
+        assert listing.status == ListingStatus.PUBLISHED
+        assert listing.renew_count == 1
 
-        delete_bookmark(listing=listing, user=user)
-        assert KindnessBookmark.objects.count() == 0
-        listing.refresh_from_db()
-        assert listing.bookmark_count == 0
-
-    def test_report_review_can_suspend_listing_and_updates_counts(self) -> None:
+    def test_renew_rejected_on_fulfilled(self) -> None:
         listing = PublishedNeedListingFactory()
-        reporter = KindnessUserFactory()
-        admin = KindnessUserFactory()
+        services.fulfill_listing(listing=listing)
+        with pytest.raises(services.KindnessListingStateError):
+            services.renew_listing(listing=listing)
 
-        report = report_listing(
-            listing=listing,
-            reported_by=reporter,
-            reason=ReportReason.SPAM,
-            description="آگهی اسپم است",
-        )
+    def test_fulfill_records_note_and_timestamp(self) -> None:
+        listing = PublishedNeedListingFactory()
+        services.fulfill_listing(listing=listing, note="  دو خانواده کمک کردند  ")
         listing.refresh_from_db()
-        assert listing.report_count == 1
+        assert listing.status == ListingStatus.FULFILLED
+        assert listing.fulfilled_at is not None
+        assert listing.fulfillment_note == "دو خانواده کمک کردند"
 
-        review_listing_report(
-            report=report,
-            admin=admin,
-            status=ReportStatus.REVIEWED,
-            admin_note="گزارش درست بود",
-            suspend_listing_on_review=True,
-        )
-        report.refresh_from_db()
-        listing.refresh_from_db()
-        assert report.status == ReportStatus.REVIEWED
-        assert listing.status == ListingStatus.SUSPENDED
-
-
-class TestKindnessMatchAndMaintenance:
-    """Match actions, duplicate review, expiration, and analytics."""
-
-    def test_match_can_be_dismissed_and_marked_contacted_by_source_owner(self) -> None:
-        source = PublishedNeedListingFactory(
-            title="برنامه نویس لازم دارم", description="طراحی سایت"
-        )
-        target = PublishedOfferListingFactory(
-            category=source.category, title="برنامه نویس هستم", description="طراحی سایت"
-        )
-        match = KindnessMatch.objects.create(source_listing=source, target_listing=target, score=80)
-
-        dismiss_match(match=match, user=source.owner)
-        match.refresh_from_db()
-        assert match.status == MatchStatus.DISMISSED
-        assert match.dismissed_by_id == source.owner_id
-
-        match.status = MatchStatus.ACTIVE
-        match.save(update_fields=["status"])
-        mark_match_contacted(match=match, user=source.owner)
-        match.refresh_from_db()
-        assert match.status == MatchStatus.CONTACTED
-        assert match.contacted_at is not None
-
-    def test_expire_due_listings_and_analytics_summary(self) -> None:
-        expired = PublishedNeedListingFactory(
-            expires_at=timezone.now() - timezone.timedelta(days=1)
-        )
-        active = PublishedOfferListingFactory(
-            expires_at=timezone.now() + timezone.timedelta(days=10)
-        )
-        report_listing(listing=active, reported_by=KindnessUserFactory(), reason=ReportReason.OTHER)
-        reveal_contact(listing=active, viewer=KindnessUserFactory())
-
-        updated = expire_due_listings()
-        expired.refresh_from_db()
-        summary = get_admin_analytics_summary()
-
-        assert updated == 1
-        assert expired.status == ListingStatus.EXPIRED
-        assert summary["total_listings"] >= 2
-        assert summary["published_listings"] == 1
-        assert summary["contact_reveals"] == 1
-        assert summary["pending_reports"] == 1
-
-    def test_duplicate_candidate_review_changes_status(self) -> None:
+    def test_fulfill_from_draft_not_allowed(self) -> None:
         listing = KindnessListingFactory()
-        candidate = KindnessListingFactory(owner=listing.owner, category=listing.category)
-        duplicate = listing.duplicate_candidates.create(candidate_listing=candidate, score=90)
+        with pytest.raises(services.KindnessListingStateError):
+            services.fulfill_listing(listing=listing)
 
-        review_duplicate_candidate(
-            duplicate=duplicate, status=DuplicateStatus.CONFIRMED, reason="واقعاً تکراری است"
+    def test_archive_from_any_state_and_revert(self) -> None:
+        listing = KindnessListingFactory()
+        services.archive_listing(listing=listing)
+        assert listing.status == ListingStatus.ARCHIVED
+        services.revert_to_draft(listing=listing)
+        assert listing.status == ListingStatus.DRAFT
+        assert KindnessListing.all_objects.filter(pk=listing.pk).exists()
+
+    def test_featured_toggle_persists(self) -> None:
+        listing = PublishedNeedListingFactory()
+        services.set_featured(listing=listing, featured=True)
+        listing.refresh_from_db()
+        assert listing.is_featured is True
+        services.set_featured(listing=listing, featured=False)
+        listing.refresh_from_db()
+        assert listing.is_featured is False
+
+
+class TestExpiryTaskService:
+    def test_expire_due_listings_only_touches_overdue_published(self) -> None:
+        stale = PublishedNeedListingFactory(expires_at=timezone.now() - timedelta(minutes=1))
+        fresh = PublishedNeedListingFactory()
+        draft = KindnessListingFactory()
+        count = services.expire_due_listings()
+        assert count == 1
+        stale.refresh_from_db()
+        fresh.refresh_from_db()
+        draft.refresh_from_db()
+        assert stale.status == ListingStatus.EXPIRED
+        assert fresh.status == ListingStatus.PUBLISHED
+        assert draft.status == ListingStatus.DRAFT
+
+    def test_expire_task_returns_count_and_is_idempotent(self) -> None:
+        from apps.kindness_wall.tasks import expire_old_listings_task
+
+        PublishedNeedListingFactory(expires_at=timezone.now() - timedelta(minutes=1))
+        assert expire_old_listings_task() >= 1
+        assert expire_old_listings_task() == 0
+
+    def test_bulk_update_does_not_break_board(self) -> None:
+        """انقضای دسته‌ای باید آگهی را از تختهٔ عمومی خارج کند (سلکتور، نه سیگنال)."""
+        stale = PublishedNeedListingFactory(expires_at=timezone.now() - timedelta(minutes=1))
+        services.expire_due_listings()
+        from apps.kindness_wall import selectors
+
+        slugs = {row.slug for row in selectors.get_public_listings()}
+        assert stale.slug not in slugs
+
+
+class TestCategoryGuard:
+    def test_deactivate_blocked_while_listings_open(self) -> None:
+        category = KindnessCategoryFactory()
+        PublishedNeedListingFactory(category=category)
+        with pytest.raises(services.KindnessCategoryGuardError):
+            services.set_category_active(category=category, active=False)
+        assert category.is_active is True
+
+    def test_deactivate_allowed_when_board_empty(self) -> None:
+        category = KindnessCategoryFactory()
+        KindnessListingFactory(category=category)  # فقط پیش‌نویس
+        services.set_category_active(category=category, active=False)
+        category.refresh_from_db()
+        assert category.is_active is False
+
+
+class TestOfferLifecycle:
+    def test_submit_offer_creates_then_updates_same_row(self) -> None:
+        listing = PublishedNeedListingFactory()
+        user = UserFactory()
+        offer, created = services.submit_offer(listing=listing, user=user, message="یک پتو دارم")
+        assert created is True
+        offer2, created2 = services.submit_offer(listing=listing, user=user, message="دو پتو دارم")
+        assert created2 is False
+        assert offer2.pk == offer.pk
+        assert offer2.message == "دو پتو دارم"
+
+    def test_submit_offer_rejects_non_board_listing(self) -> None:
+        listing = KindnessListingFactory()
+        user = UserFactory()
+        with pytest.raises(services.KindnessOfferError, match="روی دیوار نیست"):
+            services.submit_offer(listing=listing, user=user, message="")
+
+    def test_handled_offer_is_locked_for_editing(self) -> None:
+        listing = PublishedNeedListingFactory()
+        user = UserFactory()
+        offer, _ = services.submit_offer(listing=listing, user=user)
+        admin = UserFactory()
+        services.review_offer(
+            offer=offer, admin=admin, status=OfferStatus.CONTACTED, note="تماس شد"
         )
-        duplicate.refresh_from_db()
+        with pytest.raises(services.KindnessOfferError, match="بررسی شده"):
+            services.submit_offer(listing=listing, user=user, message="باز هم!")
 
-        assert duplicate.status == DuplicateStatus.CONFIRMED
-        assert duplicate.reason == "واقعاً تکراری است"
+    def test_withdraw_only_before_handling_and_only_owner(self) -> None:
+        listing = PublishedNeedListingFactory()
+        owner = UserFactory()
+        stranger = UserFactory()
+        offer, _ = services.submit_offer(listing=listing, user=owner)
+        with pytest.raises(services.KindnessOfferError, match="صاحب اعلام"):
+            services.withdraw_offer(offer=offer, user=stranger)
+        services.withdraw_offer(offer=offer, user=owner)
+        assert not listing.offers.exists()
+
+    def test_withdraw_blocked_after_review(self) -> None:
+        listing = PublishedNeedListingFactory()
+        user = UserFactory()
+        offer, _ = services.submit_offer(listing=listing, user=user)
+        services.review_offer(offer=offer, admin=UserFactory(), status=OfferStatus.DECLINED)
+        with pytest.raises(services.KindnessOfferError, match="قابل پس‌گرفتن نیست"):
+            services.withdraw_offer(offer=offer, user=user)
+
+    def test_review_validates_status_choice(self) -> None:
+        listing = PublishedNeedListingFactory()
+        user = UserFactory()
+        offer, _ = services.submit_offer(listing=listing, user=user)
+        with pytest.raises(services.KindnessWallServiceError):
+            services.review_offer(offer=offer, admin=UserFactory(), status="ghost")
+
+    def test_review_records_handler_and_note(self) -> None:
+        listing = PublishedNeedListingFactory()
+        user = UserFactory()
+        admin = UserFactory()
+        offer, _ = services.submit_offer(listing=listing, user=user)
+        services.review_offer(
+            offer=offer, admin=admin, status=OfferStatus.CONTACTED, note="هماهنگ شد"
+        )
+        offer.refresh_from_db()
+        assert offer.handled_by == admin
+        assert offer.handled_at is not None
+        assert offer.admin_note == "هماهنگ شد"
+
+
+class TestViewCounter:
+    def test_view_bump_uses_update_not_save(self) -> None:
+        """شمارش بازدید نباید ردیف را save کند (سیگنال کش/رخداد ساخت)."""
+        listing = PublishedNeedListingFactory()
+        before = listing.updated_at
+        for _ in range(3):
+            services.bump_listing_view_count(listing=listing)
+        listing.refresh_from_db()
+        assert listing.view_count == 3
+        assert listing.updated_at == before

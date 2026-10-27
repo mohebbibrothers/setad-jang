@@ -119,31 +119,29 @@ def _support_summary() -> dict[str, int]:
 
 
 def _kindness_summary() -> dict[str, int]:
-    """Return Kindness Wall operational counters."""
-    from apps.kindness_wall.choices import DuplicateStatus, ListingStatus, ReportStatus
-    from apps.kindness_wall.models import (
-        KindnessContactReveal,
-        KindnessDuplicateCandidate,
-        KindnessListing,
-        KindnessListingReport,
-        KindnessRiskSignal,
-    )
+    """شمارنده‌های عملیاتی دیوار مهربانی (v2 — تختهٔ نیاز ادمین‌محور).
 
-    # ``objects`` و ``all_objects`` دو manager متفاوت‌اند (soft-delete)، پس
-    # این دو شمارنده قابل ادغام در یک کوئری نیستند.
+    صف بازِ اعلام‌ها مهم‌ترین عدد برای ادمین است (تریاج داوطلبان) و
+    «برطرف‌شده ۳۰ روزه» سنجهٔ اثر دیوار؛ دو عدد انقضا (expired/renewable)
+    هم صف نگهداشت روزانه را نشان می‌دهد.
+    """
+    from datetime import timedelta
+
+    from apps.kindness_wall.choices import ListingStatus, OfferStatus, Urgency
+    from apps.kindness_wall.models import KindnessListing, KindnessOffer
+
+    open_offers = KindnessOffer.objects.filter(status=OfferStatus.NEW)
+    fulfilled_since = timezone.now() - timedelta(days=30)
     return {
-        "pending_listings": KindnessListing.all_objects.filter(
-            status=ListingStatus.PENDING_REVIEW
-        ).count(),
         "published_listings": KindnessListing.objects.published().count(),
-        "pending_reports": KindnessListingReport.objects.filter(
-            status=ReportStatus.PENDING
+        "urgent_listings": KindnessListing.objects.published()
+        .filter(urgency=Urgency.URGENT)
+        .count(),
+        "draft_listings": KindnessListing.objects.filter(status=ListingStatus.DRAFT).count(),
+        "open_offers": open_offers.count(),
+        "fulfilled_30d": KindnessListing.objects.filter(
+            status=ListingStatus.FULFILLED, fulfilled_at__gte=fulfilled_since
         ).count(),
-        "active_duplicate_candidates": KindnessDuplicateCandidate.objects.filter(
-            status=DuplicateStatus.ACTIVE
-        ).count(),
-        "contact_reveals_total": KindnessContactReveal.objects.count(),
-        "open_risk_signals": KindnessRiskSignal.objects.filter(status="open").count(),
     }
 
 
