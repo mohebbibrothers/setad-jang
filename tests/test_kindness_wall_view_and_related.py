@@ -198,6 +198,35 @@ class TestViewBeacon:
         assert "198.51.100.23" not in mark.viewer_key
         assert mark.viewer_key.startswith("g")
 
+    def test_missing_table_degrades_to_cache_without_500(self) -> None:
+        """اگر مهاجرتِ ۰۰۰۷ اعمال نشده باشد، beacon نباید ۵۰۰ بدهد.
+
+        سناریوی واقعیِ استقرار: کدِ تازه روی سروری اجرا شد که جدولِ
+        `KindnessListingView` را ندارد. قرارداد: پاسخ ۲۰۰ با شمارشِ
+        بهترین‌تلاش (کشِ همان پردازه) و لاگِ هشدار — نه خطای کاربر.
+        """
+        from unittest.mock import patch
+
+        from django.db import OperationalError
+
+        listing = PublishedNeedListingFactory()
+        client = APIClient()
+        with patch(
+            "apps.kindness_wall.services.KindnessListingView.objects.get_or_create",
+            side_effect=OperationalError("no such table"),
+        ):
+            response = client.post(_view_url(listing.slug))
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["data"]["counted"] is True
+        # تلاشِ دوم همان پردازه با کش رد می‌شود
+        with patch(
+            "apps.kindness_wall.services.KindnessListingView.objects.get_or_create",
+            side_effect=OperationalError("no such table"),
+        ):
+            second = client.post(_view_url(listing.slug))
+        assert second.status_code == status.HTTP_200_OK
+        assert second.data["data"]["counted"] is False
+
     def test_purge_removes_stale_windows_only(self) -> None:
         from apps.kindness_wall.services import purge_stale_listing_views, view_window_index
 

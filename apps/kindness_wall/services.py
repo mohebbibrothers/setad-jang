@@ -14,7 +14,7 @@ import logging
 from django.conf import settings
 from django.core.cache import cache
 from django.core.exceptions import ValidationError
-from django.db import IntegrityError, transaction
+from django.db import IntegrityError, OperationalError, ProgrammingError, transaction
 from django.db.models import F
 from django.utils import timezone
 
@@ -224,32 +224,16 @@ def view_window_index(*, now=None) -> int:
     return int(moment.timestamp()) // window
 
 
-def register_listing_view(*, listing: KindnessListing, request) -> tuple[bool, int]:
-    """ثبتِ یک بازدیدِ **یکتا**؛ برمی‌گرداند (شمارش‌شد؟, عددِ تازه).
+def _try_mark_view(*, listing: KindnessListing, fingerprint: str, window: int) -> bool | None:
+    """ثبتِ اتمیکِ اثرِ بازدید در دیتابیس.
 
-    دو لایهٔ دفاع:
-      ۱) **دیتابیس** (منبعِ حقیقت): درجِ ردیفِ (آگهی، بیننده، پنجره) با
-         constraint یکتا. درجِ دوم — حتی از پردازهٔ دیگر یا هم‌زمان — با
-         IntegrityError رد می‌شود. این لایه به‌تنهایی کافی است.
-      ۲) **کش** (مسیرِ سریع): اگر همین پردازه بداند این بیننده شمرده شده،
-         بدونِ لمسِ دیتابیس برمی‌گردد. صرفاً بهینه‌سازی است، نه تضمین؛ پس
-         بودنش روی درستی اثر ندارد.
-
-    عددِ برگشتی از دیتابیس خوانده می‌شود (نه از شیءِ کش‌شده) تا همان لحظه
-    دقیق باشد.
+    برمی‌گرداند:
+      • ``True``  → این بیننده در این پنجره تازه شمرده شد
+      • ``False`` → قبلاً شمرده شده بود (constraint یکتا جلوی درجِ دوم را گرفت)
+      • ``None``  → **لایهٔ دیتابیس در دسترس نیست** (مثلاً جدولِ مهاجرت اعمال
+        نشده). این حالت عمداً از «قبلاً شمرده شده» جدا است تا caller بتواند
+        به لایهٔ کش عقب‌نشینی کند و هرگز ۵۰۰ ندهد.
     """
-    window = view_window_index()
-    fingerprint = viewer_fingerprint(request=request)
-
-    # ── مسیرِ سریع: همین پردازه قبلاً این بیننده را در همین پنجره دیده است.
-    fast_key = make_cache_key("kindness:view_seen", listing.pk, window, fingerprint)
-    # کش فقط بهینه‌سازی است؛ خرابیِ آن نباید رفتار (یا درستیِ شمارش) را
-    # عوض کند — پس بی‌صدا نادیده گرفته می‌شود.
-    with contextlib.suppress(Exception):
-        if cache.get(fast_key):
-            return False, _current_view_count(listing)
-
-    counted = False
     try:
         with transaction.atomic():
             _mark, created = KindnessListingView.objects.get_or_create(
@@ -257,17 +241,56 @@ def register_listing_view(*, listing: KindnessListing, request) -> tuple[bool, i
                 viewer_key=fingerprint,
                 window_start=window,
             )
-            counted = created
+            return created
     except IntegrityError:
         # درجِ هم‌زمان از پردازهٔ دیگر — همان محدودیتِ یکتا کارِ خودش را کرد.
-        counted = False
+        return False
+    except (OperationalError, ProgrammingError):
+        # جدولِ اثرِ بازدید در دسترس نیست (مهاجرت اعمال نشده / دیتابیسِ قدیمی).
+        # این یک نقصِ عملیاتی است، نه خطای کاربر: لاگ می‌کنیم و با کش ادامه
+        # می‌دهیم تا شمارنده هرگز صفحه/درخواست را نشکند.
+        logger.warning(
+            "جدولِ اثرِ بازدید در دسترس نیست (kindness_wall.0007 اعمال نشده؟) — dedupe موقتاً روی کش",
+            exc_info=True,
+        )
+        return None
     except Exception:
         logger.exception("ثبتِ اثرِ بازدیدِ آگهی %s ناموفق بود", listing.pk)
-        counted = bool(
-            not KindnessListingView.objects.filter(
-                listing=listing, viewer_key=fingerprint, window_start=window
-            ).exists()
-        )
+        return None
+
+
+def register_listing_view(*, listing: KindnessListing, request) -> tuple[bool, int]:
+    """ثبتِ یک بازدیدِ **یکتا**؛ برمی‌گرداند (شمارش‌شد؟, عددِ تازه).
+
+    سه لایه، به‌ترتیبِ اعتماد:
+      ۱) **دیتابیس** (منبعِ حقیقت): constraint یکتا روی (آگهی، بیننده،
+         پنجره). درجِ دوم — حتی از پردازهٔ دیگر یا هم‌زمان — رد می‌شود.
+      ۲) **کش** (مسیرِ سریع): اگر همین پردازه بداند این بیننده شمرده شده،
+         بدونِ لمسِ دیتابیس برمی‌گردد. صرفاً بهینه‌سازی.
+      ۳) **پشتیبانِ کش** (fail-safe): اگر لایهٔ دیتابیس در دسترس نبود،
+         `cache.add` اتمیکِ همان پردازه تنها ضامنِ موجود است. dedupe بینِ
+         پردازه‌ها کامل نیست، ولی شمارنده کار می‌کند و هیچ درخواستی ۵۰۰
+         نمی‌شود — و به‌محضِ اعمالِ مهاجرت، لایهٔ اول خودکار برمی‌گردد.
+    """
+    window = view_window_index()
+    fingerprint = viewer_fingerprint(request=request)
+
+    # ── مسیرِ سریع: همین پردازه قبلاً این بیننده را در همین پنجره دیده است.
+    fast_key = make_cache_key("kindness:view_seen", listing.pk, window, fingerprint)
+    with contextlib.suppress(Exception):
+        if cache.get(fast_key):
+            return False, _current_view_count(listing)
+
+    db_result = _try_mark_view(listing=listing, fingerprint=fingerprint, window=window)
+
+    if db_result is None:
+        # پشتیبان: dedupe فقط در همین پردازه (بهترین تلاش).
+        cache_ok = False
+        with contextlib.suppress(Exception):
+            cache_ok = bool(cache.add(fast_key, 1, timeout=_view_dedupe_window()))
+        counted = cache_ok
+    else:
+        counted = db_result
 
     if counted:
         try:
