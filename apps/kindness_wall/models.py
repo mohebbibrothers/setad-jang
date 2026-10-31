@@ -25,6 +25,8 @@ from django.db import models
 from django.utils import timezone
 from django.utils.text import slugify
 
+from apps.core.geo import PROVINCE_CHOICES, normalize_city, normalize_province
+from apps.core.geo.validators import validate_iran_place
 from apps.core.models import BaseModel
 from apps.kindness_wall.choices import (
     CONTACT_CHANNEL_REGISTRY,
@@ -157,8 +159,30 @@ class KindnessListing(BaseModel):
         verbose_name="نام/لقب صاحب نیاز",
         help_text="می‌تواند محرمانه باشد؛ مثل «خانواده‌ای در شوش».",
     )
-    province = models.CharField(max_length=60, blank=True, verbose_name="استان")
-    city = models.CharField(max_length=60, blank=True, verbose_name="شهر")
+    # ── موقعیت جغرافیایی — از دیتاستِ رسمی (apps.core.geo) ──────────────
+    # هر دو خالی = «سراسر کشور» (آگهی در فیلترِ *هر* استان/شهر هم دیده می‌شود).
+    # استان از لیستِ ۳۱گانه انتخاب می‌شود و شهر با فهرستِ همان استان
+    # اعتبارسنجی می‌شود؛ این‌طور فیلترِ فرانت و دادهٔ ادمین همیشه یکی‌اند.
+    province = models.CharField(
+        max_length=60,
+        blank=True,
+        choices=PROVINCE_CHOICES,
+        db_index=True,
+        verbose_name="استان",
+        help_text="خالی بگذارید تا آگهی «سراسر کشور» شود و در فیلترِ همهٔ استان‌ها دیده شود.",
+    )
+    city = models.CharField(
+        max_length=60,
+        blank=True,
+        verbose_name="شهر",
+        help_text="از فهرستِ رسمیِ همان استان (خالی = همهٔ شهرهای آن استان).",
+    )
+    locality = models.CharField(
+        max_length=80,
+        blank=True,
+        verbose_name="روستا/محله",
+        help_text="اختیاری — برای دقتِ بیشتر مثل «روستای قلعه‌نو».",
+    )
     contact_note = models.CharField(
         max_length=240,
         blank=True,
@@ -253,6 +277,21 @@ class KindnessListing(BaseModel):
             digits = "98" + digits[1:]
         return f"tel:+{digits}"
 
+    def _normalize_place(self) -> None:
+        """شکلِ رسمیِ استان/شهر/روستا را قبل از ذخیره تثبیت می‌کند.
+
+        اگر مقدارها با دیتاست هم‌خوان نباشند (مثلاً ورودِ قدیمی یا API)،
+        بی‌صدا به شکلِ رسمی برمی‌گردند؛ ناشناخته‌ها همان‌طور می‌مانند تا
+        `clean()`/فرمِ ادمین خطای صریح بدهد و داده بی‌صدا پاک نشود.
+        """
+        province = normalize_province(self.province)
+        if province:
+            self.province = province
+            city = normalize_city(province, self.city)
+            if city:
+                self.city = city
+        self.locality = (self.locality or "").strip()
+
     def _normalize_channels(self) -> None:
         """نرمال‌سازی یکسانِ همهٔ کانال‌ها دقیقاً قبل از ذخیره (منبع یکتا)."""
         for field, code, _label, _link in self.channel_fields():
@@ -280,16 +319,38 @@ class KindnessListing(BaseModel):
         if not self.slug:
             self.slug = _unique_slug(model=KindnessListing, value=self.title, max_length=300)
         self._normalize_channels()
+        self._normalize_place()
         self.search_document = (
             f"{self.title}\n{self.description}\n{self.beneficiary_name}\n"
-            f"{self.province} {self.city}\n{self.category.title if self.category_id else ''}"
+            f"{self.province} {self.city} {self.locality}\n"
+            f"{self.category.title if self.category_id else ''}"
         )
         super().save(*args, **kwargs)
+
+    def clean_fields(self, exclude: Any = None) -> None:
+        """نرمال‌سازیِ جغرافیا **پیش از** اعتبارسنجیِ choices.
+
+        چرا این‌جا و نه فقط در save؟ چون `full_clean` نخست اعتبارسنجیِ فیلدها
+        (از جمله `choices` استان) را اجرا می‌کند و «آذربايجان شرقي» (ي عربی)
+        همان‌جا رد می‌شد، هرچند در ذخیره به شکلِ رسمی نرمال می‌شد. با این
+        override، ورودیِ کاربر/ادمین/API با همان یک قاعدهٔ دیتاست یکسان می‌شود
+        و پیامِ خطا فقط برای مقدارِ واقعاً ناشناخته می‌ماند.
+        """
+        self._normalize_place()
+        super().clean_fields(exclude=exclude)
 
     def clean(self) -> None:
         """قاعدهٔ سیاست: انتشار بدون حتی یک راه تماس غیرممکن است."""
         super().clean()
         errors: dict[str, ValidationError] = {}
+        # موقعیت باید با دیتاستِ رسمی هم‌خوان باشد (سراسر کشور = هر دو خالی).
+        try:
+            validate_iran_place(self.province, self.city)
+        except ValidationError as exc:
+            if hasattr(exc, "error_dict"):
+                errors.update(dict(exc.error_dict))
+            else:
+                errors["province"] = exc
         for field, code, label, _link in self.channel_fields():
             value = getattr(self, field) or ""
             if value.strip():

@@ -129,6 +129,12 @@ api_v1_urlpatterns = [
         "api/v1/lms/",
         include(("apps.lms.urls", "lms"), namespace="lms"),
     ),
+    # ── Geography (provinces / cities / localities) ─────────
+    # منبعِ واحدِ استان/شهر برای فرانت و پنلِ ادمین؛ دیتاستِ رسمیِ بسته‌بندی‌شده.
+    path(
+        "api/v1/geo/",
+        include(("apps.core.geo.urls", "geo"), namespace="geo"),
+    ),
     # ── Kindness Wall (Divar-e Mehrabani) ──────────────────
     path(
         "api/v1/kindness-wall/",

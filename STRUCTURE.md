@@ -9,7 +9,7 @@
 
 ## اپلیکیشن‌ها
 
-مجموع: **13 اپ** · 88 مدل · 68 مایگریشن · 44 ویو · 274 مسیر
+مجموع: **13 اپ** · 88 مدل · 69 مایگریشن · 44 ویو · 274 مسیر
 
 | اپ | مدل | مایگریشن | ویو | مسیر |
 |---|---:|---:|---:|---:|
@@ -18,7 +18,7 @@
 | `authentication` | 4 | 9 | 0 | 30 |
 | `command_center` | 0 | 0 | 1 | 1 |
 | `core` | 2 | 3 | 1 | 0 |
-| `kindness_wall` | 4 | 5 | 8 | 17 |
+| `kindness_wall` | 4 | 6 | 8 | 17 |
 | `lms` | 18 | 8 | 0 | 54 |
 | `madadkar` | 15 | 10 | 0 | 48 |
 | `notifications` | 4 | 3 | 7 | 7 |
@@ -153,6 +153,7 @@ setad-jang/
 │   ├── urls.py  # مسیرها
 │   └── views.py  # لایهٔ HTTP
 ├── core/
+│   ├── geo/
 │   ├── health/
 │   ├── migrations/
 │   ├── static/
@@ -202,6 +203,8 @@ setad-jang/
 │   └── views.py  # لایهٔ HTTP
 ├── kindness_wall/
 │   ├── migrations/
+│   ├── static/
+│   ├── templates/
 │   ├── tests/
 │   ├── __init__.py
 │   ├── admin.py
@@ -410,6 +413,7 @@ setad-jang/
 
 ```text
 apps/core/
+├── geo/
 ├── health/
 ├── migrations/
 ├── static/

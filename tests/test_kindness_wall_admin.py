@@ -367,3 +367,95 @@ class TestSchemaAndEnumNaming:
             timeout=240,
         )
         assert result.returncode == 0, result.stderr[-3000:]
+
+
+# ══════════════════════════════════════════════════════════════════════════
+#  جغرافیای ادمین — دیتاستِ رسمی، ویجتِ وابسته و عنوانِ درستِ بخشِ فرم
+# ══════════════════════════════════════════════════════════════════════════
+
+
+@pytest.mark.django_db
+class TestAdminGeoWiring:
+    """ادمین باید استان/شهر را از **فهرست** انتخاب کند، نه تایپِ آزاد."""
+
+    def _admin_user(self):
+        return AdminUserFactory(is_staff=True, is_superuser=True)
+
+    def test_fieldset_title_is_correct_and_readable(self) -> None:
+        titles = [title for title, _opts in KindnessListingAdmin.fieldsets]
+        assert "صاحبِ نیاز و موقعیتِ جغرافیایی" in titles
+        # عنوانِ ناقص/چسبیدهٔ قدیمی نباید برگردد
+        assert all(t.strip()[-4:] != "جغرا" for t in titles)
+
+    def test_change_form_embeds_geo_dataset_and_city_select(self) -> None:
+        client = APIClient()
+        user = self._admin_user()
+        client.force_authenticate(user=user)
+        listing = KindnessListingFactory(province="تهران", city="تهران")
+
+        from django.test import Client
+
+        django_client = Client()
+        django_client.force_login(user)
+        response = django_client.get(
+            reverse("admin:kindness_wall_kindnesslisting_change", args=[listing.pk])
+        )
+        assert response.status_code == 200
+        html = response.content.decode()
+        # نقشهٔ استان→شهر برای اسکریپتِ وابسته‌سازی
+        assert 'id="kw-geo-data"' in html
+        assert "admin_geo.js" in html
+        # «شهر» باید select باشد نه input متنی
+        assert 'name="city"' in html
+        assert "<select" in html.split('name="city"')[0][-400:]
+        # روستا/محله با datalist
+        assert 'name="locality"' in html
+
+    def test_form_rejects_city_outside_province(self) -> None:
+        from apps.kindness_wall.admin import KindnessListingAdminForm
+
+        category = KindnessCategoryFactory()
+        form = KindnessListingAdminForm(
+            data={
+                "category": category.pk,
+                "title": "نیاز آزمایشی",
+                "description": "توضیح",
+                "quantity": 1,
+                "unit": "عدد",
+                "urgency": "normal",
+                "status": ListingStatus.DRAFT,
+                "province": "قم",
+                "city": "تهران",  # در استانِ قم نیست
+                "contact_phone": "09120000000",
+            }
+        )
+        assert form.is_valid() is False
+        assert "city" in form.errors
+
+    def test_model_clean_normalizes_and_accepts_valid_pair(self) -> None:
+        category = KindnessCategoryFactory()
+        listing = KindnessListing(
+            category=category,
+            title="نیاز معتبر",
+            description="توضیح",
+            province="آذربايجان شرقي",  # ي عربی عمدی
+            city="تبريز",
+            contact_phone="09120000000",
+            status=ListingStatus.DRAFT,
+        )
+        listing.full_clean(exclude=["slug", "search_document"])
+        assert listing.province == "آذربایجان شرقی"
+        assert listing.city == "تبریز"
+
+    def test_nationwide_listing_is_valid(self) -> None:
+        category = KindnessCategoryFactory()
+        listing = KindnessListing(
+            category=category,
+            title="نیاز سراسری",
+            description="توضیح",
+            province="",
+            city="",
+            contact_phone="09120000000",
+            status=ListingStatus.DRAFT,
+        )
+        listing.full_clean(exclude=["slug", "search_document"])  # نباید خطا بدهد

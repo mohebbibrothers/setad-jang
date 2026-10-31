@@ -9,7 +9,9 @@
 from __future__ import annotations
 
 import django_filters
+from django.db.models import Q
 
+from apps.core.geo import normalize_province
 from apps.core.search import SearchField, apply_smart_search
 from apps.kindness_wall.choices import ListingStatus, OfferStatus, Urgency
 from apps.kindness_wall.models import KindnessListing, KindnessOffer
@@ -27,8 +29,8 @@ class KindnessListingPublicFilter(django_filters.FilterSet):
     """فیلترهای تختهٔ عمومی: دسته، جغرا، فوریت، ordering و جستجو."""
 
     category = django_filters.CharFilter(field_name="category__slug", lookup_expr="exact")
-    province = django_filters.CharFilter(field_name="province", lookup_expr="iexact")
-    city = django_filters.CharFilter(field_name="city", lookup_expr="iexact")
+    province = django_filters.CharFilter(method="filter_province")
+    city = django_filters.CharFilter(method="filter_city")
     urgent = django_filters.BooleanFilter(method="filter_urgent")
     ordering = django_filters.CharFilter(method="filter_ordering")
     search = django_filters.CharFilter(method="filter_search")
@@ -36,6 +38,34 @@ class KindnessListingPublicFilter(django_filters.FilterSet):
     class Meta:
         model = KindnessListing
         fields: list[str] = []
+
+    def filter_province(self, queryset, name, value):
+        """آگهی‌های همان استان **+ آگهی‌های سراسر کشور**.
+
+        سیاست محصول: آگهیِ «سراسر کشور» یعنی «در هر نقطه از ایران قابلِ
+        برآورده‌شدن است»، پس وقتی کاربر استانی را فیلتر می‌کند باید همان‌ها هم
+        ببیند؛ در غیر این صورت گران‌ترین نیازها (که عامدانه سراسری ثبت شده‌اند)
+        از دیدِ فیلترشده پنهان می‌شوند. استانِ خالی = کلِ سرزمین.
+        """
+        raw = (value or "").strip()
+        if not raw:
+            return queryset
+        province = normalize_province(raw) or raw
+        return queryset.filter(
+            Q(province__iexact=province) | Q(province__isnull=True) | Q(province="")
+        )
+
+    def filter_city(self, queryset, name, value):
+        """آگهی‌های همان شهر + استانِ خالی (سراسر کشور) + شهرِ خالی.
+
+        شهرِ خالی در آگهی یعنی «همهٔ شهرهای آن استان» (یا سراسر کشور)، پس با
+        فیلترِ شهرِ کاربر هم باید دیده شود. اگر کاربر شهری را فیلتر کند که در
+        دیتاست نیست، همان عبارت به‌صورت iexact و بدونِ خطا اعمال می‌شود.
+        """
+        raw = (value or "").strip()
+        if not raw:
+            return queryset
+        return queryset.filter(Q(city__iexact=raw) | Q(city__isnull=True) | Q(city=""))
 
     def filter_urgent(self, queryset, name, value):
         """فیلتر «فقط فوری‌ها»."""

@@ -89,6 +89,7 @@ class KindnessListingListSerializer(serializers.ModelSerializer):
     cover_url = serializers.SerializerMethodField()
     days_left = serializers.IntegerField(read_only=True)
     open_offers_count = serializers.IntegerField(read_only=True, required=False)
+    is_nationwide = serializers.SerializerMethodField()
 
     class Meta:
         model = KindnessListing
@@ -105,6 +106,8 @@ class KindnessListingListSerializer(serializers.ModelSerializer):
             "unit",
             "province",
             "city",
+            "locality",
+            "is_nationwide",
             "view_count",
             "open_offers_count",
             "cover_url",
@@ -112,6 +115,10 @@ class KindnessListingListSerializer(serializers.ModelSerializer):
             "published_at",
         )
         read_only_fields = fields
+
+    def get_is_nationwide(self, obj: KindnessListing) -> bool:
+        """آگهیِ «سراسر کشور» = بدونِ استان؛ در فیلترِ همهٔ استان‌ها هم می‌آید."""
+        return not (obj.province or "").strip()
 
     def get_excerpt(self, obj: KindnessListing) -> str:
         """چکیدهٔ توضیحات برای کارت."""

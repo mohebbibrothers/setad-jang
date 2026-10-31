@@ -1,0 +1,12 @@
+{% extends "admin/change_form.html" %}
+{% comment %}
+  حلقهٔ اتصالِ «دیتاستِ جغرافیا → ویجتِ وابسته» در فرمِ آگهی.
+
+  نقشهٔ کاملِ استان→شهر (و روستاها اگر دیتاستِ اختیاری متصل باشد) به‌صورت
+  JSON امن درج می‌شود تا admin_geo.js بدونِ هیچ درخواستِ شبکه، دراپ‌دانِ شهر
+  را هم‌زمان با تغییرِ استان بازسازی کند. json_script escaping را خودش انجام
+  می‌دهد (بدونِ XSS، بدونِ نیاز به |safe).
+{% endcomment %}
+{% block after_field_sets %}{{ block.super }}
+{{ geo_data|json_script:"kw-geo-data" }}
+{% endblock %}

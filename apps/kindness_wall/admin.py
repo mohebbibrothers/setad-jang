@@ -8,6 +8,7 @@ audit هم ثبت گردد.
 
 from __future__ import annotations
 
+from django import forms
 from django.contrib import admin, messages
 from django.db.models import Q
 from django.http import HttpResponse
@@ -16,6 +17,7 @@ from django.utils import timezone
 from django.utils.html import format_html
 
 from apps.audit_logs.services import log_action_async
+from apps.core.geo import PROVINCE_NAMES, cities_of, localities_of
 from apps.kindness_wall import services
 from apps.kindness_wall.choices import MAX_IMAGES_PER_LISTING, ListingStatus, OfferStatus, Urgency
 from apps.kindness_wall.export import (
@@ -127,9 +129,92 @@ class KindnessListingImageInline(admin.TabularInline):
     fields = ("image", "alt_text", "is_cover", "order")
 
 
+class KindnessListingAdminForm(forms.ModelForm):
+    """فرمِ آگهی با دراپ‌دانِ وابستهٔ استان → شهر (و راهنمای روستا).
+
+    • «شهر» به `<select>` تبدیل می‌شود با گزینه‌های همان استان؛ اعتبارسنجیِ
+      نهایی همچنان در `clean()` مدل و `validate_iran_place` است، پس دستکاریِ
+      POST هم پاسخِ صریح می‌گیرد.
+    • مقدارِ فعلی همیشه در فهرست می‌ماند تا ویرایشِ رکوردِ قدیمی چیزی را از
+      دست ندهد (حتی اگر شهر بیرون از دیتاست باشد، با برچسبِ هشدار نمایش
+      داده می‌شود و ادمین می‌تواند اصلاحش کند).
+    """
+
+    class Meta:
+        model = KindnessListing
+        # همهٔ فیلدهای ویرایش‌پذیر صریح (قاعدهٔ DJ007: `__all__` در ModelForm ممنوع)
+        fields = (
+            "category",
+            "title",
+            "description",
+            "quantity",
+            "unit",
+            "urgency",
+            "is_featured",
+            "beneficiary_name",
+            "province",
+            "city",
+            "locality",
+            "contact_phone",
+            "contact_bale",
+            "contact_eitaa",
+            "contact_telegram",
+            "contact_rubika",
+            "contact_instagram",
+            "contact_note",
+            "status",
+            "expires_at",
+            "fulfillment_note",
+            "is_active",
+        )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        province_field = self.fields.get("province")
+        if province_field is not None:
+            # خودِ مدل choices دارد؛ صریح می‌گذاریم تا ویجت هم قطعی باشد.
+            province_field.widget = forms.Select(
+                choices=[("", "— سراسر کشور (بدونِ استان) —")]
+                + [(name, name) for name in PROVINCE_NAMES()]
+            )
+
+        city_field = self.fields.get("city")
+        if city_field is None:
+            return
+
+        province_value = ""
+        if self.is_bound:
+            province_value = (self.data.get("province") or "").strip()
+        elif self.instance and self.instance.pk:
+            province_value = (self.instance.province or "").strip()
+
+        choices: list[tuple[str, str]] = [("", "— همهٔ شهرهای استان / سراسر کشور —")]
+        if province_value:
+            choices += [(city, city) for city in cities_of(province_value)]
+            current = ""
+            if self.is_bound:
+                current = (self.data.get("city") or "").strip()
+            elif self.instance and self.instance.pk:
+                current = (self.instance.city or "").strip()
+            if current and current not in {value for value, _label in choices}:
+                choices.append((current, f"{current} (خارج از فهرستِ رسمی)"))
+        city_field.widget = forms.Select(choices=choices)
+
+        locality_field = self.fields.get("locality")
+        if locality_field is not None:
+            locality_field.widget.attrs.setdefault("list", "kw-locality-options")
+
+
 @admin.register(KindnessListing)
 class KindnessListingAdmin(admin.ModelAdmin):
     """آلات اصلی مدیریت دیوار: ویرایش آگهی + چرخه حیات + خروجی."""
+
+    form = KindnessListingAdminForm
+
+    class Media:
+        """اسکریپتِ وابسته‌سازیِ استان→شهر (بدونِ وابستگی به jQuery ادمین)."""
+
+        js = ("kindness_wall/admin_geo.js",)
 
     list_display = (
         "title_short",
@@ -137,7 +222,7 @@ class KindnessListingAdmin(admin.ModelAdmin):
         "status_badge",
         "urgency_flag",
         "featured_star",
-        "city",
+        "location_badge",
         "expires_display",
         "view_count",
         "offer_count_badge",
@@ -189,10 +274,15 @@ class KindnessListingAdmin(admin.ModelAdmin):
             },
         ),
         (
-            "صاحب نیاز و جغرا",
+            "صاحبِ نیاز و موقعیتِ جغرافیایی",
             {
-                "fields": ("beneficiary_name", "province", "city"),
-                "classes": ("collapse",),
+                "description": (
+                    "نام/لقبِ صاحبِ نیاز (می‌تواند محرمانه باشد) و محلِ برآورده‌شدنِ نیاز. "
+                    "استان را از فهرست انتخاب کنید تا فهرستِ شهرهای همان استان باز شود؛ "
+                    "خالی گذاشتنِ استان یعنی «سراسر کشور» — چنین آگهی‌ای در فیلترِ هر "
+                    "استان و شهری هم به کاربر نشان داده می‌شود."
+                ),
+                "fields": ("beneficiary_name", "province", "city", "locality"),
             },
         ),
         (
@@ -241,6 +331,19 @@ class KindnessListingAdmin(admin.ModelAdmin):
         ),
     )
 
+    def changeform_view(self, request, object_id=None, form_url="", extra_context=None):
+        """نقشهٔ استان→شهر (و روستاها) را در قالبِ فرم تزریق می‌کند.
+
+        فقط استان‌هایی که شهر دارند فرستاده می‌شوند تا حجمِ HTML کم بماند؛
+        `admin_geo.js` همین ساختار را می‌خواند.
+        """
+        extra_context = {**(extra_context or {})}
+        extra_context["geo_data"] = {
+            "cities": {name: cities_of(name) for name in PROVINCE_NAMES()},
+            "localities": {name: localities_of(name) for name in PROVINCE_NAMES()},
+        }
+        return super().changeform_view(request, object_id, form_url, extra_context)
+
     @admin.display(description="عنوان")
     def title_short(self, obj: KindnessListing) -> str:
         """عنوان بریده‌شده برای خوانایی فهرست."""
@@ -262,6 +365,17 @@ class KindnessListingAdmin(admin.ModelAdmin):
     def featured_star(self, obj: KindnessListing) -> str:
         """⭐ برای آگهی تثبیت‌شده بالای دیوار."""
         return "⭐" if obj.is_featured else ""
+
+    @admin.display(description="موقعیت", ordering="province")
+    def location_badge(self, obj: KindnessListing) -> object:
+        """موقعیتِ خوانا: روستا/شهر، استان — یا نشانِ «سراسر کشور»."""
+        if not (obj.province or "").strip():
+            return format_html(
+                "<span style='display:inline-block;padding:1px 8px;border-radius:999px;"
+                "background:#0d8074;color:#fff;font-size:11px;'>سراسر کشور</span>"
+            )
+        parts = [p for p in (obj.locality, obj.city, obj.province) if (p or "").strip()]
+        return "، ".join(parts)
 
     @admin.display(description="انقضا", ordering="expires_at")
     def expires_display(self, obj: KindnessListing) -> object:
