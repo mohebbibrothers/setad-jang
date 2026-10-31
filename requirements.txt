@@ -31,7 +31,7 @@ django-storages[s3]==1.14.6
 djangorestframework==3.18.2
 djangorestframework_simplejwt==5.5.1
 # dnspython (استفادهٔ مستقیم در apps/authentication/validators.py — MX/دامنه)
-dnspython==2.7.0
+dnspython==2.9.0
 drf-spectacular==0.29.0
 flower==2.0.1
 gunicorn==26.2.0
