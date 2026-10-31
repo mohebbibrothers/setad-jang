@@ -436,6 +436,60 @@ class KindnessListingImage(BaseModel):
         return result
 
 
+class KindnessListingView(models.Model):
+    """اثرِ یکتای «یک بیننده در یک پنجرهٔ زمانی» برای یک آگهی.
+
+    چرا این جدول لازم شد؟
+    ─────────────────────
+    نسخهٔ اولِ dedupe بازدید روی `django.core.cache` بود. در توسعه درست کار
+    می‌کرد، ولی در استقرارِ واقعی (چند پردازهٔ Passenger + `CACHE_BACKEND=locmem`)
+    هر پردازه کشِ جداگانه دارد؛ نتیجه: یک بیننده به‌تعدادِ پردازه‌ها شمرده
+    می‌شد (در آزمونِ زنده دو شمارش برای یک مرورگر دیده شد).
+
+    این جدول همان قرارداد را **اتمیک و مشترک بین همهٔ پردازه‌ها** می‌کند:
+    یک constraint یکتا روی (آگهی، بیننده، پنجره) تضمین می‌کند درجِ دوم
+    رد شود — حتی اگر دو درخواست هم‌زمان به دو پردازهٔ مختلف برسند.
+
+    اندازه و نگهداری
+    ─────────────────
+    هر ردیف یک‌بار در هر پنجره (پیش‌فرض ۶ ساعت) برای هر بینندهٔ یکتا ساخته
+    می‌شود؛ حجمش با «تعداد بازدیدکنندهٔ یکتا × آگهی‌های دیده‌شده» رشد می‌کند،
+    نه با تعداد رفرش. ردیف‌های قدیمی‌تر از دو پنجره در تسکِ دوره‌ای پاک
+    می‌شوند (`purge_stale_listing_views`) تا جدول همیشه کوچک بماند.
+    """
+
+    listing = models.ForeignKey(
+        KindnessListing,
+        on_delete=models.CASCADE,
+        related_name="view_marks",
+        verbose_name="آگهی",
+    )
+    #: هشِ کوتاهِ بیننده (شناسهٔ کاربر یا IP+UA). هرگز IP/UA خام ذخیره نمی‌شود.
+    viewer_key = models.CharField(max_length=40, verbose_name="اثرِ بیننده")
+    #: شمارهٔ پنجره = floor(timestamp / طولِ پنجره). تغییرِ طولِ پنجره، پنجرهٔ
+    #: تازه می‌سازد؛ این عمدی است (تنظیمات = سیاست).
+    window_start = models.BigIntegerField(verbose_name="شمارهٔ پنجره")
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True, verbose_name="زمان")
+
+    class Meta:
+        verbose_name = "اثرِ بازدید"
+        verbose_name_plural = "اثرهای بازدید"
+        constraints = [
+            models.UniqueConstraint(
+                fields=("listing", "viewer_key", "window_start"),
+                name="uniq_kindness_view_mark",
+            )
+        ]
+        indexes = [
+            models.Index(fields=("listing", "window_start"), name="kw_view_listing_window_idx"),
+        ]
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        """نمایشِ خوانا برای لاگ/ادمین."""
+        return f"{self.listing_id} · {self.viewer_key} · {self.window_start}"
+
+
 class KindnessOffer(BaseModel):
     """«من می‌توانم کمک کنم» — سیگنال اختیاری کاربرِ ثبت‌نام‌کرده.
 

@@ -35,3 +35,25 @@ def expire_old_listings_task() -> int:
         invalidate_public_domain("kindness")
         logger.info("Kindness wall listings expired count=%d", expired_count)
     return expired_count
+
+
+@shared_task(
+    name="apps.kindness_wall.tasks.purge_listing_view_marks_task",
+    acks_late=True,
+    reject_on_worker_lost=True,
+    ignore_result=True,
+)
+def purge_listing_view_marks_task() -> int:
+    """پاک‌سازیِ اثرهای بازدیدِ قدیمی (نگهداشتِ جدولِ dedupe).
+
+    جدولِ `KindnessListingView` با هر «بینندهٔ یکتا در هر پنجره» یک ردیف
+    می‌گیرد؛ بدونِ پاک‌سازی در طولِ سال بی‌دلیل رشد می‌کند. دو پنجرهٔ آخر
+    (پیش‌فرض ۶ ساعته ⇒ ۱۲ ساعت) نگه داشته می‌شود، بقیه حذف.
+
+    Returns:
+        تعداد ردیف‌های حذف‌شده در این اجرا.
+    """
+    from .services import purge_stale_listing_views
+
+    deleted = purge_stale_listing_views()
+    return deleted

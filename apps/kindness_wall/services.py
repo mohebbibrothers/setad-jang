@@ -7,20 +7,26 @@
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import logging
 
 from django.conf import settings
 from django.core.cache import cache
 from django.core.exceptions import ValidationError
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import F
 from django.utils import timezone
 
 from apps.core.cache import make_cache_key
 from apps.core.client_ip import get_client_ip
 from apps.kindness_wall.choices import DEFAULT_LISTING_TTL_DAYS, ListingStatus, OfferStatus
-from apps.kindness_wall.models import KindnessCategory, KindnessListing, KindnessOffer
+from apps.kindness_wall.models import (
+    KindnessCategory,
+    KindnessListing,
+    KindnessListingView,
+    KindnessOffer,
+)
 from apps.kindness_wall.validators import validate_at_least_one_contact
 
 logger = logging.getLogger(__name__)
@@ -192,8 +198,8 @@ def viewer_fingerprint(*, request) -> str:
     • کاربرِ واردشده → شناسهٔ کاربر (پایدارترین حالت، مستقل از دستگاه)
     • مهمان        → هشِ کوتاهِ «IP + User-Agent»
 
-    هش کردن عمدی است: در cache فقط یک رشتهٔ ۱۶ نویسه‌ای می‌نشیند، نه آدرسِ
-    IP خام (حریمِ خصوصی + حجمِ کمتر + بی‌فایده‌بودنِ دامپِ کش). ترکیبِ UA با
+    هش کردن عمدی است: در دیتابیس/کش فقط یک رشتهٔ ۱۶ نویسه‌ای می‌نشیند، نه
+    آدرسِ IP خام (حریمِ خصوصی + حجمِ کمتر + بی‌فایده‌بودنِ دامپ). ترکیبِ UA با
     IP باعث می‌شود چند مرورگرِ پشتِ یک NAT (دفتر/دانشگاه) هر کدام بازدیدِ
     مستقل داشته باشند، ولی رفرشِ همان مرورگر دوباره شمرده نشود.
     """
@@ -207,21 +213,61 @@ def viewer_fingerprint(*, request) -> str:
     return f"g{digest}"
 
 
+def view_window_index(*, now=None) -> int:
+    """شمارهٔ پنجرهٔ جاری = floor(timestamp / طولِ پنجره).
+
+    چرا «شماره» و نه «بازهٔ تاریخ»؟ چون با تغییرِ طولِ پنجره در تنظیمات، همهٔ
+    شماره‌ها به‌طور طبیعی جابه‌جا می‌شوند و نیازی به مهاجرت/پاک‌سازی نیست.
+    """
+    moment = now or timezone.now()
+    window = _view_dedupe_window()
+    return int(moment.timestamp()) // window
+
+
 def register_listing_view(*, listing: KindnessListing, request) -> tuple[bool, int]:
     """ثبتِ یک بازدیدِ **یکتا**؛ برمی‌گرداند (شمارش‌شد؟, عددِ تازه).
 
+    دو لایهٔ دفاع:
+      ۱) **دیتابیس** (منبعِ حقیقت): درجِ ردیفِ (آگهی، بیننده، پنجره) با
+         constraint یکتا. درجِ دوم — حتی از پردازهٔ دیگر یا هم‌زمان — با
+         IntegrityError رد می‌شود. این لایه به‌تنهایی کافی است.
+      ۲) **کش** (مسیرِ سریع): اگر همین پردازه بداند این بیننده شمرده شده،
+         بدونِ لمسِ دیتابیس برمی‌گردد. صرفاً بهینه‌سازی است، نه تضمین؛ پس
+         بودنش روی درستی اثر ندارد.
+
     عددِ برگشتی از دیتابیس خوانده می‌شود (نه از شیءِ کش‌شده) تا همان لحظه
-    دقیق باشد و رابط بتواند بی‌درنگ نشان دهد.
+    دقیق باشد.
     """
+    window = view_window_index()
+    fingerprint = viewer_fingerprint(request=request)
+
+    # ── مسیرِ سریع: همین پردازه قبلاً این بیننده را در همین پنجره دیده است.
+    fast_key = make_cache_key("kindness:view_seen", listing.pk, window, fingerprint)
+    # کش فقط بهینه‌سازی است؛ خرابیِ آن نباید رفتار (یا درستیِ شمارش) را
+    # عوض کند — پس بی‌صدا نادیده گرفته می‌شود.
+    with contextlib.suppress(Exception):
+        if cache.get(fast_key):
+            return False, _current_view_count(listing)
+
     counted = False
     try:
-        key = make_cache_key(
-            "kindness:view_dedupe", listing.pk, viewer_fingerprint(request=request)
+        with transaction.atomic():
+            _mark, created = KindnessListingView.objects.get_or_create(
+                listing=listing,
+                viewer_key=fingerprint,
+                window_start=window,
+            )
+            counted = created
+    except IntegrityError:
+        # درجِ هم‌زمان از پردازهٔ دیگر — همان محدودیتِ یکتا کارِ خودش را کرد.
+        counted = False
+    except Exception:
+        logger.exception("ثبتِ اثرِ بازدیدِ آگهی %s ناموفق بود", listing.pk)
+        counted = bool(
+            not KindnessListingView.objects.filter(
+                listing=listing, viewer_key=fingerprint, window_start=window
+            ).exists()
         )
-        counted = bool(cache.add(key, 1, timeout=_view_dedupe_window()))
-    except Exception:  # cache هرگز نباید مسیرِ کاربر را بشکند
-        logger.warning("dedupe cache برای بازدیدِ آگهی %s ناموفق بود", listing.pk, exc_info=True)
-        counted = True
 
     if counted:
         try:
@@ -229,12 +275,35 @@ def register_listing_view(*, listing: KindnessListing, request) -> tuple[bool, i
         except Exception:
             logger.exception("افزایشِ شمارندهٔ بازدیدِ آگهی %s ناموفق بود", listing.pk)
 
+    # ثبتِ مسیرِ سریع (بدونِ اثر بر درستیِ شمارش)
+    with contextlib.suppress(Exception):
+        cache.set(fast_key, 1, timeout=_view_dedupe_window())
+
+    return counted, _current_view_count(listing)
+
+
+def _current_view_count(listing: KindnessListing) -> int:
+    """عددِ تازهٔ بازدید از دیتابیس (تک‌ستونی و ارزان)."""
     fresh = (
         KindnessListing.all_objects.filter(pk=listing.pk)
         .values_list("view_count", flat=True)
         .first()
     )
-    return counted, int(fresh or 0)
+    return int(fresh or 0)
+
+
+def purge_stale_listing_views(*, keep_windows: int = 2) -> int:
+    """پاک‌سازیِ اثرهای بازدیدِ قدیمی؛ برمی‌گرداند تعدادِ ردیف‌های حذف‌شده.
+
+    دو پنجرهٔ گذشته نگه داشته می‌شود تا پنجرهٔ جاری و قبلی (که ممکن است هنوز
+    در حالِ محاسبه باشد) دست‌نخورده بمانند. این تابع از تسکِ دوره‌ای صدا زده
+    می‌شود تا جدول در طولِ سال کوچک بماند.
+    """
+    threshold = view_window_index() - max(1, int(keep_windows))
+    deleted, _details = KindnessListingView.objects.filter(window_start__lt=threshold).delete()
+    if deleted:
+        logger.info("پاک‌سازیِ اثرهای بازدید: %s ردیف حذف شد", deleted)
+    return int(deleted)
 
 
 def expire_due_listings() -> int:

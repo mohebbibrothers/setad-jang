@@ -1158,6 +1158,9 @@ CELERY_TASK_ROUTES = {
     "apps.kindness_wall.tasks.expire_old_listings_task": {
         "queue": "default",
     },
+    "apps.kindness_wall.tasks.purge_listing_view_marks_task": {
+        "queue": "default",
+    },
     "apps.audit_logs.tasks.enforce_audit_retention_task": {
         "queue": "default",
     },
@@ -1215,6 +1218,14 @@ CELERY_BEAT_SCHEDULE = {
     "kindness-expire-due-listings-hourly": {
         "task": "apps.kindness_wall.tasks.expire_old_listings_task",
         "schedule": crontab(minute=5),
+    },
+    # نگهداشتِ جدولِ «اثر بازدید» (dedupe). هر بینندهٔ یکتا در هر پنجره یک
+    # ردیف می‌سازد؛ اجرای شش‌ساعته (چند دقیقه پس از هر پنجرهٔ پیش‌فرض) جدول
+    # را کوچک نگه می‌دارد. حذف فقط ردیف‌های قدیمی‌تر از دو پنجره است، پس
+    # هیچ‌وقت روی بازدیدهای جاری اثر ندارد.
+    "kindness-purge-view-marks": {
+        "task": "apps.kindness_wall.tasks.purge_listing_view_marks_task",
+        "schedule": crontab(minute=20, hour="*/6"),
     },
     # سیاست نگهداشت audit تعریف شده بود ولی مجری نداشت. این اجرا غیرمخرب
     # است و فقط بدهی نگهداشت را مرئی می‌کند.

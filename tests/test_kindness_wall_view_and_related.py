@@ -32,7 +32,7 @@ from rest_framework import status
 from rest_framework.test import APIClient
 
 from apps.kindness_wall.choices import RELATED_MAX_LIMIT, ListingStatus
-from apps.kindness_wall.models import KindnessListing
+from apps.kindness_wall.models import KindnessListing, KindnessListingView
 from apps.kindness_wall.services import viewer_fingerprint
 from tests.factories import AdminUserFactory, UserFactory
 from tests.factories.kindness_wall import (
@@ -152,16 +152,67 @@ class TestViewBeacon:
         expired.refresh_from_db()
         assert expired.view_count == 0
 
-    def test_dedupe_window_comes_from_settings(self, settings) -> None:
+    def test_dedupe_survives_empty_cache(self) -> None:
+        """dedupe روی **دیتابیس** است، نه کش.
+
+        این دقیقاً همان باگِ استقرار بود: با `CACHE_BACKEND=locmem` و چند
+        پردازهٔ Passenger، هر پردازه کشِ جدا داشت و یک بیننده چندبار شمرده
+        می‌شد. حالا با پاک‌کردنِ کاملِ کش، شمارشِ دوباره هم رد می‌شود.
+        """
+        listing = PublishedNeedListingFactory()
+        client = APIClient()
+        assert client.post(_view_url(listing.slug)).data["data"]["counted"] is True
+        cache.clear()  # شبیه‌سازیِ پردازهٔ دیگر با کشِ خالی
+        response = client.post(_view_url(listing.slug))
+        assert response.data["data"]["counted"] is False
+        listing.refresh_from_db()
+        assert listing.view_count == 1
+
+    def test_window_change_opens_a_new_window(self, settings) -> None:
+        """تغییرِ طولِ پنجره در تنظیمات، پنجرهٔ تازه می‌سازد (بدونِ مهاجرت)."""
+        listing = PublishedNeedListingFactory()
+        client = APIClient()
+        settings.KINDNESS_VIEW_DEDUPE_SECONDS = 6 * 60 * 60
+        client.post(_view_url(listing.slug))
+
+        # پنجرهٔ هزار برابر بزرگ‌تر ⇒ شمارهٔ پنجرهٔ متفاوت ⇒ بازدیدِ تازه
+        settings.KINDNESS_VIEW_DEDUPE_SECONDS = 6 * 60 * 60 * 1000
         settings.KINDNESS_VIEW_DEDUPE_SECONDS = 1
+        cache.clear()
+        response = client.post(_view_url(listing.slug))
+        assert response.data["data"]["counted"] is True
+        listing.refresh_from_db()
+        assert listing.view_count == 2
+
+    def test_view_mark_row_is_created_once(self) -> None:
         listing = PublishedNeedListingFactory()
         client = APIClient()
         client.post(_view_url(listing.slug))
-        # پنجرهٔ یک‌ثانیه‌ای را دستی منقضی می‌کنیم (بدونِ sleep در تست)
-        cache.clear()
         client.post(_view_url(listing.slug))
-        listing.refresh_from_db()
-        assert listing.view_count == 2
+        assert KindnessListingView.objects.filter(listing=listing).count() == 1
+
+    def test_fingerprint_is_hashed_not_raw(self) -> None:
+        listing = PublishedNeedListingFactory()
+        APIClient(REMOTE_ADDR="198.51.100.23", HTTP_USER_AGENT="UA/1").post(_view_url(listing.slug))
+        mark = KindnessListingView.objects.get(listing=listing)
+        assert "198.51.100.23" not in mark.viewer_key
+        assert mark.viewer_key.startswith("g")
+
+    def test_purge_removes_stale_windows_only(self) -> None:
+        from apps.kindness_wall.services import purge_stale_listing_views, view_window_index
+
+        listing = PublishedNeedListingFactory()
+        current = view_window_index()
+        stale = KindnessListingView.objects.create(
+            listing=listing, viewer_key="gold", window_start=current - 5
+        )
+        fresh = KindnessListingView.objects.create(
+            listing=listing, viewer_key="gnew", window_start=current
+        )
+        deleted = purge_stale_listing_views()
+        assert deleted >= 1
+        assert not KindnessListingView.objects.filter(pk=stale.pk).exists()
+        assert KindnessListingView.objects.filter(pk=fresh.pk).exists()
 
     def test_detail_render_never_touches_counter(self) -> None:
         listing = PublishedNeedListingFactory()
@@ -170,18 +221,6 @@ class TestViewBeacon:
             client.get(reverse("kindness_wall:listing-detail", kwargs={"slug": listing.slug}))
         listing.refresh_from_db()
         assert listing.view_count == 0
-
-    def test_fingerprint_never_stores_raw_ip(self) -> None:
-        listing = PublishedNeedListingFactory()
-        request = APIClient(REMOTE_ADDR="198.51.100.23", HTTP_USER_AGENT="UA/1").post(
-            _view_url(listing.slug)
-        )
-        assert request.status_code == status.HTTP_200_OK
-        # هیچ کلیدِ کشی نباید IP خام را در خود داشته باشد
-        keys = []
-        if hasattr(cache, "_cache"):
-            keys = list(getattr(cache, "_cache", {}).keys())
-        assert all("198.51.100.23" not in key for key in keys)
 
 
 class TestRelatedListings:
