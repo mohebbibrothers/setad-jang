@@ -423,6 +423,10 @@ REST_FRAMEWORK = {
         "kindness_browse_user": "120/min",
         # ثبت اعلام آمادگی: نوشتاریِ کم‌تعداد روی آگهی دیگران؛ سقف ساعتی.
         "kindness_offer_create": "20/hour",
+        # beaconِ بازدید (POST سبک از مرورگر) — dedupe سمتِ سرویس هم فعال است؛
+        # این سقف‌ها فقط جلوی حلقهٔ اسکریپتی را می‌گیرند.
+        "kindness_view_anon": "40/min",
+        "kindness_view_user": "80/min",
         # ── Support Desk — Ticketing ───────────────────────
         "support_ticket_create": "5/hour",
         "support_ticket_message": "30/hour",

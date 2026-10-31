@@ -115,12 +115,19 @@ class TestPublicBoard:
             response = client.get(reverse("kindness_wall:listing-detail", kwargs={"slug": slug}))
             assert response.status_code == status.HTTP_404_NOT_FOUND, slug
 
-    def test_detail_bumps_view_count(self) -> None:
+    def test_detail_does_not_bump_view_count(self) -> None:
+        """شمارش از beaconِ مرورگر می‌آید، نه از رندرِ سروری/ISR.
+
+        قرارداد قبلی این بود که هر GET جزئیات شمارنده را بالا ببرد؛ با
+        revalidate و prefetchِ سرور این شمارنده بی‌معنا می‌شد. حالا جزئیات
+        فقط می‌خواند و `POST .../view/` می‌شمارد (با dedupe و throttle).
+        """
         listing = PublishedNeedListingFactory()
         client = APIClient()
-        client.get(reverse("kindness_wall:listing-detail", kwargs={"slug": listing.slug}))
+        for _ in range(3):
+            client.get(reverse("kindness_wall:listing-detail", kwargs={"slug": listing.slug}))
         listing.refresh_from_db()
-        assert listing.view_count == 1
+        assert listing.view_count == 0
 
     def test_search_filters_on_title(self) -> None:
         needle = PublishedNeedListingFactory(title="بخاری نفتی برای اردوگاه")

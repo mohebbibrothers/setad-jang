@@ -7,15 +7,23 @@
 
 from __future__ import annotations
 
+import hashlib
+import logging
+
 from django.conf import settings
+from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import F
 from django.utils import timezone
 
+from apps.core.cache import make_cache_key
+from apps.core.client_ip import get_client_ip
 from apps.kindness_wall.choices import DEFAULT_LISTING_TTL_DAYS, ListingStatus, OfferStatus
 from apps.kindness_wall.models import KindnessCategory, KindnessListing, KindnessOffer
 from apps.kindness_wall.validators import validate_at_least_one_contact
+
+logger = logging.getLogger(__name__)
 
 
 class KindnessWallServiceError(Exception):
@@ -141,6 +149,92 @@ def set_featured(*, listing: KindnessListing, featured: bool) -> KindnessListing
 def bump_listing_view_count(*, listing: KindnessListing) -> None:
     """شمارش بازدید با F() مستقیم — عمداً بدون save تا سیگنال کش شعله‌ور نشود."""
     KindnessListing.all_objects.filter(pk=listing.pk).update(view_count=F("view_count") + 1)
+
+
+# ══════════════════════════════════════════════════════════════════════════
+#  شمارشِ بازدیدِ امن (dedupe + throttle)
+# ══════════════════════════════════════════════════════════════════════════
+# قرارداد پیشین: هر بار که صفحهٔ جزئیات رندر می‌شد — حتی revalidate یا
+# prefetchِ سروری — شمارنده یک واحد بالا می‌رفت. نتیجه: عددی بی‌معنا (یک
+# بازدیدِ واقعی می‌توانست صدها شمارش بسازد) و ناتوانی در تفکیکِ «آدم» از
+# «کرالر».
+#
+# قرارداد جدید: شمارش از سمتِ **مرورگر** با یک beacon سبک انجام می‌شود و
+# تابعِ زیر پنجرهٔ dedupe دارد:
+#   • هر بیننده (کاربرِ واردشده یا اثرِ انگشت‌نگاریِ IP+UA) در هر پنجره فقط
+#     **یک** شمارش تولید می‌کند؛
+#   • کلیدِ dedupe با `cache.add` نوشته می‌شود که در Redis/LocMem اتمیک است،
+#     پس دو درخواستِ هم‌زمان هم دوبار نمی‌شمارند؛
+#   • خطای cache هرگز مسیرِ کاربر را نمی‌شکند: در بدترین حالت «شمارش انجام
+#     شد» فرض می‌شود (fail-open برای تجربه، با لاگ) چون از دست دادنِ یک
+#     شمارشِ آماری بسیار کم‌هزینه‌تر از خطای ۵۰۰ برای بازدیدکننده است؛
+#   • کارکنان/ادمین هرگز شمارش نمی‌شوند (پیش‌نمایشِ ادمین آمار را آلوده
+#     نمی‌کند).
+
+#: پنجرهٔ dedupe پیش‌فرض — شش ساعت. «بازدیدِ مجددِ همان آدم در همان روز»
+#: دوباره شمرده نمی‌شود، ولی بازگشتِ فردا یک بازدیدِ تازه است.
+DEFAULT_VIEW_DEDUPE_SECONDS = 6 * 60 * 60
+
+
+def _view_dedupe_window() -> int:
+    """پنجرهٔ dedupe از تنظیمات (قابل تغییر بدونِ کد)."""
+    raw = getattr(settings, "KINDNESS_VIEW_DEDUPE_SECONDS", DEFAULT_VIEW_DEDUPE_SECONDS)
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        return DEFAULT_VIEW_DEDUPE_SECONDS
+    return value if value > 0 else DEFAULT_VIEW_DEDUPE_SECONDS
+
+
+def viewer_fingerprint(*, request) -> str:
+    """اثرِ یکتای بیننده برای dedupe — هرگز خودِ IP/UA خام ذخیره نمی‌شود.
+
+    • کاربرِ واردشده → شناسهٔ کاربر (پایدارترین حالت، مستقل از دستگاه)
+    • مهمان        → هشِ کوتاهِ «IP + User-Agent»
+
+    هش کردن عمدی است: در cache فقط یک رشتهٔ ۱۶ نویسه‌ای می‌نشیند، نه آدرسِ
+    IP خام (حریمِ خصوصی + حجمِ کمتر + بی‌فایده‌بودنِ دامپِ کش). ترکیبِ UA با
+    IP باعث می‌شود چند مرورگرِ پشتِ یک NAT (دفتر/دانشگاه) هر کدام بازدیدِ
+    مستقل داشته باشند، ولی رفرشِ همان مرورگر دوباره شمرده نشود.
+    """
+    user = getattr(request, "user", None)
+    if user is not None and getattr(user, "is_authenticated", False):
+        return f"u{user.pk}"
+    ip = get_client_ip(request) or "unknown"
+    meta = getattr(request, "META", {}) or {}
+    ua = str(meta.get("HTTP_USER_AGENT", ""))[:180]
+    digest = hashlib.sha256(f"{ip}|{ua}".encode()).hexdigest()[:16]
+    return f"g{digest}"
+
+
+def register_listing_view(*, listing: KindnessListing, request) -> tuple[bool, int]:
+    """ثبتِ یک بازدیدِ **یکتا**؛ برمی‌گرداند (شمارش‌شد؟, عددِ تازه).
+
+    عددِ برگشتی از دیتابیس خوانده می‌شود (نه از شیءِ کش‌شده) تا همان لحظه
+    دقیق باشد و رابط بتواند بی‌درنگ نشان دهد.
+    """
+    counted = False
+    try:
+        key = make_cache_key(
+            "kindness:view_dedupe", listing.pk, viewer_fingerprint(request=request)
+        )
+        counted = bool(cache.add(key, 1, timeout=_view_dedupe_window()))
+    except Exception:  # cache هرگز نباید مسیرِ کاربر را بشکند
+        logger.warning("dedupe cache برای بازدیدِ آگهی %s ناموفق بود", listing.pk, exc_info=True)
+        counted = True
+
+    if counted:
+        try:
+            bump_listing_view_count(listing=listing)
+        except Exception:
+            logger.exception("افزایشِ شمارندهٔ بازدیدِ آگهی %s ناموفق بود", listing.pk)
+
+    fresh = (
+        KindnessListing.all_objects.filter(pk=listing.pk)
+        .values_list("view_count", flat=True)
+        .first()
+    )
+    return counted, int(fresh or 0)
 
 
 def expire_due_listings() -> int:

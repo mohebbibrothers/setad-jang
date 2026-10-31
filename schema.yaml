@@ -2263,6 +2263,65 @@ paths:
               schema:
                 $ref: '#/components/schemas/KindnessWallErrorResponse'
           description: ''
+  /api/v1/kindness-wall/listings/{slug}/related/:
+    get:
+      operationId: kindness_listing_related
+      description: فهرستِ کوتاهِ کارت‌ها؛ ۴۰۴ برای آگهیِ غیرِ‌عمومی.
+      summary: نیازهای مشابهِ یک آگهی
+      parameters:
+      - in: query
+        name: limit
+        schema:
+          type: integer
+        description: تعداد نتیجه (۱ تا ۱۲، پیش‌فرض ۴).
+      - in: path
+        name: slug
+        schema:
+          type: string
+        required: true
+      tags:
+      - دیوار مهربانی — عمومی
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KindnessListingListResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KindnessWallErrorResponse'
+          description: ''
+  /api/v1/kindness-wall/listings/{slug}/view/:
+    post:
+      operationId: kindness_listing_view
+      description: شمارش (اگر بیننده در پنجرهٔ dedupe نبود) و برگرداندنِ عددِ تازه.
+      summary: ثبتِ بازدیدِ یکتای آگهی
+      parameters:
+      - in: path
+        name: slug
+        schema:
+          type: string
+        required: true
+      tags:
+      - دیوار مهربانی — عمومی
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KindnessWallErrorResponse'
+          description: ''
   /api/v1/kindness-wall/my-offers/:
     get:
       operationId: kindness_my_offers

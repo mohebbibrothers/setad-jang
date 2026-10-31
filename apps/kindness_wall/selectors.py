@@ -8,7 +8,18 @@ from __future__ import annotations
 
 from datetime import timedelta
 
-from django.db.models import Count, Prefetch, Q, QuerySet
+from django.db.models import (
+    Case,
+    Count,
+    F,
+    IntegerField,
+    Prefetch,
+    Q,
+    QuerySet,
+    Value,
+    When,
+)
+from django.db.models.functions import Coalesce
 from django.utils import timezone
 
 from apps.kindness_wall.choices import ListingStatus, OfferStatus, Urgency
@@ -80,6 +91,71 @@ def get_fulfilled_stories() -> QuerySet[KindnessListing]:
         .select_related("category")
         .prefetch_related(_images_prefetch())
         .order_by("-fulfilled_at", "-updated_at")
+    )
+
+
+# ══════════════════════════════════════════════════════════════════════════
+#  نیازهای مشابه — صفحهٔ جزئیات
+# ══════════════════════════════════════════════════════════════════════════
+# پیش از این، «نیازهای مشابه» با یک درخواست به فهرستِ عمومی و فیلترِ سمتِ
+# فرانت ساخته می‌شد؛ نتیجه: (۱) خودِ آگهیِ جاری هم می‌آمد و در فرانت حذف
+# می‌شد، (۲) اگر دسته کم‌جمعیت بود، بخش خالی می‌ماند، (۳) ربط واقعی نداشت —
+# فقط «هر چه در همان دسته بود».
+#
+# این‌جا یک کوئریِ واحد با «امتیازِ ربط» می‌سازیم که هم قابلِ توضیح است و هم
+# ارزان (بدونِ N+1 و بدونِ حلقهٔ پایتونی):
+#
+#   ۵ → همان دسته **و** همان شهر   (نزدیک‌ترین نیاز از نظرِ موضوع و مکان)
+#   ۴ → همان دسته                  (موضوع یکی است)
+#   ۳ → همان استان، دستهٔ دیگر     (هم‌سایه‌ها؛ برای اهداکننده مهم است)
+#   ۲ → سراسری (بدونِ استان)        (در هر نقطه قابلِ برآورده‌شدن)
+#   ۱ → بقیه                        (پر کردنِ حداقلِ نتیجه)
+#
+# بعد از امتیاز، همان ترتیبِ مرجعِ تخته اعمال می‌شود (ویژه‌ها اول، بعد
+# تازه‌ترین) تا خروجی با بقیهٔ صفحه هم‌خانواده بماند.
+
+RELATED_RELEVANCE_MAX = 5
+
+
+def get_related_listings(*, listing: KindnessListing, limit: int = 4) -> QuerySet[KindnessListing]:
+    """آگهی‌های هم‌ربط با یک نیاز، به‌ترتیبِ ربط (بدونِ خودِ آگهی).
+
+    `limit` توسط لایهٔ view کلمپ می‌شود؛ این‌جا فقط یک عددِ سالم لازم است.
+    """
+    safe_limit = max(1, min(int(limit), 12))
+
+    relevance_cases = []
+    if (listing.city or "").strip():
+        relevance_cases.append(
+            When(
+                Q(category_id=listing.category_id) & Q(city__iexact=listing.city.strip()),
+                then=Value(5),
+            )
+        )
+    relevance_cases.append(When(Q(category_id=listing.category_id), then=Value(4)))
+    if (listing.province or "").strip():
+        relevance_cases.append(When(Q(province__iexact=listing.province.strip()), then=Value(3)))
+    relevance_cases.append(When(Q(province__isnull=True) | Q(province=""), then=Value(2)))
+
+    annotations = {
+        "relevance": Case(*relevance_cases, default=Value(1), output_field=IntegerField())
+    }
+    # مهلتِ نزدیک‌تر برای همان سطحِ ربط اولویت دارد: نیازِ فوری‌تر زودتر باید
+    # دیده شود. `expires_at=None` با Coalesce به «دورترین» نگاشت می‌شود تا
+    # آگهیِ بدونِ انقضا آخر صف بایستد، نه اول.
+    annotations["days_to_expiry"] = Coalesce(
+        F("expires_at"),
+        Value(timezone.now() + timedelta(days=3650)),
+    )
+
+    return (
+        _optimize_board_queryset(KindnessListing.objects.published().exclude(pk=listing.pk))
+        .annotate(**annotations)
+        .order_by(
+            "-relevance",
+            "days_to_expiry",
+            *BOARD_ORDER_BY,
+        )[:safe_limit]
     )
 
 

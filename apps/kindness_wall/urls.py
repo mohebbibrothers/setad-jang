@@ -28,6 +28,17 @@ urlpatterns = [
     path("stats/", views.KindnessBoardStatsView.as_view(), name="stats"),
     # ── کاربر ──────────────────────────────────────────────
     path(
+        "listings/<str:slug>/related/",
+        views.KindnessRelatedListView.as_view(),
+        name="listing-related",
+    ),
+    # ثبتِ بازدیدِ یکتا — beacon سبک از مرورگر (صفحهٔ جزئیات سروری شمارش نمی‌کند).
+    path(
+        "listings/<str:slug>/view/",
+        views.KindnessListingViewBeaconView.as_view(),
+        name="listing-view",
+    ),
+    path(
         "listings/<str:slug>/offer/",
         views.KindnessOfferCreateView.as_view(),
         name="offer-create",

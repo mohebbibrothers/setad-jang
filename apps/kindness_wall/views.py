@@ -7,7 +7,7 @@
 
 from __future__ import annotations
 
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.request import Request
@@ -19,6 +19,7 @@ from apps.core.pagination import StandardPagination
 from apps.core.responses import CreatedResponse, ErrorResponse, SuccessResponse
 from apps.core.views import paginated_list_response
 from apps.kindness_wall import selectors, services
+from apps.kindness_wall.choices import RELATED_DEFAULT_LIMIT, RELATED_MAX_LIMIT
 from apps.kindness_wall.filters import KindnessListingPublicFilter
 from apps.kindness_wall.models import KindnessOffer
 from apps.kindness_wall.serializers import (
@@ -34,6 +35,8 @@ from apps.kindness_wall.throttles import (
     KindnessBrowseAnonThrottle,
     KindnessBrowseUserThrottle,
     KindnessOfferCreateThrottle,
+    KindnessViewAnonThrottle,
+    KindnessViewUserThrottle,
 )
 from apps.kindness_wall.validators import gated_channel_payload
 
@@ -136,7 +139,10 @@ class KindnessListingPublicDetailView(APIView):
         listing = selectors.get_public_listing_by_slug(slug)
         if listing is None:
             return ErrorResponse(message="آگهی یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
-        services.bump_listing_view_count(listing=listing)
+        # ⚠️ شمارشِ بازدید عمداً این‌جا نیست: این endpoint سروری و کش‌شده است،
+        # پس هر revalidate یا prefetch یک «بازدید» جعلی می‌ساخت. شمارش به
+        # `POST listings/{slug}/view/` منتقل شده که از مرورگرِ واقعی می‌آید،
+        # dedupe دارد و throttle می‌شود.
 
         def build_payload() -> dict | None:
             """سریال‌سازی نسخهٔ عمومی از تازه‌ترین ردیف (None اگر از تخته رفت)."""
@@ -181,6 +187,110 @@ class KindnessListingPublicDetailView(APIView):
                 "can_offer": False,
             }
         return SuccessResponse(data=payload)
+
+
+class KindnessListingViewBeaconView(APIView):
+    """ثبتِ بازدیدِ یکتای یک آگهی — beacon سبک از مرورگر.
+
+    چرا یک endpoint جدا؟
+      • صفحهٔ جزئیات سروری و ISR‌شده است؛ شمارش در آن، هر revalidate را
+        «بازدید» می‌کرد. این‌جا درخواست از مرورگرِ واقعی می‌آید، پس هم عدد
+        معنادار است و هم می‌توان بیننده را (کاربر یا IP+UA) تشخیص داد.
+      • پاسخ، عددِ **تازه** را می‌دهد تا رابط بدونِ رفرش به‌روزش کند.
+
+    سیاست‌ها:
+      • پنجرهٔ dedupe (پیش‌فرض ۶ ساعت) — رفرشِ پیاپی شمارنده را بالا نمی‌برد؛
+      • throttle اختصاصی (سخاوتمندانه‌تر از مرور، سخت‌گیرانه‌تر از هیچ)؛
+      • کارکنان شمارش نمی‌شوند؛
+      • آگهیِ غیرِ‌عمومی ۴۰۴ می‌دهد و هیچ شمارنده‌ای را لمس نمی‌کند.
+    """
+
+    permission_classes = [AllowAny]
+    throttle_classes = [KindnessViewAnonThrottle, KindnessViewUserThrottle]
+
+    @extend_schema(
+        operation_id="kindness_listing_view",
+        tags=[TAG_PUBLIC],
+        summary="ثبتِ بازدیدِ یکتای آگهی",
+        request=None,
+        responses={200: None, 404: ERROR_RESPONSE},
+    )
+    def post(self, request: Request, slug: str) -> Response:
+        """شمارش (اگر بیننده در پنجرهٔ dedupe نبود) و برگرداندنِ عددِ تازه."""
+        listing = selectors.get_public_listing_by_slug(slug)
+        if listing is None:
+            return ErrorResponse(message="آگهی یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+
+        user = getattr(request, "user", None)
+        if user is not None and (
+            getattr(user, "is_staff", False) or getattr(user, "is_superuser", False)
+        ):
+            # پیش‌نمایشِ ادمین نباید آمارِ عمومی را آلوده کند.
+            return SuccessResponse(
+                data={"counted": False, "view_count": int(listing.view_count or 0)},
+                message="بازدیدِ کارکنان شمارش نمی‌شود.",
+            )
+
+        counted, view_count = services.register_listing_view(listing=listing, request=request)
+        return SuccessResponse(
+            data={"counted": counted, "view_count": view_count},
+            message="بازدید ثبت شد.",
+        )
+
+
+class KindnessRelatedListView(APIView):
+    """نیازهای هم‌ربط با یک آگهی — برای بخشِ «شاید این‌ها هم در توانت باشد».
+
+    تفاوت با فراخوانیِ فهرستِ عمومی:
+      • خودِ آگهی سمتِ سرور حذف می‌شود؛
+      • ترتیب بر پایهٔ **ربط** است (دسته/شهر/استان/سراسری)، نه فقط تازگی؛
+      • سبک است (فقط فیلدهای کارت، بدونِ اطلاعاتِ تماس) و کش می‌شود؛
+      • اگر دسته کم‌جمعیت باشد، با نیازهای هم‌استان و سراسری پر می‌شود تا
+        بخشِ صفحه هرگز خالی/نصفه نماند.
+    """
+
+    permission_classes = [AllowAny]
+    throttle_classes = [KindnessBrowseAnonThrottle, KindnessBrowseUserThrottle]
+
+    @extend_schema(
+        operation_id="kindness_listing_related",
+        tags=[TAG_PUBLIC],
+        summary="نیازهای مشابهِ یک آگهی",
+        parameters=[
+            OpenApiParameter(
+                name="limit",
+                location=OpenApiParameter.QUERY,
+                required=False,
+                type=int,
+                description="تعداد نتیجه (۱ تا ۱۲، پیش‌فرض ۴).",
+            )
+        ],
+        responses={200: LISTING_LIST_RESPONSE, 404: ERROR_RESPONSE},
+    )
+    def get(self, request: Request, slug: str) -> Response:
+        """فهرستِ کوتاهِ کارت‌ها؛ ۴۰۴ برای آگهیِ غیرِ‌عمومی."""
+        listing = selectors.get_public_listing_by_slug(slug)
+        if listing is None:
+            return ErrorResponse(message="آگهی یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
+
+        try:
+            limit = int(request.query_params.get("limit", RELATED_DEFAULT_LIMIT))
+        except (TypeError, ValueError):
+            limit = RELATED_DEFAULT_LIMIT
+        limit = max(1, min(limit, RELATED_MAX_LIMIT))
+
+        def build_payload() -> list[dict]:
+            """سریال‌سازیِ سبک برای کش (کلید شاملِ اسلاگ و limit است)."""
+            rows = selectors.get_related_listings(listing=listing, limit=limit)
+            return KindnessListingListSerializer(rows, many=True).data
+
+        payload = cached_public_payload(
+            domain="kindness",
+            namespace="kindness:public_list",
+            parts=("related", listing.slug, limit),
+            factory=build_payload,
+        )
+        return SuccessResponse(data=payload, message="نیازهای مشابه دریافت شد.")
 
 
 class KindnessStoryPublicListView(APIView):
