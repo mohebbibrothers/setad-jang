@@ -35,6 +35,7 @@ from apps.kindness_wall.throttles import (
     KindnessBrowseUserThrottle,
     KindnessOfferCreateThrottle,
 )
+from apps.kindness_wall.validators import gated_channel_payload
 
 from .views_common import (  # noqa: F401 — re-export برای بدنه‌ها و import بیرونی
     BOARD_STATS_RESPONSE,
@@ -153,8 +154,14 @@ class KindnessListingPublicDetailView(APIView):
         if payload is None:
             return ErrorResponse(message="آگهی یافت نشد.", status_code=status.HTTP_404_NOT_FOUND)
 
-        # فیلدهاِ شخصی‌سازی‌شده بیرون از کش محاسبه می‌شوند؛ کش فقط بخش عمومی را نگه می‌دارد.
-        if getattr(request.user, "is_authenticated", False):
+        # فیلدهای شخصی‌سازی‌شده بیرون از کش محاسبه می‌شوند؛ کش فقط بخش عمومی را
+        # نگه می‌دارد. همین‌جا «دروازهٔ تماس» اعمال می‌شود:
+        #   • کاربرِ واردشده → کانال‌های کامل (همان چیزی که در کش است)
+        #   • کاربرِ بی‌نام  → همان کانال‌ها با مقدارِ ماسک‌شده و بدونِ لینک
+        #     (`contact_gated=true`) تا اسکرپِ انبوهِ شماره‌ها ممکن نباشد و
+        #     دیدنِ کاملِ راهِ تماس، انگیزهٔ ثبت‌نامِ واقعی بماند.
+        authenticated = bool(getattr(request.user, "is_authenticated", False))
+        if authenticated:
             my_offer = selectors.get_user_offer_for_listing(
                 user_id=request.user.pk, listing=listing
             )
@@ -162,6 +169,16 @@ class KindnessListingPublicDetailView(APIView):
                 **payload,
                 "my_offer_status": my_offer.status if my_offer else None,
                 "can_offer": True,
+                "contact_gated": False,
+            }
+        else:
+            channels = payload.get("contact_channels") or []
+            payload = {
+                **payload,
+                "contact_channels": gated_channel_payload(channels),
+                "contact_gated": bool(channels),
+                "my_offer_status": None,
+                "can_offer": False,
             }
         return SuccessResponse(data=payload)
 

@@ -60,7 +60,8 @@ class TestPublicBoard:
                 assert field not in row
             assert "contact_channels" not in row
 
-    def test_detail_exposes_contact_channels_only_for_filled(self) -> None:
+    def test_detail_gates_contact_channels_for_anonymous(self) -> None:
+        """بینندهٔ بی‌نام: کانال‌ها دیده می‌شوند ولی مقدار/لینک ماسک است."""
         listing = PublishedNeedListingFactory(contact_phone="09121234567", contact_bale="")
         client = APIClient()
 
@@ -69,11 +70,39 @@ class TestPublicBoard:
         )
 
         assert response.status_code == status.HTTP_200_OK
-        channels = response.data["data"]["contact_channels"]
+        data = response.data["data"]
+        assert data["contact_gated"] is True
+        channels = data["contact_channels"]
         assert [item["kind"] for item in channels] == ["phone"]
-        assert channels[0]["value"] == "09121234567"
-        assert channels[0]["link"] == "tel:+989121234567"
+        # مقدارِ کامل هرگز به بی‌نام نمی‌رسد؛ فقط چهار رقمِ اول و دو رقمِ آخر
+        assert channels[0]["value"] != "09121234567"
+        assert channels[0]["value"].startswith("0912")
+        assert channels[0]["value"].endswith("67")
+        assert "•••••" in channels[0]["value"]
+        # لینکِ قابلِ‌استفاده (tel:) ساخته نمی‌شود
+        assert channels[0]["link"] == ""
+        assert channels[0]["masked"] == "true"
         assert "bale" not in {item["kind"] for item in channels}
+
+    def test_detail_exposes_full_contact_channels_for_authenticated(self) -> None:
+        """کاربرِ واردشده: مقدار و لینکِ کامل — همان قراردادِ قبلی."""
+        listing = PublishedNeedListingFactory(contact_phone="09121234567", contact_telegram="besat")
+        client = APIClient()
+        client.force_authenticate(user=UserFactory())
+
+        response = client.get(
+            reverse("kindness_wall:listing-detail", kwargs={"slug": listing.slug})
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.data["data"]
+        assert data["contact_gated"] is False
+        assert data["can_offer"] is True
+        channels = {item["kind"]: item for item in data["contact_channels"]}
+        assert channels["phone"]["value"] == "09121234567"
+        assert channels["phone"]["link"] == "tel:+989121234567"
+        assert channels["telegram"]["link"] == "https://t.me/besat"
+        assert "masked" not in channels["phone"]
 
     def test_detail_404_for_draft_expired_and_archived(self) -> None:
         draft = KindnessListingFactory()

@@ -16006,6 +16006,10 @@ components:
           description: 'کانال‌های پرشده — همان چیزی که سیاست می‌گوید: «درج‌شده در
             آگهی».'
           readOnly: true
+        contact_gated:
+          type: boolean
+          readOnly: true
+          default: false
         my_offer_status:
           type: string
           nullable: true
@@ -16054,6 +16058,7 @@ components:
       - category
       - city
       - contact_channels
+      - contact_gated
       - contact_note
       - cover_url
       - created_at
@@ -16525,6 +16530,10 @@ components:
           description: 'کانال‌های پرشده — همان چیزی که سیاست می‌گوید: «درج‌شده در
             آگهی».'
           readOnly: true
+        contact_gated:
+          type: boolean
+          readOnly: true
+          default: false
         my_offer_status:
           type: string
           nullable: true
@@ -16540,6 +16549,7 @@ components:
       - category
       - city
       - contact_channels
+      - contact_gated
       - contact_note
       - cover_url
       - days_left

@@ -139,6 +139,8 @@ class KindnessListingDetailSerializer(KindnessListingListSerializer):
     contact_channels = serializers.SerializerMethodField()
     my_offer_status = serializers.SerializerMethodField()
     can_offer = serializers.SerializerMethodField()
+    #: آیا راه‌های ارتباط برای این بیننده ماسک شده‌اند؟ (پاسخِ بی‌نام = true)
+    contact_gated = serializers.BooleanField(read_only=True, default=False)
 
     class Meta(KindnessListingListSerializer.Meta):
         fields = (
@@ -149,6 +151,7 @@ class KindnessListingDetailSerializer(KindnessListingListSerializer):
             "expires_at",
             "images",
             "contact_channels",
+            "contact_gated",
             "my_offer_status",
             "can_offer",
         )
