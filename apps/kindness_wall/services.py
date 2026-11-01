@@ -10,6 +10,7 @@ from __future__ import annotations
 import contextlib
 import hashlib
 import logging
+import re
 
 from django.conf import settings
 from django.core.cache import cache
@@ -192,22 +193,49 @@ def _view_dedupe_window() -> int:
     return value if value > 0 else DEFAULT_VIEW_DEDUPE_SECONDS
 
 
+#: شناسهٔ بینندهٔ کلاینتی: کاراکترهای امن، طولِ معقول. مقدار توسط خودِ مرورگر
+#: (localStorage) ساخته و فرستاده می‌شود تا dedupe به IP/پروکسی وابسته نباشد.
+_CLIENT_VIEWER_ID_RE = re.compile(r"^[A-Za-z0-9_-]{8,64}$")
+
+
 def viewer_fingerprint(*, request) -> str:
     """اثرِ یکتای بیننده برای dedupe — هرگز خودِ IP/UA خام ذخیره نمی‌شود.
 
-    • کاربرِ واردشده → شناسهٔ کاربر (پایدارترین حالت، مستقل از دستگاه)
-    • مهمان        → هشِ کوتاهِ «IP + User-Agent»
+    ترتیبِ اعتماد (پایدارترین اول):
 
-    هش کردن عمدی است: در دیتابیس/کش فقط یک رشتهٔ ۱۶ نویسه‌ای می‌نشیند، نه
-    آدرسِ IP خام (حریمِ خصوصی + حجمِ کمتر + بی‌فایده‌بودنِ دامپ). ترکیبِ UA با
-    IP باعث می‌شود چند مرورگرِ پشتِ یک NAT (دفتر/دانشگاه) هر کدام بازدیدِ
-    مستقل داشته باشند، ولی رفرشِ همان مرورگر دوباره شمرده نشود.
+    ۱) **کاربرِ واردشده** → شناسهٔ کاربر. مستقل از دستگاه و شبکه.
+    ۲) **شناسهٔ کلاینتی** (`X-Viewer-Id`) → UUIDِ تصادفی که مرورگر یک‌بار
+       می‌سازد و در localStorage نگه می‌دارد.
+
+       ⚠️ چرا این لازم شد (یافتهٔ آزمونِ زنده روی production): پیش‌تر اثرِ
+       مهمان از هشِ «IP + User-Agent» ساخته می‌شد. ترافیک از لبهٔ Vercel
+       می‌آید و `REMOTE_ADDR`ی که به جنگو می‌رسد **IPِ خروجیِ Vercel** است که
+       بین درخواست‌ها تغییر می‌کند (`NUM_PROXIES=0` هم عمداً XFF را معتبر
+       نمی‌داند). نتیجه: یک مرورگر در هر درخواست «بینندهٔ تازه» به نظر
+       می‌رسید و شمارنده چند برابر می‌شد. شناسهٔ کلاینتی این وابستگی را کامل
+       حذف می‌کند: یک مرورگر = یک شناسه، مستقل از IP، پردازه و شبکه.
+
+    ۳) **هشِ IP+UA** → فقط پشتیبان برای کلاینت‌هایی که هدر را نمی‌فرستند
+       (مثلاً درخواستِ مستقیم به API). همان‌جا هم IP خام ذخیره نمی‌شود.
+
+    نکتهٔ امنیتی: هدرِ شناسه قابلِ جعل است، ولی جعلِ آن فقط روی **dedupe**
+    اثر دارد (شمارشِ آماری) و نه دسترسی/داده. سقفِ throttleِ beacon
+    (`kindness_view_anon`) جلوی بادکردنِ عمدیِ عدد را می‌گیرد؛ و چون شمارش
+    یک سیگنالِ نرم است، این مبادله (دقتِ بالا برای کاربرِ عادی، سقفِ سخت برای
+    مهاجم) پذیرفتنی است.
     """
     user = getattr(request, "user", None)
     if user is not None and getattr(user, "is_authenticated", False):
         return f"u{user.pk}"
-    ip = get_client_ip(request) or "unknown"
+
     meta = getattr(request, "META", {}) or {}
+    client_id = str(meta.get("HTTP_X_VIEWER_ID", "") or "").strip()
+    if _CLIENT_VIEWER_ID_RE.match(client_id):
+        # پیشوندِ «c» = client؛ هشِ شناسه تا طولِ ردیف کوتاه و ثابت بماند.
+        digest = hashlib.sha256(client_id.encode()).hexdigest()[:20]
+        return f"c{digest}"
+
+    ip = get_client_ip(request) or "unknown"
     ua = str(meta.get("HTTP_USER_AGENT", ""))[:180]
     digest = hashlib.sha256(f"{ip}|{ua}".encode()).hexdigest()[:16]
     return f"g{digest}"

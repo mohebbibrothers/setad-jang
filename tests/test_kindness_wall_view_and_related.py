@@ -347,6 +347,66 @@ class TestRelatedListings:
         assert archived.slug not in slugs
 
 
+class TestClientViewerId:
+    """شناسهٔ کلاینتی: پایدار مستقل از IP — رفعِ ریشه‌ایِ شمارشِ چندگانه.
+
+    زمینه: ترافیک از لبهٔ Vercel می‌آید و `REMOTE_ADDR`ی که به جنگو می‌رسد
+    IPِ خروجیِ Vercel است که عوض می‌شود. پس اثرِ مهمان نمی‌تواند بر IP تکیه
+    کند؛ مرورگر یک UUIDِ پایدار در localStorage نگه می‌دارد و می‌فرستد.
+    """
+
+    HEADER = "HTTP_X_VIEWER_ID"
+    UUID = "3f2b8c1e-9d4a-4f77-8a11-5c6d2e9b0a13"
+
+    def test_same_client_id_dedupes_even_with_different_ip(self) -> None:
+        listing = PublishedNeedListingFactory()
+        a = APIClient(REMOTE_ADDR="203.0.113.1", HTTP_USER_AGENT="UA/1")
+        b = APIClient(REMOTE_ADDR="198.51.100.9", HTTP_USER_AGENT="UA/2")
+        first = a.post(_view_url(listing.slug), HTTP_X_VIEWER_ID=self.UUID)
+        second = b.post(_view_url(listing.slug), HTTP_X_VIEWER_ID=self.UUID)  # IP و UA کاملاً متفاوت
+        assert first.data["data"]["counted"] is True
+        assert second.data["data"]["counted"] is False
+        listing.refresh_from_db()
+        assert listing.view_count == 1
+
+    def test_different_client_ids_count_separately(self) -> None:
+        listing = PublishedNeedListingFactory()
+        client = APIClient(REMOTE_ADDR="203.0.113.1", HTTP_USER_AGENT="UA/1")
+        client.post(_view_url(listing.slug), HTTP_X_VIEWER_ID=self.UUID)
+        client.post(_view_url(listing.slug), HTTP_X_VIEWER_ID="another-client-id-01")
+        listing.refresh_from_db()
+        assert listing.view_count == 2
+
+    def test_invalid_client_id_falls_back_to_hash(self) -> None:
+        listing = PublishedNeedListingFactory()
+        client = APIClient(REMOTE_ADDR="203.0.113.1", HTTP_USER_AGENT="UA/1")
+        # کوتاه‌تر از حد / شاملِ نویسهٔ غیرمجاز ⇒ نادیده گرفته می‌شود
+        client.post(_view_url(listing.slug), HTTP_X_VIEWER_ID="short")
+        client.post(_view_url(listing.slug), HTTP_X_VIEWER_ID="bad id with spaces!!")
+        listing.refresh_from_db()
+        assert listing.view_count == 1
+
+    def test_authenticated_user_beats_client_id(self) -> None:
+        listing = PublishedNeedListingFactory()
+        user = UserFactory()
+        client = APIClient(REMOTE_ADDR="203.0.113.1")
+        client.force_authenticate(user=user)
+        client.post(_view_url(listing.slug), HTTP_X_VIEWER_ID=self.UUID)
+        # همان کاربر با شناسهٔ کلاینتیِ دیگر ⇒ همچنان یکی
+        client.post(_view_url(listing.slug), HTTP_X_VIEWER_ID="another-client-id-02")
+        listing.refresh_from_db()
+        assert listing.view_count == 1
+
+    def test_client_id_is_hashed_not_stored_raw(self) -> None:
+        listing = PublishedNeedListingFactory()
+        APIClient(REMOTE_ADDR="203.0.113.1").post(
+            _view_url(listing.slug), HTTP_X_VIEWER_ID=self.UUID
+        )
+        mark = KindnessListingView.objects.get(listing=listing)
+        assert mark.viewer_key.startswith("c")
+        assert self.UUID not in mark.viewer_key
+
+
 class TestFingerprintHelper:
     def test_authenticated_fingerprint_is_stable(self) -> None:
         user = UserFactory()
