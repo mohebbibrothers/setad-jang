@@ -368,11 +368,20 @@ class KindnessListingAdmin(admin.ModelAdmin):
 
     @admin.display(description="موقعیت", ordering="province")
     def location_badge(self, obj: KindnessListing) -> object:
-        """موقعیتِ خوانا: روستا/شهر، استان — یا نشانِ «سراسر کشور»."""
+        """موقعیتِ خوانا: روستا/شهر، استان — یا نشانِ «سراسر کشور».
+
+        قلابِ رگرسیون (باگِ ۵۰۰ِ ادمین در پاییز ۱۴۰۵): ``format_html`` با
+        رشتهٔ تک‌آرگومانیِ بدونِ placeholder عمداً ``TypeError`` می‌دهد؛ پس
+        متنِ نشان باید حتماً به‌عنوان آرگومانِ جدا پاس داده شود — وگرنه
+        هر changelistی که حتی یک آگهیِ «سراسر کشور» داشته باشد می‌مُرد
+        (علائمِ پروداکشن: ۵۰۰ بعد از هر افزودن/حذفِ آگهی، چون ریدایرکتِ
+        موفقیت به همین لیست برمی‌گردد).
+        """
         if not (obj.province or "").strip():
             return format_html(
                 "<span style='display:inline-block;padding:1px 8px;border-radius:999px;"
-                "background:#0d8074;color:#fff;font-size:11px;'>سراسر کشور</span>"
+                "background:#0d8074;color:#fff;font-size:11px;'>{}</span>",
+                "سراسر کشور",
             )
         parts = [p for p in (obj.locality, obj.city, obj.province) if (p or "").strip()]
         return "، ".join(parts)

@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 from datetime import timedelta
+from typing import Any
 from unittest.mock import patch
 
 import pytest
@@ -459,3 +460,76 @@ class TestAdminGeoWiring:
             status=ListingStatus.DRAFT,
         )
         listing.full_clean(exclude=["slug", "search_document"])  # نباید خطا بدهد
+
+
+@pytest.mark.django_db
+class TestAdminSiteChangelistRendering:
+    """راچتِ باگِ ۵۰۰ِ پروداکشن (پاییز ۱۴۰۵): لیستِ ادمین باید با آگهیِ «سراسر کشور» رندر شود.
+
+    ریشه: ``location_badge`` ``format_html`` را تک‌آرگومانی صدا می‌زد و TypeError
+    می‌داد. علائم گمراه‌کننده بود: چون پس از *موفقیتِ* افزودن/حذف، ادمین به همین
+    لیست ریدایرکت می‌شود، کاربر «افزودن/حذف آگهی ۵۰۰ می‌دهد» را می‌دید در حالی که
+    خودِ ذخیره/حذف انجام شده بود.
+    """
+
+    def test_changelist_renders_nationwide_and_city_listings(self, client: Any) -> None:
+        client.force_login(AdminUserFactory())
+        KindnessListingFactory(title="سراسریِ بدونِ استان", province="", city="")
+        KindnessListingFactory(title="تهرانی", province="تهران", city="تهران")
+
+        response = client.get(reverse("admin:kindness_wall_kindnesslisting_changelist"))
+
+        assert response.status_code == 200
+        body = response.content.decode()
+        assert "سراسر کشور" in body  # نشانِ آگهیِ بدونِ استان
+        assert "تهرانی" in body
+
+    def test_post_save_redirect_lands_on_healthy_list(self, client: Any) -> None:
+        """جریانِ واقعیِ پروداکشن: ثبتِ فرم + follow روی ریدایرکت — نباید ۵۰۰ بگیرد."""
+        client.force_login(AdminUserFactory())
+        category = KindnessCategoryFactory()
+        payload = {
+            "category": category.pk,
+            "title": "کمکِ سراسری",
+            "description": "توضیحِ کافی برای عبور از حداقلِ کاراکترها وجود دارد.",
+            "quantity": "1",
+            "unit": "عدد",
+            "urgency": "normal",
+            "status": "draft",
+            "beneficiary_name": "",
+            "province": "",
+            "city": "",
+            "locality": "",
+            "contact_note": "",
+            "contact_phone": "09121234567",
+            "contact_bale": "",
+            "contact_eitaa": "",
+            "contact_telegram": "",
+            "contact_rubika": "",
+            "contact_instagram": "",
+            "images-TOTAL_FORMS": "0",
+            "images-INITIAL_FORMS": "0",
+            "images-MIN_NUM_FORMS": "0",
+            "images-MAX_NUM_FORMS": "1000",
+            "_save": "ذخیره",
+        }
+        response = client.post(
+            reverse("admin:kindness_wall_kindnesslisting_add"), data=payload, follow=True
+        )
+        assert response.status_code == 200
+        assert KindnessListing.objects.filter(title="کمکِ سراسری").exists()
+
+    def test_delete_flow_lands_on_healthy_list(self, client: Any) -> None:
+        """حذف موفق + ریدایرکتِ لیست (با یکِ سراسریِ دیگر در سطرها) نباید ۵۰۰ دهد."""
+        client.force_login(AdminUserFactory())
+        survivor = KindnessListingFactory(province="", city="")
+        victim = KindnessListingFactory(province="", city="")
+
+        response = client.post(
+            reverse("admin:kindness_wall_kindnesslisting_delete", args=[victim.pk]),
+            {"post": "yes"},
+            follow=True,
+        )
+        assert response.status_code == 200
+        assert not KindnessListing.objects.filter(pk=victim.pk).exists()
+        assert KindnessListing.objects.filter(pk=survivor.pk).exists()
