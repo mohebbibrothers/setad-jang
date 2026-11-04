@@ -68,10 +68,15 @@ class IranPayamakOTPProvider(OTPDeliveryProvider):
                 settings, "SMS_IRANPAYAMAK_PATTERN_IDENTIFIER_ADD", ""
             )
             or "",
+            # قراردادِ کانالِ نوتیفیکیشن (apps/notifications/providers.py):
+            # SMSNotificationProvider دقیقاً رشتهٔ "notification" را به‌عنوان
+            # purpose پاس می‌دهد — این عضو OTPPurpose نیست (کدِ OTP نمی‌سازد)
+            # و الگویِ پنلِ جداگانه‌اش از تنظیماتِ زیر خوانده می‌شود.
+            "notification": getattr(settings, "SMS_IRANPAYAMAK_PATTERN_NOTIFICATION", "") or "",
         }
 
     @staticmethod
-    def _normalize_recipient(recipient: str) -> str:
+    def normalize_recipient(recipient: str) -> str:
         """تبدیل شماره از فرمت‌های مرسوم (+98/0098/98) به فرمت ملی 09xxxxxxxxx.
 
         خروجی حتماً با `09` شروع و ۱۱ رقمی است؛ در غیر این صورت fail loud —
@@ -94,7 +99,7 @@ class IranPayamakOTPProvider(OTPDeliveryProvider):
             "code": pattern_code,
             # placeholder متن الگو دقیقاً «code» است (تأییدشده در پنل).
             "attributes": {"code": code},
-            "recipient": self._normalize_recipient(recipient),
+            "recipient": self.normalize_recipient(recipient),
         }
         if self.line_number:
             payload["line_number"] = self.line_number

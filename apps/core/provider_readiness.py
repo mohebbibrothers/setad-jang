@@ -50,19 +50,24 @@ def check_sms_provider_readiness() -> ProviderReadinessResult:
     provider = getattr(settings, "OTP_SMS_PROVIDER", "console")
     if provider == "console":
         return ProviderReadinessResult(
-            "sms", settings.DEBUG, "console", "Console SMS backend is development-only."
+            "sms",
+            settings.DEBUG,
+            "console",
+            "Console SMS backend is development-only — real sends never reach "
+            "recipients (OTP raises in production, notification SMS records FAILED silently).",
         )
     if provider == "iranpayamak":
         api_key = bool(getattr(settings, "SMS_IRANPAYAMAK_API_KEY", ""))
-        missing = [
-            name
-            for name in (
-                "SMS_IRANPAYAMAK_PATTERN_LOGIN",
-                "SMS_IRANPAYAMAK_PATTERN_SIGNUP",
-                "SMS_IRANPAYAMAK_PATTERN_PASSWORD_RESET",
-            )
-            if not getattr(settings, name, "")
+        required_patterns = [
+            "SMS_IRANPAYAMAK_PATTERN_LOGIN",
+            "SMS_IRANPAYAMAK_PATTERN_SIGNUP",
+            "SMS_IRANPAYAMAK_PATTERN_PASSWORD_RESET",
         ]
+        if getattr(settings, "NOTIFICATIONS_SMS_ENABLED", False):
+            # کانال نوتیفیکیشن با purpose="notification" می‌فرستد؛ اگر فعال
+            # است، نبودِ الگو باید در همین چک دیده شود نه در لاگِ FAILED.
+            required_patterns.append("SMS_IRANPAYAMAK_PATTERN_NOTIFICATION")
+        missing = [name for name in required_patterns if not getattr(settings, name, "")]
         ready = api_key and not missing
         if not api_key:
             detail = "SMS_IRANPAYAMAK_API_KEY is required."

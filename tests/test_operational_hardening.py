@@ -13,6 +13,7 @@ Operational hardening tests for production-facing configuration.
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -346,3 +347,45 @@ def test_dockerfile_healthcheck_uses_readiness_endpoint() -> None:
     dockerfile = (PROJECT_ROOT / "Dockerfile").read_text(encoding="utf-8")
 
     assert "/api/v1/health/ready/" in dockerfile
+
+
+def test_no_argless_format_html_in_admin_modules() -> None:
+    """راچتِ استاتیک: ``format_html`` با فقطِ literal (بدونِ placeholder و آرگومان) TypeErrorِ runtime است.
+
+    باگِ واقعیِ پروداکشن (۵۰۰ِ ادمینِ دیوار مهربانی در پاییز ۱۴۰۵) از همین
+    الگو متولد شد؛ رفرِنسِ ``{`` داخلِ پوششِ فراخوانی هم لازم است چون
+    literalهای چندتکه به هم چسبان هم بی‌آرگومان حساب می‌شوند.
+    """
+    pattern = re.compile(r"format_html\(\s*(?:[fr]?\"[^\"]*\"\s*)+\)")
+    offenders: list[str] = []
+    for admin_file in sorted((PROJECT_ROOT / "apps").rglob("admin.py")):
+        source = admin_file.read_text(encoding="utf-8")
+        for match in pattern.finditer(source):
+            if "{" not in match.group(0):
+                offenders.append(
+                    f"{admin_file.relative_to(PROJECT_ROOT)}:{source[: match.start()].count(chr(10)) + 1}"
+                )
+    assert not offenders, f"format_html بی‌آرگومان: {offenders}"
+
+
+def test_env_example_declares_all_sms_switch_keys() -> None:
+    """قراردادِ کانفیگِ SMS باید کاملِ کامل باشد — نبودِ یکِ کلید در template یعنی سرور بی‌صدا console می‌ماند.
+
+    ریشهٔ «همهٔ پیامک‌ها از کار افتاده با اینکه الگوها در پنل فعال‌اند»:
+    OTP_SMS_PROVIDER (انتخابِ باکِند) و الگویِ نوتیفیکیشن هیچ‌گاه در
+    .env.example نبودند؛ اپراتور هیچ‌وقت نمی‌دانست باید ستشان کند.
+    """
+    text = (PROJECT_ROOT / ".env.example").read_text(encoding="utf-8")
+    for key in (
+        "OTP_SMS_PROVIDER=",
+        "SMS_IRANPAYAMAK_API_KEY=",
+        "SMS_IRANPAYAMAK_PATTERN_LOGIN=",
+        "SMS_IRANPAYAMAK_PATTERN_SIGNUP=",
+        "SMS_IRANPAYAMAK_PATTERN_PASSWORD_RESET=",
+        "SMS_IRANPAYAMAK_PATTERN_IDENTIFIER_ADD=",
+        "SMS_IRANPAYAMAK_PATTERN_NOTIFICATION=",
+        "NOTIFICATIONS_SMS_ENABLED=",
+    ):
+        assert key in text, (
+            f".env.example فاقدِ {key!r} — هر کمبودِ کلید، یکِ سکوتِ مرگبار در پروداکشن است"
+        )

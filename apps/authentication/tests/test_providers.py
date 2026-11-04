@@ -310,6 +310,7 @@ class TestIranPayamakProvider:
         settings.SMS_IRANPAYAMAK_PATTERN_SIGNUP = "PATTERN-SIGNUP"
         settings.SMS_IRANPAYAMAK_PATTERN_PASSWORD_RESET = "PATTERN-RESET"
         settings.SMS_IRANPAYAMAK_PATTERN_IDENTIFIER_ADD = ""
+        settings.SMS_IRANPAYAMAK_PATTERN_NOTIFICATION = "PATTERN-NOTIF"
 
     def test_factory_selects_iranpayamak(self, settings, monkeypatch):
         settings.OTP_SMS_PROVIDER = "iranpayamak"
@@ -356,7 +357,7 @@ class TestIranPayamakProvider:
     def test_recipient_normalization_accepts_common_formats(self, raw, normalized):
         from apps.authentication.iranpayamak import IranPayamakOTPProvider
 
-        assert IranPayamakOTPProvider._normalize_recipient(raw) == normalized
+        assert IranPayamakOTPProvider.normalize_recipient(raw) == normalized
 
     def test_invalid_recipient_fails_before_network(self, settings, monkeypatch):
         self._configure(settings)
@@ -389,6 +390,37 @@ class TestIranPayamakProvider:
         provider = IranPayamakOTPProvider()
         with pytest.raises(providers.OTPDeliveryFailedError, match="identifier_add"):
             provider.send(recipient="09121234567", code="1", purpose="identifier_add")
+
+    def test_notification_purpose_uses_its_own_pattern(self, settings, monkeypatch):
+        """کانال نوتیفیکیشن (purpose="notification") باید الگویِ خودش را ببرد.
+
+        رگرسیونِ قطعیِ «همهٔ پیامک‌ها مرده»: تا پیش از این، mapping فقط
+        purposeهای OTP را داشت و مسیر نوتیفیکیشن هرگز به درگاه نمی‌رسید.
+        """
+        self._configure(settings)
+        from apps.authentication.iranpayamak import IranPayamakOTPProvider
+
+        captured: dict = {}
+
+        def fake_post(url, *, json, headers, timeout):
+            captured.update(json=json)
+            return _FakePayamakResponse()
+
+        monkeypatch.setattr("apps.authentication.iranpayamak.requests.post", fake_post)
+
+        provider = IranPayamakOTPProvider()
+        assert provider.send(recipient="09121234567", code="متنِ نوتیفیکیشن", purpose="notification")
+
+        assert captured["json"]["code"] == "PATTERN-NOTIF"
+        assert captured["json"]["attributes"] == {"code": "متنِ نوتیفیکیشن"}
+
+    def test_notification_without_pattern_fails_loud(self, settings):
+        self._configure(settings)
+        settings.SMS_IRANPAYAMAK_PATTERN_NOTIFICATION = ""
+        from apps.authentication.iranpayamak import IranPayamakOTPProvider
+
+        with pytest.raises(providers.OTPDeliveryFailedError, match="notification"):
+            IranPayamakOTPProvider().send(recipient="09121234567", code="x", purpose="notification")
 
     def test_vendor_rejection_raises_with_logging(self, settings, monkeypatch):
         self._configure(settings)

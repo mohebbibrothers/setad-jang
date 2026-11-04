@@ -866,6 +866,11 @@ SMS_IRANPAYAMAK_PATTERN_IDENTIFIER_ADD = config(
     "SMS_IRANPAYAMAK_PATTERN_IDENTIFIER_ADD",
     default="",
 )
+# الگوی نوتیفیکیشن: apps/notifications SMSNotificationProvider با
+# purpose="notification" می‌فرستد؛ بدونِ این کلید آن کانال همیشه می‌سوزد
+# (OTPDeliveryFailedError) — پس readiness آن را مشروط به
+# NOTIFICATIONS_SMS_ENABLED الزامی می‌کند.
+SMS_IRANPAYAMAK_PATTERN_NOTIFICATION = config("SMS_IRANPAYAMAK_PATTERN_NOTIFICATION", default="")
 
 SMS_API_URL = config("SMS_API_URL", default="")
 SMS_API_KEY = config("SMS_API_KEY", default="")

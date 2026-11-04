@@ -345,7 +345,10 @@ def get_sms_otp_provider() -> OTPDeliveryProvider:
     """
     ساخت provider مربوط به SMS/phone.
 
-    فعلاً فقط provider کنسولی development پشتیبانی می‌شود.
+    کلیدِ انتخاب: ``OTP_SMS_PROVIDER`` — ``console`` (پیش‌فرض، فقط development:
+    در production عمداً می‌ترکد تا misconfiguration بی‌صدا نماند)، ``http``
+    (SMSC.API-like با SMS_API_URL/SMS_API_KEY) و ``iranpayamak`` (الگویِ
+    تأییدشده؛ تنها backendِ مناسبِ productionِ ایران).
     """
     provider_backend = getattr(settings, "OTP_SMS_PROVIDER", _SMS_BACKEND_CONSOLE)
 
