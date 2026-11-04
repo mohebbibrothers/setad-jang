@@ -15,7 +15,7 @@ PyJWT==2.15.0
 PyMySQL==1.2.3
 PyYAML==6.0.3
 Pygments==2.21.0
-amqp==5.4.1
+amqp==5.4.2
 asgiref==3.11.1
 ast_serialize==0.13.1
 attrs==26.1.0
@@ -31,7 +31,7 @@ click==8.5.0
 click-didyoumean==0.3.1
 click-plugins==1.1.1.2
 click-repl==0.4.1
-coverage==7.17.0
+coverage==7.17.2
 cyclonedx-python-lib==9.1.0
 defusedxml==0.7.1
 detect-secrets==1.5.0
@@ -55,14 +55,14 @@ iniconfig==2.3.1
 jmespath==1.1.0
 jsonschema==4.26.0
 jsonschema-specifications==2025.9.1
-kombu==5.6.2
+kombu==5.7.0
 librt==0.16.0
 license-expression==30.4.4
 markdown-it-py==4.2.0
 mdurl==0.1.2
 msgpack==1.2.4
 mypy==2.3.1
-mypy_extensions==1.1.0
+mypy_extensions==1.2.0
 openpyxl==3.1.5
 opentelemetry-api==1.45.1
 opentelemetry-sdk==1.45.1
@@ -71,7 +71,7 @@ packageurl-python==0.17.6
 packaging==26.3
 pathspec==1.1.1
 pillow==13.0.0
-pip==26.2.2
+pip==26.3
 pip-requirements-parser==32.0.1
 pip_api==0.0.35
 pip_audit==2.9.0
