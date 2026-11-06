@@ -226,8 +226,17 @@ except Exception as exc:
     [ -z "$CUR_DB" ] && warn "DB_NAME is EMPTY in .env (the connection error may come from a default value)"
 
     if command -v uapi >/dev/null 2>&1; then
-      DBS=$(uapi Mysql list_databases 2>/dev/null | grep -oE '"database":"[^"]+"' | cut -d'"' -f4 | tr '\n' ' ')
-      USERS=$(uapi Mysql list_users 2>/dev/null | grep -oE '"user":"[^"]+"' | cut -d'"' -f4 | tr '\n' ' ')
+      # uapi prints YAML (not JSON). Format under result.data:
+      #     - database: besatme_besat        /      - user: besatme_besat
+      # so match the "key: value" shape and be tolerant of quotes/indent.
+      DBS=$(uapi Mysql list_databases 2>/dev/null \
+        | grep -iE '^[[:space:]]*-?[[:space:]]*database[[:space:]]*:' \
+        | sed -E 's/^[^:]*:[[:space:]]*//; s/["'"'"']//g; s/[[:space:]]+$//' \
+        | grep -v '^$' | tr '\n' ' ')
+      USERS=$(uapi Mysql list_users 2>/dev/null \
+        | grep -iE '^[[:space:]]*-?[[:space:]]*user[[:space:]]*:' \
+        | sed -E 's/^[^:]*:[[:space:]]*//; s/["'"'"']//g; s/[[:space:]]+$//' \
+        | grep -v '^$' | tr '\n' ' ')
       info "databases on account: ${DBS:-<none>}"
       info "mysql users on account: ${USERS:-<none>}"
       if [ -n "$CUR_DB" ]; then
@@ -238,6 +247,12 @@ except Exception as exc:
       fi
       [ -z "$DBS" ] && warn "no databases on this account -> the MySQL data was NOT migrated with the host"
       [ -z "$USERS" ] && warn "no MySQL users on this account -> create DB + user in cPanel first"
+
+      # If the account HAS a DB but .env points to another name, say it plainly.
+      if [ -n "$DBS" ] && [ -z "$CUR_DB" ]; then
+        warn ".env has no DB_NAME but this account owns: $DBS"
+        info "next: bash scripts/repair_backend.sh --set-db <one-of-those> <user> '<password>'"
+      fi
     else
       info "uapi not available; check cPanel > MySQL Databases manually"
     fi
@@ -315,6 +330,23 @@ print('LISTINGS:', KindnessListing.all_objects.count())
     bad "database credentials still rejected - check DB name/user/password in cPanel"
   else
     warn "connected code path not reached - see the error above (may be another settings key, not the DB)"
+  fi
+fi
+
+# ------------------------------------------- 6e. raw table check (mysql CLI)
+# Independent of Django settings: confirms whether the *data* actually landed.
+if command -v mysql >/dev/null 2>&1 && [ -n "${CUR_DB:-}" ] && [ -n "${CUR_USER:-}" ]; then
+  step "6e/8 raw table count via mysql CLI (data migration proof)"
+  CUR_PASS=$(grep -ihE '^[[:space:]]*(DB_PASSWORD|DATABASE_PASSWORD)[[:space:]]*=' .env 2>/dev/null | cut -d= -f2- | tr -d '"\r' | head -1)
+  if [ -n "$CUR_PASS" ]; then
+    TABLES=$(mysql -u "$CUR_USER" -p"$CUR_PASS" -h "${CUR_HOST:-localhost}" -N -B -e \
+      "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$CUR_DB';" 2>/dev/null)
+    if [ -n "$TABLES" ]; then
+      if [ "$TABLES" -gt 20 ]; then ok "database '$CUR_DB' has $TABLES tables (schema migrated)"
+      else warn "database '$CUR_DB' has only $TABLES tables -> dump not imported yet"; fi
+    else
+      warn "mysql CLI could not read '$CUR_DB' (wrong password or missing privileges)"
+    fi
   fi
 fi
 
