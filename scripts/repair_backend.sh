@@ -23,7 +23,24 @@ APP_DIR="${APP_DIR:-$HOME/apps/besat-backend}"
 VENV_DIR="${VENV_DIR:-$HOME/virtualenv/apps/besat-backend}"
 SETTINGS="config.settings.production"
 FIX=0
-for a in "$@"; do [ "$a" = "--fix" ] && FIX=1; done
+DB_NAME_ARG=""
+DB_USER_ARG=""
+DB_PASS_ARG=""
+
+# Two spellings are accepted for the database step:
+#   --set-db <NAME> <USER> <PASS>      (positional, easiest to type)
+#   --db-name X --db-user Y --db-pass Z (explicit flags)
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --fix)      FIX=1 ;;
+    --set-db)   DB_NAME_ARG="${2:-}"; DB_USER_ARG="${3:-}"; DB_PASS_ARG="${4:-}"; shift 3 ;;
+    --db-name)  DB_NAME_ARG="${2:-}"; shift ;;
+    --db-user)  DB_USER_ARG="${2:-}"; shift ;;
+    --db-pass)  DB_PASS_ARG="${2:-}"; shift ;;
+    --check)    FIX=0 ;;
+  esac
+  shift
+done
 
 step() { printf '\n=== %s\n' "$1"; }
 ok()   { printf '  [OK] %s\n' "$1"; }
@@ -181,12 +198,99 @@ except Exception as exc:
 " 2>&1)
   echo "$OUT" | tail -12 | sed 's/^/       /'
   echo "$OUT" | grep -q "USERS : 0" && bad "users table empty - database probably NOT imported"
-  echo "$OUT" | grep -qE "Error|Traceback|OperationalError" && bad "database connection/query failed"
+  if echo "$OUT" | grep -qE "Error|Traceback|OperationalError|Access denied"; then
+    bad "database connection/query failed"
+
+    # ---- auto-discovery: what DBs/users exist on THIS cPanel account? ----
+    step "6b/8 database discovery on this host"
+    CUR_DB=$(grep -iE '^(DB_NAME|DATABASE_NAME)=' .env 2>/dev/null | head -1 | cut -d= -f2-)
+    CUR_USER=$(grep -iE '^(DB_USER|DATABASE_USER)=' .env 2>/dev/null | head -1 | cut -d= -f2-)
+    info "current .env -> DB_NAME=$CUR_DB  DB_USER=$CUR_USER"
+
+    if command -v uapi >/dev/null 2>&1; then
+      DBS=$(uapi Mysql list_databases 2>/dev/null | grep -oE '"database":"[^"]+"' | cut -d'"' -f4 | tr '\n' ' ')
+      USERS=$(uapi Mysql list_users 2>/dev/null | grep -oE '"user":"[^"]+"' | cut -d'"' -f4 | tr '\n' ' ')
+      info "databases on account: ${DBS:-<none>}"
+      info "mysql users on account: ${USERS:-<none>}"
+      case " $DBS " in *" $CUR_DB "*) ok "DB_NAME exists on this host" ;; *) warn "DB_NAME '$CUR_DB' does NOT exist here" ;; esac
+      case " $USERS " in *" $CUR_USER "*) ok "DB_USER exists on this host" ;; *) warn "DB_USER '$CUR_USER' does NOT exist here" ;; esac
+    else
+      info "uapi not available; check cPanel > MySQL Databases manually"
+    fi
+
+    cat <<'HINT'
+       FIX (once the DB + user exist in cPanel > MySQL Databases):
+         bash scripts/repair_backend.sh --set-db <DB_NAME> <DB_USER> '<PASSWORD>'
+       and if the data was not migrated yet, import the dump from the old host:
+         mysql -u <DB_USER> -p'<PASSWORD>' <DB_NAME> < backup.sql
+HINT
+  fi
 
   if [ "$FIX" -eq 1 ]; then
     info "running migrate..."
     DJANGO_SETTINGS_MODULE="$SETTINGS" "$PY" manage.py migrate --noinput 2>&1 | tail -5 | sed 's/^/       /' \
       && ok "migrate done" || bad "migrate failed"
+  fi
+fi
+
+# ------------------------------------------------ 6c. rewrite DB keys in .env
+if [ -n "$DB_NAME_ARG" ] && [ -n "$DB_USER_ARG" ] && [ -n "$DB_PASS_ARG" ]; then
+  step "6c/8 rewriting database keys in .env"
+  if [ -z "$PY" ]; then bad "no python available to edit .env safely"; else
+    cp .env ".env.bak.$(date +%s)" && info "current .env backed up"
+    DB_NAME_ARG="$DB_NAME_ARG" DB_USER_ARG="$DB_USER_ARG" DB_PASS_ARG="$DB_PASS_ARG" \
+    "$PY" - <<'PYEOF'
+import os, re, pathlib
+name, user, pwd = os.environ["DB_NAME_ARG"], os.environ["DB_USER_ARG"], os.environ["DB_PASS_ARG"]
+path = pathlib.Path(".env")
+lines = path.read_text(encoding="utf-8").splitlines()
+# Accepted key spellings in this project (base.py reads both families).
+targets = {
+    "DB_NAME": name, "DATABASE_NAME": name,
+    "DB_USER": user, "DATABASE_USER": user,
+    "DB_PASSWORD": pwd, "DATABASE_PASSWORD": pwd,
+    "DB_HOST": "localhost", "DATABASE_HOST": "localhost",
+}
+seen = set()
+out = []
+for line in lines:
+    m = re.match(r'^(\s*)([A-Z0-9_]+)(\s*)=(.*)$', line)
+    if m and m.group(2) in targets:
+        key = m.group(2)
+        line = f"{key}={targets[key]}"
+        seen.add(key)
+    out.append(line)
+# If the project uses DATABASE_* and none existed, append the canonical set.
+if not seen:
+    out += ["", "# --- database (added by repair_backend.sh) ---"]
+    out += [f"{k}={v}" for k, v in targets.items() if k.startswith("DATABASE")]
+    seen = set(targets)
+path.write_text("\n".join(out) + "\n", encoding="utf-8")
+print("       updated keys:", ", ".join(sorted(seen)))
+PYEOF
+    ok ".env updated with new DB credentials"
+  fi
+fi
+
+# --------------------------------------------- 6d. re-test DB after rewrite
+if [ -n "$DB_NAME_ARG" ] && [ -n "$PY" ]; then
+  step "6d/8 re-testing database with the new credentials"
+  OUT2=$(DJANGO_SETTINGS_MODULE="$SETTINGS" "$PY" manage.py shell -c "
+from django.contrib.auth import get_user_model
+print('USERS :', get_user_model().objects.count())
+from apps.kindness_wall.models import KindnessListing
+print('LISTINGS:', KindnessListing.all_objects.count())
+" 2>&1)
+  echo "$OUT2" | tail -6 | sed 's/^/       /'
+  echo "$OUT2" | grep -q "USERS : 0" && warn "connected, but users table is empty -> import the dump"
+  # (خطای بوت ممکن است مربوط به کلیدِ دیگری از .env باشد، نه دیتابیس؛
+  #  تشخیصِ دقیق را در بلوکِ بالا انجام می‌دهیم.)
+  if echo "$OUT2" | grep -q "USERS :"; then
+    ok "database connection OK"
+  elif echo "$OUT2" | grep -qiE "Access denied|OperationalError|1045|2002|1049"; then
+    bad "database credentials still rejected - check DB name/user/password in cPanel"
+  else
+    warn "connected code path not reached - see the error above (may be another settings key, not the DB)"
   fi
 fi
 
@@ -219,9 +323,46 @@ echo " PUBLIC IP (put this in Vercel as API_UPSTREAM_URL):"
 echo "     http://$PUBIP"
 echo "============================================================"
 if [ -f .env ] && [ "$PUBIP" != "unknown" ]; then
-  grep -q "$PUBIP" .env 2>/dev/null \
-    && ok "this IP already appears in .env" \
-    || warn "this IP is NOT in .env -> add to ALLOWED_HOSTS: ALLOWED_HOSTS=besat.me,www.besat.me,$PUBIP,localhost,127.0.0.1"
+  if grep -q "$PUBIP" .env 2>/dev/null; then
+    ok "this IP already appears in .env"
+  elif [ "$FIX" -eq 1 ] && [ -n "$PY" ]; then
+    step "hosts: adding $PUBIP to ALLOWED_HOSTS and CSRF_TRUSTED_ORIGINS"
+    cp .env ".env.bak.$(date +%s)"
+    PUBIP="$PUBIP" "$PY" - <<'PYEOF'
+import os, re, pathlib
+ip = os.environ["PUBIP"]
+p = pathlib.Path(".env")
+lines = p.read_text(encoding="utf-8").splitlines()
+out, done_hosts, done_csrf = [], False, False
+for line in lines:
+    m = re.match(r'^(ALLOWED_HOSTS)\s*=(.*)$', line)
+    if m:
+        hosts = [h.strip() for h in m.group(2).split(",") if h.strip()]
+        if ip not in hosts:
+            hosts.append(ip)
+        line = "ALLOWED_HOSTS=" + ",".join(hosts)
+        done_hosts = True
+    m2 = re.match(r'^(CSRF_TRUSTED_ORIGINS)\s*=(.*)$', line)
+    if m2:
+        origins = [o.strip() for o in m2.group(2).split(",") if o.strip()]
+        for cand in (f"http://{ip}", f"http://{ip}:8000"):
+            if cand not in origins:
+                origins.append(cand)
+        line = "CSRF_TRUSTED_ORIGINS=" + ",".join(origins)
+        done_csrf = True
+    out.append(line)
+if not done_hosts:
+    out.append(f"ALLOWED_HOSTS=besat.me,www.besat.me,{ip},localhost,127.0.0.1")
+if not done_csrf:
+    out.append(f"CSRF_TRUSTED_ORIGINS=https://besat.me,https://www.besat.me,http://{ip}")
+p.write_text("\n".join(out) + "\n", encoding="utf-8")
+print("       ALLOWED_HOSTS / CSRF_TRUSTED_ORIGINS updated")
+PYEOF
+    ok "hosts updated; Passenger will be restarted below"
+  else
+    warn "this IP is NOT in .env -> add to ALLOWED_HOSTS: ALLOWED_HOSTS=besat.me,www.besat.me,$PUBIP,localhost,127.0.0.1"
+    info "or re-run with --fix to apply automatically"
+  fi
 fi
 
 echo
@@ -231,6 +372,7 @@ if [ "$FAIL" -eq 0 ]; then
 else
   echo " RESULT: $FAIL issue(s) above need attention."
   [ "$FIX" -eq 0 ] && echo " TRY   : bash scripts/repair_backend.sh --fix"
+  echo " DB    : bash scripts/repair_backend.sh --set-db <DB_NAME> <DB_USER> '<PASSWORD>'"
   echo " Send the full output back for the exact next step."
 fi
 exit 0
