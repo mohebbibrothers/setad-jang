@@ -112,7 +112,21 @@ if [ -f .env ]; then
   ok ".env present ($(wc -l < .env | tr -d ' ') lines)"
   grep -qiE '^SECRET_KEY=.+'   .env && ok "SECRET_KEY set"   || bad "SECRET_KEY missing/empty"
   grep -qiE '^ALLOWED_HOSTS=.+' .env && ok "ALLOWED_HOSTS set" || bad "ALLOWED_HOSTS missing/empty"
-  grep -qiE '^DB_|^DATABASE_'   .env && ok "database keys present" || warn "no DB_/DATABASE_ keys found"
+  if grep -qiE '^[[:space:]]*(DB_|DATABASE_)' .env; then
+    ok "database keys present:"
+    grep -ihE '^[[:space:]]*(DB_|DATABASE_)[A-Z_]*[[:space:]]*=' .env | while IFS= read -r line; do
+      key=$(printf '%s' "$line" | cut -d= -f1 | tr -d ' ')
+      val=$(printf '%s' "$line" | cut -d= -f2- | tr -d '"')
+      case "$key" in
+        *PASSWORD*|*PASS*) [ -n "$val" ] && val="***set***" || val="<EMPTY>" ;;
+        "") : ;;
+        *) [ -z "$val" ] && val="<EMPTY>" ;;
+      esac
+      printf '         %s = %s\n' "$key" "$val"
+    done
+  else
+    warn "no DB_/DATABASE_ keys found"
+  fi
   grep -qE '^(DEBUG|DJANGO_DEBUG)=True' .env && warn "DEBUG=True in production"
 else
   bad ".env MISSING - providers skip dotfiles; restore it from the old host/backup"
@@ -203,17 +217,27 @@ except Exception as exc:
 
     # ---- auto-discovery: what DBs/users exist on THIS cPanel account? ----
     step "6b/8 database discovery on this host"
-    CUR_DB=$(grep -iE '^(DB_NAME|DATABASE_NAME)=' .env 2>/dev/null | head -1 | cut -d= -f2-)
-    CUR_USER=$(grep -iE '^(DB_USER|DATABASE_USER)=' .env 2>/dev/null | head -1 | cut -d= -f2-)
-    info "current .env -> DB_NAME=$CUR_DB  DB_USER=$CUR_USER"
+    # NOTE: the value may live in either DB_* or DATABASE_* keys, and a key
+    # can exist with an empty value. Read the *first non-empty* one for each.
+    CUR_DB=$(grep -ihE '^[[:space:]]*(DB_NAME|DATABASE_NAME)[[:space:]]*=' .env 2>/dev/null | cut -d= -f2- | tr -d '"\r' | grep -v '^[[:space:]]*$' | head -1)
+    CUR_USER=$(grep -ihE '^[[:space:]]*(DB_USER|DATABASE_USER)[[:space:]]*=' .env 2>/dev/null | cut -d= -f2- | tr -d '"\r' | grep -v '^[[:space:]]*$' | head -1)
+    CUR_HOST=$(grep -ihE '^[[:space:]]*(DB_HOST|DATABASE_HOST)[[:space:]]*=' .env 2>/dev/null | cut -d= -f2- | tr -d '"\r' | head -1)
+    info "current .env -> DB_NAME=${CUR_DB:-<empty>}  DB_USER=${CUR_USER:-<empty>}  DB_HOST=${CUR_HOST:-<empty>}"
+    [ -z "$CUR_DB" ] && warn "DB_NAME is EMPTY in .env (the connection error may come from a default value)"
 
     if command -v uapi >/dev/null 2>&1; then
       DBS=$(uapi Mysql list_databases 2>/dev/null | grep -oE '"database":"[^"]+"' | cut -d'"' -f4 | tr '\n' ' ')
       USERS=$(uapi Mysql list_users 2>/dev/null | grep -oE '"user":"[^"]+"' | cut -d'"' -f4 | tr '\n' ' ')
       info "databases on account: ${DBS:-<none>}"
       info "mysql users on account: ${USERS:-<none>}"
-      case " $DBS " in *" $CUR_DB "*) ok "DB_NAME exists on this host" ;; *) warn "DB_NAME '$CUR_DB' does NOT exist here" ;; esac
-      case " $USERS " in *" $CUR_USER "*) ok "DB_USER exists on this host" ;; *) warn "DB_USER '$CUR_USER' does NOT exist here" ;; esac
+      if [ -n "$CUR_DB" ]; then
+        case " $DBS " in *" $CUR_DB "*) ok "DB_NAME '$CUR_DB' exists on this host" ;; *) warn "DB_NAME '$CUR_DB' does NOT exist here" ;; esac
+      fi
+      if [ -n "$CUR_USER" ]; then
+        case " $USERS " in *" $CUR_USER "*) ok "DB_USER '$CUR_USER' exists on this host" ;; *) warn "DB_USER '$CUR_USER' does NOT exist here" ;; esac
+      fi
+      [ -z "$DBS" ] && warn "no databases on this account -> the MySQL data was NOT migrated with the host"
+      [ -z "$USERS" ] && warn "no MySQL users on this account -> create DB + user in cPanel first"
     else
       info "uapi not available; check cPanel > MySQL Databases manually"
     fi
