@@ -49,6 +49,46 @@ info "free space: $((FREE/1024)) MB"
 [ "$FREE" -lt 512000 ] && bad "low disk space (<500MB) - pip install may fail"
 info "system python3: $(python3 -V 2>&1)"
 
+# ---------------------------------------------- 1b. legacy home (user rename)
+step "1b/8 legacy home detection (user rename baahamnc -> besatme?)"
+LEGACY=""
+for h in /home/*; do
+  [ -d "$h" ] || continue
+  case "$h" in "$HOME") continue ;; esac
+  if [ -f "$h/apps/besat-backend/.env" ] || [ -d "$h/virtualenv/apps/besat-backend" ] || [ -d "$h/apps/besat-backend/media" ]; then
+    LEGACY="$h"; break
+  fi
+done
+
+if [ -n "$LEGACY" ]; then
+  warn "legacy home found: $LEGACY  (old user's data still lives here)"
+  [ -f "$LEGACY/apps/besat-backend/.env" ] && info ".env there: $(wc -l < "$LEGACY/apps/besat-backend/.env" | tr -d ' ') lines" || info "no .env there"
+  [ -d "$LEGACY/apps/besat-backend/media" ] && info "media there: $(find "$LEGACY/apps/besat-backend/media" -type f 2>/dev/null | wc -l | tr -d ' ') files" || info "no media there"
+  [ -d "$LEGACY/virtualenv/apps/besat-backend" ] && info "venv there: $LEGACY/virtualenv/apps/besat-backend" || true
+
+  if [ "$FIX" -eq 1 ]; then
+    step "1c/8 migrating legacy data into $HOME"
+    # .env : back up current, then copy from legacy
+    if [ -f "$LEGACY/apps/besat-backend/.env" ]; then
+      [ -f .env ] && cp .env ".env.bak.$(date +%s)" && info "current .env backed up"
+      cp "$LEGACY/apps/besat-backend/.env" .env && ok ".env copied from legacy home"
+    fi
+    # media : keep both, copy missing
+    if [ -d "$LEGACY/apps/besat-backend/media" ]; then
+      mkdir -p media
+      cp -an "$LEGACY/apps/besat-backend/media/." media/ 2>/dev/null
+      ok "media copied ($(find media -type f 2>/dev/null | wc -l | tr -d ' ') files now)"
+    fi
+    # permissions: files may still be owned by the old uid
+    chmod -R u+rwX .env media 2>/dev/null || true
+    info "note: venv is rebuilt fresh below (copying a venv across users is unreliable)"
+  else
+    info "run with --fix to copy .env and media into $HOME automatically"
+  fi
+else
+  ok "no legacy home with backend data found (nothing to migrate)"
+fi
+
 # ---------------------------------------------------------------- 2. .env
 step "2/8 .env (most common migration casualty)"
 if [ -f .env ]; then
