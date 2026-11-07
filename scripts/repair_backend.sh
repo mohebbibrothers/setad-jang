@@ -112,9 +112,11 @@ if [ -f .env ]; then
   ok ".env present ($(wc -l < .env | tr -d ' ') lines)"
   grep -qiE '^SECRET_KEY=.+'   .env && ok "SECRET_KEY set"   || bad "SECRET_KEY missing/empty"
   grep -qiE '^ALLOWED_HOSTS=.+' .env && ok "ALLOWED_HOSTS set" || bad "ALLOWED_HOSTS missing/empty"
-  if grep -qiE '^[[:space:]]*(DB_|DATABASE_)' .env; then
+  if grep -qiE '^[[:space:]]*(MYSQL_|DB_|DATABASE_)' .env; then
     ok "database keys present:"
-    grep -ihE '^[[:space:]]*(DB_|DATABASE_)[A-Z_]*[[:space:]]*=' .env | while IFS= read -r line; do
+    # NOTE: this project reads MYSQL_* in production (config/settings/production.py).
+    # DB_*/DATABASE_* are legacy/other-environment names kept for compatibility.
+    grep -ihE '^[[:space:]]*(MYSQL_|DB_|DATABASE_)[A-Z_]*[[:space:]]*=' .env | while IFS= read -r line; do
       key=$(printf '%s' "$line" | cut -d= -f1 | tr -d ' ')
       val=$(printf '%s' "$line" | cut -d= -f2- | tr -d '"')
       case "$key" in
@@ -173,11 +175,24 @@ if [ "$FIX" -eq 1 ] && [ -n "$PY" ]; then
   REQ=requirements-lock.txt; [ -f "$REQ" ] || REQ=requirements.txt
   info "installing from $REQ (this can take 2-5 min)"
   "$PY" -m pip install --upgrade pip -q 2>/dev/null
-  if "$PY" -m pip install -r "$REQ" --disable-pip-version-check -q; then
+  PIP_LOG=$(mktemp)
+  if "$PY" -m pip install -r "$REQ" --disable-pip-version-check -q >"$PIP_LOG" 2>&1; then
     ok "dependencies installed"
   else
-    bad "pip install failed (see output above; usually mysqlclient or disk)"
+    if grep -qiE "NameResolutionError|Failed to resolve|connection-failed|Temporary failure in name resolution" "$PIP_LOG"; then
+      if [ "$VENV_OK" -eq 1 ]; then
+        warn "no internet (DNS for pythonhosted failed) - SKIPPED, existing venv is already healthy"
+        info "this is fine unless you need a NEW package; see below"
+      else
+        bad "no internet and venv is broken -> cannot install dependencies from PyPI"
+        info "ask the host to allow outbound HTTPS to pypi.org / files.pythonhosted.org"
+      fi
+    else
+      bad "pip install failed (see $PIP_LOG; usually mysqlclient or disk)"
+      tail -12 "$PIP_LOG" | sed 's/^/       /'
+    fi
   fi
+  rm -f "$PIP_LOG"
   "$PY" -m pip check 2>&1 | tail -3 | sed 's/^/       /'
 else
   info "skipped (check-only, or no python)"
@@ -219,9 +234,14 @@ except Exception as exc:
     step "6b/8 database discovery on this host"
     # NOTE: the value may live in either DB_* or DATABASE_* keys, and a key
     # can exist with an empty value. Read the *first non-empty* one for each.
-    CUR_DB=$(grep -ihE '^[[:space:]]*(DB_NAME|DATABASE_NAME)[[:space:]]*=' .env 2>/dev/null | cut -d= -f2- | tr -d '"\r' | grep -v '^[[:space:]]*$' | head -1)
-    CUR_USER=$(grep -ihE '^[[:space:]]*(DB_USER|DATABASE_USER)[[:space:]]*=' .env 2>/dev/null | cut -d= -f2- | tr -d '"\r' | grep -v '^[[:space:]]*$' | head -1)
-    CUR_HOST=$(grep -ihE '^[[:space:]]*(DB_HOST|DATABASE_HOST)[[:space:]]*=' .env 2>/dev/null | cut -d= -f2- | tr -d '"\r' | head -1)
+    # MYSQL_* is what config/settings/production.py actually reads.
+    # DB_*/DATABASE_* are fallbacks for other environments.
+    _val() { grep -ihE "^[[:space:]]*($1)[[:space:]]*=" .env 2>/dev/null | cut -d= -f2- | tr -d '"\r' | grep -v '^[[:space:]]*$' | head -1; }
+    CUR_DB=$(_val 'MYSQL_NAME|DB_NAME|DATABASE_NAME')
+    CUR_USER=$(_val 'MYSQL_USER|DB_USER|DATABASE_USER')
+    CUR_HOST=$(_val 'MYSQL_HOST|DB_HOST|DATABASE_HOST')
+    CUR_ENGINE=$(_val 'DATABASE_ENGINE')
+    info "DATABASE_ENGINE=${CUR_ENGINE:-<empty>}"
     info "current .env -> DB_NAME=${CUR_DB:-<empty>}  DB_USER=${CUR_USER:-<empty>}  DB_HOST=${CUR_HOST:-<empty>}"
     [ -z "$CUR_DB" ] && warn "DB_NAME is EMPTY in .env (the connection error may come from a default value)"
 
@@ -275,6 +295,11 @@ fi
 # ------------------------------------------------ 6c. rewrite DB keys in .env
 if [ -n "$DB_NAME_ARG" ] && [ -n "$DB_USER_ARG" ] && [ -n "$DB_PASS_ARG" ]; then
   step "6c/8 rewriting database keys in .env"
+  # production.py refuses to boot with a short MySQL password (>=16 chars).
+  if [ "${#DB_PASS_ARG}" -lt 16 ]; then
+    bad "password is ${#DB_PASS_ARG} chars; production.py REQUIRES >= 16 (it will raise on boot)"
+    info "pick a longer password, e.g.: besat-$(date +%Y)-$(head -c 6 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 6)"
+  fi
   if [ -z "$PY" ]; then bad "no python available to edit .env safely"; else
     cp .env ".env.bak.$(date +%s)" && info "current .env backed up"
     DB_NAME_ARG="$DB_NAME_ARG" DB_USER_ARG="$DB_USER_ARG" DB_PASS_ARG="$DB_PASS_ARG" \
@@ -284,11 +309,18 @@ name, user, pwd = os.environ["DB_NAME_ARG"], os.environ["DB_USER_ARG"], os.envir
 path = pathlib.Path(".env")
 lines = path.read_text(encoding="utf-8").splitlines()
 # Accepted key spellings in this project (base.py reads both families).
+# MYSQL_* is the live contract in config/settings/production.py.
+# DB_*/DATABASE_* are written too so other environments keep working.
 targets = {
+    "MYSQL_NAME": name,
+    "MYSQL_USER": user,
+    "MYSQL_PASSWORD": pwd,
+    "MYSQL_HOST": "127.0.0.1",
+    "MYSQL_PORT": "3306",
     "DB_NAME": name, "DATABASE_NAME": name,
     "DB_USER": user, "DATABASE_USER": user,
     "DB_PASSWORD": pwd, "DATABASE_PASSWORD": pwd,
-    "DB_HOST": "localhost", "DATABASE_HOST": "localhost",
+    "DB_HOST": "127.0.0.1", "DATABASE_HOST": "127.0.0.1",
 }
 seen = set()
 out = []
@@ -302,7 +334,7 @@ for line in lines:
 # If the project uses DATABASE_* and none existed, append the canonical set.
 if not seen:
     out += ["", "# --- database (added by repair_backend.sh) ---"]
-    out += [f"{k}={v}" for k, v in targets.items() if k.startswith("DATABASE")]
+    out += [f"{k}={v}" for k, v in targets.items()]
     seen = set(targets)
 path.write_text("\n".join(out) + "\n", encoding="utf-8")
 print("       updated keys:", ", ".join(sorted(seen)))
@@ -337,7 +369,7 @@ fi
 # Independent of Django settings: confirms whether the *data* actually landed.
 if command -v mysql >/dev/null 2>&1 && [ -n "${CUR_DB:-}" ] && [ -n "${CUR_USER:-}" ]; then
   step "6e/8 raw table count via mysql CLI (data migration proof)"
-  CUR_PASS=$(grep -ihE '^[[:space:]]*(DB_PASSWORD|DATABASE_PASSWORD)[[:space:]]*=' .env 2>/dev/null | cut -d= -f2- | tr -d '"\r' | head -1)
+  CUR_PASS=$(_val 'MYSQL_PASSWORD|DB_PASSWORD|DATABASE_PASSWORD')
   if [ -n "$CUR_PASS" ]; then
     TABLES=$(mysql -u "$CUR_USER" -p"$CUR_PASS" -h "${CUR_HOST:-localhost}" -N -B -e \
       "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$CUR_DB';" 2>/dev/null)
