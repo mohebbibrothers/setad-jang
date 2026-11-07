@@ -1,0 +1,50 @@
+# ============================================================================
+#  .htaccess for api.besat.me - proxy every dynamic request to Django
+#
+#  Place this file at:  ~/public_html/api.besat.me/.htaccess
+#  (scripts/setup_apache_proxy.sh does it for you, with a timestamped backup)
+#
+#  Order matters:
+#    1) deny dotfiles (.env, .git, ...)              - security
+#    2) serve media/static from disk                - speed
+#    3) block cgi-bin                               - not used here
+#    4) everything else -> index.php -> 127.0.0.1:8765 (Django)
+# ============================================================================
+
+Options -Indexes +FollowSymLinks
+DirectoryIndex index.php
+
+# --- 1) never expose dotfiles or the app source ---------------------------
+<FilesMatch "^\.">
+    Require all denied
+</FilesMatch>
+
+RewriteEngine On
+
+# --- 2) static assets straight from disk ----------------------------------
+RewriteRule ^media/(.*)$  - [L]
+RewriteRule ^static/(.*)$ - [L]
+
+# --- 3) cgi-bin is unused -------------------------------------------------
+RewriteRule ^cgi-bin(/.*)?$ - [R=404,L]
+
+# --- 4) the proxy ---------------------------------------------------------
+# If the file/dir really exists on disk, let Apache serve it (robots.txt,
+# favicon, .well-known for ACME, etc.). Otherwise hand off to index.php.
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^ index.php [L,QSA]
+
+# --- timeouts: give Django room, but never hang forever -------------------
+# (harmless on hosts that ignore these; honoured where mod_reqtimeout exists)
+<IfModule mod_reqtimeout.c>
+    RequestReadTimeout header=30-60,MinRate=500 body=60,MinRate=500
+</IfModule>
+
+# --- pass the real host/scheme through to PHP -----------------------------
+<IfModule mod_setenvif.c>
+    SetEnvIf X-Forwarded-Proto "^https$" HTTPS=on
+</IfModule>
+
+# --- no directory listings, no signature leakage --------------------------
+ServerSignature Off
