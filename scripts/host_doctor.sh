@@ -39,6 +39,12 @@ ok()   { PASS=$((PASS+1)); [ "$QUIET" -eq 1 ] || printf '  [OK] %s\n' "$1"; }
 warn() { WARN=$((WARN+1)); printf '  [--] %s\n' "$1"; }
 bad()  { FAIL=$((FAIL+1)); printf '  [!!] %s\n' "$1"; }
 info() { [ "$QUIET" -eq 1 ] || printf '       %s\n' "$1"; }
+port_open() {
+  if (exec 3<>"/dev/tcp/127.0.0.1/${WSGI_PORT:-8765}") 2>/dev/null; then exec 3<&- 2>/dev/null; exec 3>&- 2>/dev/null; return 0; fi
+  command -v ss >/dev/null 2>&1 && ss -ltn 2>/dev/null | grep -qE "[:.]${WSGI_PORT:-8765}[[:space:]]" && return 0
+  command -v netstat >/dev/null 2>&1 && netstat -ltn 2>/dev/null | grep -qE "[:.]${WSGI_PORT:-8765}[[:space:]]" && return 0
+  return 1
+}
 human(){ awk -v k="$1" 'BEGIN{ if (k>=1048576) printf "%.1f GB", k/1048576; else if (k>=1024) printf "%.1f MB", k/1024; else printf "%d KB", k }'; }
 kb_of(){ [ -e "$1" ] && du -sk "$1" 2>/dev/null | awk '{print $1}' || echo 0; }
 
@@ -138,7 +144,7 @@ if [ -f "$DOCROOT/index.php" ]; then
     bad ".htaccess does not route to index.php - dynamic requests have no target"
   fi
 fi
-if ss -ltn 2>/dev/null | grep -q ":$WSGI_PORT "; then ok "WSGI server listening on $WSGI_PORT"; else
+if port_open; then ok "WSGI server listening on $WSGI_PORT"; else
   if [ "$PROXY_OK" -eq 1 ]; then bad "proxy is installed but no WSGI server on $WSGI_PORT - run: bash scripts/serve_gunicorn.sh start"
   else warn "WSGI server on $WSGI_PORT not listening"; fi
 fi
@@ -159,8 +165,10 @@ fi
 # ---------------------------------------------------------------- 8 local http
 step "8/11 local HTTP through the vhost"
 LOCAL=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 -H "Host: $DOMAIN" "http://127.0.0.1/api/v1/health/" 2>/dev/null)
-info "GET /api/v1/health/ -> $LOCAL"
-[ "$LOCAL" = "200" ] && ok "local health 200" || bad "local health $LOCAL"
+info "GET /api/v1/health/ (loopback, Host: $DOMAIN) -> $LOCAL"
+if [ "$LOCAL" = "200" ]; then ok "local health 200"
+elif port_open; then warn "loopback answers $LOCAL (vhost/SNI quirk) - the public check below is authoritative"
+else bad "local health $LOCAL and no server on the WSGI port"; fi
 
 # ---------------------------------------------------------------- 9 public http
 step "9/11 public HTTP"

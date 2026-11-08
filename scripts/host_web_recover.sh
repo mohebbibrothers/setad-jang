@@ -55,6 +55,12 @@ bad()  { printf '  [!!] %s\n' "$1"; FAIL=$((FAIL+1)); }
 warn() { printf '  [--] %s\n' "$1"; WARN=$((WARN+1)); }
 info() { printf '       %s\n' "$1"; }
 plan() { if [ "$APPLY" -eq 1 ]; then printf '  [..] %s\n' "$1"; else printf '  [plan] %s\n' "$1"; fi; }
+port_open() {
+  if (exec 3<>"/dev/tcp/127.0.0.1/$PORT") 2>/dev/null; then exec 3<&- 2>/dev/null; exec 3>&- 2>/dev/null; return 0; fi
+  command -v ss >/dev/null 2>&1 && ss -ltn 2>/dev/null | grep -qE "[:.]$PORT[[:space:]]" && return 0
+  command -v netstat >/dev/null 2>&1 && netstat -ltn 2>/dev/null | grep -qE "[:.]$PORT[[:space:]]" && return 0
+  return 1
+}
 human(){ awk -v b="$1" 'BEGIN{ if (b>=1048576) printf "%.1f MB", b/1048576; else if (b>=1024) printf "%.1f KB", b/1024; else printf "%d B", b }'; }
 
 echo "============================================================"
@@ -104,7 +110,7 @@ fi
 PHP_BIN=$(command -v php 2>/dev/null || echo "")
 if [ -n "$PHP_BIN" ]; then ok "php: $("$PHP_BIN" -v 2>/dev/null | head -1)"; else bad "php CLI not found (the proxy cannot run)"; fi
 
-if ss -ltn 2>/dev/null | grep -q ":$PORT "; then ok "port $PORT is listening (WSGI server up)"; else bad "port $PORT is not listening (WSGI server down) -> 502/404"; fi
+if port_open; then ok "port $PORT is listening (WSGI server up)"; else bad "port $PORT is not listening (WSGI server down) -> 502/404"; fi
 
 bash "$APP_DIR/scripts/serve_gunicorn.sh" status 2>&1 | sed 's/^/  | /' || true
 
@@ -161,11 +167,11 @@ step "4/7 loopback verification"
 if [ "$APPLY" -eq 1 ]; then
   CODE=""
   for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
-    CODE=$(curl -s -o /tmp/recover_port.json -w '%{http_code}' --max-time 10 "http://127.0.0.1:$PORT/api/v1/health/" 2>/dev/null)
+    CODE=$(curl -s -o /tmp/recover_port.json -w '%{http_code}' --max-time 10 -H "Host: $DOMAIN" "http://127.0.0.1:$PORT/api/v1/health/" 2>/dev/null)
     [ "$CODE" = "200" ] && break
     sleep 2
   done
-  info "direct  : http://127.0.0.1:$PORT/api/v1/health/ -> $CODE"
+  info "direct  : http://127.0.0.1:$PORT/api/v1/health/ (Host: $DOMAIN) -> $CODE"
   [ "$CODE" = "200" ] && ok "WSGI server answers 200" || bad "WSGI server answers $CODE (see: bash scripts/serve_gunicorn.sh logs)"
 
   VCODE=""
@@ -175,8 +181,13 @@ if [ "$APPLY" -eq 1 ]; then
     sleep 2
   done
   info "via host: http://127.0.0.1/api/v1/health/ (Host: $DOMAIN) -> $VCODE"
-  [ "$VCODE" = "200" ] && ok "vhost + proxy + django chain is 200" || bad "vhost chain answers $VCODE"
-  head -c 160 /tmp/recover_vhost.json 2>/dev/null | sed 's/^/       /'; echo
+  if [ "$VCODE" = "200" ]; then
+    ok "vhost + proxy + django chain is 200"
+  else
+    # A loopback request does not always hit the same vhost (SNI / listener bind)
+    # - the public URL in step 5 is the source of truth, so this is a warning.
+    warn "loopback through the vhost answers $VCODE - public URL is checked next"
+  fi
 else
   plan "curl loopback on port $PORT and through the vhost"
 fi
@@ -195,7 +206,7 @@ if [ "$APPLY" -eq 1 ]; then
   done
   # end to end through the public frontend too
   C=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "https://besat.me/api/v1/health/" 2>/dev/null)
-  info "https://besat.me/api/v1/health/ -> $C (through the Vercel proxy)"
+  info "https://besat.me/api/v1/health/ -> $C (through the Vercel proxy, 308 is normal)"
 else
   plan "curl https://$DOMAIN/{health,stats,provinces,admin/login}"
 fi

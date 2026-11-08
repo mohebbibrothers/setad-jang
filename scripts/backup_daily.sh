@@ -29,12 +29,14 @@ STAMP="$(date +%F)"
 DO_DB=1
 DO_MEDIA=1
 VERIFY=0
+PRUNE_EMPTY_ONLY=0
 
 for a in "$@"; do
   case "$a" in
     --db)    DO_MEDIA=0 ;;
     --media) DO_DB=0 ;;
     --verify) VERIFY=1 ;;
+    --prune-empty) PRUNE_EMPTY_ONLY=1 ;;
   esac
 done
 
@@ -46,6 +48,15 @@ human() { awk -v k="$1" 'BEGIN{ if (k>=1048576) printf "%.1f GB", k/1048576; els
 kb_of() { [ -e "$1" ] && du -sk "$1" 2>/dev/null | awk '{print $1}' || echo 0; }
 
 mkdir -p "$BACKUP_DIR"
+
+# ------------------------------------------------------- prune-empty-only mode
+if [ "$PRUNE_EMPTY_ONLY" -eq 1 ]; then
+  find "$BACKUP_DIR" -maxdepth 1 -type f \( -name "db-*.sql.gz" -o -name "media-*.tar.gz" \) -size -1k 2>/dev/null | while read -r f; do
+    rm -f "$f" && info "removed truncated archive: $(basename "$f")"
+  done
+  ok "truncated archives pruned"
+  exit 0
+fi
 
 # ------------------------------------------------------------------ verify mode
 if [ "$VERIFY" -eq 1 ]; then
@@ -84,9 +95,12 @@ DB_HOST="${DB_HOST:-127.0.0.1}"
 # ---------------------------------------------------------------- database dump
 if [ "$DO_DB" -eq 1 ]; then
   OUT="$BACKUP_DIR/db-$STAMP.sql.gz"
-  command -v mysqldump >/dev/null 2>&1 || { bad "mysqldump not available"; exit 1; }
+  if command -v mariadb-dump >/dev/null 2>&1; then DUMP_BIN="$(command -v mariadb-dump)"
+  elif command -v mysqldump >/dev/null 2>&1; then DUMP_BIN="$(command -v mysqldump)"
+  else bad "neither mariadb-dump nor mysqldump is available"; exit 1; fi
+  info "dump tool: $DUMP_BIN"
   # --single-transaction = consistent snapshot without locking the site
-  if MYSQL_PWD="$DB_PASS" mysqldump -h "$DB_HOST" -u "$DB_USER" \
+  if MYSQL_PWD="$DB_PASS" "$DUMP_BIN" -h "$DB_HOST" -u "$DB_USER" \
       --single-transaction --quick --skip-lock-tables --default-character-set=utf8mb4 \
       "$DB_NAME" 2>/tmp/dump_err.txt | gzip -9 > "$OUT"; then
     SIZE=$(kb_of "$OUT")
@@ -122,6 +136,15 @@ echo "  [..] retention: keeping last $KEEP_DAYS days"
 find "$BACKUP_DIR" -maxdepth 1 -type f -name "db-*.sql.gz"    -mtime "+$KEEP_DAYS" -delete 2>/dev/null
 find "$BACKUP_DIR" -maxdepth 1 -type f -name "media-*.tar.gz" -mtime "+$KEEP_DAYS" -delete 2>/dev/null
 ok "retention applied"
+# a 0-byte / truncated archive is worse than none: it looks like a backup but
+# restores nothing, and rotation would happily keep it for KEEP_DAYS days.
+EMPTY=$(find "$BACKUP_DIR" -maxdepth 1 -type f \( -name "db-*.sql.gz" -o -name "media-*.tar.gz" \) -size -1k 2>/dev/null)
+if [ -n "$EMPTY" ]; then
+  printf '%s\n' "$EMPTY" | while read -r f; do rm -f "$f" && info "removed truncated archive: $(basename "$f")"; done
+  bad "truncated archive(s) found and removed - investigate the dump/tar error"
+else
+  ok "no truncated archives"
+fi
 
 echo "  [..] current backups:"
 ls -lh "$BACKUP_DIR" 2>/dev/null | tail -n +2 | awk '{printf "       %-34s %s\n", $9, $5}' | tail -12
