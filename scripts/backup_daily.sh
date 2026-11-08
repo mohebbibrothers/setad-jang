@@ -10,14 +10,22 @@
 #  older ones, so the account never fills up again (the exact failure mode that
 #  broke the previous host: 101% disk).
 #
-#  Credentials are read from the project .env (MYSQL_* is what production uses),
-#  so nothing secret appears in the crontab.
+#  Credentials: the SINGLE SOURCE OF TRUTH is Django itself - this script asks
+#  the production settings for DATABASES["default"] and uses exactly those
+#  fields. Re-parsing .env in bash was the bug behind
+#  "Access denied ... (using password: YES)" while the site itself was healthy:
+#  the file can hold several spellings of the same key (MYSQL_*/DB_*/DATABASE_*)
+#  and a shell parser that takes the first match reads a stale one.
+#  .env parsing stays as a fallback only, and then keys are tried in priority
+#  order (MYSQL_* first) rather than file order.
+#  Nothing secret ever appears in the crontab.
 #
 #  USAGE
 #      bash scripts/backup_daily.sh              # run both
 #      bash scripts/backup_daily.sh --db         # database only
 #      bash scripts/backup_daily.sh --media      # media only
 #      bash scripts/backup_daily.sh --verify     # list what exists + sizes
+#      bash scripts/backup_daily.sh --whoami     # masked creds + SELECT 1 test
 # ============================================================================
 
 set -uo pipefail
@@ -29,6 +37,7 @@ STAMP="$(date +%F)"
 DO_DB=1
 DO_MEDIA=1
 VERIFY=0
+WHOAMI=0
 PRUNE_EMPTY_ONLY=0
 
 for a in "$@"; do
@@ -37,6 +46,7 @@ for a in "$@"; do
     --media) DO_DB=0 ;;
     --verify) VERIFY=1 ;;
     --prune-empty) PRUNE_EMPTY_ONLY=1 ;;
+    --whoami) WHOAMI=1 ;;
   esac
 done
 
@@ -70,27 +80,113 @@ if [ "$VERIFY" -eq 1 ]; then
   exit 0
 fi
 
-# ------------------------------------------------------------- read .env values
+# ------------------------------------------------------------- credentials
+VENV_PY="${VENV_PY:-$HOME/virtualenv/apps/besat-backend/3.12/bin/python}"
+SETTINGS="${SETTINGS:-config.settings.production}"
 ENV_FILE="$APP_DIR/.env"
-if [ ! -f "$ENV_FILE" ]; then
-  bad ".env not found at $ENV_FILE - cannot read database credentials"
-  exit 1
+CRED_SOURCE="none"
+DB_NAME=""; DB_USER=""; DB_PASS=""; DB_HOST=""; DB_PORT=""
+
+# 1) ask Django - identical to what the running site uses
+if [ -x "$VENV_PY" ] && [ -d "$APP_DIR" ]; then
+  DJANGO_CREDS=$(cd "$APP_DIR" && DJANGO_SETTINGS_MODULE="$SETTINGS" "$VENV_PY" - 2>/tmp/besat_creds.err <<'PYCREDS'
+import sys
+try:
+    import django
+    django.setup()
+    from django.conf import settings
+    d = settings.DATABASES["default"]
+    fields = [str(d.get(k) or "") for k in ("NAME", "USER", "PASSWORD", "HOST", "PORT")]
+    if not fields[0] or not fields[1]:
+        sys.stderr.write("NAME/USER empty in settings\n")
+        sys.exit(1)
+    sys.stdout.write("\x1f".join(fields))
+except SystemExit:
+    raise
+except Exception as exc:
+    sys.stderr.write("%s\n" % exc)
+    sys.exit(1)
+PYCREDS
+)
+  if [ -n "${DJANGO_CREDS:-}" ]; then
+    IFS=$'\x1f' read -r DB_NAME DB_USER DB_PASS DB_HOST DB_PORT <<< "$DJANGO_CREDS"
+    CRED_SOURCE="django ($SETTINGS)"
+  fi
 fi
 
+# 2) fallback: parse .env in priority order (never file order)
 get_val() {
-  # First NON-EMPTY value among the given key spellings.
-  local keys="$1"
-  grep -ihE "^[[:space:]]*($keys)[[:space:]]*=" "$ENV_FILE" 2>/dev/null \
-    | cut -d= -f2- | tr -d '"'\''\r' | grep -v '^[[:space:]]*$' | head -1
+  local key v
+  for key in $1; do
+    v=$(grep -ihE "^[[:space:]]*${key}[[:space:]]*=" "$ENV_FILE" 2>/dev/null \
+        | head -1 | cut -d= -f2- | tr -d '"'"'"'\r' | sed 's/[[:space:]]*$//')
+    if [ -n "$v" ]; then printf '%s' "$v"; return 0; fi
+  done
+  return 0
+}
+if [ "$CRED_SOURCE" = "none" ] && [ -f "$ENV_FILE" ]; then
+  DB_NAME=$(get_val 'MYSQL_NAME DB_NAME DATABASE_NAME')
+  DB_USER=$(get_val 'MYSQL_USER DB_USER DATABASE_USER')
+  DB_PASS=$(get_val 'MYSQL_PASSWORD DB_PASSWORD DATABASE_PASSWORD')
+  DB_HOST=$(get_val 'MYSQL_HOST DB_HOST DATABASE_HOST')
+  DB_PORT=$(get_val 'MYSQL_PORT DB_PORT DATABASE_PORT')
+  if [ -n "$DB_NAME" ] && [ -n "$DB_USER" ]; then CRED_SOURCE=".env (fallback)"; fi
+fi
+
+mask() {
+  local v="$1" stars
+  if [ -z "$v" ]; then printf '(empty)'; return; fi
+  stars=$(printf '%*s' $(( ${#v} > 2 ? ${#v} - 2 : 0 )) '' | tr ' ' '*')
+  printf '%s%s (%d chars)' "${v:0:2}" "$stars" "${#v}"
 }
 
-DB_NAME=$(get_val 'MYSQL_NAME|DB_NAME|DATABASE_NAME')
-DB_USER=$(get_val 'MYSQL_USER|DB_USER|DATABASE_USER')
-DB_PASS=$(get_val 'MYSQL_PASSWORD|DB_PASSWORD|DATABASE_PASSWORD')
-DB_HOST=$(get_val 'MYSQL_HOST|DB_HOST|DATABASE_HOST')
-DB_HOST="${DB_HOST:-127.0.0.1}"
+if [ "$WHOAMI" -eq 1 ]; then
+  echo "=== resolved database credentials (masked) ==="
+  info "source  : $CRED_SOURCE"
+  info "NAME    : ${DB_NAME:-(missing)}"
+  info "USER    : ${DB_USER:-(missing)}"
+  info "PASSWORD: $(mask "$DB_PASS")"
+  info "HOST    : ${DB_HOST:-(local socket)}"
+  info "PORT    : ${DB_PORT:-(default)}"
+  if [ -f "$ENV_FILE" ]; then
+    info ".env database keys (lengths only):"
+    grep -iE '^[[:space:]]*(MYSQL|DB|DATABASE)_(NAME|USER|PASSWORD|HOST|PORT)[[:space:]]*=' "$ENV_FILE" 2>/dev/null |
+      while IFS= read -r line; do
+        k="${line%%=*}"
+        v="${line#*=}"
+        v="${v%$'\r'}"
+        v="${v//\"/}"
+        printf '         %-20s %s\n' "$k" "$(mask "$v")"
+      done
+  fi
+  if [ -s /tmp/besat_creds.err ]; then
+    info "django creds reader said:"
+    tail -3 /tmp/besat_creds.err | sed 's/^/         /'
+  fi
+  if command -v mariadb >/dev/null 2>&1 || command -v mysql >/dev/null 2>&1; then
+    CLI=$(command -v mariadb 2>/dev/null || command -v mysql)
+    CONN=()
+    [ -n "$DB_HOST" ] && CONN+=(-h "$DB_HOST")
+    [ -n "$DB_PORT" ] && CONN+=(-P "$DB_PORT")
+    OUT=$(MYSQL_PWD="$DB_PASS" "$CLI" "${CONN[@]}" -u "$DB_USER" -N -B -e 'SELECT 1' 2>&1)
+    if [ "$(printf '%s' "$OUT" | tr -d '[:space:]')" = "1" ]; then
+      ok "SELECT 1 succeeded - these credentials work"
+    else
+      bad "SELECT 1 failed: $(printf '%s' "$OUT" | head -2 | tr '\n' ' ')"
+    fi
+  else
+    warn "no mariadb/mysql CLI - cannot test the connection"
+  fi
+  info "next: bash scripts/backup_daily.sh --db"
+  exit 0
+fi
 
-[ -n "$DB_NAME" ] && [ -n "$DB_USER" ] || { bad "could not read DB name/user from .env"; exit 1; }
+if [ -z "$DB_NAME" ] || [ -z "$DB_USER" ]; then
+  bad "could not resolve database credentials (django import failed and .env unusable)"
+  [ -s /tmp/besat_creds.err ] && tail -3 /tmp/besat_creds.err | sed 's/^/       /'
+  exit 1
+fi
+info "credentials: $CRED_SOURCE"
 
 # ---------------------------------------------------------------- database dump
 if [ "$DO_DB" -eq 1 ]; then
@@ -100,8 +196,13 @@ if [ "$DO_DB" -eq 1 ]; then
   else bad "neither mariadb-dump nor mysqldump is available"; exit 1; fi
   info "dump tool: $DUMP_BIN"
   # --single-transaction = consistent snapshot without locking the site
-  if MYSQL_PWD="$DB_PASS" "$DUMP_BIN" -h "$DB_HOST" -u "$DB_USER" \
-      --single-transaction --quick --skip-lock-tables --default-character-set=utf8mb4 \
+  CONN=()
+  [ -n "$DB_HOST" ] && CONN+=(-h "$DB_HOST")
+  [ -n "$DB_PORT" ] && CONN+=(-P "$DB_PORT")
+  # --no-tablespaces: shared-hosting users usually lack PROCESS -> error 1227
+  if MYSQL_PWD="$DB_PASS" "$DUMP_BIN" "${CONN[@]}" -u "$DB_USER" \
+      --single-transaction --quick --skip-lock-tables --no-tablespaces \
+      --default-character-set=utf8mb4 \
       "$DB_NAME" 2>/tmp/dump_err.txt | gzip -9 > "$OUT"; then
     SIZE=$(kb_of "$OUT")
     if [ "${SIZE:-0}" -lt 10 ]; then
@@ -112,7 +213,7 @@ if [ "$DO_DB" -eq 1 ]; then
       ok "database dump: $OUT ($(human "$SIZE"))"
     fi
   else
-    bad "mysqldump failed:"
+    bad "$(basename "$DUMP_BIN") failed:"
     tail -3 /tmp/dump_err.txt | sed 's/^/       /'
   fi
 fi

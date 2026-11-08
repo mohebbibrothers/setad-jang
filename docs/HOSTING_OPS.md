@@ -56,6 +56,7 @@ DEBUG=False
 | تمیزکاری (پیش‌نمایش) | `bash scripts/host_cleanup.sh` |
 | تمیزکاری (اجرا) | `bash scripts/host_cleanup.sh --apply` |
 | بکاپ دستی | `bash scripts/backup_daily.sh` |
+| اعتبارنامهٔ دیتابیس (ماسک‌شده) + تست اتصال | `bash scripts/backup_daily.sh --whoami` |
 | فهرستِ بکاپ‌ها | `bash scripts/backup_daily.sh --verify` |
 | تستِ سلامتِ عمومی | `bash scripts/smoke_test.sh https://besat.me` |
 | بازگردانیِ لایهٔ سرو (پیش‌نمایش) | `bash scripts/host_web_recover.sh` |
@@ -82,6 +83,7 @@ DEBUG=False
 | صفحه ۴۰۴ از خودِ LiteSpeed | vhost/docroot: `uapi DomainInfo single_domain_data domain=api.besat.me` |
 | تصاویر ۴۰۴ ولی API سالم | `media/` خالی یا مجوزِ پوشه؛ بخش ۶ doctor |
 | عددِ بازدید چند برابر می‌شود | dedupe به `X-Viewer-Id` وابسته است؛ کش/دیتابیسِ `KindnessListingView` را چک کنید |
+| بکاپِ دیتابیس صفر/چند بایتی | `bash scripts/backup_daily.sh --whoami` — اعتبارنامه و `SELECT 1` را نشان می‌دهد |
 | دیسک پر می‌شود | `bash scripts/host_cleanup.sh` (پیش‌نمایش) سپس `--apply --logs` |
 
 ## درس‌های مهاجرت (۲۰۲۶–۱۱)
@@ -100,3 +102,12 @@ DEBUG=False
 5. **`manage.py` پیش‌فرض روی `development`** می‌رود؛ برای کار با دیتابیسِ واقعی
    همیشه `DJANGO_SETTINGS_MODULE=config.settings.production`.
 6. **رمزِ MySQL کوتاه‌تر از ۱۶ نویسه** باعث می‌شود اپ اصلاً بوت نشود (fail-fast عمدی).
+8. **اعتبارنامهٔ دیتابیس را دوباره در bash پارس نکنید.** سایت سالم بود ولی بکاپ
+   `Access denied ... (using password: YES)` می‌داد، چون `.env` چند املای هم‌معنی
+   (`MYSQL_*`، `DB_*`، `DATABASE_*`) دارد و پارسرِ شل «اولین تطبیق در فایل» را برمی‌داشت
+   — یعنی احتمالاً مقدارِ کهنه. حالا `backup_daily.sh` مستقیم از
+   `settings.DATABASES["default"]` می‌خواند (تنها منبعِ حقیقت = همان چیزی که سایت با آن
+   کار می‌کند) و `.env` فقط fallback است، آن هم با اولویتِ `MYSQL_*`.
+9. **کرانِ keep-alive در حالتِ پروکسی لازم است، نه «باقی‌مانده».** سرورِ WSGI یک پروسهٔ
+   معمولی است؛ بدون کرانِ هر دقیقه، اولین crash یا ری‌بوت سایت را می‌خواباند. دکتر
+   نبودش را حالا `[!!]` می‌دهد و وجودش را تأیید می‌کند.

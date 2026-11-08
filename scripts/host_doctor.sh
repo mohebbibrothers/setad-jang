@@ -190,8 +190,30 @@ CRON=$(crontab -l 2>/dev/null || true)
 if [ -n "$CRON" ]; then
   echo "$CRON" | grep -v '^#' | grep -v '^$' | sed 's/^/       /' | head -8
   if echo "$CRON" | grep -qE "/home/(baahamnc|olduser)"; then bad "cron still references an old home path"; else ok "cron paths look current"; fi
-  echo "$CRON" | grep -q "backup_daily.sh" && ok "daily backup cron present" || warn "no backup_daily.sh cron installed"
-  echo "$CRON" | grep -q "serve_gunicorn" && warn "leftover gunicorn keep-alive cron (no longer needed)" || ok "no leftover gunicorn cron"
+  echo "$CRON" | grep -q "backup_daily.sh" && ok "daily backup cron present" || bad "no backup_daily.sh cron - install: bash scripts/host_stabilize.sh"
+  # In proxy mode (the strategy this host actually uses) the WSGI server is a
+  # plain background process, so the keep-alive cron is REQUIRED, not leftover.
+  if port_open; then
+    if echo "$CRON" | grep -q "serve_gunicorn.sh start"; then
+      ok "WSGI keep-alive cron present (required in proxy mode)"
+    else
+      bad "WSGI server has no keep-alive cron - it will not survive a crash/reboot"
+    fi
+  else
+    warn "no WSGI server on port ${WSGI_PORT:-8765} - run: bash scripts/serve_gunicorn.sh start"
+  fi
+  # newest database dump must actually contain data
+  NEWEST_DB=$(ls -1t "$BK"/db-*.sql.gz 2>/dev/null | head -1)
+  if [ -n "$NEWEST_DB" ]; then
+    SZKB=$(du -k "$NEWEST_DB" 2>/dev/null | awk '{print $1+0}')
+    if [ "${SZKB:-0}" -lt 10 ]; then
+      bad "newest db backup is $(basename "$NEWEST_DB") at ${SZKB} KB - diagnose: bash scripts/backup_daily.sh --whoami"
+    else
+      ok "newest db backup: $(basename "$NEWEST_DB") ($(human "$SZKB"))"
+    fi
+  else
+    bad "no db-*.sql.gz backup at all"
+  fi
 else
   warn "crontab is empty"
 fi
