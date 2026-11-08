@@ -4,7 +4,7 @@
 #
 #  Runs, in this order (each step is idempotent):
 #     1  doctor (baseline report)
-#     2  retire our temporary runtime (gunicorn / PHP proxy / probes)
+#     2  restore + verify the serving layer (PHP proxy -> WSGI -> public URL)
 #     3  clean caches, old logs, regnerable artefacts   (host_cleanup --apply)
 #     4  rebuild staticfiles (collectstatic)
 #     5  first real backup (db + media) with retention
@@ -20,8 +20,8 @@
 #
 #  SAFETY
 #     - never deletes media/uploads or the database
-#     - dry-run is not needed here: cleanup only targets caches, .pyc, probes,
-#       *.bak files, staticfiles and rotated *.gz logs
+#     - cleanup only targets caches, .pyc, probes, *.bak files and rotated
+#       *.gz logs - it never removes index.php, staticfiles/, media or the db
 #     - prints before/after disk usage
 #
 #  USAGE
@@ -62,27 +62,26 @@ fi
 step "1/7 baseline doctor (problems only)"
 bash scripts/host_doctor.sh --quiet
 
-# ---------------------------------------------------------- 2 retire runtime
-step "2/7 retiting the temporary runtime (Passenger serves the app now)"
-if [ -x scripts/serve_gunicorn.sh ]; then bash scripts/serve_gunicorn.sh stop >/dev/null 2>&1 || true; fi
-CRON=$(crontab -l 2>/dev/null || true)
-if echo "$CRON" | grep -q "serve_gunicorn"; then
-  echo "$CRON" | grep -v "serve_gunicorn.sh start" | crontab - && ok "removed gunicorn keep-alive cron"
-else
-  ok "no gunicorn cron to remove"
-fi
-ok "temporary runtime retired"
+# -------------------------------------------------------- 2 serving layer
+# NOTE: this host does NOT serve Django through Passenger. Production runs
+# on the PHP proxy + WSGI server pair (see docs/HOSTING_OPS.md). This step
+# guarantees that pair is installed, running and verified *before* anything
+# else is cleaned - stopping it is what takes the site down.
+step "2/7 restoring and verifying the serving layer (proxy -> WSGI -> public)"
+bash scripts/host_web_recover.sh --apply 2>&1 | tail -32
 
 # ---------------------------------------------------------------- 3 cleanup
 step "3/7 cleaning caches, probes, backups of config, staticfiles, old logs"
 bash scripts/host_cleanup.sh --apply --logs 2>&1 | tail -25
 
 # ---------------------------------------------------------------- 4 static
-step "4/7 rebuilding staticfiles"
-if DJANGO_SETTINGS_MODULE="$SETTINGS" "$VENV_PY" manage.py collectstatic --noinput -v 0 2>&1 | tail -2; then
-  ok "staticfiles rebuilt"
+step "4/7 refreshing staticfiles (regenerable, safe)"
+DJANGO_SETTINGS_MODULE="$SETTINGS" "$VENV_PY" manage.py collectstatic --noinput -v 0 >/tmp/collectstatic.log 2>&1
+if [ $? -eq 0 ]; then
+  ok "staticfiles refreshed ($(find staticfiles -type f 2>/dev/null | wc -l | tr -d ' ') files)"
 else
-  info "collectstatic reported an issue (non-fatal)"
+  info "collectstatic returned non-zero (non-fatal) - last lines:"
+  grep -v "WrongData" /tmp/collectstatic.log | tail -3 | sed 's/^/       /'
 fi
 
 # ---------------------------------------------------------------- 5 backup
@@ -99,7 +98,7 @@ echo "$NEW" | grep -q "backup_daily.sh" || NEW="$NEW
 # besat: daily database+media backup with 7-day rotation (added by host_stabilize.sh)
 $KEEP_LINE"
 echo "$NEW" | grep -q "tmp/restart.txt" || NEW="$NEW
-# besat: quiet-hour Passenger reload (memory hygiene, graceful)
+# besat: quiet-hour app reload (tmp/restart.txt is harmless in proxy mode)
 $RESTART_LINE"
 printf '%s\n' "$NEW" | sed '/^$/N;/^\n$/D' | crontab -
 ok "crons installed"
@@ -108,7 +107,7 @@ crontab -l 2>/dev/null | grep -v '^#' | grep -v '^$' | sed 's/^/       /' | head
 
 # ---------------------------------------------------------------- 7 doctor
 step "7/7 final doctor"
-bash scripts/host_doctor.sh 2>&1 | tail -40
+bash scripts/host_doctor.sh 2>&1 | tail -45
 
 AFTER=$(df -P "$HOME" | tail -1 | awk '{print $4}')
 echo

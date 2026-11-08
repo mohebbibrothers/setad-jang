@@ -9,7 +9,7 @@
 #    - duplicate media copies left by a half-finished copy
 #    - diagnostic files we created while debugging (__probe.txt, .bak files)
 #    - cron entries pointing at the OLD user path (/home/olduser/...)
-#    - orphaned processes (gunicorn proxy we no longer need under Passenger)
+#    - never the serving chain (index.php, run/, staticfiles/, media)
 #
 #  DESIGN RULES
 #  ------------
@@ -87,11 +87,11 @@ if [ "${PYC_KB:-0}" -gt 0 ]; then
   else printf '  [dry] %-52s %s\n' "__pycache__/.pyc" "$(human "$PYC_KB")"; fi
 fi
 
-step "2/8 our own temporary runtime (Passenger is back, not needed)"
-sweep "$APP_DIR/run"                        "gunicorn run dir (pid/socket)"
-sweep "$APP_DIR/logs/app.log"               "gunicorn app log"
-sweep "$HOME_DIR/public_html/index.php"     "PHP proxy index.php (Passenger serves now)"
-sweep "$HOME_DIR/public_html/api.besat.me/index.php" "PHP proxy index.php (subdomain)"
+step "2/8 runtime files - PROTECTED (never removed here)"
+# The PHP proxy (index.php), the WSGI run dir (pid/socket) and logs/app.log are
+# the production serving chain on this host. Deleting them takes the site down;
+# they are only rotated/truncated by their own scripts.
+info "kept: index.php (PHP proxy), run/ (pid), logs/app.log"
 
 step "3/8 diagnostic files we created while debugging"
 for f in \
@@ -119,8 +119,10 @@ else
 fi
 info "media kept intact: $(human "$(kb_of "$APP_DIR/media")") in $(find "$APP_DIR/media" -type f 2>/dev/null | wc -l | tr -d ' ') files"
 
-step "5/8 static export (regenerable, safe to drop before collectstatic)"
-sweep "$APP_DIR/staticfiles"                "staticfiles/ (rebuild with collectstatic)"
+step "5/8 static export - PROTECTED"
+# staticfiles/ is served straight from disk by the vhost; it is refreshed by
+# collectstatic, never deleted blindly.
+info "kept: staticfiles/ ($(human "$(kb_of "$APP_DIR/staticfiles")")) - refresh with collectstatic"
 
 step "6/8 old log archives"
 LOG_KB=$(find "$HOME_DIR/logs" -type f -name "*.gz" 2>/dev/null | du -ck --files0-from=<(find "$HOME_DIR/logs" -type f -name "*.gz" -print0 2>/dev/null) 2>/dev/null | tail -1 | awk '{print $1+0}')

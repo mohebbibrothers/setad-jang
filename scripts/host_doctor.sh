@@ -12,7 +12,7 @@
 #     4  Django checks (production settings)
 #     5  database reachability + row counts
 #     6  media + static presence
-#     7  Passenger wiring (app root / .htaccess / restart file)
+#     7  serving wiring (proxy .htaccess + WSGI port, or Passenger)
 #     8  local HTTP health through the real vhost
 #     9  public HTTP health (through the domain)
 #    10  backups + cron + retention
@@ -51,8 +51,8 @@ step "1/11 disk headroom"
 USE_PCT=$(df -P "$HOME" | tail -1 | awk '{gsub("%","",$5); print $5}')
 AVAIL=$(df -P "$HOME" | tail -1 | awk '{print $4}')
 info "used ${USE_PCT}%  avail $(human "$AVAIL")"
-if [ "${USE_PCT:-0}" -ge 95 ]; then bad "disk almost full (${USE_PCT}%) - run host_cleanup.sh --apply"
-elif [ "${USE_PCT:-0}" -ge 85 ]; then warn "disk getting tight (${USE_PCT}%)"
+if [ "${USE_PCT:-0}" -ge 93 ]; then bad "disk almost full (${USE_PCT}%) - run host_cleanup.sh --apply"
+elif [ "${USE_PCT:-0}" -ge 90 ]; then warn "disk getting tight (${USE_PCT}%)"
 else ok "disk healthy (${USE_PCT}%)"; fi
 
 # ---------------------------------------------------------------- 2 repo
@@ -122,20 +122,39 @@ M_KB=$(kb_of "$APP_DIR/media")
 if [ "${M_FILES:-0}" -gt 0 ]; then ok "media: $M_FILES files ($(human "$M_KB"))"; else bad "media empty or missing"; fi
 if [ -d "$APP_DIR/staticfiles" ]; then ok "staticfiles present"; else warn "staticfiles missing - run collectstatic"; fi
 
-# ---------------------------------------------------------------- 7 passenger
-step "7/11 passenger wiring"
+# ---------------------------------------------------------------- 7 serving
+# Production on this host is served by:  vhost -> index.php -> 127.0.0.1:PORT
+# (Passenger exists on the server but is not wired into this vhost). Accept
+# either strategy, but fail when neither is complete.
+step "7/11 serving wiring"
+WSGI_PORT="${WSGI_PORT:-8765}"
+PROXY_OK=0; PASS_OK=0
+if [ -f "$DOCROOT/index.php" ]; then
+  if grep -q "index.php" "$DOCROOT/.htaccess" 2>/dev/null; then
+    PROXY_OK=1
+    ok ".htaccess routes dynamic traffic to index.php"
+    grep -q ":$WSGI_PORT" "$DOCROOT/index.php" && ok "proxy targets 127.0.0.1:$WSGI_PORT" || warn "proxy target port differs from $WSGI_PORT"
+  else
+    bad ".htaccess does not route to index.php - dynamic requests have no target"
+  fi
+fi
+if ss -ltn 2>/dev/null | grep -q ":$WSGI_PORT "; then ok "WSGI server listening on $WSGI_PORT"; else
+  if [ "$PROXY_OK" -eq 1 ]; then bad "proxy is installed but no WSGI server on $WSGI_PORT - run: bash scripts/serve_gunicorn.sh start"
+  else warn "WSGI server on $WSGI_PORT not listening"; fi
+fi
 if [ -f "$DOCROOT/.htaccess" ] && grep -q "PASSENGER CONFIGURATION" "$DOCROOT/.htaccess"; then
   ROOT=$(sed -n 's/^PassengerAppRoot "\\(.*\\)"/\\1/p' "$DOCROOT/.htaccess" | head -1)
   PY=$(sed -n 's/^PassengerPython "\\(.*\\)"/\\1/p' "$DOCROOT/.htaccess" | head -1)
-  info "AppRoot: $ROOT"
-  info "Python : $PY"
-  case "$ROOT" in "$HOME"/*) ok "app root inside this home" ;; *) bad "app root points outside \$HOME: $ROOT" ;; esac
-  [ -x "$PY" ] && ok "passenger python exists" || bad "passenger python missing: $PY"
-  if [ -f "$APP_DIR/passenger_wsgi.py" ]; then ok "passenger_wsgi.py present"; else bad "passenger_wsgi.py missing"; fi
-  [ -f "$APP_DIR/tmp/restart.txt" ] && ok "restart file present" || warn "no tmp/restart.txt (touch it after changes)"
-else
-  bad "no Passenger block in $DOCROOT/.htaccess"
+  info "also saw a Passenger block (AppRoot: $ROOT)"
+  [ -x "$PY" ] && PASS_OK=1 || warn "PassengerPython not executable: $PY"
+  case "$ROOT" in "$HOME"/*) : ;; *) [ -n "$ROOT" ] && warn "Passenger app root points outside \$HOME: $ROOT" ;; esac
 fi
+[ "$PROXY_OK" -eq 1 ] && ok "strategy: PHP proxy + WSGI server (expected on this host)"
+if [ "$PROXY_OK" -eq 0 ] && [ "$PASS_OK" -eq 0 ]; then
+  bad "no working serving strategy - run: bash scripts/host_web_recover.sh --apply"
+fi
+[ -f "$APP_DIR/tmp/restart.txt" ] && ok "tmp/restart.txt present" || info "no tmp/restart.txt (only used in Passenger mode)"
+[ -x "$APP_DIR/scripts/host_web_recover.sh" ] || chmod +x "$APP_DIR/scripts/host_web_recover.sh" 2>/dev/null || true
 
 # ---------------------------------------------------------------- 8 local http
 step "8/11 local HTTP through the vhost"
@@ -172,9 +191,12 @@ fi
 # ---------------------------------------------------------------- 11 leftovers
 step "11/11 leftover debugging artefacts"
 LEFTOVER=0
-for f in "$HOME/public_html/__probe.txt" "$HOME/public_html/index.php" "$APP_DIR/run" "$APP_DIR/logs/app.log"; do
+for f in "$HOME/public_html/__probe.txt" "$HOME/public_html/main/__probe.txt" \
+         "$HOME/public_html/api.besat.me/__probe.txt" "$HOME/public_html/besat.me/__probe.txt"; do
   [ -e "$f" ] && { warn "still present: ${f/#$HOME/~}"; LEFTOVER=$((LEFTOVER+1)); }
 done
+BAKS=$(find "$HOME" -maxdepth 3 -type f -name ".htaccess.bak.*" 2>/dev/null | wc -l | tr -d ' ')
+[ "${BAKS:-0}" -gt 0 ] && { warn "$BAKS old .htaccess.bak.* file(s) - run host_cleanup.sh --apply"; LEFTOVER=$((LEFTOVER+1)); }
 [ "$LEFTOVER" -eq 0 ] && ok "none - host is tidy"
 
 echo

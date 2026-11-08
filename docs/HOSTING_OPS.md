@@ -11,7 +11,7 @@
   └─ besat.me            → Vercel  (Next.js، ISR)
         └─ /api/v1/* , /admin/* , /media/* , /static/*
               └─ پراکسیِ Vercel با API_UPSTREAM_URL
-                    └─ https://api.besat.me   (cPanel، Passenger + Django)
+                    └─ https://api.besat.me   (cPanel: index.php → 127.0.0.1:8765 → Django)
                           └─ MySQL/MariaDB  `besatme_besat`
                           └─ media/         (آپلودها، ۹۹ فایل)
 ```
@@ -58,14 +58,16 @@ DEBUG=False
 | بکاپ دستی | `bash scripts/backup_daily.sh` |
 | فهرستِ بکاپ‌ها | `bash scripts/backup_daily.sh --verify` |
 | تستِ سلامتِ عمومی | `bash scripts/smoke_test.sh https://besat.me` |
-| یک‌جا: تمیز + بکاپ + cron + گزارش | `bash scripts/host_stabilize.sh` |
+| بازگردانیِ لایهٔ سرو (پیش‌نمایش) | `bash scripts/host_web_recover.sh` |
+| بازگردانیِ لایهٔ سرو + تأیید عمومی | `bash scripts/host_web_recover.sh --apply` |
+| یک‌جا: سرو + تمیز + بکاپ + cron + گزارش | `bash scripts/host_stabilize.sh` |
 | دیپلویِ کد | `bash ~/deploy-back.sh` |
 
 ## کرون‌های عملیاتی
 
 ```
 20 2 * * *  backup_daily.sh        # دامپِ دیتابیس + media، چرخشِ ۷ روزه
-10 5 * * *  tmp/restart.txt        # ری‌استارتِ آرامِ Passenger
+10 5 * * *  tmp/restart.txt        # ری‌استارتِ آرامِ برنامه
 ```
 
 چرخشِ بکاپ عمدی است: هاستِ قبلی با **دیسکِ ۱۰۱٪** از کار افتاد. حالا حداکثر
@@ -75,7 +77,7 @@ DEBUG=False
 
 | نشانه | اول چه کاری |
 |---|---|
-| کل `/api/v1/*` → ۵۰۰ | `bash scripts/host_doctor.sh` — بخش ۷ (Passenger) و ۵ (دیتابیس) |
+| کل `/api/v1/*` → ۵۰۰/۴۰۴ | `bash scripts/host_web_recover.sh` — زنجیرهٔ `index.php → 8765 → Django` را بازسازی و تأیید می‌کند |
 | «Web application could not be started» | `DJANGO_SETTINGS_MODULE=config.settings.production <venv>/python -c "import passenger_wsgi"` — خطای واقعی را چاپ می‌کند |
 | صفحه ۴۰۴ از خودِ LiteSpeed | vhost/docroot: `uapi DomainInfo single_domain_data domain=api.besat.me` |
 | تصاویر ۴۰۴ ولی API سالم | `media/` خالی یا مجوزِ پوشه؛ بخش ۶ doctor |
@@ -85,7 +87,12 @@ DEBUG=False
 ## درس‌های مهاجرت (۲۰۲۶–۱۱)
 
 1. **تغییرِ نامِ کاربر** (`baahamnc` → `besatme`) سه لایه را می‌شکند: `.env`،
-   `virtualenv`، و `.htaccess`ِ Passenger. همیشه بعد از مهاجرت این سه را چک کنید.
+   `virtualenv`، و `.htaccess`. همیشه بعد از مهاجرت این سه را چک کنید.
+7. **Passenger روی این هاست در vhost وصل نیست.** سروِ واقعیِ production زنجیرهٔ
+   `index.php → 127.0.0.1:8765 → Django` است. حذفِ `index.php` یا `stop` کردنِ سرورِ WSGI
+   سایت را ۴۰۴/۵۰۲ می‌کند — شکستنِ همین زنجیره دلیلِ قطعیِ یک‌باره بود. برای همین
+   `host_cleanup.sh` دیگر به `index.php`، `run/`، `logs/app.log` و `staticfiles/` دست نمی‌زند
+   و `host_stabilize.sh` قبل از هر تمیزکاری، لایهٔ سرو را بازسازی و «تأیید» می‌کند.
 2. **پرووایدر dotfiles را کپی نمی‌کند** — `.env` را دستی منتقل کنید.
 3. **vhost تا زمانی که cPanel بازسازی نکند** ممکن است docrootِ قدیمی را بخواند؛
    شاهدِ قطعی: فایلِ موجود در docroot با `curl -H "Host: …"` هم ۴۰۴ می‌دهد.

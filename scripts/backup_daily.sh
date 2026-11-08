@@ -91,7 +91,9 @@ if [ "$DO_DB" -eq 1 ]; then
       "$DB_NAME" 2>/tmp/dump_err.txt | gzip -9 > "$OUT"; then
     SIZE=$(kb_of "$OUT")
     if [ "${SIZE:-0}" -lt 10 ]; then
-      bad "dump looks too small ($(human "$SIZE")) - check /tmp/dump_err.txt"
+      bad "dump looks too small ($(human "$SIZE")) - real error below"
+      tail -3 /tmp/dump_err.txt | sed 's/^/       /'
+      rm -f "$OUT" && info "truncated dump deleted so rotation cannot keep it"
     else
       ok "database dump: $OUT ($(human "$SIZE"))"
     fi
