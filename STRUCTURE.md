@@ -333,6 +333,7 @@ setad-jang/
 │   ├── validators.py
 │   └── views.py  # لایهٔ HTTP
 ├── r4j/
+│   ├── management/
 │   ├── migrations/
 │   ├── tests/
 │   ├── __init__.py
