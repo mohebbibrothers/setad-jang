@@ -122,24 +122,70 @@ def lockout_seconds_left(request: HttpRequest) -> int:
     now = time.time()
     remaining = 0
     for key in keys:
-        until = cache.get(key + _BLOCK_SUFFIX)
+        try:
+            until = cache.get(key + _BLOCK_SUFFIX)
+        except Exception:
+            logger.warning("admin guard: cache.get failed, treating as unlocked", exc_info=True)
+            continue
         if isinstance(until, (int, float)) and until > now:
             remaining = max(remaining, int(until - now))
     return remaining
 
 
+def _bump(counter_key: str, window_ttl: int) -> int | None:
+    """افزایشِ اتمیکِ شمارنده؛ ``None`` یعنی «کش در دسترس نیست، نشمردیم».
+
+    چرا این تابع لازم شد (حادثهٔ واقعی): روی هاستی که Redis ندارد، ابزارِ کش با
+    ``IGNORE_EXCEPTIONS`` خطا را می‌بلعد و ``cache.incr`` به‌جای استثنا **None**
+    برمی‌گرداند. مقایسهٔ ``None >= threshold`` یک ``TypeError`` می‌ساخت و نتیجه‌اش
+    این بود:
+
+        • رمزِ درست  → 302 → فقط ``cache.delete`` صدا می‌شد → ادمین وارد می‌شد ✅
+        • رمزِ غلط   → 200 → ``record_admin_login_failure`` → کرش → **۵۰۰** ❌
+
+    یعنی دقیقاً همان چیزی که کاربر دید: «با ایمیل/رمز اشتباه، Server Error 500».
+    حالا نبودِ کش فقط «نمی‌شماریم» را معنا می‌دهد، نه خرابیِ صفحه.
+    """
+    try:
+        value = cache.incr(counter_key)
+    except ValueError:
+        # کلید وجود ندارد (رفتارِ مستندِ django.core.cache)
+        cache.set(counter_key, 1, timeout=window_ttl)
+        return 1
+    except Exception:
+        logger.warning("admin guard: cache.incr failed, not counting", exc_info=True)
+        return None
+
+    if value is None:
+        # IGNORE_EXCEPTIONS: عملیات بلعیده شد. یک تلاشِ غیراتمیکِ خواندن/نوشتن،
+        # و اگر آن هم نشد، صرف‌نظر از شمارش.
+        try:
+            current = int(cache.get(counter_key) or 0)
+            cache.set(counter_key, current + 1, timeout=window_ttl)
+            return current + 1
+        except Exception:
+            logger.warning("admin guard: cache unavailable, not counting", exc_info=True)
+            return None
+
+    if not isinstance(value, int):  # نگهبانِ نوع: هر چیزِ غیرعددی = نشمردیم
+        return None
+    return value
+
+
 def record_admin_login_failure(request: HttpRequest) -> None:
-    """یک شکستِ لاگین ادمین را ثبت و در صورت عبور از آستانه، قفل می‌کند."""
+    """یک شکستِ لاگین ادمین را ثبت و در صورت عبور از آستانه، قفل می‌کند.
+
+    عمداً هیچ استثنایی بیرون نمی‌دهد: ثبتِ آمارِ امنیتی هرگز نباید صفحهٔ لاگین
+    را بشکند (fail-open برای UX، fail-closed برای تصمیمِ «قفل کن»).
+    """
     pair_threshold, ip_threshold, lockout = _limits()
     ip, username = _client_identity(request)
 
     for key, threshold in ((_pair_key(ip, username), pair_threshold), (_ip_key(ip), ip_threshold)):
         window_ttl = max(lockout, 60)
-        try:
-            failures = cache.incr(key)
-        except ValueError:
-            cache.set(key, 1, timeout=window_ttl)
-            failures = 1
+        failures = _bump(key, window_ttl)
+        if failures is None:
+            continue
         if failures >= threshold:
             cache.set(
                 key + _BLOCK_SUFFIX,
@@ -166,9 +212,12 @@ def reset_admin_login_counters(request: HttpRequest) -> None:
     names = {post_username} if post_username else set()
     keys = [_pair_key(ip, name) for name in names] + [_ip_key(ip)]
     for key in keys:
-        cache.delete(key)
-        # قفل‌ها هم پاک شوند تا ورود موفق، فوراً از قفل خارج کند.
-        cache.delete(key + _BLOCK_SUFFIX)
+        try:
+            cache.delete(key)
+            # قفل‌ها هم پاک شوند تا ورود موفق، فوراً از قفل خارج کند.
+            cache.delete(key + _BLOCK_SUFFIX)
+        except Exception:
+            logger.warning("admin guard: cache.delete failed after success", exc_info=True)
 
 
 class AdminLoginGuardMiddleware:
