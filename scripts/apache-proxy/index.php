@@ -69,7 +69,10 @@ const FORWARD_RESPONSE_HEADERS = [
 function proxy_fail(int $status, string $code): void
 {
     if (!headers_sent()) {
-        http_response_code($status);
+        // Kept as a safeguard for responses with an empty body (headers not sent yet).
+if (!headers_sent()) {
+    http_response_code($status);
+}
         header('Content-Type: application/json; charset=utf-8');
         header('Cache-Control: no-store');
     }
@@ -134,6 +137,7 @@ if ($body !== '') {
 
 // ---------------------------------------------------------------- upstream call
 
+$upstreamStatus = 0;   // filled by the header callback (see below)
 $ch = curl_init();
 curl_setopt_array($ch, [
     CURLOPT_URL => 'http://' . UPSTREAM_HOST . ':' . UPSTREAM_PORT . $uri,
@@ -151,9 +155,21 @@ curl_setopt_array($ch, [
         flush();
         return strlen($chunk);
     },
-    CURLOPT_HEADERFUNCTION => static function ($handle, string $line): int {
+    CURLOPT_HEADERFUNCTION => static function ($handle, string $line) use (&$upstreamStatus): int {
         $trimmed = trim($line);
-        if ($trimmed === '' || str_starts_with($trimmed, 'HTTP/')) {
+        if ($trimmed === '') {
+            return strlen($line);
+        }
+        if (str_starts_with($trimmed, 'HTTP/')) {
+            // The status line arrives BEFORE any body byte. This is the only
+            // moment the status can still be set: once the streaming write
+            // callback has echoed data, PHP has already sent the headers and
+            // http_response_code() silently does nothing.
+            $parts = explode(' ', $trimmed);
+            $upstreamStatus = (int) ($parts[1] ?? 0);
+            if ($upstreamStatus > 0) {
+                http_response_code($upstreamStatus);
+            }
             return strlen($line);
         }
         [$name] = explode(':', $trimmed, 2);
@@ -174,7 +190,7 @@ if ($body !== '') {
 }
 
 $started = curl_exec($ch);
-$status = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+$status = $upstreamStatus > 0 ? $upstreamStatus : (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
 
 if ($started === false) {
     $errno = curl_errno($ch);
@@ -188,4 +204,7 @@ if ($status === 0) {
     proxy_fail(502, 'upstream_unreachable');
 }
 
-http_response_code($status);
+// Kept as a safeguard for responses with an empty body (headers not sent yet).
+if (!headers_sent()) {
+    http_response_code($status);
+}

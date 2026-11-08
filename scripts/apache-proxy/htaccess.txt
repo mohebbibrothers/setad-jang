@@ -21,8 +21,15 @@ DirectoryIndex index.php
 
 RewriteEngine On
 
-# --- 2) static assets straight from disk ----------------------------------
+# --- 2) static assets: disk first, app second -----------------------------
+# If the file really exists under the docroot (symlink or copy), Apache/LiteSpeed
+# serves it itself: fastest path, correct 200 status, range requests, caching.
+# If it does NOT exist, fall through to index.php instead of letting the server
+# answer 404 - a 404 that still carries the app's bytes (the ErrorDocument case)
+# makes browsers refuse the CSS/JS and _next/image refuse the images.
+RewriteCond %{REQUEST_FILENAME} -f
 RewriteRule ^media/(.*)$  - [L]
+RewriteCond %{REQUEST_FILENAME} -f
 RewriteRule ^static/(.*)$ - [L]
 
 # --- 3) cgi-bin is unused -------------------------------------------------

@@ -170,8 +170,12 @@ def session_census() -> dict[str, Any]:
     if total and revoked / total > 0.9 and total > 20:
         warn(f"{revoked}/{total} sessions revoked - something is revoking aggressively")
     if expired_active:
-        bad(
-            f"{expired_active} session(s) are NOT revoked but already past expires_at (auth will 401)"
+        # JWT expiry is enforced by the token itself, so these rows cannot log
+        # anybody in or out - they are stale bookkeeping, i.e. evidence that the
+        # purge task / beat is not running on this host.
+        warn(
+            f"{expired_active} session row(s) are past expires_at but not revoked - "
+            "harmless for auth, but the purge task (celery beat) is not running"
         )
     if future_seen or future_created:
         bad(
@@ -181,24 +185,23 @@ def session_census() -> dict[str, Any]:
     elif total:
         ok("no timestamps in the future (server clock looks sane)")
 
-    # several sessions created seconds apart = the client retried the login
-    # (double submit / double-mounted effect) - a classic cause of "logged in,
-    # instantly logged out" because the older token is rotated away.
-    from django.db.models import Count
-    from django.db.models.functions import TruncMinute
-
-    bursts = (
-        AuthSession.objects.annotate(minute=TruncMinute("created_at"))
-        .values("user_id", "minute")
-        .annotate(n=Count("id"))
-        .filter(n__gte=3)
-        .order_by("-minute")[:5]
-    )
-    for burst in bursts:
-        warn(
-            f"user {burst['user_id']} created {burst['n']} sessions in the minute "
-            f"{burst['minute']} - client is retrying the login"
-        )
+    # Several sessions created within the same minute = the client retried the
+    # login (double submit / double-mounted effect). That is a classic cause of
+    # "logged in, instantly logged out", because the older refresh token is
+    # rotated away. NOTE: TruncMinute()/Trunc() need MySQL's timezone tables,
+    # which shared hosts usually do not load ("Database returned an invalid
+    # datetime value") - so the bucketing happens here in Python.
+    buckets: dict[tuple[int, str], int] = {}
+    for created, user_id in AuthSession.objects.filter(
+        created_at__gte=now - timedelta(days=7)
+    ).values_list("created_at", "user_id"):
+        key = (user_id, created.strftime("%Y-%m-%d %H:%M"))
+        buckets[key] = buckets.get(key, 0) + 1
+    for (user_id, minute), count in sorted(buckets.items(), key=lambda kv: kv[0][1], reverse=True):
+        if count >= 3:
+            warn(
+                f"user {user_id} created {count} sessions in the minute {minute} - client retries the login"
+            )
 
     rows = []
     for s in AuthSession.objects.order_by("-created_at")[:10]:
