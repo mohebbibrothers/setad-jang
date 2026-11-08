@@ -1037,6 +1037,14 @@ if CACHE_BACKEND == "redis":
                 "CONNECTION_POOL_KWARGS": {
                     "max_connections": 50,
                     "retry_on_timeout": True,
+                    # اگر Redis در دسترس نباشد، هر عملیاتِ کش نباید ثانیه‌ها
+                    # منتظر بماند: با IGNORE_EXCEPTIONS خطا بلعیده می‌شود ولی
+                    # هزینهٔ انتظار می‌ماند. روی همین استقرار اندازه‌گیری شد که
+                    # یک cache miss تا ~۱ ثانیه طول می‌کشید و لاگِ
+                    # «Slow request detected duration_ms=1012» می‌ساخت.
+                    # ۰.۲ ثانیه یعنی شکستِ سریع: همان درستی، بدونِ تأخیر.
+                    "socket_connect_timeout": 0.2,
+                    "socket_timeout": 0.2,
                 },
                 "IGNORE_EXCEPTIONS": True,
             },
@@ -1046,7 +1054,12 @@ if CACHE_BACKEND == "redis":
     }
 
     DJANGO_REDIS_IGNORE_EXCEPTIONS = True
-    DJANGO_REDIS_LOG_IGNORED_EXCEPTIONS = True
+    # هر خطای بلعیده‌شده یک tracebackِ کامل در لاگ می‌نویسد. روی استقرارِ فعلی که
+    # Redis ندارد این یعنی چند صد خط لاگ برای هر درخواست. پیش‌فرض روشن است (دیدنِ
+    # خطا بهتر از ندیدنش)، ولی اپراتور می‌تواند خاموشش کند تا لاگ قابل خواندن بماند.
+    DJANGO_REDIS_LOG_IGNORED_EXCEPTIONS = config(
+        "DJANGO_REDIS_LOG_IGNORED_EXCEPTIONS", default=True, cast=bool
+    )
 
 else:
     CACHES = {
