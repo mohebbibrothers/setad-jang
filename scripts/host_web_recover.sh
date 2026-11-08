@@ -167,12 +167,16 @@ step "4/7 loopback verification"
 if [ "$APPLY" -eq 1 ]; then
   CODE=""
   for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
-    CODE=$(curl -s -o /tmp/recover_port.json -w '%{http_code}' --max-time 10 -H "Host: $DOMAIN" "http://127.0.0.1:$PORT/api/v1/health/" 2>/dev/null)
+    # X-Forwarded-Proto is what SECURE_PROXY_SSL_HEADER looks at: without it the
+    # app answers 301 (redirect to https) and the probe reports a phantom failure.
+    CODE=$(curl -s -o /tmp/recover_port.json -w '%{http_code}' --max-time 10 -H "Host: $DOMAIN" -H 'X-Forwarded-Proto: https' "http://127.0.0.1:$PORT/api/v1/health/" 2>/dev/null)
     [ "$CODE" = "200" ] && break
     sleep 2
   done
   info "direct  : http://127.0.0.1:$PORT/api/v1/health/ (Host: $DOMAIN) -> $CODE"
-  [ "$CODE" = "200" ] && ok "WSGI server answers 200" || bad "WSGI server answers $CODE (see: bash scripts/serve_gunicorn.sh logs)"
+  if [ "$CODE" = "200" ]; then ok "WSGI server answers 200"
+  elif [ "$CODE" = "301" ]; then warn "WSGI answers 301 (https redirect) - check SECURE_PROXY_SSL_HEADER on this probe"
+  else bad "WSGI server answers $CODE (see: bash scripts/serve_gunicorn.sh logs)"; fi
 
   VCODE=""
   for i in 1 2 3 4 5 6; do

@@ -159,11 +159,20 @@ if [ "$APPLY" -eq 1 ]; then
     [ -n "${rel#static/}" ] || continue
     [ -n "${rel#media/}" ] || continue
     ENCODED=$(enc "$rel")
-    CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 25 -H "Host: $DOMAIN" "http://127.0.0.1/$ENCODED" 2>/dev/null)
+    # The loopback check is informational only: on this host a request to
+    # 127.0.0.1 does not always land on the api.besat.me vhost (SNI/bind), so the
+    # PUBLIC url below is the verdict that counts.
+    CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 25 -H "Host: $DOMAIN" -H 'X-Forwarded-Proto: https' "http://127.0.0.1/$ENCODED" 2>/dev/null)
     CT=$(curl -s -o /dev/null -w '%{content_type}' --max-time 25 -H "Host: $DOMAIN" "http://127.0.0.1/$ENCODED" 2>/dev/null)
     PUB=$(curl -s -o /dev/null -w '%{http_code}' --max-time 25 "https://$DOMAIN/$ENCODED" 2>/dev/null)
     printf '  %-8s %-55s local=%s (%s) public=%s\n' "$label" "${rel:0:55}" "$CODE" "$CT" "$PUB"
-    if [ "$CODE" = "200" ]; then ok "$label serves 200 locally"; else bad "$label still $CODE locally"; fi
+    if [ "$PUB" = "200" ]; then
+      ok "$label serves 200 publicly${CODE:+ (local probe: $CODE - see the SNI note)}"
+    elif [ "$CODE" = "200" ]; then
+      warn "$label is 200 locally but $PUB publicly - check the Vercel cache/CDN"
+    else
+      bad "$label is $CODE locally and $PUB publicly"
+    fi
   done
 else
   plan "curl one static + one media file through the vhost, expect 200"

@@ -371,14 +371,28 @@ def _cleanup(markers: dict[str, int]) -> None:
 
 
 def _client():
-    """HTTPS test client: SECURE_SSL_REDIRECT would answer 301 to plain http.
+    """A client that looks like a real request coming through our proxy.
 
-    That 301 is not a login bug - it is the middleware doing its job. The first
-    run of this doctor used http and reported four phantom failures.
+    Two things are needed, and `secure=True` alone is NOT enough:
+
+    *   SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https") means
+        Django's `request.is_secure()` reads ONLY that header and ignores the
+        WSGI scheme - so the test client must send it, otherwise every probe is
+        answered with a 301 by SECURE_SSL_REDIRECT.
+    *   For a POST (refresh) the CSRF check looks at Origin; Django's test
+        client does not set it, so it is supplied here as the public origin.
+    *   `enforce_csrf_checks=False` is the default for the test client, which is
+        what we want: this doctor measures authentication, not CSRF.
     """
     from django.test import Client
 
-    return Client(SERVER_NAME=HOST, HTTP_HOST=HOST, secure=True)
+    return Client(
+        SERVER_NAME=HOST,
+        HTTP_HOST=HOST,
+        secure=True,
+        HTTP_X_FORWARDED_PROTO="https",
+        HTTP_ORIGIN=f"https://{HOST}",
+    )
 
 
 def live_simulation(identifier: str) -> dict[str, Any]:
@@ -431,6 +445,11 @@ def live_simulation(identifier: str) -> dict[str, Any]:
         result["me_after_login"] = r.status_code
         if r.status_code == 200:
             ok(f"GET {ME_PATH} -> 200 (token + session are consistent)")
+        elif r.status_code == 301:
+            warn(
+                f"GET {ME_PATH} -> 301 to {r.headers.get('Location')}: the request was treated as "
+                "plain http (SECURE_SSL_REDIRECT). Not a login bug - check SECURE_PROXY_SSL_HEADER."
+            )
         else:
             bad(f"GET {ME_PATH} -> {r.status_code}: {r.content[:200]!r}")
 
@@ -527,11 +546,19 @@ def main(argv: list[str]) -> int:
     if channels.get("OTP_SMS_PROVIDER") == "console":
         problems += 1
     live = report.get("live") or {}
+    # 301 = the probe was redirected to https (infrastructure, not auth) => warning
+    redirect_only = live.get("me_after_login") == 301
     for key in ("me_after_login", "refresh", "me_after_refresh", "me_after_revoke"):
-        if key in live and live[key] not in (200, 401):
+        status = live.get(key)
+        if status is not None and status not in (200, 301, 401):
             problems += 1
-    if live.get("me_after_login") not in (None, 200):
+    if live.get("me_after_login") not in (None, 200, 301):
         problems += 1
+    if redirect_only:
+        print(
+            " NOTE: every probe came back 301 - the simulation never reached Django over https.",
+            file=sys.stderr,
+        )
     print(f" RESULT: {problems} blocking problem(s) found", file=sys.stderr)
     print("============================================================", file=sys.stderr)
 

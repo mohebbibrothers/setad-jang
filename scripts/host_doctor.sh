@@ -182,7 +182,7 @@ fi
 
 # ---------------------------------------------------------------- 8 local http
 step "8/11 local HTTP through the vhost"
-LOCAL=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 -H "Host: $DOMAIN" "http://127.0.0.1/api/v1/health/" 2>/dev/null)
+LOCAL=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 -H "Host: $DOMAIN" -H 'X-Forwarded-Proto: https' "http://127.0.0.1/api/v1/health/" 2>/dev/null)
 info "GET /api/v1/health/ (loopback, Host: $DOMAIN) -> $LOCAL"
 if [ "$LOCAL" = "200" ]; then ok "local health 200"
 elif port_open; then warn "loopback answers $LOCAL (vhost/SNI quirk) - the public check below is authoritative"
