@@ -58,6 +58,9 @@ DEBUG=False
 | بکاپ دستی (db + media) | `bash scripts/backup_daily.sh` |
 | دامپِ دیتابیس با اتصالِ خودِ جنگو | `<venv>/python scripts/db_dump.py --out <file>` |
 | بازبینیِ سالم‌بودنِ یک دامپ | `<venv>/python scripts/db_dump.py --verify --out <file>` |
+| سلامتِ مدیا (هر فایلِ ارجاع‌شده موجود است؟) | `<venv>/python scripts/media_audit.py` |
+| فایل‌های یتیمِ مدیا (بدونِ ردیف) | `<venv>/python scripts/media_audit.py --orphans` |
+| بازگردانیِ فایل‌های گم‌شده از بکاپِ مدیا | `<venv>/python scripts/media_audit.py --restore-from ~/backups/media-<date>.tar.gz --apply` |
 | اعتبارنامهٔ دیتابیس (ماسک‌شده) + تست اتصال | `bash scripts/backup_daily.sh --whoami` |
 | فهرستِ بکاپ‌ها | `bash scripts/backup_daily.sh --verify` |
 | تستِ سلامتِ عمومی | `bash scripts/smoke_test.sh https://besat.me` |
@@ -122,3 +125,14 @@ DEBUG=False
     با `--no-defaults` صدا زده می‌شود تا `.my.cnf` نتواند پسوردِ کهنه تزریق کند.
     صحت با round-trip واقعی سنجیده شد: دامپ → ری‌استور در دیتابیسِ دوم →
     `CHECKSUM TABLE` هر جدول یکسان (فارسی، ایموجی، BLOB، JSON، NULL، کوتیشن، بک‌اسلش).
+11. **مهاجرت می‌تواند فایل‌های مدیا را جا بگذارد و هیچ‌کس نفهمد.** بعد از انتقال، پنج فایل
+    (لوگوی دو حامی، کاور و عکسِ استادِ یک دوره، و عکسِ یک پروندهٔ r4j) روی دیسک نبودند
+    ولی ردیف‌هایشان در دیتابیس بود — یعنی فقط یک `<img>` شکسته. `scripts/media_audit.py`
+    همهٔ `FileField`/`ImageField`ها را از متایِ جنگو پیدا می‌کند، وجودِ فایل را با همان
+    storage چک می‌کند، و می‌تواند فایل‌های گم‌شده را از یک آرشیوِ `media-*.tar.gz`
+    برگرداند (هرگز بازنویسی نمی‌کند، فقط مسیرهایی که ردیف دارند). دکتر هم این را در
+    بخشِ ۶ هر بار می‌سنجد.
+12. **`~/.my.cnf`ِ هاستِ قبلی دامِ خاموش است.** بعد از تغییرِ نامِ کاربر، این فایلِ کوچک
+    هنوز کاربر/پسوردِ قدیمی را دارد و هر ابزارِ بیرونی (`mariadb`, `mariadb-dump`) بی‌صدا
+    از آن استفاده می‌کند. `host_cleanup.sh --apply` آن را کنار می‌گذارد (حذف نمی‌کند) و
+    دکتر وجودش را گزارش می‌دهد.

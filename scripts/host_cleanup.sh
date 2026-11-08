@@ -108,6 +108,24 @@ find "$HOME_DIR" -maxdepth 3 -type f -name ".env.bak.*" 2>/dev/null | while read
   sweep "$f" "$(basename "$f")"
 done
 
+step "3b/8 legacy mysql client option file (old-host credentials)"
+# ~/.my.cnf survived the user rename and still carries the OLD user/password.
+# It is never deleted (it may be needed) - it is moved aside, because any
+# external client (mariadb, mariadb-dump, phpMyAdmin CLI) would silently use it.
+if [ -f "$HOME_DIR/.my.cnf" ]; then
+  if grep -qiE 'baahamnc|olduser' "$HOME_DIR/.my.cnf" 2>/dev/null; then
+    if [ "$APPLY" -eq 1 ]; then
+      mv "$HOME_DIR/.my.cnf" "$HOME_DIR/.my.cnf.legacy-$(date +%Y%m%d)" && ok "~/.my.cnf moved aside (old-host credentials neutralised)"
+    else
+      printf '  [dry] %-52s %s\n' "~/.my.cnf -> ~/.my.cnf.legacy-<date>" "old-host creds"
+    fi
+  else
+    skip "~/.my.cnf has no old-host references"
+  fi
+else
+  skip "no ~/.my.cnf"
+fi
+
 step "4/8 duplicate/empty media artefacts"
 # media must never be deleted - only zero-byte files and temp uploads
 ZERO_KB=$(find "$APP_DIR/media" -type f -size 0 2>/dev/null | wc -l | tr -d ' ')

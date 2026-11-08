@@ -128,6 +128,24 @@ M_KB=$(kb_of "$APP_DIR/media")
 if [ "${M_FILES:-0}" -gt 0 ]; then ok "media: $M_FILES files ($(human "$M_KB"))"; else bad "media empty or missing"; fi
 if [ -d "$APP_DIR/staticfiles" ]; then ok "staticfiles present"; else warn "staticfiles missing - run collectstatic"; fi
 
+# media integrity: does every file the database points at actually exist?
+if [ -f "$APP_DIR/scripts/media_audit.py" ] && [ -x "$VENV_PY" ]; then
+  MA_OUT=$(cd "$APP_DIR" && DJANGO_SETTINGS_MODULE="$SETTINGS" "$VENV_PY" scripts/media_audit.py 2>&1 | grep -E '^  TOTAL:')
+  if [ -n "$MA_OUT" ]; then
+    REFS=$(printf '%s' "$MA_OUT" | awk '{print $2}')
+    MISS=$(printf '%s' "$MA_OUT" | awk '{print $5}')
+    if [ "${MISS:-0}" -gt 0 ]; then
+      bad "media integrity: $MISS of $REFS referenced file(s) are MISSING on disk"
+      info "list  : <venv>/python scripts/media_audit.py"
+      info "repair: <venv>/python scripts/media_audit.py --restore-from ~/backups/media-<date>.tar.gz --apply"
+    else
+      ok "media integrity: all $REFS referenced file(s) exist"
+    fi
+  else
+    warn "media audit produced no summary (run scripts/media_audit.py by hand)"
+  fi
+fi
+
 # ---------------------------------------------------------------- 7 serving
 # Production on this host is served by:  vhost -> index.php -> 127.0.0.1:PORT
 # (Passenger exists on the server but is not wired into this vhost). Accept
@@ -225,6 +243,15 @@ for f in "$HOME/public_html/__probe.txt" "$HOME/public_html/main/__probe.txt" \
          "$HOME/public_html/api.besat.me/__probe.txt" "$HOME/public_html/besat.me/__probe.txt"; do
   [ -e "$f" ] && { warn "still present: ${f/#$HOME/~}"; LEFTOVER=$((LEFTOVER+1)); }
 done
+if [ -f "$HOME/.my.cnf" ]; then
+  if grep -qiE 'baahamnc|olduser' "$HOME/.my.cnf" 2>/dev/null; then
+    bad "~/.my.cnf still holds OLD-host credentials - CLI tools will use them (run host_cleanup.sh --apply)"
+    LEFTOVER=$((LEFTOVER+1))
+  else
+    warn "~/.my.cnf present: mysql/mariadb CLI clients may use credentials that differ from the app"
+    LEFTOVER=$((LEFTOVER+1))
+  fi
+fi
 BAKS=$(find "$HOME" -maxdepth 3 -type f -name ".htaccess.bak.*" 2>/dev/null | wc -l | tr -d ' ')
 [ "${BAKS:-0}" -gt 0 ] && { warn "$BAKS old .htaccess.bak.* file(s) - run host_cleanup.sh --apply"; LEFTOVER=$((LEFTOVER+1)); }
 [ "$LEFTOVER" -eq 0 ] && ok "none - host is tidy"
