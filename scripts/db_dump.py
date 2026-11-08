@@ -99,8 +99,8 @@ def sql_literal(value, engine: str) -> str:
     if isinstance(value, (bytes, bytearray, memoryview)):
         blob = bytes(value)
         if engine == "sqlite":
-            return "X'%s'" % blob.hex()
-        return "0x%s" % blob.hex() if blob else "''"
+            return f"X'{blob.hex()}'"
+        return f"0x{blob.hex()}" if blob else "''"
     if isinstance(value, (dict, list, tuple)):
         import json
 
@@ -129,7 +129,9 @@ def quote_table(name: str, engine: str) -> str:
 # ------------------------------------------------------------------------- dump
 def table_names(cursor, engine: str) -> list[str]:
     if engine == "sqlite":
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name")
+        cursor.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name"
+        )
     else:
         cursor.execute("SHOW FULL TABLES")
     return [row[0] for row in cursor.fetchall() if row[0]]
@@ -196,64 +198,70 @@ def dump(settings: str, out_path: Path, gzip_output: bool, tables: list[str] | N
     failures = 0
     counts: dict[str, int] = {}
 
-    raw = open(out_path, "wb")
-    binary = gzip.GzipFile(filename="", mode="wb", fileobj=raw, compresslevel=9) if gzip_output else raw
-    text = io.TextIOWrapper(binary, encoding="utf-8", newline="\n", write_through=True)
+    with open(out_path, "wb") as raw:
+        binary = (
+            gzip.GzipFile(filename="", mode="wb", fileobj=raw, compresslevel=9)
+            if gzip_output
+            else raw
+        )
+        text = io.TextIOWrapper(binary, encoding="utf-8", newline="\n", write_through=True)
+        try:
+            text.write("-- besat logical dump v1 (scripts/db_dump.py)\n")
+            text.write(f"-- engine : {engine}\n")
+            text.write(f"-- db     : {name}\n")
+            text.write(f"-- user   : {user} @ {host}\n")
+            text.write(f"-- started: {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
 
-    started = time.strftime("%Y-%m-%d %H:%M:%S")
-    text.write(f"-- besat logical dump v1 (scripts/db_dump.py)\n")
-    text.write(f"-- engine : {engine}\n")
-    text.write(f"-- db     : {name}\n")
-    text.write(f"-- user   : {user} @ {host}\n")
-    text.write(f"-- started: {started}\n")
+            with connection.cursor() as cursor:
+                if engine != "sqlite":
+                    # one consistent snapshot; never lock the live site
+                    try:
+                        cursor.execute("SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ")
+                        cursor.execute("START TRANSACTION WITH CONSISTENT SNAPSHOT")
+                        text.write("-- snapshot: REPEATABLE READ / consistent\n")
+                    except Exception as exc:
+                        text.write(f"-- snapshot: unavailable ({redact(str(exc))})\n")
+                    text.write("SET NAMES utf8mb4;\nSET FOREIGN_KEY_CHECKS=0;\n\n")
+                else:
+                    text.write("PRAGMA foreign_keys=OFF;\n\n")
 
-    with connection.cursor() as cursor:
-        if engine != "sqlite":
-            # one consistent snapshot, no locking of the live site
-            try:
-                cursor.execute("SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ")
-                cursor.execute("START TRANSACTION WITH CONSISTENT SNAPSHOT")
-                text.write("-- snapshot: REPEATABLE READ / consistent\n")
-            except Exception as exc:  # noqa: BLE001
-                text.write(f"-- snapshot: unavailable ({exc})\n")
-            text.write("SET NAMES utf8mb4;\nSET FOREIGN_KEY_CHECKS=0;\n\n")
-        else:
-            text.write("PRAGMA foreign_keys=OFF;\n\n")
+                names = table_names(cursor, engine)
+                if tables:
+                    wanted = {t.lower() for t in tables}
+                    names = [n for n in names if n.lower() in wanted]
+                text.write(f"-- tables: {len(names)}\n\n")
 
-        names = table_names(cursor, engine)
-        if tables:
-            wanted = {t.lower() for t in tables}
-            names = [n for n in names if n.lower() in wanted]
-        text.write(f"-- tables: {len(names)}\n\n")
+                for table in names:
+                    try:
+                        ddl = create_statement(cursor, table, engine)
+                        text.write(f"\n-- table {table}\n")
+                        text.write(f"DROP TABLE IF EXISTS {quote_table(table, engine)};\n")
+                        text.write(ddl + "\n")
+                        rows = write_rows(text, cursor, table, engine)
+                        counts[table] = rows
+                        print(f"  [ok]   {table:<40} {rows} row(s)", file=sys.stderr)
+                    except Exception as exc:
+                        failures += 1
+                        print(f"  [FAIL] {table}: {redact(str(exc))}", file=sys.stderr)
 
-        for table in names:
-            try:
-                ddl = create_statement(cursor, table, engine)
-                text.write(f"\n-- table {table}\n")
-                text.write(f"DROP TABLE IF EXISTS {quote_table(table, engine)};\n")
-                text.write(ddl + "\n")
-                rows = write_rows(text, cursor, table, engine)
-                counts[table] = rows
-                print(f"  [ok]   {table:<40} {rows} row(s)", file=sys.stderr)
-            except Exception as exc:  # noqa: BLE001
-                failures += 1
-                print(f"  [FAIL] {table}: {redact(str(exc))}", file=sys.stderr)
-
-        if engine != "sqlite":
-            text.write("\nSET FOREIGN_KEY_CHECKS=1;\n")
-        else:
-            text.write("\nPRAGMA foreign_keys=ON;\n")
-        text.write(f"-- tables: {len(counts)} | rows: {sum(counts.values())}\n")
-        text.write(END_MARKER + "\n")
-
-    text.flush()
-    text.detach()  # do not close the gzip stream through the wrapper
-    if gzip_output:
-        binary.close()  # writes the gzip trailer (CRC)
-    raw.close()
+                if engine != "sqlite":
+                    text.write("\nSET FOREIGN_KEY_CHECKS=1;\n")
+                else:
+                    text.write("\nPRAGMA foreign_keys=ON;\n")
+                text.write(f"-- tables: {len(counts)} | rows: {sum(counts.values())}\n")
+                text.write(END_MARKER + "\n")
+        finally:
+            text.flush()
+            text.detach()  # do not close the underlying stream through the wrapper
+            if gzip_output:
+                binary.close()  # writes the gzip trailer (CRC)
 
     size = out_path.stat().st_size
-    print(f"  [ok] wrote {out_path} ({size/1048576:.2f} MB, {len(counts)} tables, {sum(counts.values())} rows)", file=sys.stderr)
+    print(
+        f"  [ok] wrote {out_path} "
+        f"({size / 1048576:.2f} MB, {len(counts)} tables, {sum(counts.values())} rows)",
+        file=sys.stderr,
+    )
     if failures:
         print(f"  [!!] {failures} table(s) failed - the dump is INCOMPLETE", file=sys.stderr)
         return 1
@@ -277,19 +285,23 @@ def verify(path: Path) -> int:
                 elif line.startswith("INSERT INTO"):
                     inserts += 1
                 elif line.startswith("-- tables:") and declared_tables is None:
-                    try:
-                        declared_tables = int(line.split(":")[1].split("|")[0])
-                    except (IndexError, ValueError):
-                        declared_tables = None
+                    tail = line.split(":", 1)[-1].split("|")[0].strip()
+                    declared_tables = int(tail) if tail.isdigit() else None
                 elif line.startswith(END_MARKER):
                     end = True
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         print(f"  [!!] cannot read {path}: {exc}", file=sys.stderr)
         return 1
 
-    print(f"  [..] verify: {path.name} -> {creates} CREATE TABLE, {inserts} INSERT statement(s)", file=sys.stderr)
+    print(
+        f"  [..] verify: {path.name} -> {creates} CREATE TABLE, {inserts} INSERT statement(s)",
+        file=sys.stderr,
+    )
     if declared_tables is None or creates != declared_tables:
-        print(f"  [!!] table count mismatch (header says {declared_tables}, file has {creates})", file=sys.stderr)
+        print(
+            f"  [!!] table count mismatch (header says {declared_tables}, file has {creates})",
+            file=sys.stderr,
+        )
         problems += 1
     if not end:
         print("  [!!] end marker missing - the file is truncated", file=sys.stderr)
@@ -308,7 +320,9 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--out", help="output file (default: stdout)")
     parser.add_argument("--no-gzip", action="store_true", help="write plain SQL")
     parser.add_argument("--tables", nargs="*", help="only these tables")
-    parser.add_argument("--settings", default=os.environ.get("DJANGO_SETTINGS_MODULE", DEFAULT_SETTINGS))
+    parser.add_argument(
+        "--settings", default=os.environ.get("DJANGO_SETTINGS_MODULE", DEFAULT_SETTINGS)
+    )
     parser.add_argument("--verify", action="store_true", help="only verify an existing dump")
     args = parser.parse_args(argv)
 
