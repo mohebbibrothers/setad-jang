@@ -40,7 +40,7 @@ done
 # If Django instead says "no credentials were provided", the Authorization
 # header is being dropped by the proxy - and then every logged-in user is
 # silently anonymous (the "welcome then instantly logged out" incident).
-BODY=$(curl -s --max-time 25 -H "Authorization: Bearer smoke.invalid.token" \
+BODY=$(curl -sL --max-time 25 -H "Authorization: Bearer smoke.invalid.token" \
   "$BASE/api/v1/auth/me/" 2>/dev/null)
 if printf '%s' "$BODY" | grep -qiE 'token_not_valid|نامعتبر|not valid|invalid'; then
   ok "Authorization passthrough" "rejected as token"

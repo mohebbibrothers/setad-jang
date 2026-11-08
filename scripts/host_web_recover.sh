@@ -233,6 +233,22 @@ if [ "$APPLY" -eq 1 ]; then
   else
     warn "credential test inconclusive: $(printf '%s' "$BODY" | head -c 120)"
   fi
+
+  # ─── POST body test ─────────────────────────────────────────────────────
+  # Any JSON POST must reach Django's validator. If the proxy emits the
+  # Content-Type header twice, LiteSpeed rejects the request before PHP with
+  # `400 Invalid HTTP Header: 'CONTENT-TYPE'` - which used to look like a
+  # mysterious "400 on login" in the browser console.
+  POST_BODY=$(curl -sL --max-time 25 -X POST -H 'Content-Type: application/json' \
+    -H 'Accept: application/json' -d '{}' "https://$DOMAIN/api/v1/auth/login/password/" 2>/dev/null)
+  if printf '%s' "$POST_BODY" | grep -qi 'Invalid HTTP Header'; then
+    bad "duplicate/malformed header on POST (proxy emits Content-Type twice?)"
+    info "$(printf '%s' "$POST_BODY" | tr -d '\n' | head -c 120)"
+  elif printf '%s' "$POST_BODY" | grep -qiE 'identifier|الزام|required'; then
+    ok "POST body + Content-Type reach Django (validator answered)"
+  else
+    warn "POST test inconclusive: $(printf '%s' "$POST_BODY" | head -c 120)"
+  fi
 else
   plan "curl https://$DOMAIN/{health,stats,provinces,admin/login}"
 fi

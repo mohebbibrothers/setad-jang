@@ -32,7 +32,12 @@ const FORWARD_REQUEST_HEADERS = [
     'accept-encoding',
     'accept-language',
     'authorization',
-    'content-type',
+    // NOTE: `content-type` is deliberately NOT here. It is handled by its own
+    // block below, because a header that is emitted twice makes LiteSpeed
+    // answer the whole request with
+    //     400 Bad Request — Invalid HTTP Header: 'CONTENT-TYPE'
+    // and that is exactly what broke every POST (login, listing upload) once
+    // getallheaders() was added as a header source.
     'cookie',
     'if-none-match',
     'if-modified-since',
@@ -163,19 +168,35 @@ function incoming_header(string $name): ?string
     return null;
 }
 
-$headers = [];
+/**
+ * Build the upstream headers through a MAP keyed by the lower-cased name.
+ *
+ * A plain list let the same header be appended twice (e.g. getallheaders()
+ * and the CONTENT_TYPE fallback both supplying content-type). Apache/LiteSpeed
+ * reject a duplicated Content-Type with
+ *     `400 Bad Request — Invalid HTTP Header: 'CONTENT-TYPE'`
+ * before PHP ever sees the body, so the fix is structural: one key, one value.
+ */
+$forward = [];
 foreach (FORWARD_REQUEST_HEADERS as $name) {
     $value = incoming_header($name);
     if ($value !== null) {
-        $headers[] = $name . ': ' . $value;
+        $forward[strtolower($name)] = $value;
     }
 }
-// Content-Type arrives as CONTENT_TYPE, not HTTP_CONTENT_TYPE.
-if (isset($_SERVER['CONTENT_TYPE']) && !isset($_SERVER['HTTP_CONTENT_TYPE'])) {
-    $headers[] = 'content-type: ' . $_SERVER['CONTENT_TYPE'];
+$contentType = incoming_header('content-type');
+if ($contentType === null && isset($_SERVER['CONTENT_TYPE'])) {
+    $contentType = (string) $_SERVER['CONTENT_TYPE'];
+}
+if ($contentType !== null && $contentType !== '') {
+    $forward['content-type'] = $contentType;
 }
 // Never let cURL send `Expect: 100-continue` for big uploads: some CGI stacks
 // answer it with a 417 and the body is lost (a very confusing CSRF failure).
+$headers = [];
+foreach ($forward as $name => $value) {
+    $headers[] = $name . ': ' . $value;
+}
 $headers[] = 'Expect:';
 
 $clientIp = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? '';
