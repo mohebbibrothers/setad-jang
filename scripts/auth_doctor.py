@@ -268,15 +268,24 @@ def cache_census() -> dict[str, Any]:
 
     try:
         started = time.monotonic()
-        cache.set("besat:auth_doctor", "1", timeout=30)
+        wrote = cache.set("besat:auth_doctor", "1", timeout=30)
         value = cache.get("besat:auth_doctor")
         elapsed = (time.monotonic() - started) * 1000
         cache.delete("besat:auth_doctor")
+        data["roundtrip_ms"] = round(elapsed, 1)
         if value == "1":
             ok(f"cache set/get works ({elapsed:.1f} ms)")
-            data["roundtrip_ms"] = round(elapsed, 1)
             if elapsed > 250:
                 warn("cache is slow (>250 ms): every authenticated request pays this")
+        elif wrote is None:
+            # django_redis is configured with IGNORE_EXCEPTIONS: a dead server
+            # becomes a silent miss instead of a 500. Auth still works through
+            # the database fallback, but nothing is actually cached.
+            warn(
+                "cache is DEGRADED: writes are swallowed (IGNORE_EXCEPTIONS) so every "
+                "lookup falls through to the database, and throttling stops counting"
+            )
+            data["degraded"] = True
         else:
             bad("cache set/get returned a different value (misconfigured / shared prefix)")
     except Exception as exc:
@@ -362,9 +371,14 @@ def _cleanup(markers: dict[str, int]) -> None:
 
 
 def _client():
+    """HTTPS test client: SECURE_SSL_REDIRECT would answer 301 to plain http.
+
+    That 301 is not a login bug - it is the middleware doing its job. The first
+    run of this doctor used http and reported four phantom failures.
+    """
     from django.test import Client
 
-    return Client(SERVER_NAME=HOST, HTTP_HOST=HOST)
+    return Client(SERVER_NAME=HOST, HTTP_HOST=HOST, secure=True)
 
 
 def live_simulation(identifier: str) -> dict[str, Any]:

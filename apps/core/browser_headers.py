@@ -117,6 +117,27 @@ def _profile_for(request: HttpRequest) -> str | None:
     return None
 
 
+#: کدهایی که مرورگر/CDN اجازهٔ کشِ طولانی‌مدتشان را ندارد.
+_ERROR_STATUS_MIN: Final[int] = 400
+
+
+def _neutralise_error_caching(response: HttpResponseBase) -> None:
+    """پاسخِ خطا هرگز نباید با Cache-Controlِ بلند کش شود.
+
+    چرا (حادثهٔ واقعیِ همین استقرار): روی این هاست یک ۴۰۴ همراه با
+    ``Cache-Control: public, max-age=604800`` برگشت و لبهٔ CDN آن را یک هفته
+    نگه داشت؛ بعد از رفعِ ریشه، همان URL همچنان «عکسِ شکسته/استایلِ نبود»
+    تحویل می‌داد چون کشِ لبه پاسخِ خطا را سرو می‌کرد. قاعدهٔ درست: موفقیت
+    کش می‌شود، خطا هرگز (``no-store``) — و این تصمیم در یک نقطه گرفته
+    می‌شود نه در هر view.
+    """
+    if response.status_code < _ERROR_STATUS_MIN:
+        return
+    response["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response["Pragma"] = "no-cache"
+    response["Expires"] = "0"
+
+
 class BrowserSecurityHeadersMiddleware:
     """تزریقِ Permissions-Policy (جهانی) + CSP (admin/docs) طبقِ پروفایل‌ها.
 
@@ -135,6 +156,7 @@ class BrowserSecurityHeadersMiddleware:
         page-specific)، همان حرفِ اول را می‌زند.
         """
         response = self._get_response(request)
+        _neutralise_error_caching(response)
         if not getattr(settings, "SECURE_BROWSER_HEADERS_ENABLED", True):
             return response
         response.setdefault("Permissions-Policy", _PERMISSIONS_POLICY)

@@ -59,6 +59,8 @@ DEBUG=False
 | دامپِ دیتابیس با اتصالِ خودِ جنگو | `<venv>/python scripts/db_dump.py --out <file>` |
 | بازبینیِ سالم‌بودنِ یک دامپ | `<venv>/python scripts/db_dump.py --verify --out <file>` |
 | پروبِ مدیا/استاتیک در هر چهار لایه | `bash scripts/media_probe.sh` |
+| سرو شدنِ assets (سیم‌لینک + تأییدِ ۲۰۰) | `bash scripts/fix_assets.sh` سپس `--apply` |
+| کش (Redis یا locmem) — راه‌اندازی و تأیید | `bash scripts/cache_setup.sh` سپس `--apply` |
 | عیب‌یابیِ «لاگین می‌کنم و بیرون می‌اندازد» | `<venv>/python scripts/auth_doctor.py --identifier <email>` |
 | وضعیتِ درگاهِ پیامک | `DJANGO_SETTINGS_MODULE=config.settings.production <venv>/python manage.py sms_doctor` |
 | راه‌اندازیِ پیامک + ارسالِ آزمایشی | `bash scripts/sms_setup.sh --check` سپس `--apply --key '...' --login '...'` و `--test --to 09...` |
@@ -148,3 +150,15 @@ DEBUG=False
     `OTP_SMS_PROVIDER` روی `console` (بک‌اندِ توسعه) و `OTP_PROVIDER` روی `email` ماند؛
     یعنی هیچ پیامکی ارسال نمی‌شد و کاربرِ فقط-موبایل حتی کد را از کانالِ ایمیل هم نمی‌گرفت.
     `manage.py sms_doctor` این را در سه خط می‌گوید و `scripts/sms_setup.sh` آن را می‌بندد.
+15. **assets باید در docroot حاضر باشند.** `.htaccess` می‌گوید `media`/`static` را «از دیسک» سرو
+    کن؛ اگر آن‌ها در docroot نباشند وب‌سرور ۴۰۴ می‌دهد و ErrorDocument (index.php ما) را اجرا
+    می‌کند → **بدنهٔ درست با استاتوسِ ۴۰۴**. مرورگر CSS/JSِ غیرِ۲xx را اجرا نمی‌کند و
+    `_next/image` تصویرِ ۴۰۴ را رد می‌کند (ادمینِ لخت + عکسِ شکسته). `scripts/fix_assets.sh`
+    سیم‌لینک می‌سازد و تأیید می‌گیرد.
+16. **پاسخِ خطا هرگز نباید کش شود.** همان ۴۰۴ با `Cache-Control: public, max-age=604800` به
+    لبهٔ CDN رفت و یک هفته ماند؛ رفعِ ریشه هم دیده نمی‌شد. قاعده حالا در
+    `BrowserSecurityHeadersMiddleware` است: هر `>=400` → `no-store` (یک نقطه، نه در هر view).
+17. **کشِ مرده = سکوت، نه قطعی.** `IGNORE_EXCEPTIONS` باعث می‌شود Redisِ خاموش به جست‌وجوی
+    ناموفق تبدیل شود؛ احراز هویت از دیتابیس می‌خواند و درست می‌ماند، ولی throttle عملاً
+    از کار می‌افتد و هر درخواست یک کوئری اضافه می‌خورد. `scripts/cache_setup.sh` این را
+    یا با یک Redisِ محلی درست می‌کند یا با `CACHE_BACKEND=locmem` صادق و بی‌نویز.
