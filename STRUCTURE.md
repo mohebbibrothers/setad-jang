@@ -202,6 +202,7 @@ setad-jang/
 │   ├── throttling.py
 │   └── views.py  # لایهٔ HTTP
 ├── kindness_wall/
+│   ├── management/
 │   ├── migrations/
 │   ├── static/
 │   ├── templates/
