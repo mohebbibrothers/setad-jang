@@ -55,7 +55,9 @@ DEBUG=False
 | فقط مشکلات | `bash scripts/host_doctor.sh --quiet` |
 | تمیزکاری (پیش‌نمایش) | `bash scripts/host_cleanup.sh` |
 | تمیزکاری (اجرا) | `bash scripts/host_cleanup.sh --apply` |
-| بکاپ دستی | `bash scripts/backup_daily.sh` |
+| بکاپ دستی (db + media) | `bash scripts/backup_daily.sh` |
+| دامپِ دیتابیس با اتصالِ خودِ جنگو | `<venv>/python scripts/db_dump.py --out <file>` |
+| بازبینیِ سالم‌بودنِ یک دامپ | `<venv>/python scripts/db_dump.py --verify --out <file>` |
 | اعتبارنامهٔ دیتابیس (ماسک‌شده) + تست اتصال | `bash scripts/backup_daily.sh --whoami` |
 | فهرستِ بکاپ‌ها | `bash scripts/backup_daily.sh --verify` |
 | تستِ سلامتِ عمومی | `bash scripts/smoke_test.sh https://besat.me` |
@@ -111,3 +113,12 @@ DEBUG=False
 9. **کرانِ keep-alive در حالتِ پروکسی لازم است، نه «باقی‌مانده».** سرورِ WSGI یک پروسهٔ
    معمولی است؛ بدون کرانِ هر دقیقه، اولین crash یا ری‌بوت سایت را می‌خواباند. دکتر
    نبودش را حالا `[!!]` می‌دهد و وجودش را تأیید می‌کند.
+10. **بکاپ نباید احرازِ هویت را بازپیاده کند.** روی همین هاست `mariadb-dump` می‌گفت
+    `ERROR 1045 Access denied` در حالی که سایت با همان کاربر/پسورد دیتابیس را می‌خواند.
+    کلاینتِ بیرونی چمدانِ خودش را دارد: فایلِ آپشن (`~/.my.cnf`)، اولویتِ پسورد،
+    درایور و سوکتِ متفاوت. راه‌حل: `scripts/db_dump.py` دامپ را **از داخلِ جنگو** با
+    همان `connection` می‌گیرد (schema + داده، gzip، سپس یک پاسِ `--verify` که تعداد
+    جدول‌ها، وجودِ نشانهٔ پایان و CRC گِزیپ را چک می‌کند). CLI فقط fallback است و آن هم
+    با `--no-defaults` صدا زده می‌شود تا `.my.cnf` نتواند پسوردِ کهنه تزریق کند.
+    صحت با round-trip واقعی سنجیده شد: دامپ → ری‌استور در دیتابیسِ دوم →
+    `CHECKSUM TABLE` هر جدول یکسان (فارسی، ایموجی، BLOB، JSON، NULL، کوتیشن، بک‌اسلش).

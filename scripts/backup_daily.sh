@@ -10,6 +10,15 @@
 #  older ones, so the account never fills up again (the exact failure mode that
 #  broke the previous host: 101% disk).
 #
+#  The dump itself is produced by scripts/db_dump.py, which runs inside Django
+#  and therefore uses the app's own connection (same driver, same socket, same
+#  password precedence). Reason: on this host `mariadb-dump` answered
+#  "ERROR 1045 Access denied" for credentials that the live site was using
+#  successfully - an external client brings its own option files and its own
+#  password precedence, and a backup must never re-implement authentication.
+#  The CLI stays as a fallback, called with --no-defaults so ~/.my.cnf cannot
+#  inject a stale password.
+#
 #  Credentials: the SINGLE SOURCE OF TRUTH is Django itself - this script asks
 #  the production settings for DATABASES["default"] and uses exactly those
 #  fields. Re-parsing .env in bash was the bug behind
@@ -160,19 +169,57 @@ if [ "$WHOAMI" -eq 1 ]; then
       done
   fi
   if [ -s /tmp/besat_creds.err ]; then
-    info "django creds reader said:"
-    tail -3 /tmp/besat_creds.err | sed 's/^/         /'
+    NOISE=$(grep -v -E 'clselect|WrongData|set_env_vars|site-packages/clselect' /tmp/besat_creds.err | tail -3)
+    if [ -n "$NOISE" ]; then
+      info "django creds reader said:"
+      printf '%s\n' "$NOISE" | sed 's/^/         /'
+    fi
   fi
+  # (a) the transport that actually matters: Django's own connection
+  if [ -x "$VENV_PY" ] && [ -d "$APP_DIR" ]; then
+    PYOK=$(cd "$APP_DIR" && DJANGO_SETTINGS_MODULE="$SETTINGS" "$VENV_PY" - 2>/tmp/besat_ping.err <<'PYPING'
+import sys
+try:
+    import django
+    django.setup()
+    from django.db import connection
+    with connection.cursor() as c:
+        c.execute("SELECT 1")
+        c.fetchone()
+    print("OK")
+except Exception as exc:
+    print("FAIL %s" % exc)
+PYPING
+)
+    case "$PYOK" in
+      OK)  ok "django connection: SELECT 1 succeeded (this is the connection backups must use)" ;;
+      *)   bad "django connection failed: $(printf '%s' "$PYOK" | cut -c1-140)" ;;
+    esac
+  fi
+
+  # (b) why an external CLI can disagree: option files
+  CNF=""
+  for f in "$HOME/.my.cnf" "$HOME/.mylogin.cnf" /etc/my.cnf; do [ -f "$f" ] && CNF="$CNF $f"; done
+  if [ -n "$CNF" ]; then
+    warn "client option file(s) present:$CNF - the CLI may use a DIFFERENT password than the app"
+    CLI_DEF=$(command -v mariadb 2>/dev/null || command -v mysql)
+    [ -n "$CLI_DEF" ] && "$CLI_DEF" --print-defaults 2>/dev/null | sed 's/--password=[^ ]*/--password=***/g' | sed 's/^/         /'
+    info "the backup therefore calls the CLI with --no-defaults (or skips it entirely)"
+  fi
+
   if command -v mariadb >/dev/null 2>&1 || command -v mysql >/dev/null 2>&1; then
     CLI=$(command -v mariadb 2>/dev/null || command -v mysql)
     CONN=()
     [ -n "$DB_HOST" ] && CONN+=(-h "$DB_HOST")
     [ -n "$DB_PORT" ] && CONN+=(-P "$DB_PORT")
-    OUT=$(MYSQL_PWD="$DB_PASS" "$CLI" "${CONN[@]}" -u "$DB_USER" -N -B -e 'SELECT 1' 2>&1)
-    if [ "$(printf '%s' "$OUT" | tr -d '[:space:]')" = "1" ]; then
+    OUT=$(MYSQL_PWD="$DB_PASS" "$CLI" --no-defaults -N -B -e 'SELECT 1' "${CONN[@]}" -u "$DB_USER" 2>&1)
+    # the client prints warnings on stderr-bound stdout; only the last line counts
+    LAST=$(printf '%s\n' "$OUT" | grep -v 'WARNING' | tail -1 | tr -d '[:space:]')
+    if [ "$LAST" = "1" ]; then
       ok "SELECT 1 succeeded - these credentials work"
     else
-      bad "SELECT 1 failed: $(printf '%s' "$OUT" | head -2 | tr '\n' ' ')"
+      bad "CLI SELECT 1 failed: $(printf '%s' "$OUT" | head -2 | tr '\n' ' ')"
+      info "(a CLI failure here does NOT block backups - the python dumper uses the app connection)"
     fi
   else
     warn "no mariadb/mysql CLI - cannot test the connection"
@@ -183,7 +230,7 @@ fi
 
 if [ -z "$DB_NAME" ] || [ -z "$DB_USER" ]; then
   bad "could not resolve database credentials (django import failed and .env unusable)"
-  [ -s /tmp/besat_creds.err ] && tail -3 /tmp/besat_creds.err | sed 's/^/       /'
+  [ -s /tmp/besat_creds.err ] && grep -v -E 'clselect|WrongData|set_env_vars|site-packages/clselect' /tmp/besat_creds.err | tail -3 | sed 's/^/       /'
   exit 1
 fi
 info "credentials: $CRED_SOURCE"
@@ -191,30 +238,61 @@ info "credentials: $CRED_SOURCE"
 # ---------------------------------------------------------------- database dump
 if [ "$DO_DB" -eq 1 ]; then
   OUT="$BACKUP_DIR/db-$STAMP.sql.gz"
-  if command -v mariadb-dump >/dev/null 2>&1; then DUMP_BIN="$(command -v mariadb-dump)"
-  elif command -v mysqldump >/dev/null 2>&1; then DUMP_BIN="$(command -v mysqldump)"
-  else bad "neither mariadb-dump nor mysqldump is available"; exit 1; fi
-  info "dump tool: $DUMP_BIN"
-  # --single-transaction = consistent snapshot without locking the site
-  CONN=()
-  [ -n "$DB_HOST" ] && CONN+=(-h "$DB_HOST")
-  [ -n "$DB_PORT" ] && CONN+=(-P "$DB_PORT")
-  # --no-tablespaces: shared-hosting users usually lack PROCESS -> error 1227
-  if MYSQL_PWD="$DB_PASS" "$DUMP_BIN" "${CONN[@]}" -u "$DB_USER" \
-      --single-transaction --quick --skip-lock-tables --no-tablespaces \
-      --default-character-set=utf8mb4 \
-      "$DB_NAME" 2>/tmp/dump_err.txt | gzip -9 > "$OUT"; then
-    SIZE=$(kb_of "$OUT")
-    if [ "${SIZE:-0}" -lt 10 ]; then
-      bad "dump looks too small ($(human "$SIZE")) - real error below"
-      tail -3 /tmp/dump_err.txt | sed 's/^/       /'
-      rm -f "$OUT" && info "truncated dump deleted so rotation cannot keep it"
+  DUMPER="$APP_DIR/scripts/db_dump.py"
+  DB_OK=0
+
+  # ---- 1) preferred: the Django-native dumper (same connection as the site)
+  if [ -f "$DUMPER" ] && [ -x "$VENV_PY" ]; then
+    info "dumping via scripts/db_dump.py (django connection, $CRED_SOURCE)"
+    if (cd "$APP_DIR" && DJANGO_SETTINGS_MODULE="$SETTINGS" "$VENV_PY" scripts/db_dump.py --out "$OUT") 2>/tmp/dump_err.txt; then
+      grep -E '^  \[' /tmp/dump_err.txt | tail -3 | sed 's/^/       /'
+      if (cd "$APP_DIR" && DJANGO_SETTINGS_MODULE="$SETTINGS" "$VENV_PY" scripts/db_dump.py --verify --out "$OUT") 2>/tmp/dump_ver.txt; then
+        tail -2 /tmp/dump_ver.txt | sed 's/^/       /'
+        ok "database dump: $OUT ($(human "$(kb_of "$OUT")"))"
+        DB_OK=1
+      else
+        bad "dump verification failed:"
+        tail -3 /tmp/dump_ver.txt | sed 's/^/       /'
+      fi
     else
-      ok "database dump: $OUT ($(human "$SIZE"))"
+      bad "python dumper failed:"
+      grep -v -E 'clselect|WrongData|set_env_vars|site-packages/clselect' /tmp/dump_err.txt | tail -4 | sed 's/^/       /'
     fi
   else
-    bad "$(basename "$DUMP_BIN") failed:"
-    tail -3 /tmp/dump_err.txt | sed 's/^/       /'
+    warn "scripts/db_dump.py or the venv python is missing - falling back to the CLI"
+  fi
+
+  # ---- 2) fallback: the CLI, but never with the user's option files
+  if [ "$DB_OK" -eq 0 ]; then
+    if command -v mariadb-dump >/dev/null 2>&1; then DUMP_BIN="$(command -v mariadb-dump)"
+    elif command -v mysqldump >/dev/null 2>&1; then DUMP_BIN="$(command -v mysqldump)"
+    else DUMP_BIN=""; fi
+    if [ -n "$DUMP_BIN" ]; then
+      info "falling back to $(basename "$DUMP_BIN") --no-defaults"
+      CONN=()
+      [ -n "$DB_HOST" ] && CONN+=(-h "$DB_HOST")
+      [ -n "$DB_PORT" ] && CONN+=(-P "$DB_PORT")
+      if MYSQL_PWD="$DB_PASS" "$DUMP_BIN" --no-defaults "${CONN[@]}" -u "$DB_USER" \
+          --single-transaction --quick --skip-lock-tables --no-tablespaces \
+          --default-character-set=utf8mb4 \
+          "$DB_NAME" 2>/tmp/dump_err.txt | gzip -9 > "$OUT"; then
+        SIZE=$(kb_of "$OUT")
+        if [ "${SIZE:-0}" -lt 10 ]; then
+          bad "dump looks too small ($(human "$SIZE")) - real error below"
+          tail -3 /tmp/dump_err.txt | sed 's/^/       /'
+          rm -f "$OUT" && info "truncated dump deleted so rotation cannot keep it"
+        else
+          ok "database dump (CLI fallback): $OUT ($(human "$SIZE"))"
+          DB_OK=1
+        fi
+      else
+        bad "$(basename "$DUMP_BIN") failed:"
+        tail -3 /tmp/dump_err.txt | sed 's/^/       /'
+        rm -f "$OUT"
+      fi
+    else
+      bad "no dump tool available at all (no python dumper, no mariadb-dump)"
+    fi
   fi
 fi
 
