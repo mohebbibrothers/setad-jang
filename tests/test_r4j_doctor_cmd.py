@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 import pytest
-from django.core.management import call_command
-
 from django.contrib.auth import get_user_model
+from django.core.management import call_command
 
 from apps.r4j.choices import BOUNTY_ACTIVE_STATUSES, BountyStatus
 from apps.r4j.models import R4JBounty, R4JCriminal
