@@ -192,12 +192,37 @@ else:
 # چون CACHE_BACKEND در base.py مقدار پیش‌فرض "locmem" دارد و .env.example هم
 # همان را نشان می‌دهد، یک deploy که فقط فایل نمونه را کپی کرده باشد کاملاً
 # بی‌صدا در این حالت بالا می‌آید. پس اینجا fail-fast می‌کنیم.
+# ── استثنای صریح (escape hatch) ──
+# گاردِ بالا درست است، ولی یک حالتِ واقعی وجود دارد که در آن «بالا نیامدنِ
+# سایت» از «کشِ per-process» بدتر است: هاستی که Redis ندارد و ماژول/باینری‌اش
+# هم قابلِ نصب نیست (همین هاستِ cPanel). در آن حالت اپراتور باید بتواند
+# آگاهانه و **صریح** این گارد را باز کند، نه با کامنت‌کردنِ کد:
+#
+#     CACHE_BACKEND=locmem
+#     ALLOW_LOCMEM_CACHE=True
+#
+# پیش‌فرض False است، پس هیچ استقرارِ ناخواسته‌ای بی‌صدا به locmem نمی‌افتد.
+# هزینهٔ پذیرفته‌شده: throttleها per-worker می‌شوند (نرخِ مؤثر ≈ N برابر) و
+# invalidate فقط روی همان worker اثر دارد؛ برای همین readiness/دکتر هشدار
+# می‌دهند و مسیرِ درست همان است که در docs/HOSTING_OPS.md نوشته شده: Redis.
+ALLOW_LOCMEM_CACHE = config("ALLOW_LOCMEM_CACHE", default=False, cast=bool)
+
 if CACHE_BACKEND != "redis":
-    raise RuntimeError(
-        f"CACHE_BACKEND در production باید 'redis' باشد (مقدار فعلی: '{CACHE_BACKEND}'). "
-        "با کش per-process، تمام throttleها به تعداد workerها ضعیف‌تر می‌شوند و "
-        "invalidate کش فقط روی یک worker اثر می‌کند که باعث سرو شدن دادهٔ کهنه است.",
-    )
+    if CACHE_BACKEND == "locmem" and ALLOW_LOCMEM_CACHE:
+        # آگاهانه پذیرفته شده؛ فقط یک هشدار در لاگ تا در ممیزی دیده شود.
+        import logging as _logging
+
+        _logging.getLogger("config.settings").warning(
+            "CACHE_BACKEND=locmem با ALLOW_LOCMEM_CACHE=True: کش per-process است؛ "
+            "throttleها به تعداد workerها ضعیف‌تر و invalidate محلی است."
+        )
+    else:
+        raise RuntimeError(
+            f"CACHE_BACKEND در production باید 'redis' باشد (مقدار فعلی: '{CACHE_BACKEND}'). "
+            "با کش per-process، تمام throttleها به تعداد workerها ضعیف‌تر می‌شوند و "
+            "invalidate کش فقط روی یک worker اثر می‌کند که باعث سرو شدن دادهٔ کهنه است. "
+            "اگر هاست Redis ندارد و آگاهانه می‌پذیرید: ALLOW_LOCMEM_CACHE=True را هم ست کنید.",
+        )
 
 # ── Email backend fail-fast (یافتهٔ P2 ممیزی مستقل) ──
 # در production، backend ایمیلِ توسعه (console/locmem/filebased) یعنی:

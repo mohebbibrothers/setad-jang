@@ -41,6 +41,15 @@ const FORWARD_REQUEST_HEADERS = [
     'x-requested-with',
     'x-viewer-id',
     'x-csrftoken',
+    // ─── CSRF (the "403 CSRF verification failed" on the admin login) ───
+    // Django validates unsafe requests against Origin, and falls back to
+    // Referer when Origin is absent. An allowlist that dropped both made every
+    // POST look like a cross-site forgery: the admin login form returned 403
+    // while every GET worked. These four are not optional.
+    'origin',
+    'referer',
+    'x-request-id',
+    'x-forwarded-proto',
 ];
 
 /** Headers we forward back to the client. */
@@ -69,10 +78,7 @@ const FORWARD_RESPONSE_HEADERS = [
 function proxy_fail(int $status, string $code): void
 {
     if (!headers_sent()) {
-        // Kept as a safeguard for responses with an empty body (headers not sent yet).
-if (!headers_sent()) {
-    http_response_code($status);
-}
+        http_response_code($status);
         header('Content-Type: application/json; charset=utf-8');
         header('Cache-Control: no-store');
     }
@@ -124,7 +130,9 @@ if (isset($_SERVER['CONTENT_TYPE']) && !isset($_SERVER['HTTP_CONTENT_TYPE'])) {
 
 $clientIp = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? '';
 $headers[] = 'Host: ' . $publicHost;
-$headers[] = 'X-Forwarded-Proto: ' . $scheme;
+if (!isset($_SERVER['HTTP_X_FORWARDED_PROTO'])) {
+    $headers[] = 'X-Forwarded-Proto: ' . $scheme;
+}
 $headers[] = 'X-Forwarded-Host: ' . $publicHost;
 $headers[] = 'X-Forwarded-For: ' . $clientIp;
 $headers[] = 'X-Real-IP: ' . ($_SERVER['REMOTE_ADDR'] ?? '');
