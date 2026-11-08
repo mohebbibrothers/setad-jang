@@ -143,7 +143,9 @@ step "5/8 static export - PROTECTED"
 info "kept: staticfiles/ ($(human "$(kb_of "$APP_DIR/staticfiles")")) - refresh with collectstatic"
 
 step "6/8 old log archives"
-LOG_KB=$(find "$HOME_DIR/logs" -type f -name "*.gz" 2>/dev/null | du -ck --files0-from=<(find "$HOME_DIR/logs" -type f -name "*.gz" -print0 2>/dev/null) 2>/dev/null | tail -1 | awk '{print $1+0}')
+# NOTE: no process substitution here - this host's bash has no /dev/fd and the
+# whole step used to fail silently.
+LOG_KB=$(find "$HOME_DIR/logs" -type f -name "*.gz" -print0 2>/dev/null | du -ck --files0-from=- 2>/dev/null | tail -1 | awk '{print $1+0}')
 if [ "$PRUNE_LOGS" -eq 1 ]; then
   if [ "${LOG_KB:-0}" -gt 0 ]; then
     TOTAL_KB=$((TOTAL_KB + LOG_KB))

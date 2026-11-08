@@ -62,22 +62,42 @@ PY
 
 # ---------------------------------------------------------------- 2 pick files
 step "2/6 picking real files from disk and from the database"
+# NOTE: this host's bash has no /dev/fd, so process substitution (`< <(...)`)
+# aborts the script. Everything below uses plain pipes and temp files.
+SAMPLE_FILE=$(mktemp 2>/dev/null || echo /tmp/besat-samples.txt)
+find media/public -type f 2>/dev/null | head -3 | sed 's|^media/||' > "$SAMPLE_FILE"
 SAMPLES=()
 while IFS= read -r line; do
   [ -n "$line" ] && SAMPLES+=("$line")
-done < <(find media/public -type f 2>/dev/null | head -3 | sed 's|^media/||')
+done < "$SAMPLE_FILE"
+rm -f "$SAMPLE_FILE"
 if [ "${#SAMPLES[@]}" -eq 0 ]; then
   bad "no files under media/public - cannot probe"
   exit 1
 fi
 for s in "${SAMPLES[@]}"; do info "sample: media/$s"; done
 
-# reference images that the public homepage actually shows (known 404s)
+# reference images that the public homepage actually shows
 EXTRAS=(
   "public/lms/courses/new/cover/CHERIK_CYBER.png"
   "public/madadkar/sponsors/new/logo/12267499_252.png"
   "public/r4j/criminals/3/photos/11b75449-36ff-4430-82a4-2d7288633201.png"
 )
+
+# the Django admin is unstyled when /static/ is not served correctly, so the
+# same three-layer probe runs for one admin asset as well
+ADMIN_ASSET=""
+for cand in static/admin/css/base.css static/admin/css/responsive.css staticfiles/admin/css/base.css; do
+  if [ -f "$cand" ]; then ADMIN_ASSET="$cand"; break; fi
+done
+if [ -z "$ADMIN_ASSET" ]; then
+  bad "no admin CSS found under static/ or staticfiles/ - that alone explains an unstyled admin"
+  info "run: DJANGO_SETTINGS_MODULE=$SETTINGS $VENV_PY manage.py collectstatic --noinput"
+else
+  ok "admin asset on disk: $ADMIN_ASSET ($(stat -c '%s bytes' "$ADMIN_ASSET"))"
+fi
+STATIC_URL_PATH="${ADMIN_ASSET#static/}"
+STATIC_URL_PATH="${STATIC_URL_PATH#staticfiles/}"
 for e in "${EXTRAS[@]}"; do
   if [ -f "media/$e" ]; then info "on disk : media/$e"; else info "MISSING : media/$e"; fi
 done
@@ -115,6 +135,21 @@ for layer in \
   printf '  --- %s : %s\n' "$name" "$url"
   curl -sI --max-time 25 -H "Host: $DOMAIN" "$url" 2>/dev/null | head -12 | sed 's/^/       /'
 done
+
+# ------------------------------------------------ 3c the admin asset, per layer
+step "3c/6 the Django admin asset through every layer (unstyled admin)"
+if [ -n "$ADMIN_ASSET" ]; then
+  SP="static/$STATIC_URL_PATH"
+  printf '  %s\n' "$SP"
+  printf '      port 8765 direct : %s\n' "$(curl -s -o /dev/null -w '%{http_code} %{size_download}' --max-time 20 "http://127.0.0.1:$PORT/$SP" 2>/dev/null)"
+  printf '      vhost loopback   : %s\n' "$(curl -s -o /dev/null -w '%{http_code} %{size_download}' --max-time 20 "http://127.0.0.1/$SP" 2>/dev/null)"
+  printf '      api.besat.me     : %s\n' "$(curl -s -o /dev/null -w '%{http_code} %{size_download}' --max-time 25 "https://$DOMAIN/$SP" 2>/dev/null)"
+  printf '      besat.me (proxy) : %s\n' "$(curl -s -o /dev/null -w '%{http_code} %{size_download}' --max-time 25 "https://besat.me/$SP" 2>/dev/null)"
+  printf '  headers via besat.me:\n'
+  curl -sI --max-time 25 "https://besat.me/$SP" 2>/dev/null | head -10 | sed 's/^/       /'
+else
+  warn "skipped - no admin asset on disk"
+fi
 
 # ---------------------------------------------------------------- 4 vhost cfg
 step "4/6 deployed vhost configuration"
