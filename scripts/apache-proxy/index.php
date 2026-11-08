@@ -109,6 +109,103 @@ function read_body(): string
     return $body === false ? '' : $body;
 }
 
+/**
+ * Rebuild a multipart/form-data body from what PHP already parsed.
+ *
+ * WHY THIS IS NECESSARY (the 403 on the Django admin "add" form)
+ * --------------------------------------------------------------
+ * For `multipart/form-data`, PHP consumes the request body itself and exposes
+ * it as $_POST/$_FILES. `php://input` is then **empty** (verified: 0 bytes),
+ * while for JSON and urlencoded it still holds the raw bytes.
+ *
+ * The proxy forwarded `php://input`, so every multipart POST reached Django as
+ * an EMPTY request - the `csrfmiddlewaretoken` field included. Result: Django
+ * answered 403 "CSRF verification failed", the exact symptom of the admin's
+ * add-listing form (which always has an image field). JSON API calls were
+ * unaffected, which is why login/refresh worked while the admin did not.
+ *
+ * This function re-serialises $_POST + $_FILES with a fresh boundary so the
+ * bytes Django receives are equivalent to what the browser sent.
+ *
+ * @return array{0: string, 1: string} [body, content-type] - empty strings if
+ *                                     there is nothing to rebuild
+ */
+function rebuild_multipart(): array
+{
+    if (empty($_POST) && empty($_FILES)) {
+        return ['', ''];
+    }
+
+    $boundary = '----BesatProxy' . bin2hex(random_bytes(16));
+    $eol = "\r\n";
+    $body = '';
+
+    $appendField = static function (string $name, string $value) use (&$body, $boundary, $eol): void {
+        $safe = str_replace('"', '', $name);
+        $body .= '--' . $boundary . $eol;
+        $body .= 'Content-Disposition: form-data; name="' . $safe . '"' . $eol . $eol;
+        $body .= $value . $eol;
+    };
+
+    foreach ($_POST as $name => $value) {
+        if (is_array($value)) {
+            foreach ($value as $sub => $inner) {
+                if (is_array($inner)) {
+                    continue; // deeper nesting is not used by the admin forms
+                }
+                $appendField($name . '[' . $sub . ']', (string) $inner);
+            }
+            continue;
+        }
+        $appendField((string) $name, (string) $value);
+    }
+
+    $appendFile = static function (
+        string $field,
+        string $filename,
+        string $tmpPath,
+        string $mime
+    ) use (&$body, $boundary, $eol): void {
+        $contents = is_readable($tmpPath) ? file_get_contents($tmpPath) : '';
+        $safeName = str_replace(['"', "\r", "\n"], '', $filename);
+        $body .= '--' . $boundary . $eol;
+        $body .= 'Content-Disposition: form-data; name="' . $field . '"; filename="' . $safeName . '"' . $eol;
+        $body .= 'Content-Type: ' . ($mime !== '' ? $mime : 'application/octet-stream') . $eol . $eol;
+        $body .= (is_string($contents) ? $contents : '') . $eol;
+    };
+
+    foreach ($_FILES as $field => $file) {
+        $error = $file['error'] ?? UPLOAD_ERR_NO_FILE;
+        if ($error === UPLOAD_ERR_NO_FILE) {
+            continue; // browser sent an empty file input -> nothing to forward
+        }
+        if (is_array($file['name'] ?? null)) {
+            foreach ($file['name'] as $index => $filename) {
+                if (($file['error'][$index] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+                    continue;
+                }
+                $appendFile(
+                    $field . '[' . $index . ']',
+                    (string) $filename,
+                    (string) ($file['tmp_name'][$index] ?? ''),
+                    (string) ($file['type'][$index] ?? '')
+                );
+            }
+            continue;
+        }
+        $appendFile(
+            (string) $field,
+            (string) ($file['name'] ?? ''),
+            (string) ($file['tmp_name'] ?? ''),
+            (string) ($file['type'] ?? '')
+        );
+    }
+
+    $body .= '--' . $boundary . '--' . $eol;
+
+    return [$body, 'multipart/form-data; boundary=' . $boundary];
+}
+
 // ---------------------------------------------------------------- request
 
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
@@ -210,6 +307,25 @@ $headers[] = 'X-Real-IP: ' . ($_SERVER['REMOTE_ADDR'] ?? '');
 $headers[] = 'Connection: close';
 
 $body = read_body();
+
+// multipart/form-data never appears in php://input (PHP already parsed it into
+// $_POST/$_FILES). Without this branch every multipart POST - i.e. the whole
+// Django admin - arrived at Django empty and was rejected with a 403.
+$incomingType = $forward['content-type'] ?? '';
+if ($body === '' && stripos($incomingType, 'multipart/form-data') !== false) {
+    [$rebuilt, $rebuiltType] = rebuild_multipart();
+    if ($rebuilt !== '') {
+        $body = $rebuilt;
+        $forward['content-type'] = $rebuiltType;
+        // the header list was already rendered; refresh just the content-type
+        foreach ($headers as $index => $line) {
+            if (stripos($line, 'content-type:') === 0) {
+                $headers[$index] = 'content-type: ' . $rebuiltType;
+            }
+        }
+    }
+}
+
 if ($body !== '') {
     $headers[] = 'Content-Length: ' . strlen($body);
 }

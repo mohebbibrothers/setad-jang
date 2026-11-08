@@ -81,23 +81,32 @@ fi
 
 # ------------------------------------------------------------ live credentials
 cd "$APP_DIR" || { bad "app dir not found"; exit 1; }
-read -r DB_NAME DB_USER DB_PASS DB_HOST DB_PORT < <(
-  DJANGO_SETTINGS_MODULE="$SETTINGS" "$VENV_PY" - 2>/dev/null <<'PY'
+# NOTE: this host's bash has NO /dev/fd, so process substitution (`< <(...)`)
+# fails with "No such file or directory" and the script died before doing
+# anything (it reported "could not read database credentials"). Same trap that
+# already hit media_probe.sh - everything here uses plain temp files.
+CREDS_FILE=$(mktemp 2>/dev/null || echo /tmp/besat-creds.txt)
+cd "$APP_DIR" || { bad "app dir not found"; exit 1; }
+DJANGO_SETTINGS_MODULE="$SETTINGS" "$VENV_PY" - > "$CREDS_FILE" 2>/dev/null <<'PY'
 import django
 
 django.setup()
 from django.conf import settings
 
 d = settings.DATABASES["default"]
-print(
-    d.get("NAME") or "",
-    d.get("USER") or "",
-    d.get("PASSWORD") or "",
-    d.get("HOST") or "",
-    d.get("PORT") or "",
-)
+paper = [
+    str(d.get("NAME") or ""),
+    str(d.get("USER") or ""),
+    str(d.get("PASSWORD") or ""),
+    str(d.get("HOST") or ""),
+    str(d.get("PORT") or ""),
+]
+print("\x1f".join(paper))
 PY
-)
+CREDS=$(cat "$CREDS_FILE" 2>/dev/null)
+rm -f "$CREDS_FILE"
+IFS=$'\x1f' read -r DB_NAME DB_USER DB_PASS DB_HOST DB_PORT <<< "$CREDS" || true
+
 [ -n "${DB_NAME:-}" ] || { bad "could not read database credentials from Django"; exit 1; }
 
 CLI=$(command -v mariadb 2>/dev/null || command -v mysql 2>/dev/null || true)

@@ -249,6 +249,25 @@ if [ "$APPLY" -eq 1 ]; then
   else
     warn "POST test inconclusive: $(printf '%s' "$POST_BODY" | head -c 120)"
   fi
+
+  # ─── multipart test (the Django admin's add forms) ──────────────────────
+  # PHP consumes a multipart body into $_POST/$_FILES and leaves php://input
+  # EMPTY. Forwarding php://input therefore sent empty POSTs to Django, whose
+  # CSRF check then failed with 403 - the "cannot add a listing in the admin"
+  # symptom. index.php now rebuilds the body; this proves it end to end.
+  MP_BODY=$(curl -sL --max-time 25 -X POST \
+    -F 'identifier=not-a-valid-identifier' -F 'password=x' \
+    "https://$DOMAIN/api/v1/auth/login/password/" 2>/dev/null)
+  if printf '%s' "$MP_BODY" | grep -qiE 'الزامی|required'; then
+    bad "multipart body was DROPPED (Django saw no fields) - admin forms will 403"
+    info "deploy scripts/apache-proxy/index.php again (rebuild_multipart)"
+  elif printf '%s' "$MP_BODY" | grep -qiE 'اشتباه|شناسه|invalid|401'; then
+    ok "multipart body reaches Django (admin add-forms will work)"
+  elif printf '%s' "$MP_BODY" | grep -qi 'Invalid HTTP Header'; then
+    bad "server rejected the multipart request: $(printf '%s' "$MP_BODY" | tr -d '\n' | head -c 100)"
+  else
+    warn "multipart test inconclusive: $(printf '%s' "$MP_BODY" | head -c 120)"
+  fi
 else
   plan "curl https://$DOMAIN/{health,stats,provinces,admin/login}"
 fi
