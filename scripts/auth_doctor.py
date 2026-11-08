@@ -181,6 +181,25 @@ def session_census() -> dict[str, Any]:
     elif total:
         ok("no timestamps in the future (server clock looks sane)")
 
+    # several sessions created seconds apart = the client retried the login
+    # (double submit / double-mounted effect) - a classic cause of "logged in,
+    # instantly logged out" because the older token is rotated away.
+    from django.db.models import Count
+    from django.db.models.functions import TruncMinute
+
+    bursts = (
+        AuthSession.objects.annotate(minute=TruncMinute("created_at"))
+        .values("user_id", "minute")
+        .annotate(n=Count("id"))
+        .filter(n__gte=3)
+        .order_by("-minute")[:5]
+    )
+    for burst in bursts:
+        warn(
+            f"user {burst['user_id']} created {burst['n']} sessions in the minute "
+            f"{burst['minute']} - client is retrying the login"
+        )
+
     rows = []
     for s in AuthSession.objects.order_by("-created_at")[:10]:
         rows.append(
@@ -213,6 +232,97 @@ def session_census() -> dict[str, Any]:
         "future_created": future_created,
         "recent": rows,
     }
+
+
+# ---------------------------------------------------------------- 2b cache
+def cache_census() -> dict[str, Any]:
+    """Redis is the session-validity cache; if it is down, auth can 500."""
+    from django.conf import settings
+    from django.core.cache import cache
+
+    say("2b/6 cache (holds session revocation state)")
+    backend = (settings.CACHES.get("default", {}) or {}).get("BACKEND", "")
+    location = (settings.CACHES.get("default", {}) or {}).get("LOCATION", "")
+    data: dict[str, Any] = {"backend": backend, "location": str(location)}
+    info(f"backend : {backend}")
+    info(f"location: {location}")
+
+    if "redis" in backend.lower():
+        url = str(location)
+        try:
+            from urllib.parse import urlparse
+
+            parsed = urlparse(url if "://" in url else f"redis://{url}")
+            host, port = parsed.hostname or "127.0.0.1", parsed.port or 6379
+            import socket
+
+            with socket.create_connection((host, port), timeout=3):
+                ok(f"redis socket reachable at {host}:{port}")
+        except Exception as exc:
+            bad(f"redis NOT reachable ({exc}) - set/get will fail and every auth request can 500")
+
+    import time
+
+    try:
+        started = time.monotonic()
+        cache.set("besat:auth_doctor", "1", timeout=30)
+        value = cache.get("besat:auth_doctor")
+        elapsed = (time.monotonic() - started) * 1000
+        cache.delete("besat:auth_doctor")
+        if value == "1":
+            ok(f"cache set/get works ({elapsed:.1f} ms)")
+            data["roundtrip_ms"] = round(elapsed, 1)
+            if elapsed > 250:
+                warn("cache is slow (>250 ms): every authenticated request pays this")
+        else:
+            bad("cache set/get returned a different value (misconfigured / shared prefix)")
+    except Exception as exc:
+        bad(f"cache set/get FAILED: {exc}")
+        data["error"] = str(exc)
+    return data
+
+
+# ---------------------------------------------------------------- 2c channels
+def channel_census() -> dict[str, Any]:
+    from django.conf import settings
+
+    say("2c/6 delivery channels (what the OTP actually goes through)")
+    data = {
+        "OTP_PROVIDER": getattr(settings, "OTP_PROVIDER", ""),
+        "OTP_SMS_PROVIDER": getattr(settings, "OTP_SMS_PROVIDER", ""),
+        "NOTIFICATIONS_SMS_ENABLED": bool(getattr(settings, "NOTIFICATIONS_SMS_ENABLED", False)),
+        "NOTIFICATIONS_ASYNC_DISPATCH": bool(
+            getattr(settings, "NOTIFICATIONS_ASYNC_DISPATCH", False)
+        ),
+        "SMS_IRANPAYAMAK_API_KEY_len": len(getattr(settings, "SMS_IRANPAYAMAK_API_KEY", "") or ""),
+        "patterns": {},
+    }
+    for purpose in ("LOGIN", "SIGNUP", "PASSWORD_RESET", "IDENTIFIER_ADD", "NOTIFICATION"):
+        value = getattr(settings, f"SMS_IRANPAYAMAK_PATTERN_{purpose}", "") or ""
+        data["patterns"][purpose] = bool(value)
+    info(f"OTP_PROVIDER      : {data['OTP_PROVIDER']}   (login codes go out via this channel)")
+    info(f"OTP_SMS_PROVIDER  : {data['OTP_SMS_PROVIDER']}")
+    info(
+        f"iranpayamak key   : {'SET (' + str(data['SMS_IRANPAYAMAK_API_KEY_len']) + ' chars)' if data['SMS_IRANPAYAMAK_API_KEY_len'] else 'NOT SET'}"
+    )
+    info(f"patterns          : {data['patterns']}")
+    info(f"async dispatch    : {data['NOTIFICATIONS_ASYNC_DISPATCH']}")
+
+    if data["OTP_PROVIDER"] != "sms":
+        warn(
+            "OTP_PROVIDER is not 'sms': a phone-only user receives NOTHING "
+            "(the code goes out by email). Fix: bash scripts/sms_setup.sh"
+        )
+    if data["OTP_SMS_PROVIDER"] == "console":
+        bad("OTP_SMS_PROVIDER=console -> no real SMS is ever sent (development backend)")
+    if not data["SMS_IRANPAYAMAK_API_KEY_len"]:
+        bad("SMS_IRANPAYAMAK_API_KEY is empty -> the gateway would reject every send")
+    missing = [k for k, v in data["patterns"].items() if not v]
+    if missing:
+        bad(
+            f"pattern codes missing for: {', '.join(missing)} (approved pattern required by the gateway)"
+        )
+    return data
 
 
 # --------------------------------------------------------- 3-6 live simulation
@@ -263,7 +373,14 @@ def live_simulation(identifier: str) -> dict[str, Any]:
     User = get_user_model()
     user = None
     candidate = identifier.strip()
-    lookups = [{"username": candidate}, {"phone_number": candidate}, {"email": candidate}]
+    # the project uses a custom user model: never assume `username` exists
+    fields = {f.name for f in User._meta.get_fields() if getattr(f, "concrete", False)}
+    lookups = []
+    for name in ("username", "email", "phone_number"):
+        if name in fields:
+            lookups.append({name: candidate})
+    if not lookups:
+        lookups = [{User.USERNAME_FIELD: candidate}]
     for lookup in lookups:
         try:
             user = User.objects.filter(**lookup).first()
@@ -275,7 +392,8 @@ def live_simulation(identifier: str) -> dict[str, Any]:
         bad(f"no user matched {identifier!r} (tried username / phone_number / email)")
         return {"found": False}
 
-    ok(f"user #{user.pk} ({user.username}) is_active={user.is_active}")
+    label = getattr(user, "username", None) or getattr(user, "email", None) or str(user.pk)
+    ok(f"user #{user.pk} ({label}) is_active={user.is_active}")
     if not user.is_active:
         bad("user is inactive - every authenticated request will be rejected")
 
@@ -371,6 +489,8 @@ def main(argv: list[str]) -> int:
     report: dict[str, Any] = {}
     report["config"] = config_census()
     report["sessions"] = session_census()
+    report["cache"] = cache_census()
+    report["channels"] = channel_census()
     if args.identifier:
         report["live"] = live_simulation(args.identifier)
     else:
@@ -382,6 +502,12 @@ def main(argv: list[str]) -> int:
     problems = 0
     sess = report["sessions"]
     if sess["expired_active"] or sess["future_seen"] or sess["future_created"]:
+        problems += 1
+    cache_info = report.get("cache") or {}
+    if cache_info.get("error"):
+        problems += 1
+    channels = report.get("channels") or {}
+    if channels.get("OTP_SMS_PROVIDER") == "console":
         problems += 1
     live = report.get("live") or {}
     for key in ("me_after_login", "refresh", "me_after_refresh", "me_after_revoke"):

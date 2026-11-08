@@ -58,6 +58,11 @@ DEBUG=False
 | بکاپ دستی (db + media) | `bash scripts/backup_daily.sh` |
 | دامپِ دیتابیس با اتصالِ خودِ جنگو | `<venv>/python scripts/db_dump.py --out <file>` |
 | بازبینیِ سالم‌بودنِ یک دامپ | `<venv>/python scripts/db_dump.py --verify --out <file>` |
+| پروبِ مدیا/استاتیک در هر چهار لایه | `bash scripts/media_probe.sh` |
+| عیب‌یابیِ «لاگین می‌کنم و بیرون می‌اندازد» | `<venv>/python scripts/auth_doctor.py --identifier <email>` |
+| وضعیتِ درگاهِ پیامک | `DJANGO_SETTINGS_MODULE=config.settings.production <venv>/python manage.py sms_doctor` |
+| راه‌اندازیِ پیامک + ارسالِ آزمایشی | `bash scripts/sms_setup.sh --check` سپس `--apply --key '...' --login '...'` و `--test --to 09...` |
+| ویرایشِ امنِ `.env` (اتمیک، بکاپ، بدونِ کلیدِ تکراری) | `<venv>/python scripts/env_set.py KEY=value` |
 | سلامتِ مدیا (هر فایلِ ارجاع‌شده موجود است؟) | `<venv>/python scripts/media_audit.py` |
 | فایل‌های یتیمِ مدیا (بدونِ ردیف) | `<venv>/python scripts/media_audit.py --orphans` |
 | بازگردانیِ فایل‌های گم‌شده از بکاپِ مدیا | `<venv>/python scripts/media_audit.py --restore-from ~/backups/media-<date>.tar.gz --apply` |
@@ -136,3 +141,10 @@ DEBUG=False
     هنوز کاربر/پسوردِ قدیمی را دارد و هر ابزارِ بیرونی (`mariadb`, `mariadb-dump`) بی‌صدا
     از آن استفاده می‌کند. `host_cleanup.sh --apply` آن را کنار می‌گذارد (حذف نمی‌کند) و
     دکتر وجودش را گزارش می‌دهد.
+13. **`python3` روی PATHِ این هاست نیست.** اسکریپت‌های شل باید از `<venv>/python` استفاده کنند؛
+    یک `python3 -c ...` ساده باعث شد کلِ URL-encode خالی شود و پروب بی‌صدا مسیرِ اشتباه را
+    تست کند. همین‌طور `bash`ِ این هاست `/dev/fd` ندارد → هیچ `<( ... )`ای کار نمی‌کند.
+14. **«پیامک نمی‌آید» معمولاً باگ نیست، پیکربندی است.** بعد از مهاجرت `.env` تازه ساخته شد و
+    `OTP_SMS_PROVIDER` روی `console` (بک‌اندِ توسعه) و `OTP_PROVIDER` روی `email` ماند؛
+    یعنی هیچ پیامکی ارسال نمی‌شد و کاربرِ فقط-موبایل حتی کد را از کانالِ ایمیل هم نمی‌گرفت.
+    `manage.py sms_doctor` این را در سه خط می‌گوید و `scripts/sms_setup.sh` آن را می‌بندد.

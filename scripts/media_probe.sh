@@ -29,6 +29,23 @@ DOMAIN="${DOMAIN:-api.besat.me}"
 PORT="${PORT:-8765}"
 SETTINGS="${SETTINGS:-config.settings.production}"
 
+# percent-encode a path for curl. This host has NO `python3` on PATH, so the
+# venv interpreter is used (it always exists) with a pure-bash fallback.
+urlencode() {
+  if [ -x "$VENV_PY" ]; then
+    "$VENV_PY" -c 'import sys,urllib.parse as u;print(u.quote(sys.argv[1]))' "$1" 2>/dev/null && return 0
+  fi
+  local s="$1" out="" c i
+  for (( i=0; i<${#s}; i++ )); do
+    c="${s:i:1}"
+    case "$c" in
+      [a-zA-Z0-9._~/-]) out="$out$c" ;;
+      *) out="$out$(printf '%%%02X' "'$c")" ;;
+    esac
+  done
+  printf '%s' "$out"
+}
+
 step() { printf '\n=== %s\n' "$1"; }
 info() { printf '       %s\n' "$1"; }
 ok()   { printf '  [OK] %s\n' "$1"; }
@@ -109,12 +126,9 @@ probe() { # url -> "code bytes"
 
 step "3/6 same file through every layer (status + bytes)"
 for s in "${SAMPLES[@]}" "${EXTRAS[@]}"; do
-  ENC=$(python3 - "$s" <<'PY'
-import sys, urllib.parse
-print(urllib.parse.quote(sys.argv[1]))
-PY
-)
+  ENC=$(urlencode "$s")
   printf '  %s\n' "$s"
+  printf '      gunicorn (Host)  : %s\n' "$(curl -s -o /dev/null -w '%{http_code} %{size_download} %{content_type}' --max-time 25 -H "Host: $DOMAIN" "http://127.0.0.1:$PORT/media/$ENC" 2>/dev/null)"
   printf '      port 8765 direct : %s\n' "$(probe "http://127.0.0.1:$PORT/media/$ENC")"
   printf '      vhost loopback   : %s\n' "$(probe "http://127.0.0.1/media/$ENC")"
   printf '      vhost + Host     : %s\n' "$(curl -s -o /dev/null -w '%{http_code} %{size_download}' --max-time 25 -H "Host: $DOMAIN" "http://127.0.0.1/media/$ENC" 2>/dev/null || echo 'ERR 0')"
@@ -124,7 +138,7 @@ done
 
 # ------------------------------------------- 3b headers per layer (first sample)
 step "3b/6 response headers for the first sample (status + who added what)"
-FIRST_ENC=$(python3 -c 'import sys,urllib.parse;print(urllib.parse.quote(sys.argv[1]))' "${SAMPLES[0]}")
+FIRST_ENC=$(urlencode "${SAMPLES[0]}")
 for layer in \
   "port8765|http://127.0.0.1:$PORT/media/$FIRST_ENC" \
   "vhost|http://127.0.0.1/media/$FIRST_ENC" \
