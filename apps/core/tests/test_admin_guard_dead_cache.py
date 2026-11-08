@@ -29,25 +29,25 @@ class DeadCache(BaseCache):
     def __init__(self) -> None:
         super().__init__({})
 
-    def add(self, key, value, timeout=..., version=None):  # noqa: ANN001
+    def add(self, key, value, timeout=..., version=None):
         return None
 
-    def get(self, key, default=None, version=None):  # noqa: ANN001
+    def get(self, key, default=None, version=None):
         return None
 
-    def set(self, key, value, timeout=..., version=None):  # noqa: ANN001
+    def set(self, key, value, timeout=..., version=None):
         return None
 
-    def touch(self, key, timeout=..., version=None):  # noqa: ANN001
+    def touch(self, key, timeout=..., version=None):
         return None
 
-    def delete(self, key, version=None):  # noqa: ANN001
+    def delete(self, key, version=None):
         return None
 
-    def get_many(self, keys, version=None):  # noqa: ANN001
+    def get_many(self, keys, version=None):
         return {}
 
-    def incr(self, key, delta=1, version=None):  # noqa: ANN001
+    def incr(self, key, delta=1, version=None):
         # مهم‌ترین خطِ این تست: django_redis در همین‌جا None می‌دهد، نه استثنا.
         return None
 
@@ -55,16 +55,16 @@ class DeadCache(BaseCache):
 class ExplodingCache(DeadCache):
     """بدترین حالت: هر عملیات استثنا می‌دهد."""
 
-    def get(self, *a, **kw):  # noqa: ANN002, ANN003
+    def get(self, *a, **kw):
         raise RuntimeError("cache down")
 
-    def set(self, *a, **kw):  # noqa: ANN002, ANN003
+    def set(self, *a, **kw):
         raise RuntimeError("cache down")
 
-    def incr(self, *a, **kw):  # noqa: ANN002, ANN003
+    def incr(self, *a, **kw):
         raise RuntimeError("cache down")
 
-    def delete(self, *a, **kw):  # noqa: ANN002, ANN003
+    def delete(self, *a, **kw):
         raise RuntimeError("cache down")
 
 
