@@ -1,0 +1,21 @@
+; ============================================================================
+;  .user.ini — PHP limits for the proxy that fronts Django
+;
+;  Place this file at  <docroot>/.user.ini  (host_web_recover.sh does it).
+;
+;  WHY: the Django admin's "add listing" form posts `multipart/form-data`
+;  WITH an image. PHP's default `post_max_size` (8M) silently DISCARDS the
+;  whole body when it is exceeded — the CSRF token inside the form goes with
+;  it, so Django answers the user with a 403 "CSRF verification failed"
+;  instead of anything useful. The upload then never reaches the backend.
+;
+;  `.user.ini` is honoured by PHP-FPM/CGI and by LiteSpeed's lsphp, and it is
+;  simply ignored where unsupported - unlike `php_value` in .htaccess, which
+;  can turn the whole vhost into a 500 on hosts that forbid it.
+; ============================================================================
+post_max_size = 64M
+upload_max_filesize = 64M
+memory_limit = 256M
+max_execution_time = 300
+max_input_time = 300
+max_file_uploads = 20

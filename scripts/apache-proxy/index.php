@@ -116,17 +116,67 @@ $isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
     || (($_SERVER['SERVER_PORT'] ?? '') === '443');
 $scheme = $isHttps ? 'https' : 'http';
 
+/**
+ * Read an incoming request header from EVERY place PHP may have put it.
+ *
+ * THE BUG THIS FIXES (it cost us a whole "the user is logged out instantly"
+ * incident): behind Apache/LiteSpeed with PHP as CGI/FastCGI, the
+ * `Authorization` header is NOT exposed as `$_SERVER['HTTP_AUTHORIZATION']` -
+ * Apache strips it unless the vhost explicitly passes it through. The proxy
+ * therefore forwarded every request WITHOUT credentials:
+ *
+ *      GET /api/v1/auth/me  (Bearer <valid token>)
+ *        -> Django: 401 "no authentication credentials were provided"
+ *        -> the SPA treats 401 as "session dead" -> clears the tokens
+ *        -> the user sees «خوش آمدید» and is signed out in the same breath.
+ *
+ * It also explains the 403 on every write (the admin form upload): a request
+ * with no identity cannot pass an authenticated permission class.
+ *
+ * Sources tried, in order: HTTP_*, REDIRECT_HTTP_* (after an internal
+ * rewrite), getallheaders() (LiteSpeed/apache2handler), the mod_rewrite
+ * environment variable trick (see .htaccess), and finally PHP_AUTH_*.
+ */
+function incoming_header(string $name): ?string
+{
+    $key = 'HTTP_' . strtoupper(str_replace('-', '_', $name));
+    foreach ([$key, 'REDIRECT_' . $key] as $candidate) {
+        if (!empty($_SERVER[$candidate])) {
+            return (string) $_SERVER[$candidate];
+        }
+    }
+    if (function_exists('getallheaders')) {
+        $all = getallheaders();
+        if (is_array($all)) {
+            foreach ($all as $rawName => $value) {
+                if (strcasecmp((string) $rawName, $name) === 0 && $value !== '') {
+                    return (string) $value;
+                }
+            }
+        }
+    }
+    if ($name === 'authorization' && !empty($_SERVER['PHP_AUTH_USER'])) {
+        return 'Basic ' . base64_encode(
+            $_SERVER['PHP_AUTH_USER'] . ':' . ($_SERVER['PHP_AUTH_PW'] ?? '')
+        );
+    }
+    return null;
+}
+
 $headers = [];
 foreach (FORWARD_REQUEST_HEADERS as $name) {
-    $key = 'HTTP_' . strtoupper(str_replace('-', '_', $name));
-    if (isset($_SERVER[$key])) {
-        $headers[] = $name . ': ' . $_SERVER[$key];
+    $value = incoming_header($name);
+    if ($value !== null) {
+        $headers[] = $name . ': ' . $value;
     }
 }
 // Content-Type arrives as CONTENT_TYPE, not HTTP_CONTENT_TYPE.
 if (isset($_SERVER['CONTENT_TYPE']) && !isset($_SERVER['HTTP_CONTENT_TYPE'])) {
     $headers[] = 'content-type: ' . $_SERVER['CONTENT_TYPE'];
 }
+// Never let cURL send `Expect: 100-continue` for big uploads: some CGI stacks
+// answer it with a 417 and the body is lost (a very confusing CSRF failure).
+$headers[] = 'Expect:';
 
 $clientIp = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? '';
 $headers[] = 'Host: ' . $publicHost;

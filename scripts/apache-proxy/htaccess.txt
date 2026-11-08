@@ -21,6 +21,14 @@ DirectoryIndex index.php
 
 RewriteEngine On
 
+# --- 0) make the Authorization header visible to PHP ----------------------
+# Apache/LiteSpeed drop `Authorization` before PHP sees it on CGI/FastCGI.
+# This rule copies it into an environment variable, which IS exposed as
+# $_SERVER['HTTP_AUTHORIZATION']. Without it every authenticated request
+# arrives at Django anonymously (401) and the SPA signs the user out.
+RewriteCond %{HTTP:Authorization} .
+RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
 # --- 2) static assets: disk first, app second -----------------------------
 # If the file really exists under the docroot (symlink or copy), Apache/LiteSpeed
 # serves it itself: fastest path, correct 200 status, range requests, caching.

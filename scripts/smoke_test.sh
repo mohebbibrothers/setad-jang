@@ -36,6 +36,20 @@ do
   if [ "$CODE" = "200" ]; then ok "$path" "$CODE"; else bad "$path" "$CODE"; fi
 done
 
+# --- credential passthrough: a bogus Bearer must be rejected AS A TOKEN ------
+# If Django instead says "no credentials were provided", the Authorization
+# header is being dropped by the proxy - and then every logged-in user is
+# silently anonymous (the "welcome then instantly logged out" incident).
+BODY=$(curl -s --max-time 25 -H "Authorization: Bearer smoke.invalid.token" \
+  "$BASE/api/v1/auth/me/" 2>/dev/null)
+if printf '%s' "$BODY" | grep -qiE 'token_not_valid|نامعتبر|not valid|invalid'; then
+  ok "Authorization passthrough" "rejected as token"
+elif printf '%s' "$BODY" | grep -qiE 'ارسال نشده|not provided|credentials'; then
+  bad "Authorization passthrough" "header DROPPED - users are anonymous"
+else
+  bad "Authorization passthrough" "inconclusive"
+fi
+
 # --- admin login page (200 or 302 are both fine) ---------------------------
 CODE=$(curl -sL -o /dev/null -w '%{http_code}' --max-time 25 "$BASE/admin/login/" 2>/dev/null)
 case "$CODE" in 200|302) ok "/admin/login/" "$CODE" ;; *) bad "/admin/login/" "$CODE" ;; esac

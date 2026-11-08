@@ -142,6 +142,10 @@ if [ -d "$DOCROOT" ] && [ -f "$SRC_PHP" ]; then
       PHPLINE=$(grep -hE '^[[:space:]]*(AddHandler|AddType)[[:space:]].*(php|lsphp)' "$HB" 2>/dev/null | head -2)
     fi
     cp "$SRC_PHP" "$DOCROOT/index.php" && ok "index.php deployed"
+    if [ -f "$APP_DIR/scripts/apache-proxy/php-ini.txt" ]; then
+      cp "$APP_DIR/scripts/apache-proxy/php-ini.txt" "$DOCROOT/.user.ini" \
+        && ok ".user.ini deployed (post_max_size/upload_max_filesize = 64M)"
+    fi
     if [ -n "$PHPLINE" ]; then
       { printf '%s\n\n' "$PHPLINE"; cat "$SRC_HT"; } > "$DOCROOT/.htaccess"
       ok ".htaccess deployed (host PHP handler preserved)"
@@ -211,6 +215,24 @@ if [ "$APPLY" -eq 1 ]; then
   # end to end through the public frontend too
   C=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "https://besat.me/api/v1/health/" 2>/dev/null)
   info "https://besat.me/api/v1/health/ -> $C (through the Vercel proxy, 308 is normal)"
+
+  # ─── THE credential test ────────────────────────────────────────────────
+  # A bogus Bearer token must be REJECTED as a token ("token_not_valid"), not
+  # ignored as "no credentials". If Django answers "no authentication
+  # credentials were provided", the Authorization header was dropped somewhere
+  # in the chain - and then every logged-in user is secretly anonymous, which
+  # is exactly what made the SPA sign people out right after login.
+  BODY=$(curl -s --max-time 25 -H "Authorization: Bearer audit.invalid.token" \
+    "https://$DOMAIN/api/v1/auth/me/" 2>/dev/null)
+  if printf '%s' "$BODY" | grep -qiE 'token_not_valid|not valid|نامعتبر|invalid'; then
+    ok "Authorization header reaches Django (bogus token rejected as a token)"
+  elif printf '%s' "$BODY" | grep -qiE 'ارسال نشده|not provided|credentials'; then
+    bad "Authorization header is DROPPED in the chain - every logged-in user is anonymous"
+    info "fix: make sure index.php (with incoming_header()) and .htaccess are the ones deployed here"
+    info "then: bash scripts/host_web_recover.sh --apply"
+  else
+    warn "credential test inconclusive: $(printf '%s' "$BODY" | head -c 120)"
+  fi
 else
   plan "curl https://$DOMAIN/{health,stats,provinces,admin/login}"
 fi
